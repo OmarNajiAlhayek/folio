@@ -1,0 +1,54 @@
+{
+  "name": "@folio/email-service",
+  "version": "0.1.0",
+  "description": "Folio email microservice: consumes RabbitMQ events, sends transactional + scheduled emails, owns reminder lifecycle.",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "start:dev": "ts-node --transpile-only src/main.ts",
+    "migrate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:run -d src/db/data-source.ts",
+    "migrate:generate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:generate -d src/db/data-source.ts",
+    "migrate:revert": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:revert -d src/db/data-source.ts",
+    "test": "jest",
+    "test:cov": "jest --coverage"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/schedule": "^6.0.0",
+    "@nestjs/typeorm": "^11.0.0",
+    "amqplib": "^0.10.4",
+    "dotenv": "^17.3.1",
+    "handlebars": "^4.7.8",
+    "nodemailer": "^7.0.0",
+    "pg": "^8.20.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.28"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.19",
+    "@types/amqplib": "^0.10.5",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^7.0.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

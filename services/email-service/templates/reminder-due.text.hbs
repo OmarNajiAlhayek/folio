@@ -1,0 +1,15 @@
+Dear {{reviewerDisplayName}},
+
+{{#if isOverdue}}
+The review for "{{submissionTitle}}" was due on {{dueAt}} and is now
+overdue. Please complete it as soon as possible, or contact the
+editor if you can no longer review.
+{{else}}
+This is a friendly reminder that your review for "{{submissionTitle}}"
+is due on {{dueAt}}.
+{{/if}}
+
+Open the assignment: {{assignmentUrl}}
+
+Thank you,
+Folio editorial team

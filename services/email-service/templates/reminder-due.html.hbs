@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <body>
+    <p>Dear {{reviewerDisplayName}},</p>
+    {{#if isOverdue}}
+      <p>
+        The review for <strong>{{submissionTitle}}</strong> was due on
+        {{dueAt}} and is now overdue. Please complete it as soon as
+        possible, or contact the editor if you can no longer review.
+      </p>
+    {{else}}
+      <p>
+        This is a friendly reminder that your review for
+        <strong>{{submissionTitle}}</strong> is due on {{dueAt}}.
+      </p>
+    {{/if}}
+    <p>
+      You can open the assignment here:
+      <a href="{{assignmentUrl}}">{{assignmentUrl}}</a>
+    </p>
+    <p>Thank you,<br />Folio editorial team</p>
+  </body>
+</html>
