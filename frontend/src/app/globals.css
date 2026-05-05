@@ -1,0 +1,130 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f4f3ee;
+  --foreground: #0f172a;
+  --paper: #f4f3ee;
+  --paper-mid: #e8eae4;
+  --paper-warm: #ebe6df;
+  --surface: #fffcf7;
+  --surface-2: #f2ede6;
+  --surface-muted: #f3f0ea;
+  --ink: #0f172a;
+  --accent: #c45c3e;
+  --accent-2: #3d5a4a;
+  --border: rgba(15, 23, 42, 0.10);
+  --success: #166534;
+  --warning: #92400e;
+  --danger: #991b1b;
+  --page-glow-accent: rgba(196, 92, 62, 0.09);
+  --page-glow-secondary: rgba(61, 90, 74, 0.07);
+  --page-glow-tertiary: rgba(196, 92, 62, 0.04);
+}
+
+html.dark {
+  --background: #121118;
+  --foreground: #ebe8e3;
+  --paper: #121118;
+  --paper-mid: #17161d;
+  --paper-warm: #1c1a22;
+  --surface: #1f1d26;
+  --surface-2: #252230;
+  --surface-muted: #2a272f;
+  --ink: #ebe8e3;
+  --accent: #d4785c;
+  --accent-2: #6a9b82;
+  --border: rgba(235, 232, 227, 0.10);
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --page-glow-accent: rgba(212, 120, 92, 0.14);
+  --page-glow-secondary: rgba(106, 155, 130, 0.09);
+  --page-glow-tertiary: rgba(212, 120, 92, 0.06);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-muted: var(--surface-muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+}
+
+/* Layered page backdrop: cool mid-tone, warm floor, soft radial accents */
+html[dir="ltr"] body,
+html[dir="rtl"] body {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(
+      ellipse 130% 70% at 50% -15%,
+      var(--page-glow-accent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 100% 40%,
+      var(--page-glow-secondary),
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 0% 60%,
+      var(--page-glow-tertiary),
+      transparent 45%
+    ),
+    linear-gradient(
+      180deg,
+      var(--paper-mid) 0%,
+      var(--paper) 42%,
+      var(--paper-warm) 100%
+    );
+  color: var(--ink);
+}
+
+html[dir="ltr"] body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+html[dir="rtl"] body {
+  font-family: var(--font-noto-arabic), var(--font-sans), system-ui, sans-serif;
+}
+
+html[dir="rtl"] .font-serif {
+  font-family: var(--font-amiri), var(--font-serif), serif;
+}
+
+/* Fills main column under nav so short pages still show full gradient */
+.bg-page {
+  background-color: transparent;
+  background-image:
+    radial-gradient(
+      ellipse 130% 70% at 50% -15%,
+      var(--page-glow-accent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 100% 40%,
+      var(--page-glow-secondary),
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 0% 60%,
+      var(--page-glow-tertiary),
+      transparent 45%
+    ),
+    linear-gradient(
+      180deg,
+      var(--paper-mid) 0%,
+      var(--paper) 42%,
+      var(--paper-warm) 100%
+    );
+}
