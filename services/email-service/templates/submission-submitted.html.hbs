@@ -1,0 +1,8 @@
+<p>Dear {{editorDisplayName}},</p>
+{{#if isResubmission}}
+<p><strong>{{authorDisplayName}}</strong> has resubmitted a revised manuscript: <strong>{{submissionTitle}}</strong>.</p>
+{{else}}
+<p><strong>{{authorDisplayName}}</strong> has submitted a new manuscript: <strong>{{submissionTitle}}</strong>.</p>
+{{/if}}
+<p><a href="{{editorQueueUrl}}">Open in the editor queue</a></p>
+<p>Thank you,<br/>Folio editorial team</p>

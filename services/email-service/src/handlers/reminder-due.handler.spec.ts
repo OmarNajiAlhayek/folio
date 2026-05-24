@@ -106,7 +106,11 @@ describe('ReminderDueHandler', () => {
       render: jest
         .fn()
         .mockImplementation(
-          async (_name: string, ctx: Record<string, unknown>) => ({
+          async (
+            _name: string,
+            _locale: string,
+            ctx: Record<string, unknown>,
+          ) => ({
             subject: `Reminder ${ctx.submissionTitle}`,
             html: `<p>${ctx.submissionTitle}</p>`,
             text: String(ctx.submissionTitle),

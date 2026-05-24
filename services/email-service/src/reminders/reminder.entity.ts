@@ -19,7 +19,7 @@ export type ReminderStatus = 'pending' | 'sent' | 'cancelled';
  * v1 has no consumer for that yet, so the cron also re-checks
  * assignment status by calling the backend before publishing.
  */
-@Entity({ name: 'reminder' })
+@Entity({ name: 'reminder', schema: 'email' })
 @Index('ix_reminder_due', ['status', 'sendAt'])
 export class Reminder {
   @PrimaryGeneratedColumn('uuid')
@@ -39,6 +39,12 @@ export class Reminder {
 
   @Column({ type: 'varchar', length: 32 })
   kind: ReminderKind;
+
+  /**
+   * Snapshot of invitation-time resolved email locale (`en` | `ar`).
+   */
+  @Column({ name: 'email_locale', type: 'varchar', length: 10 })
+  emailLocale: string;
 
   @Column({ name: 'send_at', type: 'timestamptz' })
   sendAt: Date;

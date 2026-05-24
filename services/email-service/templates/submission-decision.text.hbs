@@ -1,0 +1,18 @@
+Dear {{authorDisplayName}},
+
+{{#if isAccepted}}
+We are pleased to inform you that your manuscript "{{submissionTitle}}" has been accepted.
+{{/if}}
+{{#if isRejected}}
+After editorial consideration, your manuscript "{{submissionTitle}}" has been declined.
+{{/if}}
+{{#if isRevisionsRequested}}
+The editor has requested revisions for your manuscript "{{submissionTitle}}".
+{{/if}}
+
+Decision recorded by {{decidedByDisplayName}}.
+
+View your submission: {{submissionUrl}}
+
+Thank you,
+Folio editorial team

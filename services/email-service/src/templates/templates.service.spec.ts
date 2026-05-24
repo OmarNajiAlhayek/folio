@@ -9,6 +9,7 @@ describe('TemplatesService', () => {
   ): EmailTemplateEntity =>
     ({
       templateKey: key,
+      locale: 'en',
       subjectTemplate: `Sub {{submissionTitle}}`,
       htmlBody: '<p>{{reviewerDisplayName}}</p>',
       textBody: '{{reviewerDisplayName}}',
@@ -29,7 +30,7 @@ describe('TemplatesService', () => {
     const repo = { findOne } as unknown as Repository<EmailTemplateEntity>;
     const svc = new TemplatesService(repo);
 
-    const r = await svc.render('reviewer-invited', {
+    const r = await svc.render('reviewer-invited', 'en', {
       reviewerDisplayName: 'Jane',
       submissionTitle: 'Quantum Frogs',
       acceptUrl: 'http://localhost/a',
@@ -45,7 +46,7 @@ describe('TemplatesService', () => {
     const repo = { findOne } as unknown as Repository<EmailTemplateEntity>;
     const svc = new TemplatesService(repo);
 
-    const r = await svc.render('reminder-due', {
+    const r = await svc.render('reminder-due', 'en', {
       reviewerDisplayName: 'Jane',
       submissionTitle: '[manuscript]',
       assignmentUrl: 'http://localhost/asg',
@@ -55,12 +56,27 @@ describe('TemplatesService', () => {
     expect(r.subject).toContain('[manuscript]');
   });
 
+  it('falls back to disk for copyedit-assigned when row missing', async () => {
+    const findOne = jest.fn().mockResolvedValue(null);
+    const repo = { findOne } as unknown as Repository<EmailTemplateEntity>;
+    const svc = new TemplatesService(repo);
+
+    const r = await svc.render('copyedit-assigned', 'en', {
+      copyeditorDisplayName: 'Pat',
+      submissionTitle: 'Quantum Frogs',
+      workbenchUrl: 'http://localhost/copyedit/asg',
+      assignedByDisplayName: 'Ed',
+    });
+    expect(r.subject).toContain('Quantum Frogs');
+    expect(r.html).toContain('Pat');
+  });
+
   it('throws for unknown template', async () => {
     const repo = {
       findOne: jest.fn(),
     } as unknown as Repository<EmailTemplateEntity>;
     const svc = new TemplatesService(repo);
-    await expect(svc.render('nope', {})).rejects.toThrow(
+    await expect(svc.render('nope', 'en', {})).rejects.toThrow(
       /Unknown email template/,
     );
   });

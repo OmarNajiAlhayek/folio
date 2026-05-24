@@ -4,6 +4,7 @@ import * as Handlebars from 'handlebars';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { Repository } from 'typeorm';
+import { normalizeEmailLocale } from '../common/email-locale';
 import { EmailTemplateEntity } from '../entities/email-template.entity';
 
 const TEMPLATES_DIR = join(__dirname, '..', '..', 'templates');
@@ -15,14 +16,39 @@ const FILE_FALLBACK: Record<string, { subject: string }> = {
   'reminder-due': {
     subject: `{{#if isOverdue}}Overdue review: {{#if submissionTitle}}{{submissionTitle}}{{else}}Folio manuscript{{/if}}{{else}}Reminder: review due for {{#if submissionTitle}}{{submissionTitle}}{{else}}Folio manuscript{{/if}}{{/if}}`,
   },
+  'copyedit-assigned': {
+    subject: 'Copyediting assignment: {{submissionTitle}}',
+  },
+  'copyedit-queries-sent': {
+    subject: 'Copyedit requests (round {{round}}): {{submissionTitle}}',
+  },
+  'copyedit-author-ready': {
+    subject: 'Author ready for copyedit review: {{submissionTitle}}',
+  },
+  'submission-submitted': {
+    subject:
+      '{{#if isResubmission}}Revised manuscript submitted{{else}}New submission received{{/if}}: {{submissionTitle}}',
+  },
+  'submission-decision': {
+    subject: 'Editorial decision: {{submissionTitle}}',
+  },
 };
 
-const ALLOWED = new Set(['reviewer-invited', 'reminder-due']);
+/** Must match `email.email_template` CHECK + transactional handlers. */
+const ALLOWED = new Set([
+  'reviewer-invited',
+  'reminder-due',
+  'copyedit-assigned',
+  'copyedit-queries-sent',
+  'copyedit-author-ready',
+  'submission-submitted',
+  'submission-decision',
+]);
 
 /**
  * Loads template bodies from `email.email_template` on every render
  * (no long-lived cache) so admin edits take effect on the next send.
- * Falls back to disk files if a row is missing (dev / pre-migration).
+ * Falls back to `en` row, then disk files if rows are missing.
  */
 @Injectable()
 export class TemplatesService {
@@ -35,20 +61,30 @@ export class TemplatesService {
 
   async render(
     name: string,
+    localeInput: string,
     context: Record<string, unknown>,
   ): Promise<{ subject: string; html: string; text: string }> {
     if (!ALLOWED.has(name)) {
       throw new Error(`Unknown email template: ${name}`);
     }
 
-    const row = await this.templateRepo.findOne({
-      where: { templateKey: name },
-    });
+    const locale = normalizeEmailLocale(localeInput);
+
+    const row =
+      (await this.templateRepo.findOne({
+        where: { templateKey: name, locale },
+      })) ??
+      (locale !== 'en'
+        ? await this.templateRepo.findOne({
+            where: { templateKey: name, locale: 'en' },
+          })
+        : null);
+
     if (row) {
       return this.compileAndRun(row, context);
     }
     this.logger.warn(
-      `template ${name} missing in DB; using file fallback (run migrations + seed)`,
+      `template ${name} (${locale}) missing in DB; using file fallback (run migrations + seed)`,
     );
     return this.renderFromDisk(name, context);
   }
@@ -68,7 +104,9 @@ export class TemplatesService {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Template compile/render failed (${row.templateKey}): ${msg}`);
+      throw new Error(
+        `Template compile/render failed (${row.templateKey}/${row.locale}): ${msg}`,
+      );
     }
   }
 

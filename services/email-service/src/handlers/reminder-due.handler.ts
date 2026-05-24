@@ -13,6 +13,7 @@ import { ReminderDueEvent } from '../contracts/email-events';
 import { redactEventPayload } from '../shared/redactor';
 import { reminderDueKey } from '../shared/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
+import { normalizeEmailLocale } from '../common/email-locale';
 
 /**
  * Same state machine as `ReviewerInvitedHandler` but for the scheduled
@@ -60,7 +61,7 @@ export class ReminderDueHandler {
     const logRepo = this.dataSource.getRepository(EmailLog);
 
     const insertResult = (await this.dataSource.query(
-      `INSERT INTO "email_log" (
+      `INSERT INTO "email"."email_log" (
          "idempotency_key", "recipient", "template", "context", "status"
        ) VALUES ($1, $2, $3, $4::jsonb, $5)
        ON CONFLICT ("idempotency_key") DO NOTHING
@@ -97,7 +98,10 @@ export class ReminderDueHandler {
     const baseUrl = (
       this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240'
     ).replace(/\/+$/, '');
-    const rendered = await this.templates.render('reminder-due', {
+    const locale = normalizeEmailLocale(
+      event.emailLocale ?? reminder.emailLocale,
+    );
+    const rendered = await this.templates.render('reminder-due', locale, {
       reviewerDisplayName: event.reviewer.displayName,
       submissionTitle: '[manuscript]',
       assignmentUrl: `${baseUrl}/assignments/${event.assignmentSlug}`,

@@ -16,6 +16,7 @@ import { redactEventPayload } from '../shared/redactor';
 import { reviewerInvitedKey } from '../shared/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { ReminderPolicyService } from '../policy/reminder-policy.service';
+import { normalizeEmailLocale } from '../common/email-locale';
 
 /**
  * Implements the state machine documented in plan §6:
@@ -90,7 +91,7 @@ export class ReviewerInvitedHandler {
     // The semantics match plan §6 step 1: 1 row inserted = first
     // delivery, 0 rows = duplicate (caller branches on existing row).
     const insertResult = (await manager.query(
-      `INSERT INTO "email_log" (
+      `INSERT INTO "email"."email_log" (
          "idempotency_key", "recipient", "template", "context", "status"
        ) VALUES ($1, $2, $3, $4::jsonb, $5)
        ON CONFLICT ("idempotency_key") DO NOTHING
@@ -119,6 +120,7 @@ export class ReviewerInvitedHandler {
 
     const offsets = await this.reminderPolicy.getDueOffsetsMs();
     const now = Date.now();
+    const emailLocale = normalizeEmailLocale(event.emailLocale);
     await reminderRepo.save([
       reminderRepo.create({
         assignmentSlug: event.assignmentSlug,
@@ -126,6 +128,7 @@ export class ReviewerInvitedHandler {
         reviewerEmail: event.reviewer.email,
         reviewerDisplayName: event.reviewer.displayName,
         kind: 'review_due_soon',
+        emailLocale,
         sendAt: new Date(now + offsets.dueSoonMs),
         status: 'pending',
       }),
@@ -135,6 +138,7 @@ export class ReviewerInvitedHandler {
         reviewerEmail: event.reviewer.email,
         reviewerDisplayName: event.reviewer.displayName,
         kind: 'review_overdue',
+        emailLocale,
         sendAt: new Date(now + offsets.overdueMs),
         status: 'pending',
       }),
@@ -152,7 +156,8 @@ export class ReviewerInvitedHandler {
     event: ReviewerInvitedEvent,
   ): Promise<HandlerOutcome> {
     const logRepo = this.dataSource.getRepository(EmailLog);
-    const rendered = await this.templates.render('reviewer-invited', {
+    const emailLocale = normalizeEmailLocale(event.emailLocale);
+    const rendered = await this.templates.render('reviewer-invited', emailLocale, {
       reviewerDisplayName: event.reviewer.displayName,
       submissionTitle: event.submissionTitle,
       acceptUrl: event.acceptUrl,

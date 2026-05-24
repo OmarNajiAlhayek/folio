@@ -9,6 +9,7 @@ import {
   ROUTING_KEY,
 } from '../contracts/email-events';
 import { reminderDueKey } from '../shared/idempotency';
+import { normalizeEmailLocale } from '../common/email-locale';
 
 const BATCH_SIZE = 50;
 
@@ -65,6 +66,7 @@ export class RemindersScheduler {
       reminderId: reminder.id,
       kind: reminder.kind,
       assignmentSlug: reminder.assignmentSlug,
+      emailLocale: normalizeEmailLocale(reminder.emailLocale),
       reviewer: {
         id: reminder.reviewerId,
         email: reminder.reviewerEmail,

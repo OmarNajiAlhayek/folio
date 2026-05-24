@@ -15,7 +15,7 @@ export type EmailLogStatus = 'pending' | 'sent' | 'failed';
  * `INSERT ... ON CONFLICT DO NOTHING`, and any redelivery loses the
  * race and branches based on the existing row's `status`.
  */
-@Entity({ name: 'email_log' })
+@Entity({ name: 'email_log', schema: 'email' })
 @Index('ux_email_log_idempotency_key', ['idempotencyKey'], { unique: true })
 export class EmailLog {
   @PrimaryGeneratedColumn('uuid')

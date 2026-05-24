@@ -29,6 +29,7 @@ function makeEvent(
     invitedBy: { id: 'e1', displayName: 'Ed' },
     acceptUrl: 'http://localhost/a/accept',
     declineUrl: 'http://localhost/a/decline',
+    emailLocale: 'en',
     ...override,
   };
 }

@@ -4,7 +4,22 @@ import { ConsumersService } from './consumers.service';
 import { RabbitMqConnection } from '../amqp/rabbitmq.connection';
 import { ReviewerInvitedHandler } from './reviewer-invited.handler';
 import { ReminderDueHandler } from './reminder-due.handler';
+import { CopyeditAssignedHandler } from './copyedit-assigned.handler';
+import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
+import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
+import { SubmissionSubmittedHandler } from './submission-submitted.handler';
+import { SubmissionDecisionHandler } from './submission-decision.handler';
 import { DEFAULT_TOPOLOGY } from '../shared/topology';
+
+const consumerHandlerProviders = () => [
+  { provide: ReviewerInvitedHandler, useValue: { handle: jest.fn() } },
+  { provide: ReminderDueHandler, useValue: { handle: jest.fn() } },
+  { provide: CopyeditAssignedHandler, useValue: { handle: jest.fn() } },
+  { provide: CopyeditQueriesSentHandler, useValue: { handle: jest.fn() } },
+  { provide: CopyeditAuthorReadyHandler, useValue: { handle: jest.fn() } },
+  { provide: SubmissionSubmittedHandler, useValue: { handle: jest.fn() } },
+  { provide: SubmissionDecisionHandler, useValue: { handle: jest.fn() } },
+];
 
 function makeConsumeMessage(
   body: string | Record<string, unknown>,
@@ -68,6 +83,7 @@ describe('ConsumersService', () => {
           provide: ReminderDueHandler,
           useValue: { handle: reminderHandle },
         },
+        ...consumerHandlerProviders().slice(2),
       ],
     }).compile();
 
@@ -178,8 +194,7 @@ describe('ConsumersService', () => {
       providers: [
         ConsumersService,
         { provide: RabbitMqConnection, useValue: rabbit },
-        { provide: ReviewerInvitedHandler, useValue: { handle: jest.fn() } },
-        { provide: ReminderDueHandler, useValue: { handle: jest.fn() } },
+        ...consumerHandlerProviders(),
       ],
     }).compile();
     const fresh = mod.get(ConsumersService);
@@ -190,6 +205,14 @@ describe('ConsumersService', () => {
     );
     expect(rabbit.consume).toHaveBeenCalledWith(
       DEFAULT_TOPOLOGY.reminderDueQueue,
+      expect.any(Function),
+    );
+    expect(rabbit.consume).toHaveBeenCalledWith(
+      DEFAULT_TOPOLOGY.submissionSubmittedQueue,
+      expect.any(Function),
+    );
+    expect(rabbit.consume).toHaveBeenCalledWith(
+      DEFAULT_TOPOLOGY.submissionDecisionQueue,
       expect.any(Function),
     );
   });

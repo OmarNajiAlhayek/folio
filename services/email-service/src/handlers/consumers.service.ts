@@ -5,18 +5,23 @@ import {
   FolioEvent,
   ReminderDueEvent,
   ReviewerInvitedEvent,
+  CopyeditAssignedEvent,
+  CopyeditQueriesSentEvent,
+  CopyeditAuthorReadyEvent,
+  SubmissionSubmittedEvent,
+  SubmissionDecisionEvent,
   ROUTING_KEY,
 } from '../contracts/email-events';
 import { redactEventPayload } from '../shared/redactor';
 import { ReviewerInvitedHandler } from './reviewer-invited.handler';
 import { ReminderDueHandler } from './reminder-due.handler';
+import { CopyeditAssignedHandler } from './copyedit-assigned.handler';
+import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
+import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
+import { SubmissionSubmittedHandler } from './submission-submitted.handler';
+import { SubmissionDecisionHandler } from './submission-decision.handler';
 import { HandlerOutcome } from './handler-result';
 
-/**
- * Wires queue subscriptions to the right typed handler. Owns the
- * ack/nack decision based on the handler's `HandlerOutcome` so the
- * pure state-machine code never imports amqplib.
- */
 @Injectable()
 export class ConsumersService implements OnModuleInit {
   private readonly logger = new Logger(ConsumersService.name);
@@ -25,6 +30,11 @@ export class ConsumersService implements OnModuleInit {
     private readonly rabbit: RabbitMqConnection,
     private readonly reviewerInvited: ReviewerInvitedHandler,
     private readonly reminderDue: ReminderDueHandler,
+    private readonly copyeditAssigned: CopyeditAssignedHandler,
+    private readonly copyeditQueriesSent: CopyeditQueriesSentHandler,
+    private readonly copyeditAuthorReady: CopyeditAuthorReadyHandler,
+    private readonly submissionSubmitted: SubmissionSubmittedHandler,
+    private readonly submissionDecision: SubmissionDecisionHandler,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -35,6 +45,21 @@ export class ConsumersService implements OnModuleInit {
     );
     await this.rabbit.consume(topology.reminderDueQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.reminderDue),
+    );
+    await this.rabbit.consume(topology.copyeditAssignedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.copyeditAssigned),
+    );
+    await this.rabbit.consume(topology.copyeditQueriesSentQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.copyeditQueriesSent),
+    );
+    await this.rabbit.consume(topology.copyeditAuthorReadyQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.copyeditAuthorReady),
+    );
+    await this.rabbit.consume(topology.submissionSubmittedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.submissionSubmitted),
+    );
+    await this.rabbit.consume(topology.submissionDecisionQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.submissionDecision),
     );
   }
 
@@ -70,6 +95,41 @@ export class ConsumersService implements OnModuleInit {
         event.type === 'ReminderDue'
       ) {
         outcome = await this.reminderDue.handle(event as ReminderDueEvent);
+      } else if (
+        routingKey === ROUTING_KEY.copyeditAssigned &&
+        event.type === 'CopyeditAssigned'
+      ) {
+        outcome = await this.copyeditAssigned.handle(
+          event as CopyeditAssignedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.copyeditQueriesSent &&
+        event.type === 'CopyeditQueriesSent'
+      ) {
+        outcome = await this.copyeditQueriesSent.handle(
+          event as CopyeditQueriesSentEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.copyeditAuthorReady &&
+        event.type === 'CopyeditAuthorReady'
+      ) {
+        outcome = await this.copyeditAuthorReady.handle(
+          event as CopyeditAuthorReadyEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.submissionSubmitted &&
+        event.type === 'SubmissionSubmitted'
+      ) {
+        outcome = await this.submissionSubmitted.handle(
+          event as SubmissionSubmittedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.submissionDecision &&
+        event.type === 'SubmissionDecision'
+      ) {
+        outcome = await this.submissionDecision.handle(
+          event as SubmissionDecisionEvent,
+        );
       } else {
         outcome = {
           kind: 'nack-no-requeue',

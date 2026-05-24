@@ -1,0 +1,13 @@
+<p>Dear {{authorDisplayName}},</p>
+{{#if isAccepted}}
+<p>We are pleased to inform you that your manuscript <strong>{{submissionTitle}}</strong> has been <strong>accepted</strong>.</p>
+{{/if}}
+{{#if isRejected}}
+<p>After editorial consideration, your manuscript <strong>{{submissionTitle}}</strong> has been <strong>declined</strong>.</p>
+{{/if}}
+{{#if isRevisionsRequested}}
+<p>The editor has requested <strong>revisions</strong> for your manuscript <strong>{{submissionTitle}}</strong>.</p>
+{{/if}}
+<p>Decision recorded by {{decidedByDisplayName}}.</p>
+<p><a href="{{submissionUrl}}">View your submission</a></p>
+<p>Thank you,<br/>Folio editorial team</p>
