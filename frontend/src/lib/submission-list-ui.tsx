@@ -30,6 +30,8 @@ export function statusPillClass(status: string): string {
       return `${base} bg-orange-100/90 text-orange-950`;
     case "accepted":
       return `${base} bg-emerald-100/90 text-emerald-950`;
+    case "copyediting":
+      return `${base} bg-violet-100/90 text-violet-950`;
     case "rejected":
       return `${base} bg-rose-100/90 text-rose-950`;
     case "published":
@@ -90,6 +92,7 @@ export function submissionStatusLabel(
       | "stRevisions"
       | "stAccepted"
       | "stRejected"
+      | "stCopyediting"
       | "stPublished",
   ) => string,
 ): string {
@@ -106,6 +109,8 @@ export function submissionStatusLabel(
       return t("stAccepted");
     case "rejected":
       return t("stRejected");
+    case "copyediting":
+      return t("stCopyediting");
     case "published":
       return t("stPublished");
     default:

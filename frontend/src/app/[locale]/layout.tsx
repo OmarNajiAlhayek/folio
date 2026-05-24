@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
+import { AppToaster } from "@/components/app-toaster";
+import { ApiAuthSync } from "@/components/api-auth-sync";
 import { DocumentLocaleSync } from "@/components/document-locale-sync";
+import { AuthStorageSync } from "@/components/auth-storage-sync";
+import { QueryProvider } from "@/components/query-provider";
 import { LocaleDirectionProvider } from "@/components/locale-direction-provider";
 import { Nav } from "@/components/Nav";
 import { routing } from "@/i18n/routing";
@@ -37,12 +41,17 @@ export default async function LocaleLayout({ children, params }: Props) {
   return (
     <NextIntlClientProvider messages={messages} locale={locale}>
       <DocumentLocaleSync />
-      <LocaleDirectionProvider locale={locale}>
-        <Nav />
-        <div className="bg-page flex min-h-0 flex-1 flex-col pb-8">
-          {children}
-        </div>
-      </LocaleDirectionProvider>
+      <QueryProvider>
+        <ApiAuthSync />
+        <AuthStorageSync />
+        <LocaleDirectionProvider locale={locale}>
+          <AppToaster locale={locale} />
+          <Nav />
+          <div className="bg-page flex min-h-0 flex-1 flex-col pb-8">
+            {children}
+          </div>
+        </LocaleDirectionProvider>
+      </QueryProvider>
     </NextIntlClientProvider>
   );
 }

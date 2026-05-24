@@ -1,9 +1,12 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { Link, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { useEffect } from "react";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { ApiError } from "@/lib/api";
+import { getStoredToken } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { useSubmissionsList } from "@/lib/queries/submissions";
 import {
   EMPTY_STATE_CLS,
   SubmissionListSkeleton,
@@ -11,56 +14,45 @@ import {
   submissionQueueShellCls,
 } from "@/lib/submission-list-ui";
 
-type Submission = {
-  id: string;
-  slug: string;
-  title: string;
-  status: string;
-  updatedAt: string;
-};
-
 export default function SubmissionsPage() {
   const t = useTranslations("Submissions");
   const locale = useLocale();
+  const pathname = usePathname();
   const router = useRouter();
-  const [items, setItems] = useState<Submission[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  const listQuery = useSubmissionsList();
 
   useEffect(() => {
     if (!getStoredToken()) {
-      router.replace("/login");
-      return;
+      redirectToLogin(router, pathname);
     }
-    let cancelled = false;
-    apiJson<Submission[]>("/submissions")
-      .then((data) => {
-        if (!cancelled) setItems(data);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login");
-          return;
-        }
-        setError(err instanceof ApiError ? err.message : t("loadFailed"));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [router, t]);
+  }, [router, pathname]);
 
-  if (error) {
+  const loadError =
+    listQuery.isError && listQuery.error instanceof ApiError
+      ? listQuery.error.message
+      : listQuery.isError
+        ? t("loadFailed")
+        : null;
+
+  const items = listQuery.data ?? [];
+  const loading = listQuery.isLoading;
+
+  if (loadError) {
     return (
       <main className={submissionQueueShellCls}>
         <div
           className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
           role="alert"
         >
-          {error}
+          <p>{loadError}</p>
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
+            onClick={() => void listQuery.refetch()}
+          >
+            {t("retryLoad")}
+          </button>
         </div>
       </main>
     );
@@ -106,22 +98,10 @@ export default function SubmissionsPage() {
             className="mt-1 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 hover:shadow-md"
           >
             {t("emptyCta")}
-            <svg
-              className="size-4 rtl:rotate-180"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden
-            >
-              <path
-                fillRule="evenodd"
-                d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
-                clipRule="evenodd"
-              />
-            </svg>
           </Link>
         </div>
       ) : (
-        <ul className="mt-6 space-y-3">
+        <ul className="mt-8 flex flex-col gap-3">
           {items.map((s) => (
             <SubmissionQueueRow
               key={s.id}

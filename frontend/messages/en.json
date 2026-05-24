@@ -3,6 +3,17 @@
     "title": "Folio — Peer review workspace",
     "description": "Scholarly manuscript submission, peer review, and publishing workflow"
   },
+  "manuscriptStyles": {
+    "damascus-university-journal-v1": {
+      "displayName": "Damascus University Journal",
+      "description": "Fonts, margins, and reference ordering per Damascus University Journal manuscript guidelines."
+    }
+  },
+  "Toast": {
+    "genericError": "Something went wrong. Please try again.",
+    "saved": "Saved.",
+    "uploadFailed": "Upload failed."
+  },
   "Nav": {
     "brand": "Folio",
     "publications": "Publications",
@@ -11,7 +22,12 @@
     "editor": "Editor",
     "emailSettings": "Email settings",
     "myReviews": "My reviews",
+    "copyediting": "Copyediting",
     "logout": "Log out",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmDescription": "You will need to sign in again to access your account.",
+    "logoutCancel": "Cancel",
+    "logoutConfirmAction": "Sign out",
     "login": "Log in",
     "register": "Register",
     "localeEn": "English",
@@ -48,7 +64,9 @@
     "signIn": "Sign in",
     "noAccount": "No account?",
     "registerLink": "Register",
-    "loginFailed": "Login failed"
+    "loginFailed": "Login failed",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "Register": {
     "sideBlurb": "Scholarly publishing workflow in one place—roles, assignments, and the public record.",
@@ -69,11 +87,14 @@
     "createAccount": "Create account",
     "hasAccount": "Already have an account?",
     "loginLink": "Log in",
-    "registrationFailed": "Registration failed"
+    "registrationFailed": "Registration failed",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "Dashboard": {
     "title": "Dashboard",
     "loadFailed": "Failed to load profile",
+    "retryLoad": "Try again",
     "signedInAs": "Signed in as",
     "mySubmissions": "My submissions",
     "editorQueue": "Editor queue",
@@ -89,7 +110,17 @@
     "acceptRole": "Accept",
     "declineRole": "Decline",
     "working": "…",
-    "untitledSubmission": "Submission"
+    "untitledSubmission": "Submission",
+    "emailLanguageTitle": "Email language",
+    "emailLanguageHint": "Transactional emails (e.g. review invitations) use this when set; otherwise the editor’s UI language or site default applies.",
+    "emailLanguageAuto": "Automatic (recommended)",
+    "emailLanguageEn": "English",
+    "emailLanguageAr": "Arabic",
+    "emailLanguageSave": "Save preference",
+    "emailLanguageSaving": "Saving…",
+    "emailLanguageSaved": "Preference saved",
+    "roleInviteAccepted": "Editor role accepted.",
+    "roleInviteDeclined": "Invitation declined."
   },
   "Submissions": {
     "title": "Submissions",
@@ -97,12 +128,14 @@
     "hint": "Authors see their own work. Editors see the incoming queue (no drafts).",
     "empty": "No submissions yet.",
     "loadFailed": "Failed to load",
+    "retryLoad": "Try again",
     "stDraft": "Draft",
     "stSubmitted": "Submitted",
     "stUnderReview": "Under review",
     "stRevisions": "Revisions requested",
     "stAccepted": "Accepted",
     "stRejected": "Rejected",
+    "stCopyediting": "Copyediting",
     "stPublished": "Published",
     "updatedLabel": "Updated {date}",
     "emptyHint": "When you create a submission, it will appear here.",
@@ -141,6 +174,7 @@
     "attachedFiles": "Attached files",
     "uploadHint": "Required: cover letter, title page, and main manuscript. Optional: figures, tables, supplementary files. The system checks this package when you submit.",
     "submitForReview": "Submit for review",
+    "submitIrreversibleHint": "Once you submit, you cannot take this back yourself.",
     "editorSection": "Editor",
     "reviewerLabel": "Reviewer",
     "reviewerPlaceholder": "Select a reviewer",
@@ -153,6 +187,7 @@
     "downloadFailed": "Download failed",
     "loading": "Loading…",
     "loadFailed": "Failed to load",
+    "retryLoad": "Try again",
     "uploadFailed": "Upload failed",
     "submitFailed": "Submit failed",
     "assignFailed": "Assign failed",
@@ -174,7 +209,9 @@
     "reviewRecommendation": "Recommendation",
     "reviewNoEditorComments": "No confidential comments.",
     "reviewFeedbackItem": "Feedback {n}",
-    "constructorModeNotice": "This submission was authored using the in-app Word Constructor. Edit the structured content there and the manuscript file will be regenerated when you submit.",
+    "constructorModeNotice": "The main manuscript is built in the Word Constructor. Open it to edit sections; use “Submit for review” below when the full package is ready.",
+    "constructorCompanionFilesHint": "Upload the cover letter and title page here. The main manuscript Word file is generated from the constructor when you submit.",
+    "constructorUploadHint": "Required: cover letter and title page. Optional: figures, tables, supplementary files. Submit for review also generates the main manuscript from the constructor.",
     "openConstructor": "Open constructor",
     "chooseManuscriptMode": "How will you provide the manuscript?",
     "chooseManuscriptModeHint": "Upload a finished .docx, or build it section by section in the constructor.",
@@ -295,6 +332,7 @@
     "allNonDraft": "All non-draft",
     "empty": "Nothing in this view.",
     "loadFailed": "Failed to load",
+    "retryLoad": "Try again",
     "stSubmitted": "submitted",
     "stUnderReview": "under_review",
     "stRevisions": "revisions_requested",
@@ -304,10 +342,12 @@
   },
   "EmailSettings": {
     "title": "Email templates & reminders",
-    "hint": "Trusted editors only. Reminder emails use offsets from invitation time: first at (N−3) days, second at (N+1) days, where N is the value below. Changing policy does not reschedule existing pending reminders.",
+    "hint": "Trusted editors only. Edit reviewer, reminder, and copyediting transactional emails. Reminder offsets are from invitation time: first at (N−3) days, second at (N+1) days, where N is the value below. Changing policy does not reschedule existing pending reminders.",
     "forbidden": "You do not have access to this page.",
     "loading": "Loading…",
     "loadFailed": "Failed to load email settings",
+    "retryLoad": "Try again",
+    "previewFailed": "Preview failed.",
     "policySection": "Reminder policy",
     "reviewDueDays": "Review due (days, N)",
     "reviewDueDaysHelp": "Must be at least 4. Used to schedule due-soon and overdue reminder emails for new assignments.",
@@ -316,6 +356,14 @@
     "policySaved": "Policy updated",
     "templateReviewerInvited": "Reviewer invitation",
     "templateReminderDue": "Due / overdue reminder",
+    "templatesReviewSection": "Peer review",
+    "templatesWorkflowSection": "Editorial workflow",
+    "templatesCopyeditSection": "Copyediting",
+    "templateSubmissionSubmitted": "Submission received (editors)",
+    "templateSubmissionDecision": "Editor decision (author)",
+    "templateCopyeditAssigned": "Copyeditor assignment",
+    "templateCopyeditQueriesSent": "Author queries (new round)",
+    "templateCopyeditAuthorReady": "Author ready for copyedit review",
     "subject": "Subject (Handlebars)",
     "htmlBody": "HTML body",
     "textBody": "Plain text body",
@@ -324,10 +372,29 @@
     "preview": "Preview (sample data)",
     "previewing": "Rendering…",
     "previewOverdue": "Preview (overdue branch)",
-    "variablesReviewer": "Variables: {{reviewerDisplayName}}, {{submissionTitle}}, {{acceptUrl}}, {{declineUrl}}",
-    "variablesReminder": "Variables: {{reviewerDisplayName}}, {{submissionTitle}}, {{assignmentUrl}}, {{dueAt}}, {{#if isOverdue}}…{{/if}}",
+    "variablesReviewer": "Variables (Handlebars): reviewerDisplayName, submissionTitle, acceptUrl, declineUrl",
+    "variablesReminder": "Variables (Handlebars): reviewerDisplayName, submissionTitle, assignmentUrl, dueAt; conditional helpers include isOverdue",
+    "variablesCopyeditAssigned": "Variables (Handlebars): copyeditorDisplayName, submissionTitle, workbenchUrl, assignedByDisplayName",
+    "variablesCopyeditQueriesSent": "Variables (Handlebars): authorDisplayName, copyeditorDisplayName, submissionTitle, round, noteExcerpt, submissionUrl",
+    "variablesCopyeditAuthorReady": "Variables (Handlebars): copyeditorDisplayName, authorDisplayName, submissionTitle, round, workbenchUrl",
+    "variablesSubmissionSubmitted": "Variables (Handlebars): editorDisplayName, authorDisplayName, submissionTitle, isResubmission, editorQueueUrl",
+    "variablesSubmissionDecision": "Variables (Handlebars): authorDisplayName, submissionTitle, submissionUrl, decidedByDisplayName; branch flags isAccepted, isRejected, isRevisionsRequested",
     "conflict": "Settings were changed elsewhere. Refresh the page and try again.",
-    "backToEditor": "Back to editor queue"
+    "backToEditor": "Back to editor queue",
+    "templateLocale": "Templates being edited",
+    "pipelineSection": "Email pipeline status",
+    "pipelineHint": "Operational snapshot: API outbox, email-service send log, scheduled reminders, and RabbitMQ queue depths (cached). High “pending” reminders are normal before send time.",
+    "pipelineRefresh": "Refresh status",
+    "pipelineLoading": "Loading pipeline status…",
+    "pipelineFailed": "Could not load pipeline status",
+    "outboxLabel": "API outbox",
+    "emailLogLabel": "Email send log",
+    "remindersLabel": "Scheduled reminders",
+    "rabbitLabel": "RabbitMQ (cached)",
+    "rabbitUnavailable": "Broker metrics unavailable",
+    "stuckReminders": "Pending reminders past schedule (≈15 min)",
+    "failedSamples": "Recent failed sends (redacted)",
+    "deadOutboxSamples": "Recent dead outbox rows (redacted)"
   },
   "Assignments": {
     "title": "My review assignments",
@@ -348,7 +415,8 @@
     "stAssignDeclined": "Declined",
     "openReview": "Open review",
     "respondToInvite": "Respond to invitation",
-    "loadFailed": "Failed to load"
+    "loadFailed": "Failed to load",
+    "retryLoad": "Try again"
   },
   "AssignmentsInvite": {
     "back": "← Assignments",
@@ -365,6 +433,7 @@
     "decline": "Decline",
     "working": "Please wait…",
     "loadFailed": "Could not load invitation",
+    "retryLoad": "Try again",
     "notFound": "This invitation was not found.",
     "notInvited": "This assignment is not awaiting a response.",
     "actionFailed": "Something went wrong. Try again."
@@ -398,6 +467,7 @@
     "commentsForAuthorRequired": "Please enter comments for the author.",
     "loading": "Loading assignment…",
     "loadFailed": "Could not load assignment",
+    "retryLoad": "Try again",
     "notFound": "This review assignment was not found or you no longer have access.",
     "notPending": "This assignment is no longer open for review. You may have already submitted, or it was withdrawn.",
     "acceptInvitationFirst": "You need to accept the invitation before you can access the full manuscript and submit a review.",
@@ -411,13 +481,15 @@
     "readArticle": "Read",
     "loading": "Loading catalog…",
     "empty": "No published articles yet.",
-    "loadFailed": "Failed to load"
+    "loadFailed": "Failed to load",
+    "retryLoad": "Try again"
   },
   "PublicationDetail": {
     "back": "← Catalog",
     "files": "Files",
     "loading": "Loading…",
-    "notFound": "Not found"
+    "notFound": "Not found",
+    "retryLoad": "Try again"
   },
   "ConstructorMode": {
     "heading": "How would you like to provide your manuscript?",
@@ -432,7 +504,11 @@
     "titleNew": "New submission — Word Constructor",
     "subtitleNew": "Build the article in sections here. Your word construction is saved in this browser until you continue to create the submission.",
     "titleEdit": "Edit submission — Word Constructor",
-    "subtitleEdit": "Changes save automatically. Use “Generate .docx” to download a styled Word file, or “Submit” to send it for review.",
+    "subtitleEdit": "Changes save automatically. Download or attach a styled Word file, then submit for review from the submission page.",
+    "attachManuscript": "Attach as manuscript",
+    "attachingManuscript": "Attaching…",
+    "attachManuscriptSuccess": "Manuscript file saved on the server.",
+    "attachManuscriptFailed": "Could not attach the manuscript file.",
     "backToModeSelection": "← Back",
     "backToSubmission": "← Back to submission",
     "backToList": "← Back to submissions",
@@ -449,6 +525,7 @@
     "missingAbstractForSave": "Add an abstract section before saving the draft.",
     "saveFailed": "Could not save your draft. Please try again.",
     "loadFailed": "Could not load this submission.",
+    "retryLoad": "Try again",
     "loading": "Loading…",
     "notFound": "Submission not found.",
     "autosaveFailed": "Auto-save failed. Your changes are kept in the editor — try editing again to retry.",
@@ -469,7 +546,10 @@
     "downloadDocx": "Generate .docx",
     "generating": "Generating…",
     "submit": "Submit for review",
-    "submitting": "Submitting…"
+    "submitting": "Submitting…",
+    "styleLabel": "Manuscript style",
+    "styleUnsavedHint": "unsaved — download uses your latest edits",
+    "styleCatalogError": "Could not load manuscript styles. Try refreshing the page."
   },
   "ConstructorList": {
     "defaultDirLabel": "Default direction",
@@ -566,7 +646,8 @@
   "ConstructorPreview": {
     "ariaLabel": "Live preview of the generated Word document",
     "header": "Preview",
-    "empty": "Add sections on the left to see the preview here."
+    "empty": "Add sections on the left to see the preview here.",
+    "approximateNotice": "Approximate layout only — generate .docx for final formatting."
   },
   "ConstructorValidation": {
     "checklistTitle": "Before you submit, address these items:",
@@ -580,6 +661,47 @@
     "error_CONSTRUCTOR_ABSTRACT_AR_MISSING": "Add an Arabic abstract.",
     "error_CONSTRUCTOR_REFERENCES_MISSING": "Add a references section.",
     "error_CONSTRUCTOR_REFERENCES_EMPTY": "Add at least one reference."
+  },
+  "Copyedit": {
+    "title": "Copyediting",
+    "queueTitle": "Copyediting assignments",
+    "queueHint": "Manuscripts assigned to you for production copyediting.",
+    "queueEmpty": "No copyediting assignments yet.",
+    "needCopyeditorRole": "You need the copyeditor role to view this page.",
+    "loadFailed": "Could not load copyediting queue.",
+    "submissionFallback": "Manuscript",
+    "assignLabel": "Assign copyeditor",
+    "assignPlaceholder": "Choose a copyeditor…",
+    "assignButton": "Assign",
+    "assigned": "Copyeditor assigned.",
+    "assignFailed": "Could not assign copyeditor.",
+    "noNotesYet": "No copyedit requests yet.",
+    "roundLabel": "Round {round}",
+    "markReady": "I've addressed these requests",
+    "markedReady": "Marked as ready for copyeditor review.",
+    "readyFailed": "Could not mark ready. Upload a revised manuscript after the latest request.",
+    "uploadRevision": "Upload revised manuscript",
+    "uploadRevisionHint": "Upload a new manuscript file after addressing each round of requests.",
+    "revisionUploaded": "Revision uploaded.",
+    "uploadFailed": "Upload failed.",
+    "fileTooLarge": "File is too large (max {maxMb} MB).",
+    "editorOnly": "Editor only",
+    "backToQueue": "Back to queue",
+    "loading": "Loading…",
+    "viewSubmission": "View submission",
+    "queryHistory": "Query history",
+    "newQuery": "New copyedit query",
+    "noteForAuthor": "Requests for the author",
+    "noteToEditor": "Note to editor only (optional)",
+    "sendQuery": "Send to author",
+    "noteSent": "Copyedit query sent.",
+    "noteFailed": "Could not send query.",
+    "publishButton": "Publish to catalog",
+    "published": "Published.",
+    "publishFailed": "Could not publish.",
+    "assignmentStatus_active": "Active",
+    "assignmentStatus_awaiting_author": "Awaiting author",
+    "assignmentStatus_ready_for_review": "Ready for your review"
   },
   "Common": {
     "recAccept": "Accept",

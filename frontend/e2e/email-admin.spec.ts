@@ -38,5 +38,11 @@ test.describe("Editor email settings (opt-in)", () => {
     await expect(
       page.getByRole("heading", { name: "Reminder policy" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Copyediting" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Copyeditor assignment" }),
+    ).toBeVisible();
   });
 });

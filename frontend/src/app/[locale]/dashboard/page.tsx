@@ -1,9 +1,11 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { toast, toastApiError } from "@/lib/toast";
 import type { MeProfile } from "@/lib/permissions";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
 import { PAGE_SHELL } from "@/lib/page-shell";
@@ -43,6 +45,7 @@ type RoleInviteRow = {
 export default function DashboardPage() {
   const t = useTranslations("Dashboard");
   const locale = useLocale();
+  const pathname = usePathname();
   const router = useRouter();
   const [me, setMe] = useState<MeProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,22 +53,34 @@ export default function DashboardPage() {
   const [roleInvites, setRoleInvites] = useState<RoleInviteRow[]>([]);
   const [invitesLoaded, setInvitesLoaded] = useState(false);
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
+  const [emailPref, setEmailPref] = useState<"" | "en" | "ar">("");
+  const [emailPrefBusy, setEmailPrefBusy] = useState(false);
 
-  useEffect(() => {
-    if (!getStoredToken()) {
-      router.replace("/login");
-      return;
-    }
+  const loadMe = useCallback(() => {
     apiJson<MeProfile>("/auth/me")
       .then(setMe)
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login");
+          redirectToLogin(router, pathname);
           return;
         }
         setError(err instanceof ApiError ? err.message : t("loadFailed"));
       });
-  }, [router, t]);
+  }, [router, pathname, t]);
+
+  useEffect(() => {
+    if (!getStoredToken()) {
+      redirectToLogin(router, pathname);
+      return;
+    }
+    loadMe();
+  }, [router, pathname, loadMe]);
+
+  useEffect(() => {
+    if (!me) return;
+    const p = me.preferredLocale;
+    setEmailPref(p === "en" || p === "ar" ? p : "");
+  }, [me]);
 
   useEffect(() => {
     if (!me) return;
@@ -117,8 +132,10 @@ export default function DashboardPage() {
       ]);
       setMe(profile);
       setRoleInvites(roles);
-    } catch {
-      /* surface via optional toast; keep simple */
+      toast.success(t("roleInviteAccepted"));
+    } catch (err) {
+      // user-facing: role invite acceptance failed
+      toastApiError(err, t("loadFailed"), { id: "dashboard-role-invite-accept" });
     } finally {
       setRoleBusyId(null);
     }
@@ -129,8 +146,31 @@ export default function DashboardPage() {
     try {
       await apiJson(`/role-invitations/${id}/decline`, { method: "POST" });
       setRoleInvites(await apiJson<RoleInviteRow[]>("/users/me/role-invitations"));
+      toast.success(t("roleInviteDeclined"));
+    } catch (err) {
+      // user-facing: role invite decline failed
+      toastApiError(err, t("loadFailed"), { id: "dashboard-role-invite-decline" });
     } finally {
       setRoleBusyId(null);
+    }
+  }
+
+  async function saveEmailPref() {
+    setEmailPrefBusy(true);
+    try {
+      await apiJson("/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          preferredLocale: emailPref === "" ? null : emailPref,
+        }),
+      });
+      setMe(await apiJson<MeProfile>("/auth/me"));
+      toast.success(t("emailLanguageSaved"));
+    } catch (err) {
+      // user-facing: email preference save failed
+      toastApiError(err, t("loadFailed"), { id: "dashboard-email-pref" });
+    } finally {
+      setEmailPrefBusy(false);
     }
   }
 
@@ -141,7 +181,17 @@ export default function DashboardPage() {
           className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
           role="alert"
         >
-          {error}
+          <p>{error}</p>
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
+            onClick={() => {
+              setError(null);
+              loadMe();
+            }}
+          >
+            {t("retryLoad")}
+          </button>
         </div>
       </main>
     );
@@ -227,6 +277,43 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <section
+        className="mt-6 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm sm:p-6"
+        aria-labelledby="email-pref-heading"
+      >
+        <h2
+          id="email-pref-heading"
+          className="font-sans text-sm font-semibold text-ink"
+        >
+          {t("emailLanguageTitle")}
+        </h2>
+        <p className="mt-2 text-sm text-ink/65">{t("emailLanguageHint")}</p>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            <span className="sr-only">{t("emailLanguageTitle")}</span>
+            <select
+              value={emailPref}
+              onChange={(e) =>
+                setEmailPref(e.target.value as "" | "en" | "ar")
+              }
+              className="rounded-md border border-ink/15 bg-paper px-3 py-2 text-ink"
+            >
+              <option value="">{t("emailLanguageAuto")}</option>
+              <option value="en">{t("emailLanguageEn")}</option>
+              <option value="ar">{t("emailLanguageAr")}</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={emailPrefBusy}
+            onClick={() => void saveEmailPref()}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-50"
+          >
+            {emailPrefBusy ? t("emailLanguageSaving") : t("emailLanguageSave")}
+          </button>
+        </div>
+      </section>
 
       {hasPendingInvites && (
         <section

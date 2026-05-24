@@ -2,9 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
 import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { toastApiError } from "@/lib/toast";
 import { PAGE_SHELL } from "@/lib/page-shell";
 
 type AssignmentRow = {
@@ -29,6 +31,7 @@ export default function AssignmentInvitePage() {
   const tWf = useTranslations("SubmissionWorkflow");
   const params = useParams();
   const slug = params.slug as string;
+  const pathname = usePathname();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +39,6 @@ export default function AssignmentInvitePage() {
   const [abstractExpandedEn, setAbstractExpandedEn] = useState(false);
   const [abstractExpandedAr, setAbstractExpandedAr] = useState(false);
   const [acting, setActing] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,7 +58,7 @@ export default function AssignmentInvitePage() {
       setAssignment(row);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
+        redirectToLogin(router, pathname);
         return;
       }
       if (err instanceof ApiError && err.status === 403) {
@@ -67,18 +69,17 @@ export default function AssignmentInvitePage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, router, t, tAssignments]);
+  }, [slug, router, pathname, t, tAssignments]);
 
   useEffect(() => {
     if (!getStoredToken()) {
-      router.replace("/login");
+      redirectToLogin(router, pathname);
       return;
     }
     void load();
-  }, [load, router]);
+  }, [load, router, pathname]);
 
   async function accept() {
-    setActionError(null);
     setActing(true);
     try {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/accept`, {
@@ -86,16 +87,13 @@ export default function AssignmentInvitePage() {
       });
       router.push(`/assignments/${encodeURIComponent(slug)}/review`);
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err.message : t("actionFailed"),
-      );
+      toastApiError(err, t("actionFailed"), { id: "assignment-invite-accept" });
     } finally {
       setActing(false);
     }
   }
 
   async function decline() {
-    setActionError(null);
     setActing(true);
     try {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/decline`, {
@@ -103,9 +101,7 @@ export default function AssignmentInvitePage() {
       });
       router.push("/assignments");
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err.message : t("actionFailed"),
-      );
+      toastApiError(err, t("actionFailed"), { id: "assignment-invite-decline" });
     } finally {
       setActing(false);
     }
@@ -145,6 +141,13 @@ export default function AssignmentInvitePage() {
       {!loading && error && (
         <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 shadow-sm">
           <p className="text-sm text-ink/80">{error}</p>
+          <button
+            type="button"
+            className="mt-4 rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
+            onClick={() => void load()}
+          >
+            {t("retryLoad")}
+          </button>
           <Link
             href="/assignments"
             className="mt-6 inline-block text-sm font-medium text-accent hover:underline"
@@ -241,15 +244,6 @@ export default function AssignmentInvitePage() {
               {t("fullManuscriptAfterAccept")}
             </p>
           </section>
-
-          {actionError ? (
-            <p
-              className="mt-4 text-sm text-red-700"
-              role="alert"
-            >
-              {actionError}
-            </p>
-          ) : null}
 
           <div className="mt-8 flex flex-wrap gap-3">
             <button

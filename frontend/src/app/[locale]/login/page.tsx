@@ -1,10 +1,14 @@
 "use client";
 
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { apiJson, setStoredToken, ApiError } from "@/lib/api";
+import { apiJson, setStoredToken } from "@/lib/api";
+import { sanitizeNextParam } from "@/lib/auth-redirect";
+import { toastApiError } from "@/lib/toast";
 import { PAGE_SHELL } from "@/lib/page-shell";
+import { PasswordInputWithToggle } from "@/components/password-input-with-toggle";
 import {
   firstIssueByTopLevelPath,
   loginSchema,
@@ -17,22 +21,20 @@ function inputCls(err: boolean) {
   }`;
 }
 
-
-export default function LoginPage() {
+function LoginForm() {
   const t = useTranslations("Login");
   const tNav = useTranslations("Nav");
   const tv = useTranslations("Validation");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setEmailError(null);
     setPasswordError(null);
     const parsed = safeParseResult(loginSchema, { email, password });
@@ -49,10 +51,11 @@ export default function LoginPage() {
         body: JSON.stringify(parsed.data),
       });
       setStoredToken(data.accessToken);
-      router.push("/dashboard");
+      const next = sanitizeNextParam(searchParams.get("next"));
+      router.push(next ?? "/dashboard");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("loginFailed"));
+      toastApiError(err, t("loginFailed"), { id: "login-failed" });
     } finally {
       setLoading(false);
     }
@@ -99,11 +102,6 @@ export default function LoginPage() {
             </p>
           )}
           <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
-            {error && (
-              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                {error}
-              </p>
-            )}
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-ink">{t("email")}</span>
               <input
@@ -124,8 +122,7 @@ export default function LoginPage() {
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-ink">{t("password")}</span>
-              <input
-                type="password"
+              <PasswordInputWithToggle
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => {
@@ -133,7 +130,9 @@ export default function LoginPage() {
                   setPasswordError(null);
                 }}
                 aria-invalid={!!passwordError}
-                className={inputCls(!!passwordError)}
+                inputClassName={inputCls(!!passwordError)}
+                showLabel={t("showPassword")}
+                hideLabel={t("hidePassword")}
               />
               {passwordError && (
                 <span className="text-sm text-red-700">{passwordError}</span>
@@ -159,5 +158,22 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function LoginFallback() {
+  const t = useTranslations("Login");
+  return (
+    <main className={PAGE_SHELL}>
+      <p className="text-sm text-ink/70">{t("title")}…</p>
+    </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   );
 }

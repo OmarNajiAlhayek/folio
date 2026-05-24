@@ -1,10 +1,14 @@
 "use client";
 
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { apiJson, setStoredToken, ApiError } from "@/lib/api";
+import { apiJson, setStoredToken } from "@/lib/api";
+import { sanitizeNextParam } from "@/lib/auth-redirect";
+import { toastApiError } from "@/lib/toast";
 import { PAGE_SHELL } from "@/lib/page-shell";
+import { PasswordInputWithToggle } from "@/components/password-input-with-toggle";
 import {
   firstIssueByTopLevelPath,
   registerSchema,
@@ -19,11 +23,12 @@ function fieldCls(err: boolean, extra = "") {
 }
 
 
-export default function RegisterPage() {
+function RegisterForm() {
   const t = useTranslations("Register");
   const tNav = useTranslations("Nav");
   const tv = useTranslations("Validation");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -31,13 +36,11 @@ export default function RegisterPage() {
   const [orcid, setOrcid] = useState("");
   const [reviewKeywords, setReviewKeywords] = useState("");
   const [willingToReview, setWillingToReview] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setFieldErrors({});
     const parsed = safeParseResult(registerSchema, {
       email,
@@ -70,10 +73,11 @@ export default function RegisterPage() {
         body: JSON.stringify(body),
       });
       setStoredToken(data.accessToken);
-      router.push("/dashboard");
+      const next = sanitizeNextParam(searchParams.get("next"));
+      router.push(next ?? "/dashboard");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("registrationFailed"));
+      toastApiError(err, t("registrationFailed"), { id: "register-failed" });
     } finally {
       setLoading(false);
     }
@@ -103,11 +107,6 @@ export default function RegisterPage() {
             {t("title")}
           </h1>
           <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4 md:mt-0">
-        {error && (
-          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {error}
-          </p>
-        )}
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-ink">{t("displayName")}</span>
           <input
@@ -153,8 +152,7 @@ export default function RegisterPage() {
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-ink">{t("passwordMin")}</span>
-          <input
-            type="password"
+          <PasswordInputWithToggle
             autoComplete="new-password"
             value={password}
             onChange={(e) => {
@@ -166,7 +164,9 @@ export default function RegisterPage() {
               });
             }}
             aria-invalid={!!fieldErrors.password}
-            className={fieldCls(!!fieldErrors.password)}
+            inputClassName={fieldCls(!!fieldErrors.password)}
+            showLabel={t("showPassword")}
+            hideLabel={t("hidePassword")}
           />
           {fieldErrors.password && (
             <span className="text-sm text-red-700">{fieldErrors.password}</span>
@@ -263,5 +263,22 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function RegisterFallback() {
+  const t = useTranslations("Register");
+  return (
+    <main className={PAGE_SHELL}>
+      <p className="text-sm text-ink/70">{t("title")}…</p>
+    </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterFallback />}>
+      <RegisterForm />
+    </Suspense>
   );
 }

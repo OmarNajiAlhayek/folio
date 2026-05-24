@@ -3,6 +3,17 @@
     "title": "فوليو — مساحة عمل للتحكيم العلمي",
     "description": "تقديم المخطوطات والتحكيم الأقران ونشر الأعمال المقبولة"
   },
+  "manuscriptStyles": {
+    "damascus-university-journal-v1": {
+      "displayName": "مجلة جامعة دمشق",
+      "description": "الخطوط والهوامش وترتيب المراجع وفق دليل مخطوطات مجلة جامعة دمشق."
+    }
+  },
+  "Toast": {
+    "genericError": "حدث خطأ. يُرجى المحاولة مرة أخرى.",
+    "saved": "تم الحفظ.",
+    "uploadFailed": "فشل الرفع."
+  },
   "Nav": {
     "brand": "فوليو",
     "publications": "المنشورات",
@@ -11,7 +22,12 @@
     "editor": "التحرير",
     "emailSettings": "إعدادات البريد",
     "myReviews": "مراجعاتي",
+    "copyediting": "التحرير النهائي",
     "logout": "تسجيل الخروج",
+    "logoutConfirmTitle": "تسجيل الخروج؟",
+    "logoutConfirmDescription": "ستحتاج إلى تسجيل الدخول مرة أخرى للوصول إلى حسابك.",
+    "logoutCancel": "إلغاء",
+    "logoutConfirmAction": "تأكيد الخروج",
     "login": "تسجيل الدخول",
     "register": "إنشاء حساب",
     "localeEn": "English",
@@ -48,7 +64,9 @@
     "signIn": "دخول",
     "noAccount": "ليس لديك حساب؟",
     "registerLink": "سجّل",
-    "loginFailed": "فشل تسجيل الدخول"
+    "loginFailed": "فشل تسجيل الدخول",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور"
   },
   "Register": {
     "sideBlurb": "سير عمل النشر الأكاديمي في مكان واحد — الأدوار والتكليفات والسجل العلني.",
@@ -69,11 +87,14 @@
     "createAccount": "إنشاء الحساب",
     "hasAccount": "لديك حساب بالفعل؟",
     "loginLink": "سجّل الدخول",
-    "registrationFailed": "فشل التسجيل"
+    "registrationFailed": "فشل التسجيل",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور"
   },
   "Dashboard": {
     "title": "لوحة التحكم",
     "loadFailed": "تعذّر تحميل الملف الشخصي",
+    "retryLoad": "إعادة المحاولة",
     "signedInAs": "مسجّل الدخول كـ",
     "mySubmissions": "طلباتي",
     "editorQueue": "قائمة التحرير",
@@ -89,7 +110,17 @@
     "acceptRole": "قبول",
     "declineRole": "رفض",
     "working": "…",
-    "untitledSubmission": "طلب"
+    "untitledSubmission": "طلب",
+    "emailLanguageTitle": "لغة البريد",
+    "emailLanguageHint": "تُستخدم للرسائل التلقائية (مثل دعوات التحكيم) عند التعيين؛ وإلا تُطبَّق لغة واجهة المحرّر أو الافتراضية للموقع.",
+    "emailLanguageAuto": "تلقائي (مُستحسن)",
+    "emailLanguageEn": "English",
+    "emailLanguageAr": "العربية",
+    "emailLanguageSave": "حفظ التفضيل",
+    "emailLanguageSaving": "جارٍ الحفظ…",
+    "emailLanguageSaved": "تم حفظ التفضيل",
+    "roleInviteAccepted": "تم قبول دور المحرّر.",
+    "roleInviteDeclined": "تم رفض الدعوة."
   },
   "Submissions": {
     "title": "الطلبات",
@@ -97,12 +128,14 @@
     "hint": "يرى المؤلفون طلباتهم فقط. يرى المحرّرون قائمة الوارد (دون المسودات).",
     "empty": "لا توجد طلبات بعد.",
     "loadFailed": "تعذّر التحميل",
+    "retryLoad": "إعادة المحاولة",
     "stDraft": "مسودة",
     "stSubmitted": "مُرسَل",
     "stUnderReview": "قيد التحكيم",
     "stRevisions": "تعديلات مطلوبة",
     "stAccepted": "مقبول",
     "stRejected": "مرفوض",
+    "stCopyediting": "قيد التحرير النهائي",
     "stPublished": "منشور",
     "updatedLabel": "آخر تحديث {date}",
     "emptyHint": "عند إنشاء طلب سيظهر هنا.",
@@ -141,6 +174,7 @@
     "attachedFiles": "الملفات المرفقة",
     "uploadHint": "إلزامي: خطاب التغطية، صفحة العنوان، المخطوطة الرئيسية. اختياري: أشكال، جداول، ملحق. يتحقق النظام من الحزمة عند الإرسال.",
     "submitForReview": "إرسال للتحكيم",
+    "submitIrreversibleHint": "بعد الإرسال لا يمكنك سحب الطلب أو التراجع عنه بنفسك.",
     "editorSection": "المحرّر",
     "reviewerLabel": "المحكّم",
     "reviewerPlaceholder": "اختر محكّمًا",
@@ -153,6 +187,7 @@
     "downloadFailed": "فشل التنزيل",
     "loading": "جارٍ التحميل…",
     "loadFailed": "تعذّر التحميل",
+    "retryLoad": "إعادة المحاولة",
     "uploadFailed": "فشل الرفع",
     "submitFailed": "فشل الإرسال",
     "assignFailed": "فشل التعيين",
@@ -174,7 +209,9 @@
     "reviewRecommendation": "التوصية",
     "reviewNoEditorComments": "لا توجد تعليقات سرية.",
     "reviewFeedbackItem": "ملاحظات {n}",
-    "constructorModeNotice": "أُنشئ هذا الطلب عبر منشئ مستندات Word المدمج. عدّل المحتوى المنظَّم هنا، وسيُعاد توليد ملف المخطوطة عند الإرسال.",
+    "constructorModeNotice": "تُبنى المخطوطة الرئيسية في منشئ Word. افتحه لتعديل الأقسام، واستخدم «إرسال للتحكيم» أدناه عند اكتمال الحزمة.",
+    "constructorCompanionFilesHint": "ارفع خطاب التغطية وصفحة العنوان هنا. يُولَّد ملف المخطوطة الرئيسية من المنشئ عند الإرسال للتحكيم.",
+    "constructorUploadHint": "مطلوب: خطاب التغطية وصفحة العنوان. اختياري: أشكال، جداول، ملفات إضافية. الإرسال للتحكيم يولّد أيضًا المخطوطة الرئيسية من المنشئ.",
     "openConstructor": "فتح المنشئ",
     "chooseManuscriptMode": "كيف تريد تقديم المخطوطة؟",
     "chooseManuscriptModeHint": "ارفع ملف .docx جاهزًا، أو ابنِ المخطوطة قسمًا بقسم باستخدام المنشئ.",
@@ -295,6 +332,7 @@
     "allNonDraft": "الكل باستثناء المسودة",
     "empty": "لا يوجد شيء في هذا العرض.",
     "loadFailed": "تعذّر التحميل",
+    "retryLoad": "إعادة المحاولة",
     "stSubmitted": "مُرسَل",
     "stUnderReview": "قيد التحكيم",
     "stRevisions": "تعديلات مطلوبة",
@@ -304,10 +342,12 @@
   },
   "EmailSettings": {
     "title": "قوالب البريد والتذكيرات",
-    "hint": "للمحرّرين الموثوقين فقط. تُحسب رسائل التذكير من وقت الدعوة: الأولى بعد (ن−3) أيام والثانية بعد (ن+1) يوم، حيث ن هي القيمة أدناه. تغيير السياسة لا يعيد جدولة التذكيرات المعلّقة الحالية.",
+    "hint": "للمحرّرين الموثوقين فقط. عدّل رسائل التحكيم والتذكير والتحرير الإنتاجي. تُحسب التذكيرات من وقت الدعوة: الأولى بعد (ن−3) أيام والثانية بعد (ن+1) يوم، حيث ن هي القيمة أدناه. تغيير السياسة لا يعيد جدولة التذكيرات المعلّقة الحالية.",
     "forbidden": "ليست لديك صلاحية لهذه الصفحة.",
     "loading": "جارٍ التحميل…",
     "loadFailed": "تعذّر تحميل إعدادات البريد",
+    "retryLoad": "إعادة المحاولة",
+    "previewFailed": "فشلت المعاينة.",
     "policySection": "سياسة التذكير",
     "reviewDueDays": "موعد التسليم (أيام، ن)",
     "reviewDueDaysHelp": "يجب أن لا يقل عن 4. يُستخدم لجدولة رسائل «قرب الموعد» و«تجاوز الموعد» للتعيينات الجديدة.",
@@ -316,6 +356,14 @@
     "policySaved": "تم تحديث السياسة",
     "templateReviewerInvited": "دعوة المحكّم",
     "templateReminderDue": "تذكير الموعد / التأخير",
+    "templatesReviewSection": "التحكيم",
+    "templatesWorkflowSection": "سير التحرير",
+    "templatesCopyeditSection": "التحرير الإنتاجي",
+    "templateSubmissionSubmitted": "استلام التقديم (المحررون)",
+    "templateSubmissionDecision": "قرار التحرير (المؤلف)",
+    "templateCopyeditAssigned": "تعيين محرّر إنتاجي",
+    "templateCopyeditQueriesSent": "استفسارات للمؤلف (جولة جديدة)",
+    "templateCopyeditAuthorReady": "المؤلف جاهز لمراجعة التحرير",
     "subject": "الموضوع (Handlebars)",
     "htmlBody": "نص HTML",
     "textBody": "نص عادي",
@@ -324,10 +372,29 @@
     "preview": "معاينة (بيانات تجريبية)",
     "previewing": "جارٍ العرض…",
     "previewOverdue": "معاينة (فرع التأخير)",
-    "variablesReviewer": "متغيّرات: {{reviewerDisplayName}}، {{submissionTitle}}، {{acceptUrl}}، {{declineUrl}}",
-    "variablesReminder": "متغيّرات: {{reviewerDisplayName}}، {{submissionTitle}}، {{assignmentUrl}}، {{dueAt}}، {{#if isOverdue}}…{{/if}}",
+    "variablesReviewer": "متغيّرات القالب (Handlebars): reviewerDisplayName، submissionTitle، acceptUrl، declineUrl",
+    "variablesReminder": "متغيّرات القالب (Handlebars): reviewerDisplayName، submissionTitle، assignmentUrl، dueAt؛ يتوفّر أيضًا شرط isOverdue",
+    "variablesCopyeditAssigned": "متغيّرات القالب (Handlebars): copyeditorDisplayName، submissionTitle، workbenchUrl، assignedByDisplayName",
+    "variablesCopyeditQueriesSent": "متغيّرات القالب (Handlebars): authorDisplayName، copyeditorDisplayName، submissionTitle، round، noteExcerpt، submissionUrl",
+    "variablesCopyeditAuthorReady": "متغيّرات القالب (Handlebars): copyeditorDisplayName، authorDisplayName، submissionTitle، round، workbenchUrl",
+    "variablesSubmissionSubmitted": "متغيّرات القالب (Handlebars): editorDisplayName، authorDisplayName، submissionTitle، isResubmission، editorQueueUrl",
+    "variablesSubmissionDecision": "متغيّرات القالب (Handlebars): authorDisplayName، submissionTitle، submissionUrl، decidedByDisplayName؛ أعلام الفروع isAccepted و isRejected و isRevisionsRequested",
     "conflict": "تغيّر الإعداد لدى مستخدم آخر. حدّث الصفحة ثم أعد المحاولة.",
-    "backToEditor": "العودة لقائمة التحرير"
+    "backToEditor": "العودة لقائمة التحرير",
+    "templateLocale": "القالب قيد التحرير",
+    "pipelineSection": "حالة مسار البريد",
+    "pipelineHint": "لقطة تشغيلية: صندوق أحداث الواجهة، سجل الإرسال في خدمة البريد، التذكيرات المجدولة، وأعماق طوابير RabbitMQ (مخبأة). التذكيرات «المعلّقة» الكثيرة طبيعية قبل وقت الإرسال.",
+    "pipelineRefresh": "تحديث الحالة",
+    "pipelineLoading": "جارٍ تحميل حالة المسار…",
+    "pipelineFailed": "تعذّر تحميل حالة المسار",
+    "outboxLabel": "صندوق أحداث الواجهة",
+    "emailLogLabel": "سجل إرسال البريد",
+    "remindersLabel": "التذكيرات المجدولة",
+    "rabbitLabel": "RabbitMQ (مخبأ)",
+    "rabbitUnavailable": "مقاييس الوسيط غير متاحة",
+    "stuckReminders": "تذكيرات معلّقة تجاوزت موعد الإرسال (≈15 د)",
+    "failedSamples": "آخر عمليات إرسال فاشلة (مُنقّاة)",
+    "deadOutboxSamples": "آخر صفوف صندوق الأحداث الميتة (مُنقّاة)"
   },
   "Assignments": {
     "title": "مهام التحكيم الموكلة إليّ",
@@ -348,7 +415,8 @@
     "stAssignDeclined": "مرفوضة",
     "openReview": "فتح المراجعة",
     "respondToInvite": "الردّ على الدعوة",
-    "loadFailed": "تعذّر التحميل"
+    "loadFailed": "تعذّر التحميل",
+    "retryLoad": "إعادة المحاولة"
   },
   "AssignmentsInvite": {
     "back": "← المهام",
@@ -365,6 +433,7 @@
     "decline": "رفض",
     "working": "يرجى الانتظار…",
     "loadFailed": "تعذّر تحميل الدعوة",
+    "retryLoad": "إعادة المحاولة",
     "notFound": "لم تُعثر على هذه الدعوة.",
     "notInvited": "هذه المهمة لا تنتظر ردًّا.",
     "actionFailed": "حدث خطأ. أعد المحاولة."
@@ -398,6 +467,7 @@
     "commentsForAuthorRequired": "يرجى إدخال تعليقات للمؤلف.",
     "loading": "جارٍ تحميل المهمة…",
     "loadFailed": "تعذّر تحميل المهمة",
+    "retryLoad": "إعادة المحاولة",
     "notFound": "لم يُعثر على مهمة التحكيم هذه أو لم يعد بإمكانك الوصول إليها.",
     "notPending": "لم تعد هذه المهمة مفتوحة للمراجعة. ربما أرسلت مراجعتك بالفعل، أو سُحبت.",
     "acceptInvitationFirst": "تحتاج قبول الدعوة قبل الوصول إلى المخطوطة كاملة وتقديم المراجعة.",
@@ -411,13 +481,15 @@
     "readArticle": "اقرأ",
     "loading": "جارٍ تحميل الفهرس…",
     "empty": "لا توجد مقالات منشورة بعد.",
-    "loadFailed": "تعذّر التحميل"
+    "loadFailed": "تعذّر التحميل",
+    "retryLoad": "إعادة المحاولة"
   },
   "PublicationDetail": {
     "back": "← الفهرس",
     "files": "الملفات",
     "loading": "جارٍ التحميل…",
-    "notFound": "غير موجود"
+    "notFound": "غير موجود",
+    "retryLoad": "إعادة المحاولة"
   },
   "ConstructorMode": {
     "heading": "كيف تريد تقديم مخطوطتك؟",
@@ -432,7 +504,11 @@
     "titleNew": "طلب جديد — منشئ Word",
     "subtitleNew": "ابنِ المقال بالأقسام هنا. يُحفظ بناء المستند في هذا المتصفح حتى تتابع لإنشاء الطلب.",
     "titleEdit": "تعديل الطلب — منشئ Word",
-    "subtitleEdit": "تُحفظ التغييرات تلقائيًا. استخدم «توليد .docx» لتنزيل ملف Word مُنسّق، أو «إرسال» لتقديمه للتحكيم.",
+    "subtitleEdit": "تُحفظ التغييرات تلقائيًا. نزّل المخطوطة أو أرفقها، ثم أرسل للتحكيم من صفحة الطلب.",
+    "attachManuscript": "إرفاق كمخطوطة",
+    "attachingManuscript": "جارٍ الإرفاق…",
+    "attachManuscriptSuccess": "تم حفظ ملف المخطوطة على الخادم.",
+    "attachManuscriptFailed": "تعذّر إرفاق ملف المخطوطة.",
     "backToModeSelection": "← رجوع",
     "backToSubmission": "← العودة إلى الطلب",
     "backToList": "← العودة إلى الطلبات",
@@ -449,6 +525,7 @@
     "missingAbstractForSave": "أضف قسم الملخص قبل حفظ المسودة.",
     "saveFailed": "تعذّر حفظ المسودة. حاول مرة أخرى.",
     "loadFailed": "تعذّر تحميل هذا الطلب.",
+    "retryLoad": "إعادة المحاولة",
     "loading": "جارٍ التحميل…",
     "notFound": "الطلب غير موجود.",
     "autosaveFailed": "فشل الحفظ التلقائي. تغييراتك محفوظة في المحرر — حاول التعديل مجددًا لإعادة المحاولة.",
@@ -469,7 +546,10 @@
     "downloadDocx": "توليد .docx",
     "generating": "جارٍ التوليد…",
     "submit": "إرسال للتحكيم",
-    "submitting": "جارٍ الإرسال…"
+    "submitting": "جارٍ الإرسال…",
+    "styleLabel": "نمط المخطوطة",
+    "styleUnsavedHint": "غير محفوظ — التنزيل يعكس آخر تعديلاتك",
+    "styleCatalogError": "تعذّر تحميل أنماط المخطوطة. جرّب تحديث الصفحة."
   },
   "ConstructorList": {
     "defaultDirLabel": "الاتجاه الافتراضي",
@@ -566,7 +646,8 @@
   "ConstructorPreview": {
     "ariaLabel": "معاينة مباشرة لمستند Word المُولَّد",
     "header": "معاينة",
-    "empty": "أضف أقسامًا في الجهة اليسرى لرؤية المعاينة هنا."
+    "empty": "أضف أقسامًا في الجهة اليسرى لرؤية المعاينة هنا.",
+    "approximateNotice": "تخطيط تقريبي فقط — ولِّد ملف .docx للتنسيق النهائي."
   },
   "ConstructorValidation": {
     "checklistTitle": "قبل الإرسال، عالج هذه النقاط:",
@@ -580,6 +661,47 @@
     "error_CONSTRUCTOR_ABSTRACT_AR_MISSING": "أضف ملخصًا عربيًا.",
     "error_CONSTRUCTOR_REFERENCES_MISSING": "أضف قسم المراجع.",
     "error_CONSTRUCTOR_REFERENCES_EMPTY": "أضف مرجعًا واحدًا على الأقل."
+  },
+  "Copyedit": {
+    "title": "التحرير النهائي",
+    "queueTitle": "مهام التحرير النهائي",
+    "queueHint": "مخطوطات مُسندة إليك للتحرير قبل النشر.",
+    "queueEmpty": "لا توجد مهام تحرير نهائي بعد.",
+    "needCopyeditorRole": "تحتاج دور المحرر النهائي لعرض هذه الصفحة.",
+    "loadFailed": "تعذّر تحميل قائمة التحرير.",
+    "submissionFallback": "مخطوطة",
+    "assignLabel": "تعيين محرر نهائي",
+    "assignPlaceholder": "اختر محررًا نهائيًا…",
+    "assignButton": "تعيين",
+    "assigned": "تم تعيين المحرر النهائي.",
+    "assignFailed": "تعذّر التعيين.",
+    "noNotesYet": "لا توجد طلبات تحرير بعد.",
+    "roundLabel": "الجولة {round}",
+    "markReady": "أنجزتُ هذه الطلبات",
+    "markedReady": "تم الإبلاغ عن جاهزية المراجعة.",
+    "readyFailed": "تعذّر التأكيد. ارفع ملف مخطوطة مُحدَّثًا بعد آخر طلب.",
+    "uploadRevision": "رفع مخطوطة مُحدَّثة",
+    "uploadRevisionHint": "ارفع ملف مخطوطة جديدًا بعد معالجة كل جولة من الطلبات.",
+    "revisionUploaded": "تم رفع التعديل.",
+    "uploadFailed": "فشل الرفع.",
+    "fileTooLarge": "الملف كبير جدًا (الحد {maxMb} ميجابايت).",
+    "editorOnly": "للمحرر فقط",
+    "backToQueue": "العودة للقائمة",
+    "loading": "جارٍ التحميل…",
+    "viewSubmission": "عرض التقديم",
+    "queryHistory": "سجل الطلبات",
+    "newQuery": "طلب تحرير جديد",
+    "noteForAuthor": "طلبات للمؤلف",
+    "noteToEditor": "ملاحظة للمحرر فقط (اختياري)",
+    "sendQuery": "إرسال للمؤلف",
+    "noteSent": "تم إرسال طلب التحرير.",
+    "noteFailed": "تعذّر الإرسال.",
+    "publishButton": "النشر في الفهرس",
+    "published": "تم النشر.",
+    "publishFailed": "تعذّر النشر.",
+    "assignmentStatus_active": "نشط",
+    "assignmentStatus_awaiting_author": "بانتظار المؤلف",
+    "assignmentStatus_ready_for_review": "جاهز لمراجعتك"
   },
   "Common": {
     "recAccept": "قبول",

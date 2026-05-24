@@ -3,8 +3,10 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Link, useRouter } from "@/i18n/navigation";
-import { apiJson, ApiError, getStoredToken } from "@/lib/api";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { apiJson, getStoredToken } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { toast, toastApiError } from "@/lib/toast";
 import { CONSTRUCTOR_ATTACH_INTENT_SESSION_KEY } from "@/lib/constructor-draft-intent";
 import { constructorContentToSubmissionMetadataInitial } from "@/lib/constructor-to-submission-metadata";
 import {
@@ -53,9 +55,9 @@ export default function NewSubmissionPage() {
   const tv = useTranslations("Validation");
   const tConstructor = useTranslations("ConstructorPage");
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const fileInputId = useId();
-  const [error, setError] = useState<string | null>(null);
   const [stagedFiles, setStagedFiles] = useState<
     Partial<Record<SubmissionFileKind, File>>
   >({});
@@ -73,8 +75,8 @@ export default function NewSubmissionPage() {
   const clearStagedFiles = useCallback(() => setStagedFiles({}), []);
 
   useEffect(() => {
-    if (!getStoredToken()) router.replace("/login");
-  }, [router]);
+    if (!getStoredToken()) redirectToLogin(router, pathname);
+  }, [router, pathname]);
 
   useEffect(() => {
     if (fromConstructor !== "1") return;
@@ -113,11 +115,10 @@ export default function NewSubmissionPage() {
               clearConstructorDraftStorage();
             }
           } catch (e) {
-            setError(
-              e instanceof ApiError
-                ? e.message
-                : tConstructor("attachConstructorFailed"),
-            );
+            // user-facing: attach constructor draft after create failed
+            toastApiError(e, tConstructor("attachConstructorFailed"), {
+              id: "new-submission-attach-constructor",
+            });
           } finally {
             try {
               sessionStorage.removeItem(CONSTRUCTOR_ATTACH_INTENT_SESSION_KEY);
@@ -139,10 +140,11 @@ export default function NewSubmissionPage() {
     const file = list?.[0];
     if (!file) return;
     if (fileExceedsUploadLimit(file)) {
-      setError(tv("fileTooLarge", { maxMb: MAX_UPLOAD_MB }));
+      toast.error(tv("fileTooLarge", { maxMb: MAX_UPLOAD_MB }), {
+        id: "new-submission-file-too-large",
+      });
       return;
     }
-    setError(null);
     setStagedFiles((prev) => ({ ...prev, [kind]: file }));
   }
 
@@ -159,22 +161,6 @@ export default function NewSubmissionPage() {
       <Link href="/submissions" className="text-sm text-accent hover:underline">
         {t("back")}
       </Link>
-      {error && (
-        <div
-          role="alert"
-          className="mt-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-        >
-          <p className="min-w-0 flex-1 pt-0.5">{error}</p>
-          <button
-            type="button"
-            onClick={() => setError(null)}
-            className="shrink-0 rounded p-1 text-lg leading-none text-red-800 hover:bg-red-100"
-            aria-label={tDetail("dismissError")}
-          >
-            ×
-          </button>
-        </div>
-      )}
       <h1 className="mt-4 font-serif text-3xl font-semibold text-ink">
         {t("title")}
       </h1>
@@ -201,7 +187,10 @@ export default function NewSubmissionPage() {
             clearStagedFiles={clearStagedFiles}
             onSavingChange={setFormSaving}
             onCreated={(slug) => void onCreated(slug)}
-            onError={(msg) => setError(msg.trim() ? msg : null)}
+            onError={(msg) => {
+              const m = msg.trim();
+              if (m) toast.error(m, { id: "new-submission-metadata" });
+            }}
           />
         </div>
       </section>

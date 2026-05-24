@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
 import { canAccessPath } from "@/lib/route-permissions";
 import type { MeProfile } from "@/lib/permissions";
 
 type Props = { children: React.ReactNode };
 
 /**
- * Client gate when the token lives in sessionStorage (Edge middleware cannot see it).
+ * Client gate when the token lives in localStorage (Edge middleware cannot see it).
  */
 export function PermissionRouteGate({ children }: Props) {
   const pathname = usePathname();
@@ -18,7 +19,7 @@ export function PermissionRouteGate({ children }: Props) {
 
   useEffect(() => {
     if (!getStoredToken()) {
-      router.replace("/login");
+      redirectToLogin(router, pathname);
       return;
     }
     let cancelled = false;
@@ -35,7 +36,7 @@ export function PermissionRouteGate({ children }: Props) {
       .catch((err) => {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login");
+          redirectToLogin(router, pathname);
           return;
         }
         router.replace("/dashboard");

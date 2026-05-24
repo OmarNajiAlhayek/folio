@@ -2,8 +2,10 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { toast, toastApiError } from "@/lib/toast";
 import type { MeProfile } from "@/lib/permissions";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
 import { submissionQueueShellCls } from "@/lib/submission-list-ui";
@@ -16,49 +18,191 @@ type ReminderPolicy = {
 
 type EmailTemplate = {
   templateKey: string;
+  locale: string;
   subjectTemplate: string;
   htmlBody: string;
   textBody: string;
   updatedAt: string;
 };
 
+const REVIEW_TEMPLATE_KEYS = [
+  "reviewer-invited",
+  "reminder-due",
+] as const;
+
+const WORKFLOW_TEMPLATE_KEYS = [
+  "submission-submitted",
+  "submission-decision",
+] as const;
+
+const COPYEDIT_TEMPLATE_KEYS = [
+  "copyedit-assigned",
+  "copyedit-queries-sent",
+  "copyedit-author-ready",
+] as const;
+
+type EmailTemplateKey =
+  | (typeof REVIEW_TEMPLATE_KEYS)[number]
+  | (typeof WORKFLOW_TEMPLATE_KEYS)[number]
+  | (typeof COPYEDIT_TEMPLATE_KEYS)[number];
+
+const TEMPLATE_I18N: Record<
+  EmailTemplateKey,
+  { title: string; variables: string; showOverduePreview?: boolean }
+> = {
+  "reviewer-invited": {
+    title: "templateReviewerInvited",
+    variables: "variablesReviewer",
+  },
+  "reminder-due": {
+    title: "templateReminderDue",
+    variables: "variablesReminder",
+    showOverduePreview: true,
+  },
+  "submission-submitted": {
+    title: "templateSubmissionSubmitted",
+    variables: "variablesSubmissionSubmitted",
+  },
+  "submission-decision": {
+    title: "templateSubmissionDecision",
+    variables: "variablesSubmissionDecision",
+  },
+  "copyedit-assigned": {
+    title: "templateCopyeditAssigned",
+    variables: "variablesCopyeditAssigned",
+  },
+  "copyedit-queries-sent": {
+    title: "templateCopyeditQueriesSent",
+    variables: "variablesCopyeditQueriesSent",
+  },
+  "copyedit-author-ready": {
+    title: "templateCopyeditAuthorReady",
+    variables: "variablesCopyeditAuthorReady",
+  },
+};
+
+type PipelineStatus = {
+  outbox: {
+    pending: number;
+    dead: number;
+    published: number;
+    dueNow: number;
+    oldestPending: {
+      id: string;
+      routingKey: string;
+      attempts: number;
+      createdAt: string;
+    } | null;
+    deadSample: Array<{
+      id: string;
+      routingKey: string;
+      attempts: number;
+      createdAt: string;
+      lastErrorRedacted: string | null;
+    }>;
+  };
+  emailLog: {
+    counts: { pending: number; sent: number; failed: number };
+    failedSample: Array<{
+      id: string;
+      idempotencyKey: string;
+      template: string;
+      createdAt: string;
+      errorRedacted: string | null;
+    }>;
+  };
+  reminders: {
+    counts: { pending: number; sent: number; cancelled: number };
+    stuckPendingPastDue: number;
+  };
+  rabbitMq: {
+    metricsAvailable: true;
+    cachedAt: string;
+    staleAfterSeconds: number;
+    available: boolean;
+    error?: string;
+    queues: Record<string, { messageCount: number; consumerCount: number }>;
+  };
+};
+
 export default function EmailSettingsPage() {
   const t = useTranslations("EmailSettings");
   const locale = useLocale();
+  const pathname = usePathname();
   const router = useRouter();
   const [me, setMe] = useState<MeProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<ReminderPolicy | null>(null);
   const [policyDays, setPolicyDays] = useState("");
-  const [tplRi, setTplRi] = useState<EmailTemplate | null>(null);
-  const [tplRd, setTplRd] = useState<EmailTemplate | null>(null);
+  const [templates, setTemplates] = useState<
+    Partial<Record<EmailTemplateKey, EmailTemplate>>
+  >({});
+  /** Match site locale on first paint so the initial GET uses the correct ?locale= */
+  const [editTemplateLocale, setEditTemplateLocale] = useState<"en" | "ar">(
+    () => (locale === "ar" ? "ar" : "en"),
+  );
   const [busyPolicy, setBusyPolicy] = useState(false);
-  const [busyRi, setBusyRi] = useState(false);
-  const [busyRd, setBusyRd] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const subjectRi = tplRi?.subjectTemplate ?? "";
-  const htmlRi = tplRi?.htmlBody ?? "";
-  const textRi = tplRi?.textBody ?? "";
-  const subjectRd = tplRd?.subjectTemplate ?? "";
-  const htmlRd = tplRd?.htmlBody ?? "";
-  const textRd = tplRd?.textBody ?? "";
+  const [busyTemplateKey, setBusyTemplateKey] =
+    useState<EmailTemplateKey | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
-    const [p, a, b] = await Promise.all([
+    const q = `?locale=${encodeURIComponent(editTemplateLocale)}`;
+    const allKeys: EmailTemplateKey[] = [
+      ...REVIEW_TEMPLATE_KEYS,
+      ...WORKFLOW_TEMPLATE_KEYS,
+      ...COPYEDIT_TEMPLATE_KEYS,
+    ];
+    const [p, ...loaded] = await Promise.all([
       apiJson<ReminderPolicy>("/admin/email/reminder-policy"),
-      apiJson<EmailTemplate>("/admin/email/templates/reviewer-invited"),
-      apiJson<EmailTemplate>("/admin/email/templates/reminder-due"),
+      ...allKeys.map((key) =>
+        apiJson<EmailTemplate>(
+          `/admin/email/templates/${encodeURIComponent(key)}${q}`,
+        ),
+      ),
     ]);
     setPolicy(p);
     setPolicyDays(String(p.reviewDueInDays));
-    setTplRi(a);
-    setTplRd(b);
-  }, []);
+    const next: Partial<Record<EmailTemplateKey, EmailTemplate>> = {};
+    allKeys.forEach((key, i) => {
+      next[key] = loaded[i];
+    });
+    setTemplates(next);
+  }, [editTemplateLocale]);
+
+  function patchTemplate(
+    key: EmailTemplateKey,
+    patch: Partial<Pick<EmailTemplate, "subjectTemplate" | "htmlBody" | "textBody">>,
+  ) {
+    setTemplates((prev) => {
+      const tpl = prev[key];
+      if (!tpl) return prev;
+      return { ...prev, [key]: { ...tpl, ...patch } };
+    });
+  }
+
+  const loadPipeline = useCallback(async () => {
+    setPipelineLoading(true);
+    setPipelineError(null);
+    try {
+      const p = await apiJson<PipelineStatus>(
+        "/admin/email/pipeline-status",
+      );
+      setPipeline(p);
+    } catch (err) {
+      setPipelineError(
+        err instanceof ApiError ? err.message : t("pipelineFailed"),
+      );
+    } finally {
+      setPipelineLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => {
     if (!getStoredToken()) {
-      router.replace("/login");
+      redirectToLogin(router, pathname);
       return;
     }
     let cancelled = false;
@@ -67,16 +211,10 @@ export default function EmailSettingsPage() {
         const profile = await apiJson<MeProfile>("/auth/me");
         if (cancelled) return;
         setMe(profile);
-        if (
-          !profile.permissions.includes(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
-        ) {
-          return;
-        }
-        await loadAll();
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login");
+          redirectToLogin(router, pathname);
           return;
         }
         setError(err instanceof ApiError ? err.message : t("loadFailed"));
@@ -85,14 +223,37 @@ export default function EmailSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, t, loadAll]);
+  }, [router, pathname, t]);
+
+  useEffect(() => {
+    if (
+      !me?.permissions.includes(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        await Promise.all([loadAll(), loadPipeline()]);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof ApiError ? err.message : t("loadFailed"));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [me, loadAll, loadPipeline, t]);
+
+  useEffect(() => {
+    setEditTemplateLocale(locale === "ar" ? "ar" : "en");
+  }, [locale]);
 
   async function savePolicy() {
     if (!policy) return;
     const n = parseInt(policyDays, 10);
     if (!Number.isFinite(n) || n < 4) return;
     setBusyPolicy(true);
-    setMsg(null);
     try {
       const next = await apiJson<ReminderPolicy>(
         "/admin/email/reminder-policy",
@@ -106,67 +267,60 @@ export default function EmailSettingsPage() {
       );
       setPolicy(next);
       setPolicyDays(String(next.reviewDueInDays));
-      setMsg(t("policySaved"));
+      toast.success(t("policySaved"));
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setMsg(t("conflict"));
+        toast.error(t("conflict"), { id: "email-settings-conflict" });
         await loadAll().catch(() => undefined);
       } else {
-        setMsg(err instanceof ApiError ? err.message : t("loadFailed"));
+        toastApiError(err, t("loadFailed"), { id: "email-settings-policy-save" });
       }
     } finally {
       setBusyPolicy(false);
     }
   }
 
-  async function saveTemplate(
-    key: "reviewer-invited" | "reminder-due",
-    tpl: EmailTemplate,
-    subject: string,
-    html: string,
-    text: string,
-    setBusy: (v: boolean) => void,
-  ) {
-    setBusy(true);
-    setMsg(null);
+  async function saveTemplate(key: EmailTemplateKey) {
+    const tpl = templates[key];
+    if (!tpl) return;
+    setBusyTemplateKey(key);
     try {
       const next = await apiJson<EmailTemplate>(
-        `/admin/email/templates/${encodeURIComponent(key)}`,
+        `/admin/email/templates/${encodeURIComponent(key)}?locale=${encodeURIComponent(editTemplateLocale)}`,
         {
           method: "PATCH",
           body: JSON.stringify({
-            subjectTemplate: subject,
-            htmlBody: html,
-            textBody: text,
+            subjectTemplate: tpl.subjectTemplate,
+            htmlBody: tpl.htmlBody,
+            textBody: tpl.textBody,
             expectedUpdatedAt: tpl.updatedAt,
           }),
         },
       );
-      if (key === "reviewer-invited") setTplRi(next);
-      else setTplRd(next);
-      setMsg(t("templateSaved"));
+      setTemplates((prev) => ({ ...prev, [key]: next }));
+      toast.success(t("templateSaved"));
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setMsg(t("conflict"));
+        toast.error(t("conflict"), { id: "email-settings-conflict" });
         await loadAll().catch(() => undefined);
       } else {
-        setMsg(err instanceof ApiError ? err.message : t("loadFailed"));
+        toastApiError(err, t("loadFailed"), {
+          id: `email-settings-template-${key}`,
+        });
       }
     } finally {
-      setBusy(false);
+      setBusyTemplateKey(null);
     }
   }
 
-  async function preview(
-    key: "reviewer-invited" | "reminder-due",
-    isOverdue?: boolean,
-  ) {
+  async function preview(key: EmailTemplateKey, isOverdue?: boolean) {
     const body =
       key === "reminder-due" && typeof isOverdue === "boolean"
         ? JSON.stringify({ isOverdue })
         : "{}";
+    const q = `?locale=${encodeURIComponent(editTemplateLocale)}`;
     return apiJson<{ subject: string; html: string; text: string }>(
-      `/admin/email/templates/${encodeURIComponent(key)}/preview`,
+      `/admin/email/templates/${encodeURIComponent(key)}/preview${q}`,
       { method: "POST", body },
     );
   }
@@ -192,7 +346,24 @@ export default function EmailSettingsPage() {
   if (error && !policy) {
     return (
       <main className={submissionQueueShellCls}>
-        <p className="text-red-700">{error}</p>
+        <p className="text-red-700" role="alert">
+          {error}
+        </p>
+        <button
+          type="button"
+          className="mt-3 rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
+          onClick={() => {
+            setError(null);
+            void Promise.all([
+              loadAll().catch((err) => {
+                setError(err instanceof ApiError ? err.message : t("loadFailed"));
+              }),
+              loadPipeline(),
+            ]);
+          }}
+        >
+          {t("retryLoad")}
+        </button>
       </main>
     );
   }
@@ -213,14 +384,120 @@ export default function EmailSettingsPage() {
         </p>
       </header>
 
-      {msg && (
-        <div
-          className="mt-6 rounded-lg border border-ink/15 bg-paper/80 px-4 py-3 text-sm text-ink"
-          role="status"
-        >
-          {msg}
+      <section className="mt-8 rounded-xl border border-ink/10 bg-paper/50 p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-sans text-lg font-semibold text-ink">
+            {t("pipelineSection")}
+          </h2>
+          <button
+            type="button"
+            disabled={pipelineLoading}
+            onClick={() => void loadPipeline()}
+            className="rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+          >
+            {pipelineLoading ? t("pipelineLoading") : t("pipelineRefresh")}
+          </button>
         </div>
-      )}
+        <p className="mt-2 text-sm text-ink/65">{t("pipelineHint")}</p>
+        {pipelineError ? (
+          <p className="mt-3 text-sm text-red-700" role="alert">
+            {pipelineError}
+          </p>
+        ) : null}
+        {pipelineLoading && !pipeline ? (
+          <p className="mt-3 text-sm text-ink/60">{t("pipelineLoading")}</p>
+        ) : null}
+        {pipeline ? (
+          <div
+            className="mt-4 grid gap-6 text-sm md:grid-cols-2"
+            dir="ltr"
+          >
+            <div>
+              <h3 className="font-medium text-ink">{t("outboxLabel")}</h3>
+              <ul className="mt-2 space-y-1 text-ink/80">
+                <li>pending: {pipeline.outbox.pending}</li>
+                <li>dueNow: {pipeline.outbox.dueNow}</li>
+                <li>dead: {pipeline.outbox.dead}</li>
+                <li>published: {pipeline.outbox.published}</li>
+              </ul>
+              {pipeline.outbox.deadSample.length > 0 ? (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-ink/70">
+                    {t("deadOutboxSamples")}
+                  </p>
+                  <ul className="mt-1 max-h-32 space-y-1 overflow-auto font-mono text-xs text-ink/75">
+                    {pipeline.outbox.deadSample.map((r) => (
+                      <li key={r.id}>
+                        {r.routingKey} · {r.lastErrorRedacted ?? "—"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+            <div>
+              <h3 className="font-medium text-ink">{t("emailLogLabel")}</h3>
+              <ul className="mt-2 space-y-1 text-ink/80">
+                <li>pending: {pipeline.emailLog.counts.pending}</li>
+                <li>sent: {pipeline.emailLog.counts.sent}</li>
+                <li>failed: {pipeline.emailLog.counts.failed}</li>
+              </ul>
+              {pipeline.emailLog.failedSample.length > 0 ? (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-ink/70">
+                    {t("failedSamples")}
+                  </p>
+                  <ul className="mt-1 max-h-32 space-y-1 overflow-auto font-mono text-xs text-ink/75">
+                    {pipeline.emailLog.failedSample.map((r) => (
+                      <li key={r.id}>
+                        {r.idempotencyKey} · {r.errorRedacted ?? "—"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+            <div>
+              <h3 className="font-medium text-ink">{t("remindersLabel")}</h3>
+              <ul className="mt-2 space-y-1 text-ink/80">
+                <li>pending: {pipeline.reminders.counts.pending}</li>
+                <li>sent: {pipeline.reminders.counts.sent}</li>
+                <li>cancelled: {pipeline.reminders.counts.cancelled}</li>
+                <li>
+                  {t("stuckReminders")}:{" "}
+                  {pipeline.reminders.stuckPendingPastDue}
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-medium text-ink">{t("rabbitLabel")}</h3>
+              {!pipeline.rabbitMq.available ? (
+                <p className="mt-2 text-ink/75">
+                  {t("rabbitUnavailable")}
+                  {pipeline.rabbitMq.error
+                    ? ` — ${pipeline.rabbitMq.error}`
+                    : ""}
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-ink/80">
+                  {Object.entries(pipeline.rabbitMq.queues).map(
+                    ([name, q]) => (
+                      <li key={name}>
+                        {name}: msg {q.messageCount}, consumers{" "}
+                        {q.consumerCount}
+                      </li>
+                    ),
+                  )}
+                </ul>
+              )}
+              <p className="mt-2 text-xs text-ink/55">
+                cached {pipeline.rabbitMq.cachedAt} · refresh ≤{" "}
+                {pipeline.rabbitMq.staleAfterSeconds}s
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <section className="mt-10 rounded-xl border border-ink/10 bg-paper/50 p-6 shadow-sm">
         <h2 className="font-sans text-lg font-semibold text-ink">
@@ -255,70 +532,154 @@ export default function EmailSettingsPage() {
         </div>
       </section>
 
-      {tplRi && (
-        <section className="mt-8 rounded-xl border border-ink/10 bg-paper/50 p-6 shadow-sm">
-          <h2 className="font-sans text-lg font-semibold text-ink">
-            {t("templateReviewerInvited")}
-          </h2>
-          <p className="mt-2 text-xs text-ink/55">{t("variablesReviewer")}</p>
-          <TemplateFields
-            locale={locale}
-            subject={subjectRi}
-            html={htmlRi}
-            text={textRi}
-            onSubject={(v) => setTplRi({ ...tplRi, subjectTemplate: v })}
-            onHtml={(v) => setTplRi({ ...tplRi, htmlBody: v })}
-            onText={(v) => setTplRi({ ...tplRi, textBody: v })}
-            onSave={() =>
-              saveTemplate(
-                "reviewer-invited",
-                tplRi,
-                subjectRi,
-                htmlRi,
-                textRi,
-                setBusyRi,
-              )
-            }
-            onPreview={() => preview("reviewer-invited")}
-            busy={busyRi}
-            t={t}
-          />
-        </section>
-      )}
+      <div className="mt-10 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium text-ink">{t("templateLocale")}</span>
+        <div className="inline-flex rounded-lg border border-ink/15 p-0.5">
+          <button
+            type="button"
+            onClick={() => setEditTemplateLocale("en")}
+            className={`rounded-md px-3 py-1.5 text-sm ${
+              editTemplateLocale === "en"
+                ? "bg-accent text-white"
+                : "text-ink/70 hover:bg-ink/5"
+            }`}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditTemplateLocale("ar")}
+            className={`rounded-md px-3 py-1.5 text-sm ${
+              editTemplateLocale === "ar"
+                ? "bg-accent text-white"
+                : "text-ink/70 hover:bg-ink/5"
+            }`}
+          >
+            العربية
+          </button>
+        </div>
+      </div>
 
-      {tplRd && (
-        <section className="mt-8 rounded-xl border border-ink/10 bg-paper/50 p-6 shadow-sm">
-          <h2 className="font-sans text-lg font-semibold text-ink">
-            {t("templateReminderDue")}
-          </h2>
-          <p className="mt-2 text-xs text-ink/55">{t("variablesReminder")}</p>
-          <TemplateFields
-            locale={locale}
-            subject={subjectRd}
-            html={htmlRd}
-            text={textRd}
-            onSubject={(v) => setTplRd({ ...tplRd, subjectTemplate: v })}
-            onHtml={(v) => setTplRd({ ...tplRd, htmlBody: v })}
-            onText={(v) => setTplRd({ ...tplRd, textBody: v })}
-            onSave={() =>
-              saveTemplate(
-                "reminder-due",
-                tplRd,
-                subjectRd,
-                htmlRd,
-                textRd,
-                setBusyRd,
-              )
-            }
-            onPreview={() => preview("reminder-due")}
-            onPreviewOverdue={() => preview("reminder-due", true)}
-            busy={busyRd}
-            t={t}
-            showOverduePreview
-          />
-        </section>
-      )}
+      <h2 className="mt-10 font-sans text-base font-semibold uppercase tracking-wide text-ink/60">
+        {t("templatesReviewSection")}
+      </h2>
+      {REVIEW_TEMPLATE_KEYS.map((key) => (
+        <EmailTemplateEditorSection
+          key={key}
+          templateKey={key}
+          tpl={templates[key]}
+          meta={TEMPLATE_I18N[key]}
+          locale={locale}
+          busy={busyTemplateKey === key}
+          t={t}
+          onPatch={(patch) => patchTemplate(key, patch)}
+          onSave={() => void saveTemplate(key)}
+          onPreview={() => preview(key)}
+          onPreviewOverdue={
+            TEMPLATE_I18N[key].showOverduePreview
+              ? () => preview(key, true)
+              : undefined
+          }
+        />
+      ))}
+
+      <h2 className="mt-10 font-sans text-base font-semibold uppercase tracking-wide text-ink/60">
+        {t("templatesWorkflowSection")}
+      </h2>
+      {WORKFLOW_TEMPLATE_KEYS.map((key) => (
+        <EmailTemplateEditorSection
+          key={key}
+          templateKey={key}
+          tpl={templates[key]}
+          meta={TEMPLATE_I18N[key]}
+          locale={locale}
+          busy={busyTemplateKey === key}
+          t={t}
+          onPatch={(patch) => patchTemplate(key, patch)}
+          onSave={() => void saveTemplate(key)}
+          onPreview={() => preview(key)}
+        />
+      ))}
+
+      <h2 className="mt-10 font-sans text-base font-semibold uppercase tracking-wide text-ink/60">
+        {t("templatesCopyeditSection")}
+      </h2>
+      {COPYEDIT_TEMPLATE_KEYS.map((key) => (
+        <EmailTemplateEditorSection
+          key={key}
+          templateKey={key}
+          tpl={templates[key]}
+          meta={TEMPLATE_I18N[key]}
+          locale={locale}
+          busy={busyTemplateKey === key}
+          t={t}
+          onPatch={(patch) => patchTemplate(key, patch)}
+          onSave={() => void saveTemplate(key)}
+          onPreview={() => preview(key)}
+        />
+      ))}
     </main>
+  );
+}
+
+function EmailTemplateEditorSection({
+  templateKey,
+  tpl,
+  meta,
+  locale,
+  busy,
+  t,
+  onPatch,
+  onSave,
+  onPreview,
+  onPreviewOverdue,
+}: {
+  templateKey: EmailTemplateKey;
+  tpl: EmailTemplate | undefined;
+  meta: (typeof TEMPLATE_I18N)[EmailTemplateKey];
+  locale: string;
+  busy: boolean;
+  t: (key: string) => string;
+  onPatch: (
+    patch: Partial<
+      Pick<EmailTemplate, "subjectTemplate" | "htmlBody" | "textBody">
+    >,
+  ) => void;
+  onSave: () => void;
+  onPreview: () => Promise<{ subject: string; html: string; text: string }>;
+  onPreviewOverdue?: () => Promise<{
+    subject: string;
+    html: string;
+    text: string;
+  }>;
+}) {
+  if (!tpl) return null;
+
+  return (
+    <section
+      className="mt-8 rounded-xl border border-ink/10 bg-paper/50 p-6 shadow-sm"
+      data-template-key={templateKey}
+    >
+      <h2 className="font-sans text-lg font-semibold text-ink">
+        {t(meta.title)}
+      </h2>
+      <p className="mt-2 text-xs text-ink/55">{t(meta.variables)}</p>
+      <TemplateFields
+        locale={locale}
+        subject={tpl.subjectTemplate}
+        html={tpl.htmlBody}
+        text={tpl.textBody}
+        onSubject={(v) => onPatch({ subjectTemplate: v })}
+        onHtml={(v) => onPatch({ htmlBody: v })}
+        onText={(v) => onPatch({ textBody: v })}
+        onSave={onSave}
+        onPreview={onPreview}
+        onPreviewOverdue={onPreviewOverdue}
+        busy={busy}
+        t={t}
+        showOverduePreview={meta.showOverduePreview}
+      />
+    </section>
   );
 }
 
@@ -355,6 +716,7 @@ function TemplateFields({
   locale: string;
   showOverduePreview?: boolean;
 }) {
+  const tEmail = useTranslations("EmailSettings");
   const [pv, setPv] = useState<string | null>(null);
   const [pvBusy, setPvBusy] = useState(false);
 
@@ -368,8 +730,10 @@ function TemplateFields({
       setPv(
         `Subject: ${r.subject}\n\n--- HTML ---\n${r.html}\n\n--- Text ---\n${r.text}`,
       );
-    } catch {
-      setPv("Preview failed");
+    } catch (err) {
+      // user-facing: template preview failed
+      toastApiError(err, tEmail("previewFailed"), { id: "email-settings-preview" });
+      setPv(null);
     } finally {
       setPvBusy(false);
     }

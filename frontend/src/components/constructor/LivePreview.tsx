@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { resolveSectionDir } from "@/lib/constructor-direction";
-import { getApiBase, getStoredToken } from "@/lib/api";
+import { apiBlob } from "@/lib/api";
 import { parseKeywordsFromStorage } from "@/lib/keywords";
 import { KeywordTagsDisplay } from "@/components/ui/keyword-tags-input";
+import type { ManuscriptPreviewTheme } from "@/lib/manuscript-styles-catalog";
 import type {
   AbstractSection,
   AuthorsSection,
@@ -22,46 +23,31 @@ import type {
 
 interface LivePreviewProps {
   content: ConstructorContent;
+  /** Theme from `GET /public/manuscript-styles` for the effective profile id. */
+  previewTheme: ManuscriptPreviewTheme;
   /** Required to render image previews via the protected files endpoint. */
   slug?: string;
-  /**
-   * Debounce in ms before recomputing derived state (numbering, sorted refs).
-   * Defaults to 300 per plan section B.
-   */
   debounceMs?: number;
 }
 
 /**
- * Side-by-side approximation of the generated .docx. Mirrors the styles
- * defined in `style.md` and the spans/runs used by `DocxGeneratorService`:
- *
- *   - "Simplified Arabic" 12pt for RTL sections
- *   - "Times New Roman" 11pt for LTR sections
- *   - Title 16pt bold, H1/H2 14pt bold (subtitle scale)
- *   - Figure caption BELOW image, bold 10pt; Table caption ABOVE table.
- *   - Reference list: Arabic refs first, then English, alphabetised within each group.
- *
- * This is an approximation, not byte-perfect Word rendering. The server
- * remains the source of truth for the final .docx.
+ * Side-by-side approximation of the generated `.docx`. Driven by the catalog
+ * `previewTheme` for fonts and house conventions; Word layout is not identical to CSS.
  */
 export function LivePreview({
   content,
+  previewTheme,
   slug,
   debounceMs = 300,
 }: LivePreviewProps) {
   const t = useTranslations("ConstructorPreview");
 
-  // Debounce the content used for *expensive* derivations (numbering, sort).
-  // Direct text changes still re-render via React's normal cycle; the
-  // debounce just keeps the heavy bits stable while typing fast.
   const [debouncedContent, setDebouncedContent] = useState(content);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedContent(content), debounceMs);
-    return () => clearTimeout(t);
+    const handle = setTimeout(() => setDebouncedContent(content), debounceMs);
+    return () => clearTimeout(handle);
   }, [content, debounceMs]);
 
-  // Derive caption numbering from the debounced content so figure/table N
-  // labels don't churn every keystroke.
   const numbering = useMemo(() => {
     const map = new Map<string, number>();
     let figure = 0;
@@ -79,6 +65,10 @@ export function LivePreview({
   }, [debouncedContent.sections]);
 
   const defaultDir = content.defaultDir;
+  const rootFont =
+    defaultDir === "rtl"
+      ? previewTheme.fontFamilyArabicStack
+      : previewTheme.fontFamilyLatinStack;
 
   return (
     <aside
@@ -86,17 +76,13 @@ export function LivePreview({
       aria-label={t("ariaLabel")}
     >
       <header className="border-b border-ink/10 px-4 py-2 text-xs font-medium uppercase tracking-wide text-ink/60">
-        {t("header")}
+        <div>{t("header")}</div>
+        <p className="mt-1 normal-case font-normal text-ink/50">{t("approximateNotice")}</p>
       </header>
       <div
         className="prose prose-sm max-w-none p-6"
         style={{
-          // Approximate the Word margins (3cm top, 2cm sides) with proportionally
-          // sized padding rather than absolute cm to fit the side panel.
-          fontFamily:
-            defaultDir === "rtl"
-              ? '"Simplified Arabic", "Noto Naskh Arabic", serif'
-              : '"Times New Roman", "Liberation Serif", serif',
+          fontFamily: rootFont,
         }}
         dir={defaultDir}
       >
@@ -113,6 +99,7 @@ export function LivePreview({
                 defaultDir={defaultDir}
                 slug={slug}
                 figureOrTableNumber={numbering.get(section.id)}
+                previewTheme={previewTheme}
               />
             </div>
           ))
@@ -127,17 +114,19 @@ function PreviewSection({
   defaultDir,
   slug,
   figureOrTableNumber,
+  previewTheme,
 }: {
   section: ConstructorSection;
   defaultDir: ConstructorDir;
   slug?: string;
   figureOrTableNumber?: number;
+  previewTheme: ManuscriptPreviewTheme;
 }) {
   const dir = resolveSectionDir(section, defaultDir);
   const fontFamily =
     dir === "rtl"
-      ? '"Simplified Arabic", "Noto Naskh Arabic", serif'
-      : '"Times New Roman", "Liberation Serif", serif';
+      ? previewTheme.fontFamilyArabicStack
+      : previewTheme.fontFamilyLatinStack;
 
   const wrapperStyle = { fontFamily };
 
@@ -149,7 +138,9 @@ function PreviewSection({
         <PreviewAuthors section={section} dir={dir} style={wrapperStyle} />
       );
     case "abstract":
-      return <PreviewAbstract section={section} />;
+      return (
+        <PreviewAbstract section={section} previewTheme={previewTheme} />
+      );
     case "heading1":
     case "heading2":
     case "heading3":
@@ -168,6 +159,7 @@ function PreviewSection({
           style={wrapperStyle}
           slug={slug}
           number={figureOrTableNumber ?? 0}
+          previewTheme={previewTheme}
         />
       );
     case "table":
@@ -177,10 +169,13 @@ function PreviewSection({
           dir={dir}
           style={wrapperStyle}
           number={figureOrTableNumber ?? 0}
+          previewTheme={previewTheme}
         />
       );
     case "references":
-      return <PreviewReferences section={section} />;
+      return (
+        <PreviewReferences section={section} previewTheme={previewTheme} />
+      );
   }
 }
 
@@ -241,12 +236,18 @@ function PreviewAuthors({
   );
 }
 
-function PreviewAbstract({ section }: { section: AbstractSection }) {
+function PreviewAbstract({
+  section,
+  previewTheme,
+}: {
+  section: AbstractSection;
+  previewTheme: ManuscriptPreviewTheme;
+}) {
   const dir: ConstructorDir = section.lang === "ar" ? "rtl" : "ltr";
   const fontFamily =
     dir === "rtl"
-      ? '"Simplified Arabic", "Noto Naskh Arabic", serif'
-      : '"Times New Roman", "Liberation Serif", serif';
+      ? previewTheme.fontFamilyArabicStack
+      : previewTheme.fontFamilyLatinStack;
   const keywordTags = parseKeywordsFromStorage(section.keywords);
   return (
     <section dir={dir} style={{ fontFamily, marginBottom: "1rem" }}>
@@ -326,8 +327,6 @@ function PreviewParagraph({
         lineHeight: 1.4,
         margin: "0 0 0.5rem",
       }}
-      // TipTap output is sanitised by the backend on submit; for the preview
-      // we trust the local state since the same rules will apply server-side.
       dangerouslySetInnerHTML={{ __html: section.html || "<p></p>" }}
     />
   );
@@ -339,36 +338,55 @@ function PreviewImage({
   style,
   slug,
   number,
+  previewTheme,
 }: {
   section: ImageSection;
   dir: ConstructorDir;
   style: React.CSSProperties;
   slug?: string;
   number: number;
+  previewTheme: ManuscriptPreviewTheme;
 }) {
-  const captionLabel = dir === "rtl" ? `الشكل ${number}` : `Figure ${number}`;
+  const captionLabel = `${previewTheme.figureWord} ${number}`;
+  const captionBlock = (
+    <figcaption
+      style={{
+        fontSize: "10pt",
+        fontWeight: 700,
+        marginTop: previewTheme.figureCaptionBelowImage ? "0.25rem" : 0,
+        marginBottom: previewTheme.figureCaptionBelowImage ? 0 : "0.25rem",
+      }}
+    >
+      {captionLabel}
+      {section.caption ? `: ${section.caption}` : ""}
+    </figcaption>
+  );
+
+  const imgBlock =
+    section.fileId && slug ? (
+      <ProtectedImage slug={slug} fileId={section.fileId} alt={section.altText} />
+    ) : (
+      <div
+        aria-hidden
+        className="mx-auto flex h-32 w-full max-w-md items-center justify-center rounded border border-dashed border-ink/20 bg-paper/40 text-xs text-ink/45"
+      >
+        {section.altText || "(no image)"}
+      </div>
+    );
+
   return (
     <figure dir={dir} style={{ ...style, margin: "0.75rem 0", textAlign: "center" }}>
-      {section.fileId && slug ? (
-        <ProtectedImage slug={slug} fileId={section.fileId} alt={section.altText} />
+      {previewTheme.figureCaptionBelowImage ? (
+        <>
+          {imgBlock}
+          {captionBlock}
+        </>
       ) : (
-        <div
-          aria-hidden
-          className="mx-auto flex h-32 w-full max-w-md items-center justify-center rounded border border-dashed border-ink/20 bg-paper/40 text-xs text-ink/45"
-        >
-          {section.altText || "(no image)"}
-        </div>
+        <>
+          {captionBlock}
+          {imgBlock}
+        </>
       )}
-      <figcaption
-        style={{
-          fontSize: "10pt",
-          fontWeight: 700,
-          marginTop: "0.25rem",
-        }}
-      >
-        {captionLabel}
-        {section.caption ? `: ${section.caption}` : ""}
-      </figcaption>
     </figure>
   );
 }
@@ -384,23 +402,19 @@ function ProtectedImage({
 }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
-    let cancelled = false;
     let objectUrl: string | null = null;
-    const token = getStoredToken();
-    if (!token) return;
-    fetch(
-      `${getApiBase()}/api/v1/submissions/${encodeURIComponent(slug)}/files/${fileId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+    const controller = new AbortController();
+    apiBlob(
+      `/submissions/${encodeURIComponent(slug)}/files/${fileId}`,
+      { signal: controller.signal },
     )
-      .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
-        if (cancelled || !blob) return;
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       })
       .catch(() => undefined);
     return () => {
-      cancelled = true;
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [slug, fileId]);
@@ -420,63 +434,87 @@ function PreviewTable({
   dir,
   style,
   number,
+  previewTheme,
 }: {
   section: TableSection;
   dir: ConstructorDir;
   style: React.CSSProperties;
   number: number;
+  previewTheme: ManuscriptPreviewTheme;
 }) {
-  const captionLabel = dir === "rtl" ? `الجدول ${number}` : `Table ${number}`;
+  const captionLabel = `${previewTheme.tableWord} ${number}`;
+  const captionEl = (
+    <p
+      style={{
+        fontSize: "10pt",
+        fontWeight: 700,
+        textAlign: "center",
+        margin: previewTheme.tableCaptionAboveTable ? "0 0 0.25rem" : "0.25rem 0 0",
+      }}
+    >
+      {captionLabel}
+      {section.caption ? `: ${section.caption}` : ""}
+    </p>
+  );
+
+  const tableEl = (
+    <table
+      style={{
+        borderCollapse: "collapse",
+        width: "100%",
+        fontSize: dir === "rtl" ? "12pt" : "11pt",
+      }}
+    >
+      <tbody>
+        {section.rows.map((row, r) => (
+          <tr key={r}>
+            {row.map((cell, c) => {
+              const isHeader = section.hasHeaderRow && r === 0;
+              const Tag = isHeader ? "th" : "td";
+              return (
+                <Tag
+                  key={c}
+                  style={{
+                    border: "1px solid #999",
+                    padding: "4px 8px",
+                    fontWeight: isHeader ? 700 : 400,
+                    textAlign: "start",
+                  }}
+                >
+                  {cell || "\u00a0"}
+                </Tag>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <div dir={dir} style={{ ...style, margin: "0.75rem 0" }}>
-      <p
-        style={{
-          fontSize: "10pt",
-          fontWeight: 700,
-          textAlign: "center",
-          margin: "0 0 0.25rem",
-        }}
-      >
-        {captionLabel}
-        {section.caption ? `: ${section.caption}` : ""}
-      </p>
-      <table
-        style={{
-          borderCollapse: "collapse",
-          width: "100%",
-          fontSize: dir === "rtl" ? "12pt" : "11pt",
-        }}
-      >
-        <tbody>
-          {section.rows.map((row, r) => (
-            <tr key={r}>
-              {row.map((cell, c) => {
-                const isHeader = section.hasHeaderRow && r === 0;
-                const Tag = isHeader ? "th" : "td";
-                return (
-                  <Tag
-                    key={c}
-                    style={{
-                      border: "1px solid #999",
-                      padding: "4px 8px",
-                      fontWeight: isHeader ? 700 : 400,
-                      textAlign: "start",
-                    }}
-                  >
-                    {cell || "\u00a0"}
-                  </Tag>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {previewTheme.tableCaptionAboveTable ? (
+        <>
+          {captionEl}
+          {tableEl}
+        </>
+      ) : (
+        <>
+          {tableEl}
+          {captionEl}
+        </>
+      )}
     </div>
   );
 }
 
-function PreviewReferences({ section }: { section: ReferencesSection }) {
-  // Per style.md: Arabic references first, then English, alphabetised within each group.
+function PreviewReferences({
+  section,
+  previewTheme,
+}: {
+  section: ReferencesSection;
+  previewTheme: ManuscriptPreviewTheme;
+}) {
   const sorted = useMemo(() => {
     const ar = section.items
       .filter((i) => i.lang === "ar")
@@ -486,8 +524,8 @@ function PreviewReferences({ section }: { section: ReferencesSection }) {
       .filter((i) => i.lang === "en")
       .slice()
       .sort((a, b) => a.text.localeCompare(b.text, "en"));
-    return [...ar, ...en];
-  }, [section.items]);
+    return previewTheme.referencesArabicFirst ? [...ar, ...en] : [...en, ...ar];
+  }, [section.items, previewTheme.referencesArabicFirst]);
 
   return (
     <section style={{ margin: "1rem 0 0" }}>
@@ -498,15 +536,15 @@ function PreviewReferences({ section }: { section: ReferencesSection }) {
           margin: "0 0 0.5rem",
         }}
       >
-        References
+        {previewTheme.referencesHeading}
       </h2>
       <ol style={{ paddingInlineStart: "1.25rem", margin: 0 }}>
         {sorted.map((item, i) => {
           const dir: ConstructorDir = item.lang === "ar" ? "rtl" : "ltr";
           const fontFamily =
             dir === "rtl"
-              ? '"Simplified Arabic", "Noto Naskh Arabic", serif'
-              : '"Times New Roman", "Liberation Serif", serif';
+              ? previewTheme.fontFamilyArabicStack
+              : previewTheme.fontFamilyLatinStack;
           return (
             <li
               key={i}

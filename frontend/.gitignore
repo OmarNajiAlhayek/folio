@@ -13,6 +13,11 @@
 # testing
 /coverage
 
+# playwright / e2e artifacts (also ignored from repo root `.gitignore`)
+/playwright-report/
+/blob-report/
+/test-results/
+
 # next.js
 /.next/
 /out/

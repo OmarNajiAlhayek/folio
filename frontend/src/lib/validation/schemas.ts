@@ -86,7 +86,7 @@ const articleTypeFromForm = z.preprocess((v) => {
   return v;
 }, z.enum(SUBMISSION_ARTICLE_TYPES).optional());
 
-/** Journal guideline (style.md): each abstract at most 300 words. */
+/** Journal guideline (Damascus / docs/styles): each abstract at most 300 words. */
 export const ABSTRACT_MAX_WORDS = 300;
 
 export function countWords(s: string): number {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { publicJson } from "@/lib/public-api";
@@ -51,27 +51,26 @@ export default function PublicationsPage() {
   const tWf = useTranslations("SubmissionWorkflow");
   const locale = useLocale();
   const [items, setItems] = useState<Item[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadCatalog = useCallback(() => {
+    setLoadError(null);
     publicJson<Item[]>("/public/submissions")
       .then((data) => {
-        if (!cancelled) setItems(data);
+        setItems(data);
       })
       .catch((e) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : t("loadFailed"));
-        }
+        setLoadError(e instanceof Error ? e.message : t("loadFailed"));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [t]);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => loadCatalog());
+  }, [loadCatalog]);
 
   return (
     <main className={PAGE_SHELL}>
@@ -87,14 +86,24 @@ export default function PublicationsPage() {
           </p>
         </header>
 
-        {error && (
+        {loadError ? (
           <div
             className="mt-8 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-red-800 shadow-sm"
             role="alert"
           >
-            {error}
+            <p>{loadError}</p>
+            <button
+              type="button"
+              className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
+              onClick={() => {
+                setLoading(true);
+                loadCatalog();
+              }}
+            >
+              {t("retryLoad")}
+            </button>
           </div>
-        )}
+        ) : null}
 
         {loading ? (
           <>
@@ -103,12 +112,12 @@ export default function PublicationsPage() {
             </p>
             <CatalogSkeleton />
           </>
-        ) : !error && items.length === 0 ? (
+        ) : !loadError && items.length === 0 ? (
           <div className="mt-8 rounded-xl border border-dashed border-ink/15 bg-surface/60 px-6 py-10 text-center shadow-sm">
             <p className="font-serif text-base text-ink/90">{t("empty")}</p>
           </div>
         ) : (
-          !error && (
+          !loadError && (
             <div className="mt-6 space-y-5">
               {items.map((p) => {
                 const dateStr = formatDate(p.publishedAt, locale);

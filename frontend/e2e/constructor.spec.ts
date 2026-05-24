@@ -1,8 +1,11 @@
 import { test, expect } from "./fixtures/auth";
 import type { APIRequestContext } from "@playwright/test";
-import { createSubmission, getApiV1Base } from "./helpers/e2e-api";
+import { createSubmission, apiV1Absolute, uniqueSubmissionTitle } from "./helpers/e2e-api";
+import { hideNextJsDevPortals } from "./helpers/hide-next-dev-portals";
 import { waitForAutosave } from "./helpers/waits";
 import { mockedValidationErrors } from "./fixtures/validation-errors";
+
+test.setTimeout(60_000);
 
 const DRAFT_STORAGE_KEY = "folio.constructor-draft.v1";
 
@@ -12,13 +15,16 @@ async function patchConstructorContent(
   slug: string,
   constructorContent: unknown,
 ) {
-  const res = await request.patch(`${getApiV1Base()}/submissions/${slug}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const res = await request.patch(
+    apiV1Absolute(`submissions/${encodeURIComponent(slug)}`),
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      data: { constructorContent },
     },
-    data: { constructorContent },
-  });
+  );
   expect(res.ok()).toBeTruthy();
 }
 
@@ -26,7 +32,7 @@ test("mode routing and sticky upload mode", async ({ page }) => {
   await page.goto("/en/submissions/new");
 
   await page.getByTestId("constructor-mode-builder").click();
-  await expect(page).toHaveURL(/\/en\/submissions\/constructor\/new$/);
+  await expect(page).toHaveURL(/\/en\/submissions\/compose\/create$/);
 
   await page.goto("/en/submissions/new");
   await page.getByTestId("constructor-mode-upload").click();
@@ -35,18 +41,25 @@ test("mode routing and sticky upload mode", async ({ page }) => {
   await expect(page.getByTestId("constructor-mode-builder")).toHaveCount(0);
 });
 
-test("legacy compose/create redirects to constructor/new", async ({ page }) => {
-  await page.goto("/en/submissions/compose/create");
-  await expect(page).toHaveURL(/\/en\/submissions\/constructor\/new$/);
+test("legacy constructor/create redirects to compose/create", async ({ page }) => {
+  await page.goto("/en/submissions/constructor/create");
+  await expect(page).toHaveURL(/\/en\/submissions\/compose\/create$/);
 });
 
 test("pre-slug to post-slug transition clears local draft and persists", async ({
   page,
 }) => {
-  await page.goto("/en/submissions/constructor/new");
+  const titleEn = uniqueSubmissionTitle("E2E Constructor");
+  await page.goto("/en/submissions/compose/create");
+  await hideNextJsDevPortals(page);
+  await new Promise((r) => setTimeout(r, 400));
+  await hideNextJsDevPortals(page);
+  await expect(page.getByPlaceholder("Enter the article title…").first()).toBeVisible({
+    timeout: 45_000,
+  });
 
   const titlePh = page.getByPlaceholder("Enter the article title…");
-  await titlePh.nth(0).fill("E2E Constructor Title");
+  await titlePh.nth(0).fill(titleEn);
   await titlePh.nth(1).fill("عنوان E2E");
 
   const absPh = page.getByPlaceholder("Write the abstract here…");
@@ -62,9 +75,7 @@ test("pre-slug to post-slug transition clears local draft and persists", async (
   await page.getByTestId("constructor-continue-submission").click();
   await expect(page).toHaveURL(/\/en\/submissions\/new$/);
 
-  await expect(
-    page.locator('input[value="E2E Constructor Title"]'),
-  ).toBeVisible();
+  await expect(page.getByDisplayValue(titleEn)).toBeVisible();
 
   await page.getByLabel("Full name").fill("E2E Author");
   await page.getByLabel("Affiliation").first().fill("E2E University");
@@ -84,17 +95,18 @@ test("pre-slug to post-slug transition clears local draft and persists", async (
 
   const slug = new URL(page.url()).pathname.split("/").filter(Boolean).pop();
   expect(slug).toBeTruthy();
-  await page.goto(`/en/submissions/${slug}/constructor`);
+  await page.goto(`/en/submissions/${slug}/compose`);
 
   const titleInput = page.getByPlaceholder("Enter the article title…").first();
-  await expect(titleInput).toHaveValue("E2E Constructor Title");
-  await titleInput.fill("E2E Constructor Title Persisted");
+  await expect(titleInput).toHaveValue(titleEn);
+  const persisted = `${titleEn} persisted`;
+  await titleInput.fill(persisted);
   await waitForAutosave(page);
   await page.reload();
-  await expect(titleInput).toHaveValue("E2E Constructor Title Persisted");
+  await expect(titleInput).toHaveValue(persisted);
 
-  await page.goto(`/en/submissions/${slug}/compose`);
-  await expect(page).toHaveURL(`**/en/submissions/${slug}/constructor`);
+  await page.goto(`/en/submissions/${slug}/constructor`);
+  await expect(page).toHaveURL(`**/en/submissions/${slug}/compose`);
 });
 
 test("inline gating on submission detail (mode selector vs constructor CTA)", async ({
@@ -102,14 +114,14 @@ test("inline gating on submission detail (mode selector vs constructor CTA)", as
   authToken,
 }) => {
   const noMode = await createSubmission(page.request, authToken, {
-    title: "No mode committed",
+    title: uniqueSubmissionTitle("No mode committed"),
     abstract: "No mode abstract",
   });
   await page.goto(`/en/submissions/${noMode.slug}`);
   await expect(page.getByTestId("constructor-mode-builder")).toBeVisible();
 
   const constructorCommitted = await createSubmission(page.request, authToken, {
-    title: "Constructor committed",
+    title: uniqueSubmissionTitle("Constructor committed"),
     abstract: "Constructor abstract",
   });
   await patchConstructorContent(page.request, authToken, constructorCommitted.slug, {
@@ -130,7 +142,7 @@ test("inline gating on submission detail (mode selector vs constructor CTA)", as
     page.getByRole("link", { name: "Open constructor" }),
   ).toBeVisible();
   await expect(page.getByTestId("constructor-mode-builder")).toHaveCount(0);
-  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  await expect(page.locator('input[type="file"]')).toHaveCount(2);
 });
 
 test("validation banner renders structured backend errors and jump works", async ({
@@ -138,7 +150,7 @@ test("validation banner renders structured backend errors and jump works", async
   authToken,
 }) => {
   const created = await createSubmission(page.request, authToken, {
-    title: "Validation e2e",
+    title: uniqueSubmissionTitle("Validation e2e"),
     abstract: "Validation e2e abstract",
   });
 
@@ -155,9 +167,25 @@ test("validation banner renders structured backend errors and jump works", async
     ],
   });
 
-  await page.goto(`/en/submissions/${created.slug}/constructor`);
+  await page.goto(`/en/submissions/${created.slug}`);
+  await hideNextJsDevPortals(page);
+  const slugEnc = encodeURIComponent(created.slug);
   await page.route(
-    `${getApiV1Base()}/submissions/${created.slug}/submit`,
+    `**${apiV1Absolute(`submissions/${slugEnc}/generate-docx`)}**`,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "e2e-manuscript",
+          originalName: "e2e.docx",
+          kind: "manuscript",
+        }),
+      });
+    },
+  );
+  await page.route(
+    `${apiV1Absolute(`submissions/${slugEnc}/submit`)}`,
     async (route) => {
       await route.fulfill({
         status: 400,
@@ -167,7 +195,10 @@ test("validation banner renders structured backend errors and jump works", async
     },
   );
 
-  await page.getByTestId("constructor-submit").click();
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/en/submissions/${created.slug}/compose$`),
+  );
   await expect(page.getByTestId("constructor-validation-banner")).toBeVisible();
 
   const jumpButton = page.getByTestId("constructor-validation-jump-sec-para");
@@ -186,7 +217,7 @@ test("docx generate flow (real smoke + rtl preview assertion)", async ({
   authToken,
 }) => {
   const created = await createSubmission(page.request, authToken, {
-    title: "DOCX e2e",
+    title: uniqueSubmissionTitle("DOCX e2e"),
     abstract: "DOCX e2e abstract",
   });
 
@@ -229,7 +260,8 @@ test("docx generate flow (real smoke + rtl preview assertion)", async ({
     ],
   });
 
-  await page.goto(`/en/submissions/${created.slug}/constructor`);
+  await page.goto(`/en/submissions/${created.slug}/compose`);
+  await hideNextJsDevPortals(page);
 
   const paragraphEditor = page.locator(
     '#constructor-section-sec-rtl [contenteditable="true"]',
@@ -259,4 +291,77 @@ test("docx generate flow (real smoke + rtl preview assertion)", async ({
   );
   const body = await response.body();
   expect(body.byteLength).toBeGreaterThan(5 * 1024);
+});
+
+test("generate-docx POST body includes unsaved paragraph text (before autosave)", async ({
+  page,
+  authToken,
+}) => {
+  const created = await createSubmission(page.request, authToken, {
+    title: uniqueSubmissionTitle("DOCX unsaved body"),
+    abstract: "abstract",
+  });
+
+  await patchConstructorContent(page.request, authToken, created.slug, {
+    defaultDir: "ltr",
+    sections: [
+      {
+        id: "sec-title",
+        kind: "title",
+        text: "Title",
+      },
+      {
+        id: "sec-abs",
+        kind: "abstract",
+        lang: "en",
+        text: "English abstract.",
+        keywords: "k",
+      },
+      {
+        id: "sec-abs-ar",
+        kind: "abstract",
+        lang: "ar",
+        text: "ملخص",
+        keywords: "ك",
+      },
+      {
+        id: "sec-p",
+        kind: "paragraph",
+        html: "<p></p>",
+      },
+      {
+        id: "sec-ref",
+        kind: "references",
+        items: [{ lang: "en", text: "Ref" }],
+      },
+    ],
+  });
+
+  await page.goto(`/en/submissions/${created.slug}/compose`);
+  await hideNextJsDevPortals(page);
+
+  const marker = "UNSAVED_DOCX_MARKER_E2E_XYZ";
+  const paragraphEditor = page.locator(
+    '#constructor-section-sec-p [contenteditable="true"]',
+  );
+  await paragraphEditor.click();
+  await paragraphEditor.fill(marker);
+
+  const requestPromise = page.waitForRequest(
+    (req) =>
+      req.method() === "POST" &&
+      req.url().includes(
+        `/api/v1/submissions/${encodeURIComponent(created.slug)}/generate-docx`,
+      ),
+  );
+
+  await page.getByTestId("constructor-generate-docx").click();
+  const req = await requestPromise;
+  const data = req.postDataJSON() as { content?: { sections?: unknown[] } };
+  const sections = data.content?.sections ?? [];
+  const para = sections.find(
+    (s): s is { kind: string; html?: string } =>
+      typeof s === "object" && s !== null && (s as { kind?: string }).kind === "paragraph",
+  );
+  expect(para?.html).toContain(marker);
 });

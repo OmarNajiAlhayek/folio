@@ -46,7 +46,7 @@ export function resolveSectionDir(
 /**
  * Word-count weighted heuristic for the page-count badge.
  *   words(text) + 150 × imageCount + 80 × tableRowCount
- * Soft warning fires above ~7,500 weighted words (≈ 25 pages, style.md max).
+ * Soft warning fires above ~7,500 weighted words (≈ 25 pages, Damascus guideline).
  */
 export function estimateWeightedWordCount(content: ConstructorContent): {
   words: number;

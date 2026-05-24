@@ -13,19 +13,22 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // Legacy "new" path → current create flow.
       {
-        source: "/:locale/submissions/compose/create",
-        destination: "/:locale/submissions/constructor/new",
+        source: "/:locale/submissions/constructor/new",
+        destination: "/:locale/submissions/compose/create",
         permanent: true,
       },
-      {
-        source: "/:locale/submissions/:slug/compose",
-        destination: "/:locale/submissions/:slug/constructor",
-        permanent: true,
-      },
+      // Legacy "constructor/create" → renamed segment.
       {
         source: "/:locale/submissions/constructor/create",
-        destination: "/:locale/submissions/constructor/new",
+        destination: "/:locale/submissions/compose/create",
+        permanent: true,
+      },
+      // Legacy per-slug path.
+      {
+        source: "/:locale/submissions/:slug/constructor",
+        destination: "/:locale/submissions/:slug/compose",
         permanent: true,
       },
     ];

@@ -24,7 +24,7 @@ export const test = base.extend<object, AuthFixtures>({
   ],
   page: async ({ page, authToken }, runWithPage) => {
     await page.addInitScript((token: string) => {
-      window.sessionStorage.setItem("folio_token", token);
+      window.localStorage.setItem("folio_token", token);
     }, authToken);
     await runWithPage(page);
   },

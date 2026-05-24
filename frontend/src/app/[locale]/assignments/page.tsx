@@ -1,9 +1,10 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
 import {
   AssignmentQueueRow,
   EMPTY_STATE_CLS,
@@ -23,49 +24,66 @@ export default function AssignmentsPage() {
   const t = useTranslations("Assignments");
   const tSub = useTranslations("Submissions");
   const locale = useLocale();
+  const pathname = usePathname();
   const router = useRouter();
   const [items, setItems] = useState<Row[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [showRetry, setShowRetry] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!getStoredToken()) {
-      router.replace("/login");
-      return;
-    }
-    let cancelled = false;
+  const loadList = useCallback(() => {
+    setLoadError(null);
     apiJson<Row[]>("/assignments/me")
       .then((data) => {
-        if (!cancelled) setItems(data);
+        setItems(data);
+        setShowRetry(true);
       })
       .catch((err) => {
-        if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login");
+          redirectToLogin(router, pathname);
           return;
         }
         if (err instanceof ApiError && err.status === 403) {
-          setError(t("needReviewerRole"));
+          setLoadError(t("needReviewerRole"));
+          setShowRetry(false);
           return;
         }
-        setError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setLoadError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setShowRetry(true);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [router, t]);
+  }, [router, pathname, t]);
 
-  if (error) {
+  useEffect(() => {
+    if (!getStoredToken()) {
+      redirectToLogin(router, pathname);
+      return;
+    }
+    void Promise.resolve().then(() => loadList());
+  }, [router, pathname, loadList]);
+
+  if (loadError) {
     return (
       <main className={submissionQueueShellCls}>
         <div
           className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
           role="alert"
         >
-          {error}
+          <p>{loadError}</p>
+          {showRetry ? (
+            <button
+              type="button"
+              className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
+              onClick={() => {
+                setLoading(true);
+                loadList();
+              }}
+            >
+              {t("retryLoad")}
+            </button>
+          ) : null}
         </div>
       </main>
     );

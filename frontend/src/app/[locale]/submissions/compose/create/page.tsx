@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/navigation";
-import { ApiError, getApiBase, getStoredToken } from "@/lib/api";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { apiPostJsonOrBlob, getStoredToken } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { toastApiError } from "@/lib/toast";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { ConstructorWorkspace } from "@/components/constructor/ConstructorWorkspace";
 import { useConstructorDraft } from "@/lib/use-constructor-draft";
@@ -18,8 +20,8 @@ import { useConstructorDraft } from "@/lib/use-constructor-draft";
 export default function NewConstructorPage() {
   const t = useTranslations("ConstructorPage");
   const router = useRouter();
+  const pathname = usePathname();
   const [downloadingDocx, setDownloadingDocx] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const { content, setContent, quotaExceeded, externalUpdateAt } =
     useConstructorDraft();
@@ -27,8 +29,8 @@ export default function NewConstructorPage() {
   const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
-    if (!getStoredToken()) router.replace("/login");
-  }, [router]);
+    if (!getStoredToken()) redirectToLogin(router, pathname);
+  }, [router, pathname]);
 
   useEffect(() => {
     if (!externalUpdateAt) return;
@@ -62,30 +64,18 @@ export default function NewConstructorPage() {
   }
 
   async function handleDownloadDocx() {
-    setDownloadError(null);
     setDownloadingDocx(true);
     try {
       if (!getStoredToken()) {
-        router.replace("/login");
+        redirectToLogin(router, pathname);
         return;
       }
-      const token = getStoredToken();
-      const res = await fetch(
-        `${getApiBase()}/api/v1/submissions/generate-docx-standalone`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ content, attach: false }),
-        },
+      const result = await apiPostJsonOrBlob(
+        "/submissions/generate-docx-standalone",
+        { content, attach: false },
       );
-      if (!res.ok) {
-        const text = await res.text();
-        throw new ApiError(text || res.statusText, undefined, res.status);
-      }
-      const blob = await res.blob();
+      if (result.kind !== "blob") return;
+      const blob = result.data;
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;
@@ -95,7 +85,7 @@ export default function NewConstructorPage() {
       a.remove();
       URL.revokeObjectURL(dlUrl);
     } catch (e) {
-      setDownloadError(e instanceof ApiError ? e.message : t("generateFailed"));
+      toastApiError(e, t("generateFailed"), { id: "constructor-new-download" });
     } finally {
       setDownloadingDocx(false);
     }
@@ -119,20 +109,13 @@ export default function NewConstructorPage() {
       </header>
 
       <section className="mt-6">
-        <ConstructorWorkspace
-          content={content}
-          onChange={setContent}
-          notice={
+        <Suspense fallback={<p className="text-sm text-ink/60">{t("loading")}</p>}>
+          <ConstructorWorkspace
+            content={content}
+            onChange={setContent}
+            notice={
             <>
               <p className="text-sm text-ink/70">{t("browserDraftNotice")}</p>
-              {downloadError ? (
-                <div
-                  role="alert"
-                  className="rounded-md border border-red-300/70 bg-red-100/75 px-3 py-2 text-sm text-red-800 dark:border-red-500/35 dark:bg-red-500/12 dark:text-red-200"
-                >
-                  {downloadError}
-                </div>
-              ) : null}
               {quotaExceeded ? (
                 <div className="rounded-md border border-amber-300/70 bg-amber-100/70 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/35 dark:bg-amber-500/12 dark:text-amber-200">
                   {t("quotaExceeded")}
@@ -166,6 +149,7 @@ export default function NewConstructorPage() {
             </div>
           }
         />
+        </Suspense>
       </section>
     </main>
   );

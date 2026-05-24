@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
 import { publicJson } from "@/lib/public-api";
@@ -34,23 +34,54 @@ export default function PublicationDetailPage() {
   const params = useParams();
   const routeSlug = params.slug as string;
   const [data, setData] = useState<Detail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadDetail = useCallback(() => {
+    setLoadError(null);
+    setData(null);
+    setLoading(true);
     publicJson<Detail>(`/public/submissions/${encodeURIComponent(routeSlug)}`)
       .then(setData)
       .catch((e) =>
-        setError(e instanceof Error ? e.message : t("notFound")),
-      );
+        setLoadError(e instanceof Error ? e.message : t("notFound")),
+      )
+      .finally(() => setLoading(false));
   }, [routeSlug, t]);
 
-  if (error || !data) {
+  useEffect(() => {
+    void Promise.resolve().then(() => loadDetail());
+  }, [loadDetail]);
+
+  if (loading && !loadError) {
     return (
       <main className={PAGE_SHELL_NARROW}>
         <Link href="/publications" className="text-sm text-accent hover:underline">
           {t("back")}
         </Link>
-        <p className="mt-8 text-ink/70">{error ?? t("loading")}</p>
+        <p className="mt-8 text-ink/70">{t("loading")}</p>
+      </main>
+    );
+  }
+
+  if (loadError || !data) {
+    return (
+      <main className={PAGE_SHELL_NARROW}>
+        <Link href="/publications" className="text-sm text-accent hover:underline">
+          {t("back")}
+        </Link>
+        <p className="mt-8 text-ink/70" role="alert">
+          {loadError ?? t("loading")}
+        </p>
+        {loadError ? (
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
+            onClick={() => void loadDetail()}
+          >
+            {t("retryLoad")}
+          </button>
+        ) : null}
       </main>
     );
   }

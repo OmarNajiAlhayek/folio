@@ -1,9 +1,10 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
 import { MultiSelect } from "@/components/ui/multi-select";
 import {
   EMPTY_STATE_CLS,
@@ -27,6 +28,7 @@ const EDITOR_FILTER_STATUSES = [
   "revisions_requested",
   "accepted",
   "rejected",
+  "copyediting",
   "published",
 ] as const;
 
@@ -35,11 +37,39 @@ export default function EditorPage() {
   const tSub = useTranslations("Submissions");
   const tUi = useTranslations("UI");
   const locale = useLocale();
+  const pathname = usePathname();
   const router = useRouter();
   const [items, setItems] = useState<Submission[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const loadList = useCallback(() => {
+    setLoadError(null);
+    void (async () => {
+      setLoading(true);
+      try {
+        const data = await apiJson<Submission[]>("/submissions");
+        setItems(data);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          redirectToLogin(router, pathname);
+          return;
+        }
+        setLoadError(err instanceof ApiError ? err.message : t("loadFailed"));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [router, pathname, t]);
+
+  useEffect(() => {
+    if (!getStoredToken()) {
+      redirectToLogin(router, pathname);
+      return;
+    }
+    loadList();
+  }, [router, pathname, loadList]);
 
   const statusOptions = useMemo(
     () =>
@@ -55,44 +85,21 @@ export default function EditorPage() {
     return items.filter((s) => selectedStatuses.includes(s.status));
   }, [items, selectedStatuses]);
 
-  useEffect(() => {
-    if (!getStoredToken()) {
-      router.replace("/login");
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      await Promise.resolve();
-      if (cancelled) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await apiJson<Submission[]>("/submissions");
-        if (!cancelled) setItems(data);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login");
-          return;
-        }
-        setError(err instanceof ApiError ? err.message : t("loadFailed"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [router, t]);
-
-  if (error) {
+  if (loadError) {
     return (
       <main className={submissionQueueShellCls}>
         <div
           className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
           role="alert"
         >
-          {error}
+          <p>{loadError}</p>
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
+            onClick={() => loadList()}
+          >
+            {t("retryLoad")}
+          </button>
         </div>
       </main>
     );

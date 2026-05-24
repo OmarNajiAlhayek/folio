@@ -11,12 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
-import {
-  apiUpload,
-  ApiError,
-  getApiBase,
-  getStoredToken,
-} from "@/lib/api";
+import { apiBlob, apiUpload } from "@/lib/api";
+import { toast, toastApiError } from "@/lib/toast";
 import {
   detectDirection,
   resolveSectionDir,
@@ -642,16 +638,14 @@ function ImageEditor({
   const t = useTranslations("ConstructorEditor");
   const fileInputId = useId();
   const [uploading, setUploading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const dir = resolveSectionDir(section, defaultDir);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
     if (!slug) {
-      setErr(t("imageNeedsDraft"));
+      toast.error(t("imageNeedsDraft"), { id: "constructor-image-needs-draft" });
       return;
     }
-    setErr(null);
     setUploading(true);
     try {
       const row = (await apiUpload(
@@ -661,7 +655,7 @@ function ImageEditor({
       )) as { id: string };
       onChange({ ...section, fileId: row.id });
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("imageUploadFailed"));
+      toastApiError(e, t("imageUploadFailed"), { id: "constructor-image-upload" });
     } finally {
       setUploading(false);
     }
@@ -710,9 +704,6 @@ function ImageEditor({
             <span className="text-xs text-ink/60">{t("imageUploading")}</span>
           ) : null}
         </div>
-        {err ? (
-          <p className="text-sm text-red-700 dark:text-red-300">{err}</p>
-        ) : null}
         {section.fileId && slug ? (
           <ImagePreview slug={slug} fileId={section.fileId} />
         ) : null}
@@ -742,23 +733,19 @@ function ImageEditor({
 function ImagePreview({ slug, fileId }: { slug: string; fileId: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
-    let cancelled = false;
     let objectUrl: string | null = null;
-    const token = getStoredToken();
-    if (!token) return;
-    fetch(
-      `${getApiBase()}/api/v1/submissions/${encodeURIComponent(slug)}/files/${fileId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+    const controller = new AbortController();
+    apiBlob(
+      `/submissions/${encodeURIComponent(slug)}/files/${fileId}`,
+      { signal: controller.signal },
     )
-      .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
-        if (cancelled || !blob) return;
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       })
       .catch(() => undefined);
     return () => {
-      cancelled = true;
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [slug, fileId]);

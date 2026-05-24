@@ -17,6 +17,7 @@ export const SUBMISSION_STATUSES = [
   "revisions_requested",
   "accepted",
   "rejected",
+  "copyediting",
   "published",
 ] as const;
 

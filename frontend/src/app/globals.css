@@ -61,6 +61,74 @@ html.dark {
   --font-serif: var(--font-serif);
 }
 
+/*
+ * Logout modal: enter/exit without JS — transition-behavior: allow-discrete on top-layer
+ * display/overlay holds the previous state until opacity/backdrop transitions finish.
+ */
+dialog.folio-logout-dialog {
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    display 200ms allow-discrete,
+    overlay 200ms allow-discrete;
+}
+
+dialog.folio-logout-dialog[open] {
+  opacity: 1;
+}
+
+@starting-style {
+  dialog.folio-logout-dialog[open] {
+    opacity: 0;
+  }
+}
+
+/* Same scrim as the original static backdrop — fade via opacity only so we never interpolate transparent→ink (that washes lighter). */
+dialog.folio-logout-dialog::backdrop {
+  background: color-mix(in oklab, var(--ink) 38%, transparent);
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    display 200ms allow-discrete,
+    overlay 200ms allow-discrete;
+}
+
+dialog.folio-logout-dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  dialog.folio-logout-dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+dialog.folio-logout-dialog .folio-logout-dialog__panel {
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@starting-style {
+  dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.folio-logout-dialog,
+  dialog.folio-logout-dialog::backdrop,
+  dialog.folio-logout-dialog .folio-logout-dialog__panel {
+    transition-duration: 0ms;
+  }
+}
+
 /* Layered page backdrop: cool mid-tone, warm floor, soft radial accents */
 html[dir="ltr"] body,
 html[dir="rtl"] body {

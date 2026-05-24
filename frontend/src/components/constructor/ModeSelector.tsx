@@ -36,9 +36,9 @@ export function ModeSelector({
     ? "/submissions/new?mode=upload"
     : undefined;
   const constructorHref = newSubmissionMode
-    ? "/submissions/constructor/new"
+    ? "/submissions/compose/create"
     : slug
-      ? `/submissions/${encodeURIComponent(slug)}/constructor`
+      ? `/submissions/${encodeURIComponent(slug)}/compose`
       : undefined;
 
   const cardCls =

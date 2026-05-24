@@ -1,15 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import {
-  apiJson,
+  apiPostJsonOrBlob,
   ApiError,
-  getApiBase,
   getStoredToken,
 } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { useMe } from "@/lib/queries/auth";
+import {
+  usePatchSubmission,
+  useSubmission,
+  type SubmissionSummary,
+} from "@/lib/queries/submissions";
+import { takeConstructorSubmitErrors } from "@/lib/constructor-submit-errors";
+import { toast, toastApiError } from "@/lib/toast";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { ConstructorWorkspace } from "@/components/constructor/ConstructorWorkspace";
 import type {
@@ -17,85 +25,80 @@ import type {
   ConstructorValidationError,
 } from "@/lib/constructor-content.types";
 
-interface SubmissionSummary {
-  id: string;
-  slug: string;
-  status: string;
-  authorId: string;
-  constructorContent: ConstructorContent | null;
-}
-
-interface MeShape {
-  id: string;
-  permissions?: string[];
-}
-
 const EMPTY_CONTENT: ConstructorContent = {
   defaultDir: "ltr",
   sections: [],
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
+/** Autosave surface: toast-after-3 — show one error toast only after this many consecutive failures. */
+const AUTOSAVE_FAILURES_BEFORE_TOAST = 3;
 
 /**
  * Post-slug constructor: loaded after a draft submission exists. Auto-saves
- * to the backend with a 1.5s debounce. Generate / Submit buttons are wired
- * directly to the existing endpoints.
+ * to the backend with a 1.5s debounce. Generate / attach manuscript only —
+ * submit for review lives on the submission detail page.
  */
 export default function SubmissionConstructorPage() {
   const t = useTranslations("ConstructorPage");
   const tCommon = useTranslations("ConstructorWorkspace");
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams();
   const slug = params.slug as string;
 
-  const [me, setMe] = useState<MeShape | null>(null);
-  const [sub, setSub] = useState<SubmissionSummary | null>(null);
+  const meQuery = useMe();
+  const subQuery = useSubmission(slug);
+  const patchSubmission = usePatchSubmission(slug);
+  const me = meQuery.data
+    ? { id: meQuery.data.id, permissions: meQuery.data.permissions }
+    : null;
+  const sub = subQuery.data as SubmissionSummary | undefined;
   const [content, setContentState] = useState<ConstructorContent>(EMPTY_CONTENT);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [submitBlockBanner, setSubmitBlockBanner] = useState<string | null>(null);
+  const loading = meQuery.isLoading || subQuery.isLoading;
+  const loadError =
+    meQuery.isError || subQuery.isError
+      ? (meQuery.error ?? subQuery.error) instanceof ApiError
+        ? ((meQuery.error ?? subQuery.error) as ApiError).message
+        : t("loadFailed")
+      : null;
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const [blockingErrors, setBlockingErrors] = useState<
     ConstructorValidationError[]
   >([]);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedJsonRef = useRef<string>("");
+  const autosaveFailCountRef = useRef(0);
+  const [savedFingerprint, setSavedFingerprint] = useState<string | null>(null);
 
-  // Hydrate
+  useEffect(() => {
+    const stashed = takeConstructorSubmitErrors();
+    if (stashed?.length) {
+      setBlockingErrors(stashed);
+      setSubmitBlockBanner(t("submitBlockedByValidation"));
+    }
+  }, [t]);
+
   useEffect(() => {
     if (!getStoredToken()) {
-      router.replace("/login");
-      return;
+      redirectToLogin(router, pathname);
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const enc = encodeURIComponent(slug);
-        const [m, s] = await Promise.all([
-          apiJson<MeShape>("/auth/me"),
-          apiJson<SubmissionSummary>(`/submissions/${enc}`),
-        ]);
-        if (cancelled) return;
-        setMe(m);
-        setSub(s);
-        const initial = s.constructorContent ?? EMPTY_CONTENT;
-        setContentState(initial);
-        lastSavedJsonRef.current = JSON.stringify(initial);
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof ApiError ? e.message : t("loadFailed"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, router, t]);
+  }, [router, pathname]);
+
+  useEffect(() => {
+    if (!subQuery.data) return;
+    const initial =
+      (subQuery.data.constructorContent as ConstructorContent | null) ??
+      EMPTY_CONTENT;
+    setContentState(initial);
+    lastSavedJsonRef.current = JSON.stringify(initial);
+    setSavedFingerprint(JSON.stringify(initial));
+  }, [subQuery.data?.id]);
 
   const isAuthor = !!(sub && me && sub.authorId === me.id);
   const isEditableStatus =
@@ -116,21 +119,26 @@ export default function SubmissionConstructorPage() {
         if (json === lastSavedJsonRef.current) return;
         setSaving(true);
         try {
-          await apiJson(`/submissions/${encodeURIComponent(sub.slug)}`, {
-            method: "PATCH",
-            body: JSON.stringify({ constructorContent: next }),
-          });
+          await patchSubmission.mutateAsync({ constructorContent: next });
           lastSavedJsonRef.current = json;
+          setSavedFingerprint(json);
           setSavedAt(new Date());
-          setBlockingErrors([]); // any successful save invalidates a stale block
+          setBlockingErrors([]);
+          autosaveFailCountRef.current = 0;
         } catch (e) {
-          setError(e instanceof ApiError ? e.message : t("autosaveFailed"));
+          autosaveFailCountRef.current += 1;
+          if (autosaveFailCountRef.current >= AUTOSAVE_FAILURES_BEFORE_TOAST) {
+            toastApiError(e, t("autosaveFailed"), {
+              id: "constructor-autosave",
+            });
+            autosaveFailCountRef.current = 0;
+          }
         } finally {
           setSaving(false);
         }
       }, AUTOSAVE_DEBOUNCE_MS);
     },
-    [canEdit, sub, t],
+    [canEdit, sub, t, patchSubmission],
   );
 
   useEffect(() => {
@@ -157,46 +165,36 @@ export default function SubmissionConstructorPage() {
     if (json === lastSavedJsonRef.current) return;
     setSaving(true);
     try {
-      await apiJson(`/submissions/${encodeURIComponent(sub.slug)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ constructorContent: content }),
-      });
+      await patchSubmission.mutateAsync({ constructorContent: content });
       lastSavedJsonRef.current = json;
+      setSavedFingerprint(json);
       setSavedAt(new Date());
+      autosaveFailCountRef.current = 0;
     } finally {
       setSaving(false);
     }
-  }, [canEdit, sub, content]);
+  }, [canEdit, sub, content, patchSubmission]);
 
   const generate = useCallback(
     async (attach: boolean) => {
       if (!sub) return;
-      setError(null);
-      setGenerating(true);
+      setSubmitBlockBanner(null);
+      if (attach) setAttaching(true);
+      else setGenerating(true);
       try {
-        // Always send the live content to avoid the auto-save race.
+        if (attach) await flushSave();
         const enc = encodeURIComponent(sub.slug);
-        const url = `${getApiBase()}/api/v1/submissions/${enc}/generate-docx${
+        const path = `/submissions/${enc}/generate-docx${
           attach ? "?attach=true" : ""
         }`;
-        const token = getStoredToken();
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ content, attach }),
-        });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new ApiError(text || res.statusText, undefined, res.status);
-        }
-        if (attach) {
-          // Server returned the attached file row — re-load to get latest state.
+        const result = await apiPostJsonOrBlob(path, { content, attach });
+        if (result.kind === "json") {
           setSavedAt(new Date());
+          toast.success(t("attachManuscriptSuccess"), {
+            id: "constructor-attach-success",
+          });
         } else {
-          const blob = await res.blob();
+          const blob = result.data;
           const dlUrl = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = dlUrl;
@@ -207,49 +205,18 @@ export default function SubmissionConstructorPage() {
           URL.revokeObjectURL(dlUrl);
         }
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : t("generateFailed"));
+        toastApiError(
+          e,
+          attach ? t("attachManuscriptFailed") : t("generateFailed"),
+          { id: attach ? "constructor-attach" : "constructor-generate" },
+        );
       } finally {
-        setGenerating(false);
+        if (attach) setAttaching(false);
+        else setGenerating(false);
       }
     },
-    [sub, content, t],
+    [sub, content, t, flushSave],
   );
-
-  const submit = useCallback(async () => {
-    if (!sub) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      // Flush any pending edits, then attach a freshly-generated .docx as the
-      // manuscript so the editorial flow has a real file to work with, then
-      // call the existing submit endpoint.
-      await flushSave();
-      await generate(true);
-      await apiJson(`/submissions/${encodeURIComponent(sub.slug)}/submit`, {
-        method: "POST",
-      });
-      router.replace(`/submissions/${encodeURIComponent(sub.slug)}`);
-    } catch (e) {
-      // Backend submit-time validator returns
-      //   { message, code: "CONSTRUCTOR_VALIDATION_FAILED",
-      //     errors: [{ code, message, sectionId }] }
-      // which `ApiError.details` exposes verbatim.
-      if (
-        e instanceof ApiError &&
-        e.code === "CONSTRUCTOR_VALIDATION_FAILED" &&
-        Array.isArray(e.details?.errors)
-      ) {
-        setBlockingErrors(
-          (e.details!.errors as ConstructorValidationError[]) ?? [],
-        );
-        setError(t("submitBlockedByValidation"));
-      } else {
-        setError(e instanceof ApiError ? e.message : t("submitFailed"));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }, [sub, flushSave, generate, router, t]);
 
   const headerActions = useMemo(() => {
     if (!sub) return null;
@@ -267,7 +234,7 @@ export default function SubmissionConstructorPage() {
         <button
           type="button"
           onClick={() => void generate(false)}
-          disabled={generating || !canEdit}
+          disabled={generating || attaching || !canEdit}
           data-testid="constructor-generate-docx"
           className="rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
         >
@@ -275,13 +242,19 @@ export default function SubmissionConstructorPage() {
         </button>
         <button
           type="button"
-          onClick={() => void submit()}
-          disabled={submitting || !canEdit}
-          data-testid="constructor-submit"
-          className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+          onClick={() => void generate(true)}
+          disabled={generating || attaching || !canEdit}
+          data-testid="constructor-attach-manuscript"
+          className="rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
         >
-          {submitting ? tCommon("submitting") : tCommon("submit")}
+          {attaching ? t("attachingManuscript") : t("attachManuscript")}
         </button>
+        <Link
+          href={`/submissions/${encodeURIComponent(sub.slug)}`}
+          className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90"
+        >
+          {t("backToSubmission")}
+        </Link>
       </div>
     );
   }, [
@@ -289,12 +262,16 @@ export default function SubmissionConstructorPage() {
     saving,
     savedAt,
     generating,
-    submitting,
+    attaching,
     canEdit,
     generate,
-    submit,
+    t,
     tCommon,
   ]);
+
+  const hasUnsavedChanges =
+    savedFingerprint !== null &&
+    JSON.stringify(content) !== savedFingerprint;
 
   if (loading) {
     return (
@@ -306,8 +283,22 @@ export default function SubmissionConstructorPage() {
   if (!sub || !me) {
     return (
       <main className={PAGE_SHELL}>
-        {error ? (
-          <p className="text-sm text-red-700">{error}</p>
+        {loadError ? (
+          <>
+            <p className="text-sm text-red-700" role="alert">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              className="mt-3 rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
+              onClick={() => {
+                void meQuery.refetch();
+                void subQuery.refetch();
+              }}
+            >
+              {t("retryLoad")}
+            </button>
+          </>
         ) : (
           <p className="text-sm text-ink/60">{t("notFound")}</p>
         )}
@@ -340,12 +331,12 @@ export default function SubmissionConstructorPage() {
         </div>
       </header>
 
-      {error ? (
+      {submitBlockBanner ? (
         <div
           role="alert"
           className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
         >
-          {error}
+          {submitBlockBanner}
         </div>
       ) : null}
 
@@ -364,16 +355,22 @@ export default function SubmissionConstructorPage() {
       ) : null}
 
       <section className="mt-6">
-        <ConstructorWorkspace
-          content={content}
-          onChange={handleChange}
-          slug={sub.slug}
-          readOnly={!canEdit}
-          blockingErrors={blockingErrors}
-          actions={headerActions}
-        />
+        <Suspense
+          fallback={
+            <p className="text-sm text-ink/60">{t("loading")}</p>
+          }
+        >
+          <ConstructorWorkspace
+            content={content}
+            onChange={handleChange}
+            slug={sub.slug}
+            readOnly={!canEdit}
+            blockingErrors={blockingErrors}
+            actions={headerActions}
+            hasUnsavedChanges={hasUnsavedChanges}
+          />
+        </Suspense>
       </section>
     </main>
   );
 }
-

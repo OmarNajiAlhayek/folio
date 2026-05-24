@@ -2,9 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
-import { Link, useRouter } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
-import { apiJson, getApiBase, getStoredToken, ApiError } from "@/lib/api";
+import { apiBlob, apiJson, ApiError, getStoredToken } from "@/lib/api";
+import { redirectToLogin } from "@/lib/auth-redirect";
+import { toast, toastApiError } from "@/lib/toast";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { cn } from "@/lib/utils";
 import {
@@ -105,17 +107,15 @@ export default function ReviewFormPage() {
   const tWf = useTranslations("SubmissionWorkflow");
   const params = useParams();
   const slug = params.slug as string;
+  const pathname = usePathname();
   const router = useRouter();
   const recGroupId = useId();
 
   const [commentsForAuthor, setCommentsForAuthor] = useState("");
   const [commentsToEditorOnly, setCommentsToEditorOnly] = useState("");
   const [recommendation, setRecommendation] = useState<Rec>("accept");
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [fileDownloadError, setFileDownloadError] = useState<string | null>(
-    null,
-  );
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [abstractExpandedEn, setAbstractExpandedEn] = useState(false);
   const [abstractExpandedAr, setAbstractExpandedAr] = useState(false);
 
@@ -151,7 +151,7 @@ export default function ReviewFormPage() {
       setAssignment(row);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
+        redirectToLogin(router, pathname);
         return;
       }
       if (err instanceof ApiError && err.status === 403) {
@@ -162,18 +162,18 @@ export default function ReviewFormPage() {
     } finally {
       setPageLoading(false);
     }
-  }, [slug, router, t, tAssignments]);
+  }, [slug, router, pathname, t, tAssignments]);
 
   useEffect(() => {
     if (!getStoredToken()) {
-      router.replace("/login");
+      redirectToLogin(router, pathname);
       return;
     }
     loadContext().catch(() => {
       setContextError(t("loadFailed"));
       setPageLoading(false);
     });
-  }, [loadContext, router, t]);
+  }, [loadContext, router, pathname, t]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -197,7 +197,7 @@ export default function ReviewFormPage() {
       });
       router.push("/assignments");
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : t("submitFailed"));
+      toastApiError(err, t("submitFailed"), { id: "assignment-review-submit" });
     } finally {
       setSubmitting(false);
     }
@@ -230,17 +230,12 @@ export default function ReviewFormPage() {
         : t("recHintRevisions");
 
   async function downloadReviewFile(file: ReviewFileRow) {
-    const token = getStoredToken();
     const slug = sub?.slug;
-    if (!token || !slug) return;
-    setFileDownloadError(null);
+    if (!slug) return;
     try {
-      const res = await fetch(
-        `${getApiBase()}/api/v1/submissions/${encodeURIComponent(slug)}/files/${file.id}`,
-        { headers: { Authorization: `Bearer ${token}` } },
+      const blob = await apiBlob(
+        `/submissions/${encodeURIComponent(slug)}/files/${file.id}`,
       );
-      if (!res.ok) throw new Error("fail");
-      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -248,7 +243,7 @@ export default function ReviewFormPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setFileDownloadError(t("downloadFailed"));
+      toast.error(t("downloadFailed"), { id: "assignment-review-download" });
     }
   }
 
@@ -273,6 +268,13 @@ export default function ReviewFormPage() {
       {!pageLoading && contextError && (
         <div className="mt-8 rounded-xl border border-red-200 bg-red-50/90 p-5 shadow-sm">
           <p className="text-sm text-red-900">{contextError}</p>
+          <button
+            type="button"
+            className="mt-4 rounded-md border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
+            onClick={() => void loadContext()}
+          >
+            {t("retryLoad")}
+          </button>
           <Link
             href="/assignments"
             className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
@@ -428,9 +430,6 @@ export default function ReviewFormPage() {
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">
                     {t("reviewPackageFiles")}
                   </h3>
-                  {fileDownloadError ? (
-                    <p className="mt-2 text-sm text-red-700">{fileDownloadError}</p>
-                  ) : null}
                   <ul className="mt-3 space-y-2">
                     {sub.files.map((file) => (
                       <li
