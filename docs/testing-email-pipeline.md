@@ -9,12 +9,12 @@ RabbitMQ is **not** required for these commands: unit tests mock RabbitMQ and DB
 | Command | What it covers |
 |--------|----------------|
 | `cd services/email-service && npm test` | Handlers, templates, idempotency, redactor, reminder scheduler (mocked RabbitMQ / DB). |
-| `cd backend && npm test` | Outbox drainer, event publisher enqueue, `SubmissionsService.assignReviewer` outbox contract (mocked DB), **`RemindersService`** (mocked `DataSource`; no `email` schema required). |
-| `cd backend && npm run test:e2e` | HTTP app + database: `GET /api/v1/health` and `GET /api/v1/health/outbox`; [`admin-email.e2e-spec.ts`](../backend/test/admin-email.e2e-spec.ts) (401/403/422 always; policy/template/preview/409 when schema **`email`** and seed rows exist — otherwise DB-backed `it` blocks no-op with a console warning). Needs the same **`DB_*`** vars as `backend/.env`. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB user cannot read/update `email.*`. |
+| `cd backend && npm test` | Outbox drainer, event publisher enqueue, `SubmissionsService.assignReviewer` outbox contract (mocked DB), **`RemindersService`** (mocked `DataSource`; no `email` schema required), **pipeline observability** (mocked repositories + queue metrics). |
+| `cd backend && npm run test:e2e` | HTTP app + database: `GET /api/v1/health` and `GET /api/v1/health/outbox`; [`admin-email.e2e-spec.ts`](../backend/test/admin-email.e2e-spec.ts) (401/403/422 always; policy/template/preview/**pipeline-status**/409 when schema **`email`** and seed rows exist — otherwise DB-backed `it` blocks no-op with a console warning). Needs the same **`DB_*`** vars as `backend/.env`. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB user cannot read/update `email.*` (includes **`SELECT` on `email.email_log`** for pipeline status). |
 
 ## Journal email admin API (templates & policy)
 
-Editors with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and both transactional templates (closed key set — unknown keys return **422**):
+Editors with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all five transactional templates (`reviewer-invited`, `reminder-due`, and the three `copyedit-*` keys — unknown keys return **422**):
 
 | Method | Path |
 |--------|------|
@@ -22,8 +22,11 @@ Editors with JWT + **`email.manage_reminders`** can manage the singleton reminde
 | `PATCH` | `/api/v1/admin/email/reminder-policy` — body `{ "reviewDueInDays": number (≥4), "expectedUpdatedAt": ISO }`; mismatch → **409** |
 | `GET` | `/api/v1/admin/email/templates/reviewer-invited` |
 | `GET` | `/api/v1/admin/email/templates/reminder-due` |
+| `GET` | `/api/v1/admin/email/templates/copyedit-assigned` (and `copyedit-queries-sent`, `copyedit-author-ready`) |
+| `GET` | `/api/v1/admin/email/templates/submission-submitted`, `submission-decision` |
 | `PATCH` | `/api/v1/admin/email/templates/:templateKey` — full template fields + `expectedUpdatedAt`; mismatch → **409** |
 | `POST` | `/api/v1/admin/email/templates/:templateKey/preview` — optional `{ "isOverdue": true }` for reminder-due branch; **does not send mail** |
+| `GET` | `/api/v1/admin/email/pipeline-status` — outbox + `email_log` + `email.reminder` + cached RabbitMQ queue depths (redacted samples; requires **`SELECT` on `email.email_log`**) |
 
 **DB:** tables live in schema **`email`** (same database as backend). Run email-service migrations first. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB role cannot read/update `email.*`.
 
@@ -108,6 +111,35 @@ event contract.
 
 There is no single npm script that boots Docker, both apps, and asserts on queues automatically; add Testcontainers or a compose profile in CI when you want that fully automated.
 
+## Operator runbooks (pipeline visibility)
+
+**Where to look**
+
+- **Public probe:** `GET /api/v1/health/outbox` — pending / published / dead counts (no payloads).
+- **Authenticated snapshot:** `GET /api/v1/admin/email/pipeline-status` (JWT + `email.manage_reminders`) — outbox + `email.email_log` + `email.reminder` + **cached** RabbitMQ queue depths. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) so the backend role has **`SELECT` on `email.email_log`** (and existing `email.*` grants).
+
+**Growing `pending` outbox or high `dueNow`**
+
+- Check RabbitMQ is up and reachable from the API (`RABBITMQ_URL`). Fix networking or credentials, then let the outbox drainer publish; pending rows should drain.
+- Inspect backend logs for `outbox.retry` / `outbox.dead`.
+
+**`dead` outbox rows**
+
+- Meaning: the drainer exceeded its retry cap talking to the broker. Inspect `last_error` in Postgres (`public.outbound_event_outbox`). After fixing the root cause, recovery is **manual** (re-insert a correct row or republish with care — there is no “magic requeue” API in v1).
+
+**`email.email_log` status `failed` and DLQ depth**
+
+- A failed provider send marks the log row `failed` and the message was **nack’d without requeue**, so it lands on the dead-letter path (`folio.events.dlq` in the default topology). Fix SMTP/provider or template issues first.
+- Use the RabbitMQ management UI (see “Full stack” above) to inspect DLQ messages.
+
+**Idempotency before republishing from the DLQ**
+
+- Republishing `reviewer.invited` or `reminder.due` is **not always safe**. The email-service uses **`email_log` idempotency keys** and transactional pre-claims (see [`plans/email-service.md`](plans/email-service.md) §6). A first attempt may have **committed reminder rows or `email_log`** before the SMTP failure; blindly republishing can **duplicate side effects** (e.g. extra reminders) even if a second send is deduped. Before moving messages out of the DLQ: correlate **`idempotency_key`**, `email.email_log`, and assignment/submission state in Postgres; when in doubt, fix forward and avoid replay.
+
+**Reminder rows stuck `pending`**
+
+- `pending` with **`send_at` in the future** is normal. If `send_at` is far in the past and rows stay `pending`, check **email-service** (scheduler/cron) and that the worker consumes `reminder.due`.
+
 ## Journal email admin — manual smoke (checklist)
 
 Use this for a release or staging sign-off (copy into a PR if you prefer not to version it here):
@@ -118,6 +150,7 @@ Use this for a release or staging sign-off (copy into a PR if you prefer not to 
 4. **Optimistic lock:** open two tabs, change reminder policy in both, save the stale tab second → expect **409** (`EMAIL_POLICY_CONFLICT` / refresh message).
 5. **Preview:** use **POST** `…/preview` (or the UI preview buttons) for `reminder-due` with and without overdue; response is rendered HTML/text only (no mail).
 6. **Submission reminders:** as the same editor, open a submission with assignments; confirm the per-assignment reminder table and reschedule/cancel actions hit `/api/v1/submissions/.../reminders` as expected (network tab or backend logs).
+7. **Pipeline status:** on **Email settings**, confirm the pipeline card loads (or shows a clear DB/permission error). With RabbitMQ down, DB sections should still populate; broker line should show unavailable.
 
 ## One-liner (bash) for all automated tests in this doc
 

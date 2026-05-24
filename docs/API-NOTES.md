@@ -22,7 +22,16 @@ Use stable `code` values for the frontend (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NO
 
 ### Submission `status` in API
 
-Must match [`DATA-MODEL.md`](./DATA-MODEL.md): `draft`, `submitted`, `under_review`, `revisions_requested`, `accepted`, `rejected`, `published`. Transitions enforced in service layer, not ad hoc from clients.
+Must include `copyediting` between acceptance and publication: `draft`, `submitted`, `under_review`, `revisions_requested`, `accepted`, `rejected`, `copyediting`, `published`. Transitions enforced in service layer, not ad hoc from clients.
+
+### Copyediting
+
+- **Assign:** `POST /submissions/:slug/copyedit-assignments` body `{ copyeditorId }` — submission must be `accepted` or already `copyediting`; duplicate copyeditor per submission rejected; multiple different copyeditors allowed.
+- **Queries:** `POST /copyedit-assignments/:assignmentSlug/notes` body `{ noteForAuthor, noteToEditorOnly? }` — assignment `active` or `ready_for_review` → `awaiting_author`; emits `copyedit.queries_sent`.
+- **Author ready:** `POST /copyedit-assignments/:assignmentSlug/ready` — author only; requires new `manuscript` upload after latest note; emits `copyedit.author_ready`.
+- **Publish:** `POST /submissions/:slug/publish` — copyeditor assigned on submission; all assignments must be `ready_for_review`.
+- **List notes:** `GET /submissions/:slug/copyedit-notes` — timeline with `round`, `assignmentSlug`; author sees `noteForAuthor` only.
+- **Dev DB:** drop unique on `copyedit_notes.assignment_id` when migrating from one-note schema (TypeORM `synchronize` on fresh DBs applies automatically).
 
 ### Peer review policy (OJS-style)
 
@@ -112,13 +121,13 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 
 ---
 
-## Phase 2 (deferred)
+## Phase 2 (email — editorial workflow)
 
-- Email — *partially shipped:* reviewer-invite emails and scheduled
-  review reminders are now produced via the
-  [`email-service`](./plans/email-service.md) (RabbitMQ events from the
-  backend, Handlebars templates, pluggable provider). Remaining: emails
-  on submission received and editor decisions.
+- **Shipped:** submission-received emails to all editors (`submission.submitted`)
+  and editor-decision emails to the author (`submission.decision`) via the
+  same [`email-service`](./plans/email-service.md) pipeline as reviewer/copyedit mail.
+- **Still deferred:** review-submitted → editor, published → author, role-invitation
+  email, auth/welcome mail.
 - WebSockets or SSE for in-app notifications.
 - Refresh tokens, OAuth, ORCID.
 
@@ -133,10 +142,24 @@ in [`docs/plans/email-service.md`](./plans/email-service.md).
 |-------------|----------|----------|--------|
 | `reviewer.invited` | Backend (`assignReviewer`) | email-service | Sends invitation email + schedules due-soon / overdue reminders |
 | `reminder.due` | email-service cron | email-service | Sends a reminder email; same template/provider path as immediate sends |
+| `copyedit.assigned` | Backend (`assignCopyeditor`) | email-service | Notifies copyeditor of assignment |
+| `copyedit.queries_sent` | Backend (`submitCopyeditNote`) | email-service | Notifies author of copyedit queries |
+| `copyedit.author_ready` | Backend (`markCopyeditAuthorReady`) | email-service | Notifies copyeditor author is ready |
+| `submission.submitted` | Backend (`submit`) | email-service | Notifies each editor (one outbox row per editor) |
+| `submission.decision` | Backend (`updateStatus` → accepted/rejected/revisions_requested) | email-service | Notifies author of editorial decision |
 
 Operational view (counts only, no PII):
 `GET /health/outbox` returns the backend outbox state (`pending`,
 `published`, `dead` plus the oldest pending row).
+
+Editors with JWT and permission `email.manage_reminders` may call
+`GET /admin/email/pipeline-status` for a fuller operational snapshot:
+outbox counts and redacted samples of dead rows, `email.email_log` counts
+and recent failed rows (no recipient), `email.reminder` counts plus
+“stuck” pending past schedule, and **cached** passive RabbitMQ queue
+depths (`folio.events.dlq`, `email.reviewer_invited`, `email.reminder_due`).
+When the broker is unreachable, database sections still return; `rabbitMq.available`
+is `false`. Tune cache TTL with `EMAIL_QUEUE_METRICS_CACHE_MS` (default 20000).
 
 ---
 

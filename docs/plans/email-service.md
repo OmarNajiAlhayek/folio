@@ -192,9 +192,13 @@ Changing policy **does not** reschedule existing **pending** reminders; only **n
 
 ### Templates (`email.email_template`)
 
-Bodies and subjects are stored per **`template_key`** (`reviewer-invited`, `reminder-due`). The email-service loads rows **from the DB on each render** (no long-lived cache) so edits apply on the next send. Disk files under `templates/` remain a **fallback** if a row is missing.
+Bodies and subjects are stored per **`(template_key, locale)`** with `locale` in **`en` \| `ar`**. The email-service loads the matching row **from the DB on each render** (no long-lived cache) so edits apply on the next send. If the resolved locale row is missing, rendering falls back to the **`en`** row for that key, then disk files under `templates/` as a last resort (dev / pre-migration).
 
-Editors manage templates via **`GET/PATCH /api/v1/admin/email/templates/:templateKey`** (same permission). **`POST .../preview`** renders with a **fixed server-side demo context** (no outbound mail).
+Editors manage templates via **`GET/PATCH /api/v1/admin/email/templates/:templateKey?locale=en|ar`** (same permission). **`POST .../preview?locale=...`** renders with a **fixed server-side demo context** (no outbound mail).
+
+### Outbound locale resolution (backend publisher)
+
+When an editor assigns a reviewer, the backend resolves **`emailLocale`** with priority: recipient **`users.preferred_locale`** → request header **`X-Folio-Locale`** (editor UI hint) → **`DEFAULT_EMAIL_LOCALE`** env → **`en`**. The value is embedded in **`ReviewerInvited`** events and snapshotted on **`reminder.email_locale`** so scheduled reminders stay consistent if the user later changes preference.
 
 **Trust:** template content is Handlebars; only trusted editors should edit. Validate with compile checks before save.
 
@@ -228,8 +232,21 @@ The email-service owns its own TypeORM datasource pinned to the
   `public`). The backend **reads** `email.*` admin tables via raw SQL
   for editor APIs; it does not run email-service migrations.
 
+If the backend connects as a **restricted** Postgres role (not the table owner),
+run [`backend/scripts/grant-email-reminder-admin.sql`](../../backend/scripts/grant-email-reminder-admin.sql)
+after email-service migrations so `SELECT`/`UPDATE` on `email.reminder`,
+`email.email_template`, and `email.email_reminder_policy` succeed for `DB_USERNAME`.
+
 The backend's `outbound_event_outbox` table lives in `public` because
 it must commit atomically with `review_assignments`.
+
+### Rollout (Section 7): dev vs production
+
+**Development / pre-production:** You can reset the database or wipe queues. Running email-service migrations (or starting email-service once, which runs migrations) plus the backend together is usually enough; no multi-phase backlog drain is required when there is no legacy queue.
+
+**Production:** Prefer rolling schema migrations first (nullable columns or defaults, backfill Arabic template rows, etc.). **Do not deploy an updated backend publisher alone** while the active email-service consumer still ignores `emailLocale` and fails to persist `reminder.email_locale` on the reviewer-invite path — consumers could receive payloads with locale while reminders stay inconsistent. **Ship the updated consumer before or with the publisher.** After traffic stabilizes, tighten constraints (for example `NOT NULL` on `reminder.email_locale`) and optionally drop defensive handling for missing `emailLocale` on the wire.
+
+**Header semantics:** `X-Folio-Locale` is an editor UI locale hint for fallback resolution only; it does not grant privileges. **Resolved locale** (stored on events and reminders) is separate from **template row fallback** (if no DB row for `(templateKey, ar)`, rendering uses the `en` row for that key).
 
 ## Provider abstraction
 
@@ -285,7 +302,6 @@ Used to build accept/decline links inside `ReviewerInvitedEvent`
 - Multi-replica reminder scheduler (single instance assumed; switch to
   `SELECT ... FOR UPDATE SKIP LOCKED` when sharding).
 - Email log retention pruning job.
-- Per-locale template rows (templates are EN today in seeds; i18n is a follow-up).
 
 ## Phase 2 status
 

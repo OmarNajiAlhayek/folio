@@ -89,6 +89,13 @@ The service connects to RabbitMQ, runs its own migrations into a dedicated `emai
 | `editor@folio.local` | `Editor123!` | Author, editor, reviewer |
 | `reviewer@folio.local` | `Reviewer123!` | Author, reviewer |
 | `author@folio.local` | `Author123!` | Author |
+| `copyeditor@folio.local` | `Copyeditor123!` | Author, copyeditor |
+
+### Copyediting (production queries)
+
+After **accepted**, an editor assigns one or more **copyeditors** (`POST /api/v1/submissions/:slug/copyedit-assignments`). The submission moves to **`copyediting`**. Copyeditors send **rounds** of author-facing queries (`POST /api/v1/copyedit-assignments/:assignmentSlug/notes`); the author is emailed, uploads a revised **manuscript** file, then marks that assignment ready (`POST /api/v1/copyedit-assignments/:assignmentSlug/ready`). When every assignment is **ready for review**, a copyeditor may **publish** (`POST /api/v1/submissions/:slug/publish`). UI: **Copyediting** nav (copyeditor queue) and a copyedit panel on the submission detail page.
+
+Email templates (admin): `copyedit-assigned`, `copyedit-queries-sent`, `copyedit-author-ready`.
 
 New self-registered users are **authors** with a researcher profile (affiliation, optional ORCID, review interests). **Reviewer** (and other non-editor roles) can be merged by an existing editor with `users.manage_roles` via `PATCH /api/v1/users/:id/roles`. **Adding the `editor` role** requires an in-app invitation the user accepts:
 
@@ -118,7 +125,7 @@ Authors who do not have a `.docx` ready can build their manuscript section by se
 2. The pre-slug constructor (`/submissions/constructor/new`) saves to `localStorage` and syncs across tabs via `BroadcastChannel`. Click **Save draft** to create a real submission record.
 3. The post-slug constructor (`/submissions/[slug]/constructor`) auto-saves every 1.5 s, generates a real `.docx` via the backend, and submits the manuscript through the same `/submissions/:slug/submit` endpoint as the upload flow.
 
-Generated `.docx` files apply the styles defined in [`style.md`](style.md) (Simplified Arabic 12 pt for RTL, Times New Roman 11 pt for LTR, headings, figure/table captions, RTL-aware paragraphs).
+Generated `.docx` files apply curated **publication styles** from [`backend/src/manuscript-styles`](backend/src/manuscript-styles) (API: `GET /api/v1/public/manuscript-styles`). The Damascus profile matches [docs/styles/damascus-university-journal-v1.md](docs/styles/damascus-university-journal-v1.md) (Simplified Arabic 12 pt for RTL, Times New Roman 11 pt for LTR, headings, figure/table captions, RTL-aware paragraphs).
 
 ### Architecture
 
