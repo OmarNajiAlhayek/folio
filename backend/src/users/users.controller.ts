@@ -37,6 +37,12 @@ export class UsersController {
     return this.usersService.listReviewerCandidates();
   }
 
+  @Get('copyeditor-candidates')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR)
+  copyeditorCandidates() {
+    return this.usersService.listCopyeditorCandidates();
+  }
+
   @Post(':id/role-invitations')
   @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
   createRoleInvitation(

@@ -14,9 +14,12 @@ import {
   AssignmentStatus,
 } from '../entities/review-assignment.entity';
 import { Review } from '../entities/review.entity';
+import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
+import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
 import { RbacService } from '../rbac/rbac.service';
 import { DocxGeneratorService } from './docx-generator.service';
+import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
 import { ROUTING_KEY } from '../messaging/contracts/email-events';
 import { reviewerInvitedKey } from '../messaging/shared/idempotency';
@@ -51,6 +54,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     id: 'rev-1',
     email: 'rev@test.dev',
     displayName: 'Reviewer One',
+    preferredLocale: null,
   } as User;
 
   const savedAssignment: ReviewAssignment = {
@@ -107,6 +111,8 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
         { provide: getRepositoryToken(SubmissionFile), useValue: {} },
         { provide: getRepositoryToken(ReviewAssignment), useValue: assignmentsRepo },
         { provide: getRepositoryToken(Review), useValue: {} },
+        { provide: getRepositoryToken(CopyeditAssignment), useValue: {} },
+        { provide: getRepositoryToken(CopyeditNote), useValue: {} },
         { provide: getRepositoryToken(User), useValue: usersRepo },
         {
           provide: RbacService,
@@ -116,6 +122,14 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
           },
         },
         { provide: DocxGeneratorService, useValue: {} },
+        {
+          provide: ManuscriptStyleRegistryService,
+          useValue: {
+            assertConstructorContentStyleKnown: jest.fn(),
+            resolveEffectiveStyleId: jest.fn().mockReturnValue('damascus-university-journal-v1'),
+            getProfile: jest.fn(),
+          },
+        },
         { provide: EventPublisherService, useValue: eventPublisher },
         {
           provide: ConfigService,
@@ -138,7 +152,12 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
   });
 
   it('enqueues reviewer.invited with expected payload and transactional manager', async () => {
-    await service.assignReviewer('paper-one', reviewer.id, editorUser);
+    await service.assignReviewer(
+      'paper-one',
+      reviewer.id,
+      editorUser,
+      undefined,
+    );
 
     expect(eventPublisher.enqueue).toHaveBeenCalledTimes(1);
     const [routingKey, payload, manager] = eventPublisher.enqueue.mock
@@ -146,7 +165,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     expect(routingKey).toBe(ROUTING_KEY.reviewerInvited);
     expect(payload.type).toBe('ReviewerInvited');
     expect(payload.idempotencyKey).toBe(
-      reviewerInvitedKey(savedAssignment.slug),
+      reviewerInvitedKey(savedAssignment.slug!),
     );
     expect(payload.assignmentSlug).toBe(savedAssignment.slug);
     expect(payload.submissionSlug).toBe(submission.slug);
@@ -166,6 +185,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     expect(String(payload.declineUrl)).toContain(
       `/assignments/${savedAssignment.slug}/decline`,
     );
+    expect(payload.emailLocale).toBe('en');
     expect(manager).toBeDefined();
     expect(typeof manager.getRepository).toBe('function');
   });
@@ -174,7 +194,12 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     eventPublisher.enqueue.mockRejectedValueOnce(new Error('outbox insert failed'));
 
     await expect(
-      service.assignReviewer('paper-one', reviewer.id, editorUser),
+      service.assignReviewer(
+        'paper-one',
+        reviewer.id,
+        editorUser,
+        undefined,
+      ),
     ).rejects.toThrow('outbox insert failed');
 
     expect(assignmentsRepo.manager.transaction).toHaveBeenCalledTimes(1);
@@ -205,7 +230,12 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     );
 
     await expect(
-      service.assignReviewer('paper-one', reviewer.id, editorUser),
+      service.assignReviewer(
+        'paper-one',
+        reviewer.id,
+        editorUser,
+        undefined,
+      ),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
@@ -213,7 +243,12 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     rbacUserHasPermission.mockResolvedValueOnce(false);
 
     await expect(
-      service.assignReviewer('paper-one', reviewer.id, editorUser),
+      service.assignReviewer(
+        'paper-one',
+        reviewer.id,
+        editorUser,
+        undefined,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(eventPublisher.enqueue).not.toHaveBeenCalled();
   });

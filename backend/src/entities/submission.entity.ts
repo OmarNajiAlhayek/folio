@@ -14,6 +14,7 @@ import { SubmissionArticleType } from './submission-article-type.enum';
 import { SubmissionReviewMethod } from './submission-review-method.enum';
 import { SubmissionFile } from './submission-file.entity';
 import { ReviewAssignment } from './review-assignment.entity';
+import { CopyeditAssignment } from './copyedit-assignment.entity';
 import type { SubmissionContributorJson } from '../submissions/submission-json.types';
 import type { ConstructorContent } from '../submissions/constructor-content.types';
 
@@ -126,4 +127,7 @@ export class Submission {
 
   @OneToMany(() => ReviewAssignment, (a) => a.submission)
   reviewAssignments: ReviewAssignment[];
+
+  @OneToMany(() => CopyeditAssignment, (a) => a.submission)
+  copyeditAssignments: CopyeditAssignment[];
 }

@@ -5,6 +5,7 @@ import {
   IsIn,
   IsObject,
   IsOptional,
+  IsString,
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -24,6 +25,14 @@ export class ConstructorContentDto {
   @ApiProperty({ enum: ['ltr', 'rtl'] })
   @IsIn(['ltr', 'rtl'])
   defaultDir: 'ltr' | 'rtl';
+
+  @ApiPropertyOptional({
+    description:
+      'Manuscript style profile id (curated). Omitted uses server default.',
+  })
+  @IsOptional()
+  @IsString()
+  manuscriptStyleId?: string;
 
   @ApiProperty({
     type: 'array',

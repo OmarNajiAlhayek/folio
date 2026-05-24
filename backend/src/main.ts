@@ -2,27 +2,26 @@ import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { appendFileSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { AppModule } from './app.module';
 
-// #region agent log
-function agentDebugLog(payload: Record<string, unknown>) {
-  try {
-    const logPath = join(__dirname, '..', '..', 'debug-a1bf0c.log');
-    appendFileSync(
-      logPath,
-      JSON.stringify({
-        sessionId: 'a1bf0c',
-        timestamp: Date.now(),
-        ...payload,
-      }) + '\n',
-    );
-  } catch {
-    /* ignore */
+const DEFAULT_DEV_FRONTEND_ORIGINS = [
+  'http://localhost:5240',
+  'http://127.0.0.1:5240',
+];
+
+function corsOriginsFromEnv(raw: string | undefined): string | string[] {
+  if (raw == null || raw.trim() === '') {
+    return DEFAULT_DEV_FRONTEND_ORIGINS;
   }
+  const parts = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (parts.length === 0) {
+    return DEFAULT_DEV_FRONTEND_ORIGINS;
+  }
+  return parts.length === 1 ? parts[0]! : parts;
 }
-// #endregion
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,8 +29,9 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
   app.enableCors({
-    origin: config.get<string>('FRONTEND_ORIGIN', 'http://localhost:5240'),
+    origin: corsOriginsFromEnv(config.get<string>('FRONTEND_ORIGIN')),
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Folio-Locale'],
   });
 
   app.useGlobalPipes(
@@ -81,30 +81,5 @@ async function bootstrap() {
   logger.log(
     `Application is listening on port ${port} — API base: ${baseUrl}/api/v1`,
   );
-
-  // #region agent log
-  try {
-    const compiledCtrl = join(__dirname, 'users', 'users.controller.js');
-    const src = readFileSync(compiledCtrl, 'utf8');
-    agentDebugLog({
-      hypothesisId: 'A',
-      location: 'main.ts:afterListen',
-      message: 'compiled UsersController probe',
-      runId: 'bootstrap',
-      data: {
-        compiledCtrlPath: compiledCtrl,
-        hasReviewerCandidatesInDist: src.includes('reviewer-candidates'),
-      },
-    });
-  } catch (e) {
-    agentDebugLog({
-      hypothesisId: 'B',
-      location: 'main.ts:afterListen',
-      message: 'compiled controller probe failed',
-      runId: 'bootstrap',
-      data: { err: String(e) },
-    });
-  }
-  // #endregion
 }
 void bootstrap();

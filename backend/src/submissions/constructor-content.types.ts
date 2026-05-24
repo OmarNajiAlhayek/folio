@@ -119,6 +119,8 @@ export type ConstructorSection =
 
 export interface ConstructorContent {
   defaultDir: ConstructorDir;
+  /** Curated profile id; see `GET /public/manuscript-styles`. Omitted → server default. */
+  manuscriptStyleId?: string;
   sections: ConstructorSection[];
 }
 

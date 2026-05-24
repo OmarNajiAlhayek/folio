@@ -2,13 +2,17 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOperation,
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
@@ -17,6 +21,7 @@ import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { AdminEmailService } from './admin-email.service';
+import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
 import {
   PatchEmailTemplateDto,
   PreviewEmailTemplateDto,
@@ -28,7 +33,19 @@ import { PatchReminderPolicyDto } from './dto/patch-reminder-policy.dto';
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
 @ApiBearerAuth('JWT')
 export class AdminEmailController {
-  constructor(private readonly adminEmail: AdminEmailService) {}
+  constructor(
+    private readonly adminEmail: AdminEmailService,
+    private readonly pipelineObservability: EmailPipelineObservabilityService,
+  ) {}
+
+  @Get('pipeline-status')
+  @ApiOperation({
+    summary: 'Email pipeline observability (outbox, email_log, reminders, RabbitMQ)',
+  })
+  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  getPipelineStatus() {
+    return this.pipelineObservability.getPipelineStatus();
+  }
 
   @Get('reminder-policy')
   @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
@@ -48,8 +65,11 @@ export class AdminEmailController {
   @Get('templates/:templateKey')
   @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
   @ApiParam({ name: 'templateKey', example: 'reviewer-invited' })
-  getTemplate(@Param('templateKey') templateKey: string) {
-    return this.adminEmail.getTemplate(templateKey);
+  getTemplate(
+    @Param('templateKey') templateKey: string,
+    @Query('locale') locale?: string,
+  ) {
+    return this.adminEmail.getTemplate(templateKey, locale);
   }
 
   @Patch('templates/:templateKey')
@@ -58,9 +78,11 @@ export class AdminEmailController {
   patchTemplate(
     @Param('templateKey') templateKey: string,
     @Body() dto: PatchEmailTemplateDto,
+    @Query('locale') locale?: string,
   ) {
     return this.adminEmail.patchTemplate(
       templateKey,
+      locale,
       dto.subjectTemplate,
       dto.htmlBody,
       dto.textBody,
@@ -69,12 +91,18 @@ export class AdminEmailController {
   }
 
   @Post('templates/:templateKey/preview')
+  @HttpCode(HttpStatus.OK)
   @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
   @ApiParam({ name: 'templateKey', example: 'reminder-due' })
   previewTemplate(
     @Param('templateKey') templateKey: string,
     @Body() dto: PreviewEmailTemplateDto,
+    @Query('locale') locale?: string,
   ) {
-    return this.adminEmail.previewTemplate(templateKey, dto?.isOverdue);
+    return this.adminEmail.previewTemplate(
+      templateKey,
+      dto?.isOverdue,
+      locale,
+    );
   }
 }

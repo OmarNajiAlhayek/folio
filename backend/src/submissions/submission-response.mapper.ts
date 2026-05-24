@@ -33,6 +33,7 @@ export function submissionToViewerJson(
       ? files.filter((f) => f.fileStage === SubmissionFileStage.REVIEW)
       : files;
 
+
   const base: Record<string, unknown> = {
     id: s.id,
     slug: s.slug,
@@ -81,7 +82,11 @@ export function submissionToViewerJson(
   base.ethicalApprovalReference = s.ethicalApprovalReference;
   base.originalityConfirmed = s.originalityConfirmed;
   base.aiUsageStatement = s.aiUsageStatement;
-  base.constructorContent = s.constructorContent;
+
+  if (viewer !== 'copyeditor') {
+    base.constructorContent = s.constructorContent;
+  }
+
   if (viewer === 'editor' && s.reviewAssignments?.length) {
     base.reviewAssignments = s.reviewAssignments;
   }

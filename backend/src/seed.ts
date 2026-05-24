@@ -15,6 +15,8 @@ import { Submission } from './entities/submission.entity';
 import { SubmissionFile } from './entities/submission-file.entity';
 import { ReviewAssignment } from './entities/review-assignment.entity';
 import { Review, ReviewRecommendation } from './entities/review.entity';
+import { CopyeditAssignment } from './entities/copyedit-assignment.entity';
+import { CopyeditNote } from './entities/copyedit-note.entity';
 import { SubmissionStatus } from './entities/submission-status.enum';
 import { SubmissionArticleType } from './entities/submission-article-type.enum';
 import { SubmissionFileStage } from './entities/submission-file-stage.enum';
@@ -208,13 +210,26 @@ async function resetSampleSubmissions(dataSource: DataSource): Promise<void> {
     select: ['id'],
   });
   const assignmentIds = assignments.map((a) => a.id);
-
   if (assignmentIds.length > 0) {
     await dataSource.getRepository(Review).delete({
       assignmentId: In(assignmentIds),
     });
   }
   await assignmentRepo.delete({ submissionId: In(ids) });
+
+  const copyeditAssignmentRepo = dataSource.getRepository(CopyeditAssignment);
+  const copyeditAssignments = await copyeditAssignmentRepo.find({
+    where: { submissionId: In(ids) },
+    select: ['id'],
+  });
+  const copyeditAssignmentIds = copyeditAssignments.map((a) => a.id);
+  if (copyeditAssignmentIds.length > 0) {
+    await dataSource.getRepository(CopyeditNote).delete({
+      assignmentId: In(copyeditAssignmentIds),
+    });
+  }
+  await copyeditAssignmentRepo.delete({ submissionId: In(ids) });
+
   await fileRepo.delete({ submissionId: In(ids) });
   await subRepo.delete(ids);
   console.log(`SEED_RESET_SAMPLE: removed ${ids.length} sample submission(s)`);
@@ -281,9 +296,19 @@ async function run() {
       willingToReview: true,
     },
   });
+  const copyeditor = await ensureUser(usersService, rbacService, {
+    email: 'copyeditor@folio.local',
+    password: 'Copyeditor123!',
+    displayName: 'P. Copyeditor',
+    roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.COPYEDITOR],
+    profile: {
+      affiliation: 'Folio Journal — Editorial office',
+    },
+  });
 
   const authorReq = await toRequestUser(usersService, rbacService, author.id);
   const editorReq = await toRequestUser(usersService, rbacService, editor.id);
+  const copyeditorReq = await toRequestUser(usersService, rbacService, copyeditor.id);
 
   const pdfBytes = Buffer.from('%PDF-1.4 sample manuscript placeholder\n');
 
@@ -441,7 +466,42 @@ async function run() {
     );
   }
 
-  // 6) Published
+  // 6) In copyediting — accepted and assigned to copyeditor, note submitted
+  const tCopyedit = `${SAMPLE_TITLE_PREFIX} In copyediting`;
+  if (!(await findSampleSubmission(dataSource, author.id, tCopyedit))) {
+    const s = await submissionsService.create(author.id, {
+      title: tCopyedit,
+      abstract: 'Sample manuscript assigned to a copyeditor for final polish.',
+      ...sampleJournalMetadata(),
+    });
+    await attachStandardFilePackage(
+      submissionsService,
+      s.slug!,
+      authorReq,
+      pdfBytes,
+      'copyedit.pdf',
+    );
+    await submissionsService.submit(s.slug!, authorReq);
+    await submissionsService.updateStatus(
+      s.slug!,
+      editorReq,
+      SubmissionStatus.ACCEPTED,
+    );
+    const ceAssignment = await submissionsService.assignCopyeditor(
+      s.slug!,
+      copyeditor.id,
+      editorReq,
+    );
+    await submissionsService.submitCopyeditNote(
+      ceAssignment.slug!,
+      copyeditor.id,
+      'Minor style edits applied. Please review the revised abstract phrasing.',
+      'No structural concerns; ready to publish once author acknowledges.',
+    );
+    console.log(`Seeded: ${tCopyedit} (copyediting, note submitted)`);
+  }
+
+  // 7) Published — goes through the full copyediting stage
   const tPub = `${SAMPLE_TITLE_PREFIX} Published article`;
   if (!(await findSampleSubmission(dataSource, author.id, tPub))) {
     const s = await submissionsService.create(author.id, {
@@ -462,20 +522,41 @@ async function run() {
       editorReq,
       SubmissionStatus.ACCEPTED,
     );
-    await submissionsService.updateStatus(
+    const pubCeAssignment = await submissionsService.assignCopyeditor(
       s.slug!,
+      copyeditor.id,
       editorReq,
-      SubmissionStatus.PUBLISHED,
     );
+    await submissionsService.submitCopyeditNote(
+      pubCeAssignment.slug!,
+      copyeditor.id,
+      'Proofread and formatted. Please upload the final file if needed.',
+      '',
+    );
+    await submissionsService.addFile(
+      s.slug!,
+      authorReq,
+      {
+        buffer: pdfBytes,
+        originalname: 'published-revision.pdf',
+        mimetype: 'application/pdf',
+        size: pdfBytes.length,
+      } as Express.Multer.File,
+      'manuscript',
+    );
+    await submissionsService.markCopyeditAuthorReady(
+      pubCeAssignment.slug!,
+      author.id,
+    );
+    await submissionsService.publishSubmission(s.slug!, copyeditorReq);
     console.log(`Seeded: ${tPub} (published)`);
   }
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
-  console.log('author@folio.local    / Author123!    roles: author');
-  console.log(
-    'editor@folio.local    / Editor123!    roles: author, editor, reviewer',
-  );
-  console.log('reviewer@folio.local  / Reviewer123!  roles: author, reviewer');
+  console.log('author@folio.local      / Author123!      roles: author');
+  console.log('editor@folio.local      / Editor123!      roles: author, editor, reviewer');
+  console.log('reviewer@folio.local    / Reviewer123!    roles: author, reviewer');
+  console.log('copyeditor@folio.local  / Copyeditor123!  roles: author, copyeditor');
   console.log('\n--- Sample submissions (title prefix [SAMPLE]) ---');
   console.log(`${tDraft} — author: draft with file`);
   console.log(`${tQueue} — editor queue: submitted`);
@@ -484,6 +565,7 @@ async function run() {
   console.log(
     `${tRev} — round1: revisions requested; author resubmitted + revised file; round2: same reviewer, invitation pending (accept in app)`,
   );
+  console.log(`${tCopyedit} — copyediting: assigned + note submitted`);
   console.log(`${tPub} — public catalog: published`);
   console.log(
     '\nRe-run safely; use SEED_RESET_SAMPLE=1 (or legacy SEED_RESET_DEMO=1) to wipe [SAMPLE] and legacy [DEMO] submissions first.',

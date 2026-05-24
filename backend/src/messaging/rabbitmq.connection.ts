@@ -78,6 +78,22 @@ export class RabbitMqConnection implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Passive queue inspect — does not create the queue. Throws if the
+   * broker is unreachable or the queue is missing.
+   */
+  async getQueueMessageStats(queue: string): Promise<{
+    messageCount: number;
+    consumerCount: number;
+  }> {
+    const ch = await this.getChannel();
+    const ok = await ch.checkQueue(queue);
+    return {
+      messageCount: ok.messageCount,
+      consumerCount: ok.consumerCount,
+    };
+  }
+
   async publish(
     routingKey: string,
     payload: Record<string, unknown>,

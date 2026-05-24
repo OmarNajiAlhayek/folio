@@ -5,5 +5,6 @@ export enum SubmissionStatus {
   REVISIONS_REQUESTED = 'revisions_requested',
   ACCEPTED = 'accepted',
   REJECTED = 'rejected',
+  COPYEDITING = 'copyediting',
   PUBLISHED = 'published',
 }

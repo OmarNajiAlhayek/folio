@@ -19,12 +19,13 @@ import {
 } from 'docx';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import sanitizeHtml from 'sanitize-html';
+import type { ManuscriptAlignment } from '../manuscript-styles/manuscript-style.types';
+import type { ManuscriptStyleProfile } from '../manuscript-styles/manuscript-style.types';
 import type {
   AbstractSection,
   AuthorsSection,
   ConstructorContent,
   ConstructorDir,
-  ConstructorSection,
   HeadingSection,
   ImageSection,
   ParagraphSection,
@@ -48,31 +49,16 @@ type InlineMarks = {
   underline?: boolean;
 };
 
-/**
- * Standard fonts per `style.md`.
- *  - Latin script: Times New Roman 11 pt
- *  - Arabic script: Simplified Arabic 12 pt (set as the run's `bidi` font)
- *  - Captions / table text: 10 pt regardless of script
- *  - H1 (title): 16 pt bold
- *  - H2 (subtitle): 14 pt bold
- *  - H3: 12 pt bold (not in spec, interpolated)
- */
-const FONT = {
-  latin: 'Times New Roman',
-  arabic: 'Simplified Arabic',
-};
-
-const SIZE = {
-  bodyLatin: 22, // 11 pt × 2 (docx uses half-points)
-  bodyArabic: 24, // 12 pt × 2
-  caption: 20, // 10 pt × 2
-  heading1: 32, // 16 pt × 2
-  heading2: 28, // 14 pt × 2
-  heading3: 24, // 12 pt × 2
-};
-
-const NUMBERING_BULLET_REF = 'constructor-bullet';
-const NUMBERING_DECIMAL_REF = 'constructor-decimal';
+function toAlignmentType(a: ManuscriptAlignment) {
+  switch (a) {
+    case 'center':
+      return AlignmentType.CENTER;
+    case 'right':
+      return AlignmentType.RIGHT;
+    default:
+      return AlignmentType.LEFT;
+  }
+}
 
 @Injectable()
 export class DocxGeneratorService {
@@ -81,13 +67,14 @@ export class DocxGeneratorService {
    *
    * Caller responsibilities:
    *  - Resolve image bytes for any `ImageSection.fileId` and pass via `imageResolver`.
-   *  - Caption numbering is derived here (Nth image → "Figure N", Nth table → "Table N").
+   *  - Supply the resolved {@link ManuscriptStyleProfile} for layout (fonts, margins, etc.).
    */
   async generate(
     content: ConstructorContent,
     imageResolver: (
       fileId: string,
     ) => Promise<{ data: Buffer; mime: string } | null>,
+    profile: ManuscriptStyleProfile,
   ): Promise<Buffer> {
     const defaultDir = content.defaultDir;
     let figureCounter = 0;
@@ -99,21 +86,21 @@ export class DocxGeneratorService {
       const dir = resolveSectionDir(section, defaultDir);
       switch (section.kind) {
         case 'title':
-          children.push(this.buildTitle(section, dir));
+          children.push(this.buildTitle(section, dir, profile));
           break;
         case 'authors':
-          children.push(...this.buildAuthors(section, dir));
+          children.push(...this.buildAuthors(section, dir, profile));
           break;
         case 'abstract':
-          children.push(...this.buildAbstract(section));
+          children.push(...this.buildAbstract(section, profile));
           break;
         case 'heading1':
         case 'heading2':
         case 'heading3':
-          children.push(this.buildHeading(section, dir));
+          children.push(this.buildHeading(section, dir, profile));
           break;
         case 'paragraph':
-          children.push(...this.buildParagraph(section, dir));
+          children.push(...this.buildParagraph(section, dir, profile));
           break;
         case 'image': {
           figureCounter += 1;
@@ -123,40 +110,40 @@ export class DocxGeneratorService {
               dir,
               figureCounter,
               imageResolver,
+              profile,
             )),
           );
           break;
         }
         case 'table': {
           tableCounter += 1;
-          children.push(...this.buildTable(section, dir, tableCounter));
+          children.push(...this.buildTable(section, dir, tableCounter, profile));
           break;
         }
         case 'references':
-          children.push(...this.buildReferences(section));
+          children.push(...this.buildReferences(section, profile));
           break;
       }
     }
 
+    const mm = profile.pageMarginsMm;
     const doc = new Document({
-      styles: this.buildStyles(),
-      numbering: this.buildNumbering(),
+      styles: this.buildStyles(profile),
+      numbering: this.buildNumbering(profile),
       sections: [
         {
           properties: {
             page: {
               size: { orientation: PageOrientation.PORTRAIT },
-              // style.md: top 3cm, bottom/left/right 2cm; header 1.8cm; footer 0.6cm
               margin: {
-                top: convertMillimetersToTwip(30),
-                bottom: convertMillimetersToTwip(20),
-                left: convertMillimetersToTwip(20),
-                right: convertMillimetersToTwip(20),
-                header: convertMillimetersToTwip(18),
-                footer: convertMillimetersToTwip(6),
+                top: convertMillimetersToTwip(mm.top),
+                bottom: convertMillimetersToTwip(mm.bottom),
+                left: convertMillimetersToTwip(mm.left),
+                right: convertMillimetersToTwip(mm.right),
+                header: convertMillimetersToTwip(mm.header),
+                footer: convertMillimetersToTwip(mm.footer),
               },
             },
-            // style.md: different odd and even pages
             titlePage: false,
           },
           children,
@@ -167,75 +154,72 @@ export class DocxGeneratorService {
     return Packer.toBuffer(doc);
   }
 
-  // ---------------------------------------------------------------------------
-  // Styles & numbering
-  // ---------------------------------------------------------------------------
-
-  private buildStyles() {
+  private buildStyles(profile: ManuscriptStyleProfile) {
+    const f = profile.fonts;
+    const s = profile.sizesHalfPoints;
+    const h = profile.headingParagraphSpacing;
+    const docSpacing = profile.documentParagraphSpacing;
     return {
       default: {
         document: {
           run: {
-            font: { ascii: FONT.latin, hAnsi: FONT.latin, cs: FONT.arabic },
-            size: SIZE.bodyLatin,
+            font: { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
+            size: s.bodyLatin,
           },
           paragraph: {
-            spacing: { line: 240, before: 0, after: 0 }, // single line, no extra spacing
+            spacing: {
+              line: profile.documentLineSpacingTwips,
+              before: docSpacing.before,
+              after: docSpacing.after,
+            },
           },
         },
         heading1: {
-          run: { bold: true, size: SIZE.heading1 },
-          paragraph: { spacing: { before: 240, after: 120 } },
+          run: { bold: true, size: s.heading1 },
+          paragraph: {
+            spacing: { before: h.heading1.before, after: h.heading1.after },
+          },
         },
         heading2: {
-          run: { bold: true, size: SIZE.heading2 },
-          paragraph: { spacing: { before: 200, after: 100 } },
+          run: { bold: true, size: s.heading2 },
+          paragraph: {
+            spacing: { before: h.heading2.before, after: h.heading2.after },
+          },
         },
         heading3: {
-          run: { bold: true, size: SIZE.heading3 },
-          paragraph: { spacing: { before: 160, after: 80 } },
+          run: { bold: true, size: s.heading3 },
+          paragraph: {
+            spacing: { before: h.heading3.before, after: h.heading3.after },
+          },
         },
       },
-      paragraphStyles: [
-        {
-          id: 'FigureCaption',
-          name: 'Figure Caption',
-          basedOn: 'Normal',
-          next: 'Normal',
-          run: { bold: true, size: SIZE.caption },
-          paragraph: {
-            alignment: AlignmentType.CENTER,
-            spacing: { before: 80, after: 200 },
+      paragraphStyles: profile.paragraphStyles.map((ps) => ({
+        id: ps.id,
+        name: ps.name,
+        basedOn: ps.basedOn,
+        next: ps.next,
+        run: {
+          bold: ps.run.bold,
+          size: ps.run.sizeHalfPoints,
+        },
+        paragraph: {
+          alignment: toAlignmentType(ps.paragraph.alignment),
+          spacing: {
+            before: ps.paragraph.spacingBefore,
+            after: ps.paragraph.spacingAfter,
           },
         },
-        {
-          id: 'TableCaption',
-          name: 'Table Caption',
-          basedOn: 'Normal',
-          next: 'Normal',
-          run: { bold: true, size: SIZE.caption },
-          paragraph: {
-            alignment: AlignmentType.CENTER,
-            spacing: { before: 200, after: 80 },
-          },
-        },
-        {
-          id: 'TableNote',
-          name: 'Table Note',
-          basedOn: 'Normal',
-          next: 'Normal',
-          run: { size: SIZE.caption },
-          paragraph: { spacing: { before: 40, after: 80 } },
-        },
-      ],
+      })),
     };
   }
 
-  private buildNumbering() {
+  private buildNumbering(profile: ManuscriptStyleProfile) {
+    const bulletRef = profile.numbering.bulletReference;
+    const decimalRef = profile.numbering.decimalReference;
     return {
       config: [
         {
-          reference: NUMBERING_BULLET_REF,
+          reference: bulletRef,
           levels: [
             {
               level: 0,
@@ -249,7 +233,7 @@ export class DocxGeneratorService {
           ],
         },
         {
-          reference: NUMBERING_DECIMAL_REF,
+          reference: decimalRef,
           levels: [
             {
               level: 0,
@@ -266,22 +250,37 @@ export class DocxGeneratorService {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Section builders
-  // ---------------------------------------------------------------------------
+  private figureCaptionStyleId(profile: ManuscriptStyleProfile): string {
+    const fig = profile.paragraphStyles.find((p) =>
+      p.id.toLowerCase().includes('figure'),
+    );
+    return fig?.id ?? 'FigureCaption';
+  }
 
-  private buildTitle(section: TitleSection, dir: ConstructorDir): Paragraph {
+  private tableCaptionStyleId(profile: ManuscriptStyleProfile): string {
+    const t = profile.paragraphStyles.find(
+      (p) => p.id === 'TableCaption' || p.name.toLowerCase().includes('table caption'),
+    );
+    return t?.id ?? 'TableCaption';
+  }
+
+  private buildTitle(
+    section: TitleSection,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+  ): Paragraph {
     return new Paragraph({
       heading: HeadingLevel.HEADING_1,
       alignment: AlignmentType.CENTER,
       bidirectional: dir === 'rtl',
-      children: [this.run(section.text || '', dir, { bold: true })],
+      children: [this.run(section.text || '', dir, profile, { bold: true })],
     });
   }
 
   private buildHeading(
     section: HeadingSection,
     dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
   ): Paragraph {
     const level =
       section.kind === 'heading1'
@@ -292,14 +291,16 @@ export class DocxGeneratorService {
     return new Paragraph({
       heading: level,
       bidirectional: dir === 'rtl',
-      alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-      children: [this.run(section.text || '', dir, { bold: true })],
+      alignment:
+        dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+      children: [this.run(section.text || '', dir, profile, { bold: true })],
     });
   }
 
   private buildAuthors(
     section: AuthorsSection,
     dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
   ): Paragraph[] {
     const out: Paragraph[] = [];
     for (const a of section.authors) {
@@ -310,21 +311,24 @@ export class DocxGeneratorService {
         new Paragraph({
           alignment: AlignmentType.CENTER,
           bidirectional: dir === 'rtl',
-          children: [this.run(headerText, dir, { bold: true })],
+          children: [this.run(headerText, dir, profile, { bold: true })],
         }),
       );
       out.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           bidirectional: dir === 'rtl',
-          children: [this.run(bodyText, dir)],
+          children: [this.run(bodyText, dir, profile)],
         }),
       );
     }
     return out;
   }
 
-  private buildAbstract(section: AbstractSection): Paragraph[] {
+  private buildAbstract(
+    section: AbstractSection,
+    profile: ManuscriptStyleProfile,
+  ): Paragraph[] {
     const dir: ConstructorDir = section.lang === 'ar' ? 'rtl' : 'ltr';
     const headingText =
       section.lang === 'ar' ? 'الملخص' : 'Abstract';
@@ -334,23 +338,26 @@ export class DocxGeneratorService {
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
         bidirectional: dir === 'rtl',
-        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-        children: [this.run(headingText, dir, { bold: true })],
+        alignment:
+          dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        children: [this.run(headingText, dir, profile, { bold: true })],
       }),
       new Paragraph({
         bidirectional: dir === 'rtl',
-        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-        children: [this.run(section.text || '', dir)],
+        alignment:
+          dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        children: [this.run(section.text || '', dir, profile)],
       }),
     ];
     if (section.keywords?.trim()) {
       out.push(
         new Paragraph({
           bidirectional: dir === 'rtl',
-          alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+          alignment:
+            dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
           children: [
-            this.run(keywordsLabel, dir, { bold: true }),
-            this.run(section.keywords, dir),
+            this.run(keywordsLabel, dir, profile, { bold: true }),
+            this.run(section.keywords, dir, profile),
           ],
         }),
       );
@@ -361,6 +368,7 @@ export class DocxGeneratorService {
   private buildParagraph(
     section: ParagraphSection,
     dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
   ): Paragraph[] {
     const sanitized = sanitizeHtml(section.html ?? '', {
       allowedTags: [
@@ -381,7 +389,7 @@ export class DocxGeneratorService {
     const root = parse(wrapped, {
       sourceCodeLocationInfo: false,
     }) as DefaultTreeAdapterMap['document'];
-    return this.htmlToParagraphs(root as unknown as Node, dir);
+    return this.htmlToParagraphs(root as unknown as Node, dir, profile);
   }
 
   private async buildImage(
@@ -391,8 +399,22 @@ export class DocxGeneratorService {
     imageResolver: (
       fileId: string,
     ) => Promise<{ data: Buffer; mime: string } | null>,
+    profile: ManuscriptStyleProfile,
   ): Promise<Paragraph[]> {
-    const out: Paragraph[] = [];
+    const captionStyle = this.figureCaptionStyleId(profile);
+    const captionPara = new Paragraph({
+      style: captionStyle,
+      bidirectional: dir === 'rtl',
+      children: [
+        this.run(
+          `${profile.captions.figureWord} ${figureNumber}: ${section.caption || ''}`,
+          dir,
+          profile,
+          { bold: true },
+        ),
+      ],
+    });
+
     let imagePara: Paragraph;
     if (section.fileId) {
       const file = await imageResolver(section.fileId);
@@ -419,6 +441,7 @@ export class DocxGeneratorService {
             this.run(
               `[Missing image: ${section.altText || section.fileId}]`,
               dir,
+              profile,
               { italics: true },
             ),
           ],
@@ -428,46 +451,37 @@ export class DocxGeneratorService {
       imagePara = new Paragraph({
         alignment: AlignmentType.CENTER,
         children: [
-          this.run('[No image uploaded]', dir, { italics: true }),
+          this.run('[No image uploaded]', dir, profile, { italics: true }),
         ],
       });
     }
-    out.push(imagePara);
-    out.push(
-      new Paragraph({
-        style: 'FigureCaption',
-        bidirectional: dir === 'rtl',
-        children: [
-          this.run(
-            `Figure ${figureNumber}: ${section.caption || ''}`,
-            dir,
-            { bold: true },
-          ),
-        ],
-      }),
-    );
-    return out;
+
+    if (profile.captions.figureCaptionAfterImage) {
+      return [imagePara, captionPara];
+    }
+    return [captionPara, imagePara];
   }
 
   private buildTable(
     section: TableSection,
     dir: ConstructorDir,
     tableNumber: number,
+    profile: ManuscriptStyleProfile,
   ): Array<Paragraph | Table> {
-    const out: Array<Paragraph | Table> = [];
-    out.push(
-      new Paragraph({
-        style: 'TableCaption',
-        bidirectional: dir === 'rtl',
-        children: [
-          this.run(
-            `Table ${tableNumber}: ${section.caption || ''}`,
-            dir,
-            { bold: true },
-          ),
-        ],
-      }),
-    );
+    const captionStyle = this.tableCaptionStyleId(profile);
+    const captionPara = new Paragraph({
+      style: captionStyle,
+      bidirectional: dir === 'rtl',
+      children: [
+        this.run(
+          `${profile.captions.tableWord} ${tableNumber}: ${section.caption || ''}`,
+          dir,
+          profile,
+          { bold: true },
+        ),
+      ],
+    });
+
     const rows = (section.rows ?? []).map((row, rowIdx) => {
       const isHeader = section.hasHeaderRow && rowIdx === 0;
       return new TableRow({
@@ -484,7 +498,7 @@ export class DocxGeneratorService {
                   alignment:
                     dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
                   children: [
-                    this.run(cell ?? '', dir, isHeader ? { bold: true } : {}),
+                    this.run(cell ?? '', dir, profile, isHeader ? { bold: true } : {}),
                   ],
                 }),
               ],
@@ -492,20 +506,30 @@ export class DocxGeneratorService {
         ),
       });
     });
-    if (rows.length > 0) {
-      out.push(
-        new Table({
-          rows,
-          visuallyRightToLeft: dir === 'rtl',
-          width: { size: 100, type: WidthType.PERCENTAGE },
-        }),
-      );
+    const tableBlock =
+      rows.length > 0
+        ? new Table({
+            rows,
+            visuallyRightToLeft: dir === 'rtl',
+            width: { size: 100, type: WidthType.PERCENTAGE },
+          })
+        : null;
+
+    const out: Array<Paragraph | Table> = [];
+    if (profile.captions.tableCaptionBeforeTable) {
+      out.push(captionPara);
+      if (tableBlock) out.push(tableBlock);
+    } else {
+      if (tableBlock) out.push(tableBlock);
+      out.push(captionPara);
     }
     return out;
   }
 
-  private buildReferences(section: ReferencesSection): Paragraph[] {
-    // style.md: Arabic references first (alphabetical), then English (alphabetical)
+  private buildReferences(
+    section: ReferencesSection,
+    profile: ManuscriptStyleProfile,
+  ): Paragraph[] {
     const items = [...section.items].filter((i) => i.text?.trim());
     const arabic = items
       .filter((i) => i.lang === 'ar')
@@ -513,44 +537,54 @@ export class DocxGeneratorService {
     const english = items
       .filter((i) => i.lang === 'en')
       .sort((a, b) => a.text.localeCompare(b.text, 'en'));
+    const ordered = profile.references.arabicFirst
+      ? [...arabic, ...english]
+      : [...english, ...arabic];
     const out: Paragraph[] = [
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [this.run('References', 'ltr', { bold: true })],
+        children: [
+          this.run(profile.references.headingText, 'ltr', profile, { bold: true }),
+        ],
       }),
     ];
+    const sp = profile.references.entrySpacing;
     const renderEntry = (
       entry: { text: string; doi?: string },
       dir: ConstructorDir,
     ) => {
-      const children: ParagraphChild[] = [this.run(entry.text, dir)];
+      const children: ParagraphChild[] = [this.run(entry.text, dir, profile)];
       if (entry.doi?.trim()) {
-        children.push(this.run(` https://doi.org/${entry.doi.trim()}`, 'ltr'));
+        children.push(
+          this.run(` https://doi.org/${entry.doi.trim()}`, 'ltr', profile),
+        );
       }
       return new Paragraph({
         bidirectional: dir === 'rtl',
-        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-        spacing: { before: 60, after: 60 },
+        alignment:
+          dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        spacing: { before: sp.before, after: sp.after },
         children,
       });
     };
-    for (const item of arabic) out.push(renderEntry(item, 'rtl'));
-    for (const item of english) out.push(renderEntry(item, 'ltr'));
+    for (const item of ordered) {
+      out.push(renderEntry(item, item.lang === 'ar' ? 'rtl' : 'ltr'));
+    }
     return out;
   }
 
-  // ---------------------------------------------------------------------------
-  // HTML → docx mapping (TipTap output)
-  // ---------------------------------------------------------------------------
-
-  private htmlToParagraphs(node: Node, dir: ConstructorDir): Paragraph[] {
+  private htmlToParagraphs(
+    node: Node,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+  ): Paragraph[] {
     const out: Paragraph[] = [];
-    this.walkBlocks(node, dir, out, {});
+    this.walkBlocks(node, dir, profile, out, {});
     if (out.length === 0) {
       out.push(
         new Paragraph({
           bidirectional: dir === 'rtl',
-          children: [this.run('', dir)],
+          children: [this.run('', dir, profile)],
         }),
       );
     }
@@ -560,6 +594,7 @@ export class DocxGeneratorService {
   private walkBlocks(
     node: Node,
     dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
     out: Paragraph[],
     activeMarks: InlineMarks,
   ): void {
@@ -573,12 +608,14 @@ export class DocxGeneratorService {
             bidirectional: dir === 'rtl',
             alignment:
               dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-            children: this.collectInline(child, dir, activeMarks),
+            children: this.collectInline(child, dir, profile, activeMarks),
           }),
         );
       } else if (tag === 'ul' || tag === 'ol') {
         const ref =
-          tag === 'ol' ? NUMBERING_DECIMAL_REF : NUMBERING_BULLET_REF;
+          tag === 'ol'
+            ? profile.numbering.decimalReference
+            : profile.numbering.bulletReference;
         for (const li of child.childNodes ?? []) {
           if (
             'tagName' in li &&
@@ -590,19 +627,18 @@ export class DocxGeneratorService {
                 alignment:
                   dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
                 numbering: { reference: ref, level: 0 },
-                children: this.collectInline(li as Element, dir, activeMarks),
+                children: this.collectInline(li as Element, dir, profile, activeMarks),
               }),
             );
           }
         }
       } else if (tag === 'root' || tag === 'html' || tag === 'body') {
-        this.walkBlocks(child, dir, out, activeMarks);
+        this.walkBlocks(child, dir, profile, out, activeMarks);
       } else {
-        // Treat unknown block as a paragraph fallback.
         out.push(
           new Paragraph({
             bidirectional: dir === 'rtl',
-            children: this.collectInline(child, dir, activeMarks),
+            children: this.collectInline(child, dir, profile, activeMarks),
           }),
         );
       }
@@ -612,12 +648,13 @@ export class DocxGeneratorService {
   private collectInline(
     node: Node,
     dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
     inheritedMarks: InlineMarks,
   ): ParagraphChild[] {
     const out: ParagraphChild[] = [];
-    this.walkInline(node, dir, inheritedMarks, out);
+    this.walkInline(node, dir, profile, inheritedMarks, out);
     if (out.length === 0) {
-      out.push(this.run('', dir, inheritedMarks));
+      out.push(this.run('', dir, profile, inheritedMarks));
     }
     return out;
   }
@@ -625,6 +662,7 @@ export class DocxGeneratorService {
   private walkInline(
     node: Node,
     dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
     marks: InlineMarks,
     out: ParagraphChild[],
   ): void {
@@ -632,14 +670,18 @@ export class DocxGeneratorService {
     for (const child of node.childNodes) {
       if (this.isTextNode(child)) {
         const text = child.value;
-        if (text) out.push(this.run(text, dir, marks));
+        if (text) out.push(this.run(text, dir, profile, marks));
         continue;
       }
       if (!('tagName' in child)) continue;
       const tag = child.tagName.toLowerCase();
       if (tag === 'br') {
         out.push(
-          new TextRun({ text: '', break: 1, ...this.runOpts(dir, marks) }),
+          new TextRun({
+            text: '',
+            break: 1,
+            ...this.runOpts(dir, profile, marks),
+          }),
         );
         continue;
       }
@@ -647,7 +689,7 @@ export class DocxGeneratorService {
       if (tag === 'strong' || tag === 'b') nextMarks.bold = true;
       else if (tag === 'em' || tag === 'i') nextMarks.italics = true;
       else if (tag === 'u') nextMarks.underline = true;
-      this.walkInline(child, dir, nextMarks, out);
+      this.walkInline(child, dir, profile, nextMarks, out);
     }
   }
 
@@ -655,25 +697,32 @@ export class DocxGeneratorService {
     return (node as TextNode).nodeName === '#text';
   }
 
-  // ---------------------------------------------------------------------------
-  // Run construction
-  // ---------------------------------------------------------------------------
-
-  private run(text: string, dir: ConstructorDir, marks: InlineMarks = {}) {
-    return new TextRun({ text, ...this.runOpts(dir, marks) });
+  private run(
+    text: string,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+    marks: InlineMarks = {},
+  ) {
+    return new TextRun({ text, ...this.runOpts(dir, profile, marks) });
   }
 
-  private runOpts(dir: ConstructorDir, marks: InlineMarks): IRunOptions {
+  private runOpts(
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+    marks: InlineMarks,
+  ): IRunOptions {
     const isRtl = dir === 'rtl';
+    const f = profile.fonts;
+    const s = profile.sizesHalfPoints;
     return {
       bold: marks.bold,
       italics: marks.italics,
       underline: marks.underline ? {} : undefined,
       rightToLeft: isRtl,
       font: isRtl
-        ? { ascii: FONT.latin, hAnsi: FONT.latin, cs: FONT.arabic }
-        : { ascii: FONT.latin, hAnsi: FONT.latin, cs: FONT.arabic },
-      size: isRtl ? SIZE.bodyArabic : SIZE.bodyLatin,
+        ? { ascii: f.latin, hAnsi: f.latin, cs: f.arabic }
+        : { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
+      size: isRtl ? s.bodyArabic : s.bodyLatin,
     };
   }
 

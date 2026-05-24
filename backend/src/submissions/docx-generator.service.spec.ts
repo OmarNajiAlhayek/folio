@@ -1,7 +1,8 @@
-import JSZip from 'jszip';
 import { DocxGeneratorService } from './docx-generator.service';
 import type { ConstructorContent } from './constructor-content.types';
 import { validateConstructorContentForSubmit } from './constructor-content-utils';
+import { damascusUniversityJournalV1 } from '../manuscript-styles/profiles/damascus-university-journal-v1.profile';
+import { extractDocumentXml } from './ooxml-docx.test-utils';
 
 describe('DocxGeneratorService', () => {
   const service = new DocxGeneratorService();
@@ -9,8 +10,7 @@ describe('DocxGeneratorService', () => {
   /**
    * Minimal end-to-end: build a tiny ConstructorContent with mixed RTL/LTR,
    * a heading, an abstract pair, a paragraph, a table, and references; then
-   * unzip the resulting `.docx` and assert that the expected named styles
-   * and `w:bidi` toggles appear in `word/document.xml`.
+   * unzip the resulting `.docx` and assert on OOXML in `word/document.xml`.
    */
   it('emits a .docx whose document.xml carries the expected styles & RTL', async () => {
     const content: ConstructorContent = {
@@ -58,20 +58,18 @@ describe('DocxGeneratorService', () => {
       ],
     };
 
-    const buffer = await service.generate(content, async () => null);
+    const buffer = await service.generate(
+      content,
+      async () => null,
+      damascusUniversityJournalV1,
+    );
 
-    const zip = await JSZip.loadAsync(buffer);
-    const docXml = await zip.file('word/document.xml')!.async('string');
+    const docXml = await extractDocumentXml(buffer);
 
     expect(docXml).toContain('w:val="Heading1"');
     expect(docXml).toContain('w:val="Heading2"');
-    // Caption styles defined in buildStyles(); a TableCaption paragraph
-    // must appear because we passed a TableSection above.
     expect(docXml).toContain('TableCaption');
-    // RTL coverage: at least one paragraph carries `<w:bidi/>` (no `w:val="false"`)
-    // for the Arabic abstract section.
     expect(docXml).toMatch(/<w:bidi\s*\/>/);
-    // Inline marks survive the parse5 → docx mapping
     expect(docXml).toContain('<w:b/>');
     expect(docXml).toContain('<w:i/>');
   });

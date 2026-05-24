@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Submission } from './submission.entity';
 import { ReviewAssignment } from './review-assignment.entity';
+import { CopyeditAssignment } from './copyedit-assignment.entity';
 import { UserRole } from './user-role.entity';
 
 @Entity('users')
@@ -39,6 +40,10 @@ export class User {
   @Column({ name: 'willing_to_review', default: false })
   willingToReview: boolean;
 
+  /** Preferred locale for transactional email (`en` | `ar`). */
+  @Column({ name: 'preferred_locale', type: 'varchar', length: 10, nullable: true })
+  preferredLocale: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -53,4 +58,7 @@ export class User {
 
   @OneToMany(() => ReviewAssignment, (a) => a.reviewer)
   reviewAssignments: ReviewAssignment[];
+
+  @OneToMany(() => CopyeditAssignment, (a) => a.copyeditor)
+  copyeditAssignments: CopyeditAssignment[];
 }

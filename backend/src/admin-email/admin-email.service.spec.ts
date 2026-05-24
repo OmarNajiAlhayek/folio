@@ -1,5 +1,9 @@
-import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { AdminEmailService } from './admin-email.service';
 
 describe('AdminEmailService', () => {
@@ -28,6 +32,7 @@ describe('AdminEmailService', () => {
     await expect(
       svc.patchTemplate(
         'reviewer-invited',
+        undefined,
         '{{bad',
         'x',
         'y',
@@ -42,11 +47,88 @@ describe('AdminEmailService', () => {
     await expect(
       svc.patchTemplate(
         'reviewer-invited',
+        undefined,
         'ok {{submissionTitle}}',
         '<p>x</p>',
         'x',
         new Date().toISOString(),
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('patchTemplate accepts RETURNING row with ISO string updatedAt (camelCase)', async () => {
+    const iso = '2026-05-05T12:00:00.000Z';
+    ds.query.mockResolvedValueOnce([
+      {
+        template_key: 'reviewer-invited',
+        locale: 'ar',
+        subject_template: 's',
+        html_body: '<p>x</p>',
+        text_body: 't',
+        updatedAt: iso,
+      },
+    ]);
+    const out = await svc.patchTemplate(
+      'reviewer-invited',
+      'ar',
+      'ok {{submissionTitle}}',
+      '<p>x</p>',
+      't',
+      iso,
+    );
+    expect(out.updatedAt).toBe(iso);
+  });
+
+  it('patchTemplate unwraps TypeORM Postgres UPDATE result tuple [rows, rowCount]', async () => {
+    const iso = '2026-05-05T12:00:00.000Z';
+    const row = {
+      template_key: 'reviewer-invited',
+      locale: 'ar',
+      subject_template: 'ok {{submissionTitle}}',
+      html_body: '<p>x</p>',
+      text_body: 't',
+      updated_at: new Date(iso),
+    };
+    ds.query.mockResolvedValueOnce([[row], 1]);
+    const out = await svc.patchTemplate(
+      'reviewer-invited',
+      'ar',
+      row.subject_template,
+      row.html_body,
+      row.text_body,
+      iso,
+    );
+    expect(out.updatedAt).toBe(iso);
+  });
+
+  it('patchTemplate maps Postgres permission denied to ForbiddenException', async () => {
+    ds.query.mockRejectedValueOnce(
+      new QueryFailedError('', [], {
+        code: '42501',
+        message: 'permission denied for table email_template',
+      }),
+    );
+    await expect(
+      svc.patchTemplate(
+        'reviewer-invited',
+        undefined,
+        'ok {{submissionTitle}}',
+        '<p>x</p>',
+        'x',
+        new Date().toISOString(),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('patchReminderPolicy maps Postgres permission denied to ForbiddenException', async () => {
+    ds.query.mockRejectedValueOnce(
+      new QueryFailedError('', [], {
+        code: '42501',
+        message: 'permission denied for table email_reminder_policy',
+      }),
+    );
+    await expect(
+      svc.patchReminderPolicy(21, new Date().toISOString()),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

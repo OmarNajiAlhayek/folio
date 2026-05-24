@@ -203,4 +203,62 @@ describe('Admin email (e2e)', () => {
     expect(typeof b.html).toBe('string');
     expect(typeof b.text).toBe('string');
   });
+
+  it('GET /admin/email/pipeline-status without auth returns 401', () => {
+    return request(app.getHttpServer())
+      .get('/api/v1/admin/email/pipeline-status')
+      .expect(401);
+  });
+
+  it('GET /admin/email/pipeline-status as author returns 403', () => {
+    return request(app.getHttpServer())
+      .get('/api/v1/admin/email/pipeline-status')
+      .set('Authorization', `Bearer ${authorToken}`)
+      .expect(403);
+  });
+
+  it('GET /admin/email/pipeline-status as editor returns 200 with stable shape when email DB is present', async () => {
+    if (skipEmailAdminIntegration) return;
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/admin/email/pipeline-status')
+      .set('Authorization', `Bearer ${editorToken}`)
+      .expect(200);
+    const b = res.body as {
+      outbox: { pending: number; deadSample: unknown[] };
+      emailLog: { counts: Record<string, number>; failedSample: unknown[] };
+      reminders: { counts: Record<string, number>; stuckPendingPastDue: number };
+      rabbitMq: {
+        metricsAvailable: boolean;
+        cachedAt: string;
+        staleAfterSeconds: number;
+        available: boolean;
+        queues: Record<string, { messageCount: number }>;
+      };
+    };
+    expect(typeof b.outbox.pending).toBe('number');
+    expect(Array.isArray(b.outbox.deadSample)).toBe(true);
+    expect(b.emailLog.counts).toMatchObject({
+      pending: expect.any(Number),
+      sent: expect.any(Number),
+      failed: expect.any(Number),
+    });
+    expect(Array.isArray(b.emailLog.failedSample)).toBe(true);
+    expect(b.reminders.counts).toMatchObject({
+      pending: expect.any(Number),
+      sent: expect.any(Number),
+      cancelled: expect.any(Number),
+    });
+    expect(typeof b.reminders.stuckPendingPastDue).toBe('number');
+    expect(b.rabbitMq.metricsAvailable).toBe(true);
+    expect(typeof b.rabbitMq.cachedAt).toBe('string');
+    expect(typeof b.rabbitMq.staleAfterSeconds).toBe('number');
+    expect(typeof b.rabbitMq.available).toBe('boolean');
+    if (b.rabbitMq.available) {
+      expect(b.rabbitMq.queues).toMatchObject({
+        'folio.events.dlq': { messageCount: expect.any(Number) },
+        'email.reviewer_invited': { messageCount: expect.any(Number) },
+        'email.reminder_due': { messageCount: expect.any(Number) },
+      });
+    }
+  });
 });

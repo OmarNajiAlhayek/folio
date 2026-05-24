@@ -19,6 +19,12 @@ export type ReviewerCandidate = {
   email: string;
 };
 
+export type CopyeditorCandidate = {
+  id: string;
+  displayName: string;
+  email: string;
+};
+
 export type PublicUserProfile = {
   id: string;
   email: string;
@@ -27,6 +33,8 @@ export type PublicUserProfile = {
   orcid: string | null;
   reviewKeywords: string | null;
   willingToReview: boolean;
+  /** `en` | `ar` when set — controls outbound email language resolution. */
+  preferredLocale: string | null;
   roles: string[];
   permissions: string[];
 };
@@ -93,6 +101,7 @@ export class UsersService {
       orcid?: string | null;
       reviewKeywords?: string | null;
       willingToReview?: boolean;
+      preferredLocale?: string | null;
     },
   ): Promise<void> {
     const patch: Partial<User> = {};
@@ -102,8 +111,27 @@ export class UsersService {
       patch.reviewKeywords = data.reviewKeywords;
     if (data.willingToReview !== undefined)
       patch.willingToReview = data.willingToReview;
+    if (data.preferredLocale !== undefined)
+      patch.preferredLocale = data.preferredLocale;
     if (Object.keys(patch).length === 0) return;
     await this.usersRepo.update({ id: userId }, patch);
+  }
+
+  async patchMe(
+    userId: string,
+    preferredLocale: 'en' | 'ar' | null | undefined,
+  ): Promise<PublicUserProfile> {
+    if (preferredLocale !== undefined) {
+      await this.usersRepo.update({ id: userId }, { preferredLocale });
+    }
+    const profile = await this.toPublicProfile(userId);
+    if (!profile) {
+      throw new NotFoundException({
+        message: 'User not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    return profile;
   }
 
   async listReviewerCandidates(): Promise<ReviewerCandidate[]> {
@@ -115,6 +143,25 @@ export class UsersService {
     }
     const users = await this.usersRepo.find({
       where: { id: In(ids), willingToReview: true },
+      select: ['id', 'displayName', 'email'],
+      order: { displayName: 'ASC', email: 'ASC' },
+    });
+    return users.map((u) => ({
+      id: u.id,
+      displayName: u.displayName,
+      email: u.email,
+    }));
+  }
+
+  async listCopyeditorCandidates(): Promise<CopyeditorCandidate[]> {
+    const ids = await this.rbacService.listUserIdsWithPermission(
+      PERMISSION_SLUGS.COPYEDIT_SUBMIT_NOTE,
+    );
+    if (ids.length === 0) {
+      return [];
+    }
+    const users = await this.usersRepo.find({
+      where: { id: In(ids) },
       select: ['id', 'displayName', 'email'],
       order: { displayName: 'ASC', email: 'ASC' },
     });
@@ -138,6 +185,7 @@ export class UsersService {
       orcid: user.orcid,
       reviewKeywords: user.reviewKeywords,
       willingToReview: user.willingToReview,
+      preferredLocale: user.preferredLocale,
       roles: roleSlugs,
       permissions: permissionSlugs,
     };

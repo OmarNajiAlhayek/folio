@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -26,6 +27,7 @@ import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
+import { AssignCopyeditorDto } from './dto/assign-copyeditor.dto';
 import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
 import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage.dto';
 import { GenerateDocxDto } from './dto/constructor-content.dto';
@@ -122,8 +124,14 @@ export class SubmissionsController {
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateStatusDto,
+    @Headers('x-folio-locale') folioLocale?: string,
   ) {
-    return this.submissionsService.updateStatus(slug, user, dto.status);
+    return this.submissionsService.updateStatus(
+      slug,
+      user,
+      dto.status,
+      folioLocale,
+    );
   }
 
   @Post(':slug/assignments')
@@ -132,8 +140,14 @@ export class SubmissionsController {
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
     @Body() dto: AssignReviewerDto,
+    @Headers('x-folio-locale') folioLocale?: string,
   ) {
-    return this.submissionsService.assignReviewer(slug, dto.reviewerId, user);
+    return this.submissionsService.assignReviewer(
+      slug,
+      dto.reviewerId,
+      user,
+      folioLocale,
+    );
   }
 
   @Get(':slug/assignments')
@@ -148,6 +162,39 @@ export class SubmissionsController {
   @Get(':slug/reviews')
   listReviews(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
     return this.submissionsService.listReviews(slug, user);
+  }
+
+  @Post(':slug/copyedit-assignments')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR)
+  assignCopyeditor(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: AssignCopyeditorDto,
+  ) {
+    return this.submissionsService.assignCopyeditor(slug, dto.copyeditorId, user);
+  }
+
+  @Get(':slug/copyedit-assignments')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
+  listCopyeditAssignments(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.listCopyeditAssignments(slug, user);
+  }
+
+  @Get(':slug/copyedit-notes')
+  listCopyeditNotes(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.listCopyeditNotes(slug, user);
+  }
+
+  @Post(':slug/publish')
+  @Permissions(PERMISSION_SLUGS.COPYEDIT_PUBLISH)
+  publish(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
+    return this.submissionsService.publishSubmission(slug, user);
   }
 
   @Post(':slug/files')

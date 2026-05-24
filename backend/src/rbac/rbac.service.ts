@@ -59,6 +59,22 @@ export class RbacService implements OnModuleInit {
         slug: PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
         description: 'Configure email reminder rules and templates',
       },
+      {
+        slug: PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
+        description: 'Assign a copyeditor to an accepted submission',
+      },
+      {
+        slug: PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE,
+        description: 'View own copyediting assignments queue',
+      },
+      {
+        slug: PERMISSION_SLUGS.COPYEDIT_SUBMIT_NOTE,
+        description: 'Submit copyediting notes for a submission',
+      },
+      {
+        slug: PERMISSION_SLUGS.COPYEDIT_PUBLISH,
+        description: 'Publish a submission after copyediting',
+      },
     ];
 
     for (const p of permissionDefs) {
@@ -71,6 +87,7 @@ export class RbacService implements OnModuleInit {
       { slug: ROLE_SLUGS.AUTHOR, name: 'Author' },
       { slug: ROLE_SLUGS.EDITOR, name: 'Editor' },
       { slug: ROLE_SLUGS.REVIEWER, name: 'Reviewer' },
+      { slug: ROLE_SLUGS.COPYEDITOR, name: 'Copyeditor' },
     ];
 
     for (const r of roleDefs) {
@@ -82,6 +99,7 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
       PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
       PERMISSION_SLUGS.USERS_MANAGE_ROLES,
       PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
     ];
@@ -89,9 +107,15 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
       PERMISSION_SLUGS.REVIEW_SUBMIT,
     ];
+    const copyeditorPerms = [
+      PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE,
+      PERMISSION_SLUGS.COPYEDIT_SUBMIT_NOTE,
+      PERMISSION_SLUGS.COPYEDIT_PUBLISH,
+    ];
 
     await this.ensureRolePermissions(ROLE_SLUGS.EDITOR, editorPerms);
     await this.ensureRolePermissions(ROLE_SLUGS.REVIEWER, reviewerPerms);
+    await this.ensureRolePermissions(ROLE_SLUGS.COPYEDITOR, copyeditorPerms);
     // author: no extra permissions
   }
 
