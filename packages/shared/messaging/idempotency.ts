@@ -6,6 +6,11 @@
  * Rules are documented in the plan §7a:
  *   - ReviewerInvited -> "reviewer_invited:" + assignmentSlug
  *   - ReminderDue     -> "reminder_due:"     + reminderId
+ *   - CopyeditAssigned -> "copyedit_assigned:" + assignmentSlug
+ *   - CopyeditQueriesSent -> "copyedit_queries:" + assignmentSlug + ":" + round
+ *   - CopyeditAuthorReady -> "copyedit_author_ready:" + assignmentSlug + ":" + round
+ *   - SubmissionSubmitted -> "submission_submitted:" + submissionSlug + ":" + editorUserId
+ *   - SubmissionDecision   -> "submission_decision:" + submissionSlug + ":" + decision
  */
 
 export function reviewerInvitedKey(assignmentSlug: string): string {
@@ -20,4 +25,57 @@ export function reminderDueKey(reminderId: string): string {
     throw new Error('reminderDueKey: reminderId is required');
   }
   return `reminder_due:${reminderId}`;
+}
+
+export function copyeditAssignedKey(assignmentSlug: string): string {
+  if (!assignmentSlug) {
+    throw new Error('copyeditAssignedKey: assignmentSlug is required');
+  }
+  return `copyedit_assigned:${assignmentSlug}`;
+}
+
+export function copyeditQueriesSentKey(
+  assignmentSlug: string,
+  round: number,
+): string {
+  if (!assignmentSlug) {
+    throw new Error('copyeditQueriesSentKey: assignmentSlug is required');
+  }
+  return `copyedit_queries:${assignmentSlug}:${round}`;
+}
+
+export function copyeditAuthorReadyKey(
+  assignmentSlug: string,
+  round: number,
+): string {
+  if (!assignmentSlug) {
+    throw new Error('copyeditAuthorReadyKey: assignmentSlug is required');
+  }
+  return `copyedit_author_ready:${assignmentSlug}:${round}`;
+}
+
+export function submissionSubmittedKey(
+  submissionSlug: string,
+  editorUserId: string,
+): string {
+  if (!submissionSlug) {
+    throw new Error('submissionSubmittedKey: submissionSlug is required');
+  }
+  if (!editorUserId) {
+    throw new Error('submissionSubmittedKey: editorUserId is required');
+  }
+  return `submission_submitted:${submissionSlug}:${editorUserId}`;
+}
+
+export function submissionDecisionKey(
+  submissionSlug: string,
+  decision: string,
+): string {
+  if (!submissionSlug) {
+    throw new Error('submissionDecisionKey: submissionSlug is required');
+  }
+  if (!decision) {
+    throw new Error('submissionDecisionKey: decision is required');
+  }
+  return `submission_decision:${submissionSlug}:${decision}`;
 }

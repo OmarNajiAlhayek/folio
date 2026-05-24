@@ -36,6 +36,11 @@ export type TopologyNames = {
   dlq: string;
   reviewerInvitedQueue: string;
   reminderDueQueue: string;
+  copyeditAssignedQueue: string;
+  copyeditQueriesSentQueue: string;
+  copyeditAuthorReadyQueue: string;
+  submissionSubmittedQueue: string;
+  submissionDecisionQueue: string;
 };
 
 export const DEFAULT_TOPOLOGY: TopologyNames = {
@@ -44,6 +49,11 @@ export const DEFAULT_TOPOLOGY: TopologyNames = {
   dlq: 'folio.events.dlq',
   reviewerInvitedQueue: 'email.reviewer_invited',
   reminderDueQueue: 'email.reminder_due',
+  copyeditAssignedQueue: 'email.copyedit_assigned',
+  copyeditQueriesSentQueue: 'email.copyedit_queries_sent',
+  copyeditAuthorReadyQueue: 'email.copyedit_author_ready',
+  submissionSubmittedQueue: 'email.submission_submitted',
+  submissionDecisionQueue: 'email.submission_decision',
 };
 
 export async function assertTopology(
@@ -80,5 +90,70 @@ export async function assertTopology(
     names.reminderDueQueue,
     names.exchange,
     'reminder.due',
+  );
+
+  await channel.assertQueue(names.copyeditAssignedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'copyedit.assigned.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.copyeditAssignedQueue,
+    names.exchange,
+    'copyedit.assigned',
+  );
+
+  await channel.assertQueue(names.copyeditQueriesSentQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'copyedit.queries_sent.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.copyeditQueriesSentQueue,
+    names.exchange,
+    'copyedit.queries_sent',
+  );
+
+  await channel.assertQueue(names.copyeditAuthorReadyQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'copyedit.author_ready.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.copyeditAuthorReadyQueue,
+    names.exchange,
+    'copyedit.author_ready',
+  );
+
+  await channel.assertQueue(names.submissionSubmittedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'submission.submitted.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.submissionSubmittedQueue,
+    names.exchange,
+    'submission.submitted',
+  );
+
+  await channel.assertQueue(names.submissionDecisionQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'submission.decision.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.submissionDecisionQueue,
+    names.exchange,
+    'submission.decision',
   );
 }
