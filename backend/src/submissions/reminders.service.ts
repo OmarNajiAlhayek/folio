@@ -42,8 +42,9 @@ export class RemindersService {
 
   /**
    * Same editorial scope as listing assignments: must be able to list
-   * assignments on the submission. `email.manage_reminders` is enforced
-   * on the controller.
+   * assignments on the submission. Per-assignment reminder admin is enforced
+   * on the controller (`email.manage_assignment_reminders` or global
+   * `email.manage_reminders`).
    */
   private async assertAssignmentScope(
     submissionSlug: string,

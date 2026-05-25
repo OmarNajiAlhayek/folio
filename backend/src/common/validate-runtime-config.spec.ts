@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import {
   assertBackendDoesNotConfigureMail,
+  isLocalDevSandbox,
   RuntimeConfigError,
   validateBackendRuntimeConfig,
 } from './validate-runtime-config';
@@ -70,6 +71,54 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'real-prod-password-not-in-blocklist',
       RABBITMQ_URL: 'amqp://guest:guest@localhost:5672',
     });
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+  });
+
+  it('rejects staging with example secrets even when NODE_ENV is not production', () => {
+    const config = configFromEnv({
+      NODE_ENV: 'staging',
+      JWT_SECRET: 'change_this_to_a_long_random_secret',
+      DB_PASSWORD: 'changeme',
+      RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
+      AUTH_COOKIE_SECURE: 'true',
+    });
+    expect(isLocalDevSandbox(config)).toBe(false);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+  });
+
+  it('rejects deploy-shaped config when NODE_ENV is omitted but secrets are still examples', () => {
+    const config = configFromEnv({
+      JWT_SECRET: 'change_this_to_a_long_random_secret',
+      DB_PASSWORD: 'changeme',
+      DB_HOST: 'db.prod.example',
+      RABBITMQ_URL: 'amqp://folio:secret@broker.example:5672',
+      FRONTEND_ORIGIN: 'https://journal.example.com',
+      APP_BASE_URL: 'https://journal.example.com',
+      AUTH_COOKIE_SECURE: 'true',
+    });
+    expect(isLocalDevSandbox(config)).toBe(false);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+  });
+
+  it('rejects when AUTH_COOKIE_SECURE is true but NODE_ENV is still development', () => {
+    const config = configFromEnv({
+      NODE_ENV: 'development',
+      JWT_SECRET: 'change_this_to_a_long_random_secret',
+      DB_PASSWORD: 'changeme',
+      AUTH_COOKIE_SECURE: 'true',
+    });
+    expect(isLocalDevSandbox(config)).toBe(false);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+  });
+
+  it('honors RUNTIME_CONFIG_STRICT to force checks in local-looking env', () => {
+    const config = configFromEnv({
+      NODE_ENV: 'development',
+      RUNTIME_CONFIG_STRICT: 'true',
+      JWT_SECRET: 'change_this_to_a_long_random_secret',
+      DB_PASSWORD: 'changeme',
+    });
+    expect(isLocalDevSandbox(config)).toBe(false);
     expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
   });
 });

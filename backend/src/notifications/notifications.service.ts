@@ -3,7 +3,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, Repository } from 'typeorm';
+import {
+  EntityManager,
+  In,
+  IsNull,
+  Repository,
+  type QueryDeepPartialEntity,
+} from 'typeorm';
+import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { Notification } from '../entities/notification.entity';
 import {
   NOTIFICATION_I18N,
@@ -82,37 +89,54 @@ export class NotificationsService {
     input: CreateNotificationInput,
     manager: EntityManager | null = null,
   ): Promise<Notification | null> {
-    const i18n = NOTIFICATION_I18N[input.type];
+    const created = await this.createManyIfAbsent([input], manager);
+    return created[0] ?? null;
+  }
+
+  /**
+   * Insert notifications inside a transaction, skipping rows that already exist
+   * (by idempotency key). Returns only newly created rows. Does NOT emit SSE.
+   */
+  async createManyIfAbsent(
+    inputs: CreateNotificationInput[],
+    manager: EntityManager | null = null,
+  ): Promise<Notification[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
     const repo = manager ? manager.getRepository(Notification) : this.repo;
-    const existing = await repo.findOne({
-      where: { idempotencyKey: input.idempotencyKey },
+    const keys = inputs.map((i) => i.idempotencyKey);
+    const existing = await repo.find({
+      where: { idempotencyKey: In(keys) },
+      select: ['idempotencyKey'],
     });
-    if (existing) {
-      return null;
+    const existingKeys = new Set(existing.map((row) => row.idempotencyKey));
+    const toInsert = inputs.filter((i) => !existingKeys.has(i.idempotencyKey));
+    if (toInsert.length === 0) {
+      return [];
     }
-    const row = repo.create({
-      userId: input.userId,
-      type: input.type,
-      titleKey: i18n.titleKey,
-      bodyKey: i18n.bodyKey,
-      params: input.params ?? {},
-      href: input.href,
-      idempotencyKey: input.idempotencyKey,
-      readAt: null,
+    const values = toInsert.map((input) => {
+      const i18n = NOTIFICATION_I18N[input.type];
+      return {
+        userId: input.userId,
+        type: input.type,
+        titleKey: i18n.titleKey,
+        bodyKey: i18n.bodyKey,
+        params: input.params ?? {},
+        href: input.href,
+        idempotencyKey: input.idempotencyKey,
+        readAt: null,
+      };
     });
-    try {
-      return await repo.save(row);
-    } catch (err: unknown) {
-      const code =
-        err &&
-        typeof err === 'object' &&
-        'code' in err &&
-        (err as { code: string }).code;
-      if (code === '23505') {
-        return null;
-      }
-      throw err;
-    }
+    const result = await repo
+      .createQueryBuilder()
+      .insert()
+      .into(Notification)
+      .values(values as QueryDeepPartialEntity<Notification>[])
+      .orIgnore()
+      .returning('*')
+      .execute();
+    return (result.raw as Notification[]) ?? [];
   }
 
   /** Post-commit: push live SSE events for newly created rows. */

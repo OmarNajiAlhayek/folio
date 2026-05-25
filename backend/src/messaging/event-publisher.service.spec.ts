@@ -72,4 +72,33 @@ describe('EventPublisherService', () => {
     expect(rootCreate).not.toHaveBeenCalled();
     expect(rootSave).not.toHaveBeenCalled();
   });
+
+  it('enqueueMany saves all rows in one call', async () => {
+    const save = jest.fn().mockImplementation(async (rows: OutboundEvent[]) => rows);
+    const create = jest.fn((x: Partial<OutboundEvent>) => x);
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        EventPublisherService,
+        {
+          provide: getRepositoryToken(OutboundEvent),
+          useValue: { create, save },
+        },
+      ],
+    }).compile();
+
+    const svc = moduleRef.get(EventPublisherService);
+    await svc.enqueueMany([
+      { routingKey: 'a', payload: { n: 1 } },
+      { routingKey: 'b', payload: { n: 2 } },
+    ]);
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ routingKey: 'a' }),
+        expect.objectContaining({ routingKey: 'b' }),
+      ]),
+    );
+  });
 });

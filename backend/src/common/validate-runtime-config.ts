@@ -36,16 +36,90 @@ export class RuntimeConfigError extends Error {
   }
 }
 
+const LOCAL_DEV_NODE_ENVS = new Set(['development', 'test']);
+const LOCAL_DB_HOSTS = new Set(['', 'localhost', '127.0.0.1', 'host.docker.internal']);
+
 function nodeEnv(config?: ConfigService): string {
   return (
     config?.get<string>('NODE_ENV') ??
     process.env.NODE_ENV ??
     'development'
-  );
+  )
+    .trim()
+    .toLowerCase();
 }
 
-function isProduction(config?: ConfigService): boolean {
-  return nodeEnv(config) === 'production';
+function isLocalhostishUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return true;
+  }
+  try {
+    const host = new URL(trimmed).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function frontendOriginsLookLocal(config: ConfigService): boolean {
+  const raw = config.get<string>('FRONTEND_ORIGIN', '').trim();
+  if (raw === '') {
+    return true;
+  }
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .every((origin) => isLocalhostishUrl(origin));
+}
+
+function rabbitMqLooksLocal(config: ConfigService): boolean {
+  const url = config.get<string>('RABBITMQ_URL', '').trim();
+  if (url === '') {
+    return true;
+  }
+  return /localhost|127\.0\.0\.1/i.test(url);
+}
+
+/**
+ * True only for a conventional local dev machine (.env.example defaults).
+ * Deploys that omit NODE_ENV=production but use remote HTTPS, secure cookies, etc.
+ * still run JWT/DB/cookie validation.
+ */
+export function isLocalDevSandbox(config: ConfigService): boolean {
+  if (config.get<string>('RUNTIME_CONFIG_STRICT') === 'true') {
+    return false;
+  }
+
+  const env = nodeEnv(config);
+  if (!LOCAL_DEV_NODE_ENVS.has(env)) {
+    return false;
+  }
+
+  if (config.get<string>('AUTH_COOKIE_SECURE') === 'true') {
+    return false;
+  }
+
+  const appBase = config.get<string>('APP_BASE_URL', '').trim();
+  if (appBase !== '' && !isLocalhostishUrl(appBase)) {
+    return false;
+  }
+
+  const dbHost = config.get<string>('DB_HOST', 'localhost').trim().toLowerCase();
+  if (!LOCAL_DB_HOSTS.has(dbHost)) {
+    return false;
+  }
+
+  if (!frontendOriginsLookLocal(config)) {
+    return false;
+  }
+
+  if (!rabbitMqLooksLocal(config)) {
+    return false;
+  }
+
+  return true;
 }
 
 /** Mail is sent only by `services/email-service`; backend env must not set SMTP. */
@@ -65,7 +139,7 @@ export function assertBackendDoesNotConfigureMail(): void {
 export function validateBackendRuntimeConfig(config: ConfigService): void {
   assertBackendDoesNotConfigureMail();
 
-  if (!isProduction(config)) {
+  if (isLocalDevSandbox(config)) {
     return;
   }
 

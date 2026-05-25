@@ -9,22 +9,55 @@ describe('NotificationsService', () => {
   let service: NotificationsService;
   let repo: {
     findOne: jest.Mock;
+    find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
     count: jest.Mock;
     update: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
+  let insertQb: {
+    insert: jest.Mock;
+    into: jest.Mock;
+    values: jest.Mock;
+    orIgnore: jest.Mock;
+    returning: jest.Mock;
+    execute: jest.Mock;
+  };
   let hub: { emitNotification: jest.Mock };
 
   beforeEach(async () => {
+    insertQb = {
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({
+        raw: [
+          {
+            id: 'n-new',
+            userId: 'u1',
+            type: NOTIFICATION_TYPE.REVIEWER_INVITED,
+            titleKey: 'Notifications.reviewerInvited.title',
+            bodyKey: 'Notifications.reviewerInvited.body',
+            params: {},
+            href: '/assignments',
+            idempotencyKey: 'reviewer_invited:a2',
+            readAt: null,
+            createdAt: new Date(),
+          },
+        ],
+      }),
+    };
     repo = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn((x) => x),
       save: jest.fn(async (x) => ({ ...x, id: 'n-1', createdAt: new Date() })),
       count: jest.fn().mockResolvedValue(2),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-      createQueryBuilder: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue(insertQb),
     };
     hub = { emitNotification: jest.fn() };
 
@@ -40,7 +73,7 @@ describe('NotificationsService', () => {
   });
 
   it('createIfAbsent returns null when idempotency key exists', async () => {
-    repo.findOne.mockResolvedValue({ id: 'existing' });
+    repo.find.mockResolvedValue([{ idempotencyKey: 'reviewer_invited:a1' }]);
     const result = await service.createIfAbsent({
       userId: 'u1',
       type: NOTIFICATION_TYPE.REVIEWER_INVITED,
@@ -48,7 +81,7 @@ describe('NotificationsService', () => {
       idempotencyKey: 'reviewer_invited:a1',
     });
     expect(result).toBeNull();
-    expect(repo.save).not.toHaveBeenCalled();
+    expect(insertQb.execute).not.toHaveBeenCalled();
   });
 
   it('emitCreated pushes to hub', () => {
@@ -69,6 +102,32 @@ describe('NotificationsService', () => {
       'u1',
       expect.objectContaining({ id: 'n-1' }),
     );
+  });
+
+  it('createManyIfAbsent skips existing idempotency keys', async () => {
+    repo.find.mockResolvedValue([{ idempotencyKey: 'reviewer_invited:a1' }]);
+    const result = await service.createManyIfAbsent([
+      {
+        userId: 'u1',
+        type: NOTIFICATION_TYPE.REVIEWER_INVITED,
+        href: '/assignments',
+        idempotencyKey: 'reviewer_invited:a1',
+      },
+      {
+        userId: 'u2',
+        type: NOTIFICATION_TYPE.REVIEWER_INVITED,
+        href: '/assignments',
+        idempotencyKey: 'reviewer_invited:a2',
+      },
+    ]);
+    expect(repo.find).toHaveBeenCalledWith({
+      where: { idempotencyKey: expect.anything() },
+      select: ['idempotencyKey'],
+    });
+    expect(insertQb.values).toHaveBeenCalledWith([
+      expect.objectContaining({ idempotencyKey: 'reviewer_invited:a2' }),
+    ]);
+    expect(result).toHaveLength(1);
   });
 
   it('unreadCount queries unread rows', async () => {

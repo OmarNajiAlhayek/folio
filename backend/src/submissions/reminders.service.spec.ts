@@ -63,7 +63,7 @@ describe('RemindersService', () => {
       'asg-1',
       user([
         PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-        PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
       ]),
     );
 
@@ -94,7 +94,7 @@ describe('RemindersService', () => {
         '00000000-0000-0000-0000-000000000001',
         user([
           PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-          PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+          PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
         ]),
       ),
     ).rejects.toBeInstanceOf(NotFoundException);

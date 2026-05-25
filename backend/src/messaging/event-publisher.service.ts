@@ -55,4 +55,32 @@ export class EventPublisherService {
       `outbox.enqueue routing=${routingKey} ${JSON.stringify(redactEventPayload(payload))}`,
     );
   }
+
+  /**
+   * Insert multiple outbox rows in one save (same transactional rules as `enqueue`).
+   */
+  async enqueueMany(
+    events: { routingKey: string; payload: Record<string, unknown> }[],
+    manager: EntityManager | null = null,
+  ): Promise<void> {
+    if (events.length === 0) {
+      return;
+    }
+    const repo = manager
+      ? manager.getRepository(OutboundEvent)
+      : this.outboxRepo;
+    const rows = events.map((event) =>
+      repo.create({
+        routingKey: event.routingKey,
+        payload: event.payload,
+        status: 'pending',
+        attempts: 0,
+        nextAttemptAt: null,
+      }),
+    );
+    await repo.save(rows);
+    this.logger.debug(
+      `outbox.enqueueMany count=${events.length} routing=${events[0]!.routingKey}`,
+    );
+  }
 }
