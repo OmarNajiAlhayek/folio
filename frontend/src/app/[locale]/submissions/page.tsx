@@ -5,7 +5,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { ApiErrorState } from "@/components/api-error-state";
 import { getApiErrorKind } from "@/lib/api-error-message";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useMe } from "@/lib/queries/auth";
 import {
@@ -26,7 +25,6 @@ export default function SubmissionsPage() {
   const locale = useLocale();
   const router = useRouter();
   const { resolve: resolveApiError } = useApiErrorMessages();
-  useAuthRedirect();
   const meQuery = useMe();
   const canBrowse = meQuery.data
     ? canBrowseSubmissionsNav(meQuery.data.permissions)

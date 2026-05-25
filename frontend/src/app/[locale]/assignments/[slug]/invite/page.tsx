@@ -7,7 +7,6 @@ import { useParams } from "next/navigation";
 import { apiJson, ApiError } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { toast } from "@/lib/toast";
 import { useToastApiError } from "@/lib/use-toast-api-error";
@@ -80,8 +79,6 @@ export default function AssignmentInvitePage() {
       setLoading(false);
     }
   }, [slug, router, pathname, t, tAssignments, resolveApiError]);
-
-  useAuthRedirect();
 
   useEffect(() => {
     void load();

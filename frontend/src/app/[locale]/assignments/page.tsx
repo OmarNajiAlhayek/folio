@@ -7,7 +7,6 @@ import { apiJson, ApiError } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
 import { getApiErrorKind } from "@/lib/api-error-message";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import {
   AssignmentQueueRow,
@@ -64,8 +63,6 @@ export default function AssignmentsPage() {
         setLoading(false);
       });
   }, [router, pathname, t, resolveApiError]);
-
-  useAuthRedirect();
 
   useEffect(() => {
     void Promise.resolve().then(() => loadList());

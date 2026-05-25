@@ -13,14 +13,27 @@ export const PERMISSION_SLUGS = {
   REVIEW_SUBMIT: "review.submit",
   USERS_MANAGE_ROLES: "users.manage_roles",
   EMAIL_MANAGE_REMINDERS: "email.manage_reminders",
+  EMAIL_MANAGE_ASSIGNMENT_REMINDERS: "email.manage_assignment_reminders",
 } as const;
 
 export const ROLE_SLUGS = {
   AUTHOR: "author",
   EDITOR: "editor",
+  JOURNAL_MANAGER: "journal_manager",
   REVIEWER: "reviewer",
   COPYEDITOR: "copyeditor",
 } as const;
+
+/** Global email admin or per-assignment reminder controls on a submission. */
+export function canManageAssignmentReminders(
+  permissions: Iterable<string>,
+): boolean {
+  const set = new Set(permissions);
+  return (
+    set.has(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS) ||
+    set.has(PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS)
+  );
+}
 
 export function canManageOwnSubmissions(permissions: Iterable<string>): boolean {
   return [...permissions].includes(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN);

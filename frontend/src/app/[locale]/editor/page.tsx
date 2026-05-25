@@ -7,7 +7,6 @@ import { apiJson, ApiError } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
 import { getApiErrorKind } from "@/lib/api-error-message";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { MultiSelect } from "@/components/ui/multi-select";
 import {
@@ -71,8 +70,6 @@ export default function EditorPage() {
       }
     })();
   }, [router, pathname, t, resolveApiError]);
-
-  useAuthRedirect();
 
   useEffect(() => {
     loadList();

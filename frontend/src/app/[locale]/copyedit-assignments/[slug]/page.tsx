@@ -18,7 +18,6 @@ import { getApiErrorKind } from "@/lib/api-error-message";
 
 import { redirectToLogin } from "@/lib/auth-redirect";
 
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 
@@ -153,8 +152,6 @@ export default function CopyeditWorkbenchPage() {
   }, [assignmentSlug, router, pathname, resolveApiError, t]);
 
 
-
-  useAuthRedirect();
 
 
 

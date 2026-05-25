@@ -5,7 +5,6 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
 import { apiBlob, apiJson, ApiError } from "@/lib/api";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { redirectToLogin } from "@/lib/auth-redirect";
 import { ApiErrorState } from "@/components/api-error-state";
 import { toast } from "@/lib/toast";
@@ -173,8 +172,6 @@ export default function ReviewFormPage() {
       setPageLoading(false);
     }
   }, [slug, router, pathname, t, tAssignments, resolveApiError]);
-
-  useAuthRedirect();
 
   useEffect(() => {
     loadContext().catch(() => {

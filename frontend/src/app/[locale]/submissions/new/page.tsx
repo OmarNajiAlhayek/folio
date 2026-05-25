@@ -5,7 +5,6 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
 import { apiJson } from "@/lib/api";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import {
   ACCEPT_FIGURE,
   ACCEPT_MANUSCRIPT,
@@ -105,7 +104,6 @@ export default function NewSubmissionPage() {
   const tv = useTranslations("Validation");
   const tConstructor = useTranslations("ConstructorPage");
   const router = useRouter();
-  useAuthRedirect();
   const searchParams = useSearchParams();
   const fileInputId = useId();
   const [stagedFiles, setStagedFiles] = useState<

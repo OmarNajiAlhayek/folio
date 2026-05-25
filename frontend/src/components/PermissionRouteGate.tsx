@@ -1,86 +1,63 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, ApiError } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
+import { AuthGateFallback } from "@/components/auth-gate-fallback";
 import { getApiErrorKind } from "@/lib/api-error-message";
-import { redirectToLogin } from "@/lib/auth-redirect";
 import { canAccessPath } from "@/lib/route-permissions";
+import { useMe } from "@/lib/queries/auth";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import type { MeProfile } from "@/lib/permissions";
 
 type Props = { children: React.ReactNode };
 
-type GateState =
-  | { status: "loading" }
-  | { status: "ready" }
-  | { status: "error"; message: string; error: unknown };
-
 /**
- * Client gate for cookie auth (Edge middleware cannot see session cookies).
+ * Client gate for permission checks (auth is handled by {@link AuthGate}).
  * Permission rules live in `@/lib/route-permissions`.
  */
 export function PermissionRouteGate({ children }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+  const me = useMe();
   const { resolve } = useApiErrorMessages();
   const tApi = useTranslations("ApiErrors");
-  const [gate, setGate] = useState<GateState>({ status: "loading" });
 
   useEffect(() => {
-    let cancelled = false;
-    setGate({ status: "loading" });
-    apiJson<MeProfile>("/auth/me")
-      .then((me) => {
-        if (cancelled) return;
-        const set = new Set(me.permissions ?? []);
-        if (!canAccessPath(set, pathname)) {
-          router.replace("/dashboard");
-          return;
-        }
-        setGate({ status: "ready" });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          redirectToLogin(router, pathname);
-          return;
-        }
-        setGate({
-          status: "error",
-          message: resolve(err, tApi("serverError")),
-          error: err,
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, router, resolve, tApi]);
+    if (!me.isSuccess || !me.data) return;
+    const set = new Set(me.data.permissions ?? []);
+    if (!canAccessPath(set, pathname)) {
+      router.replace("/dashboard");
+    }
+  }, [me.isSuccess, me.data, pathname, router]);
 
-  if (gate.status === "loading") {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-10 text-sm text-ink/70 sm:py-12">
-        Loading…
-      </div>
-    );
+  if (me.isPending && !me.isSuccess) {
+    return <AuthGateFallback />;
   }
 
-  if (gate.status === "error") {
-    const kind = getApiErrorKind(gate.error);
+  if (me.isError) {
+    const kind = getApiErrorKind(me.error);
     return (
       <ApiErrorState
         className="mx-auto max-w-lg px-4 py-10 sm:py-12"
-        message={gate.message}
+        message={resolve(me.error, tApi("serverError"))}
         hint={kind === "rateLimit" ? tApi("rateLimitHint") : undefined}
-        error={gate.error}
+        error={me.error}
         backHref="/dashboard"
         backLabel={tApi("goHome")}
-        onRetry={() => router.refresh()}
+        onRetry={() => void me.refetch()}
         retryLabel={tApi("retry")}
       />
     );
+  }
+
+  if (!me.data) {
+    return null;
+  }
+
+  const set = new Set(me.data.permissions ?? []);
+  if (!canAccessPath(set, pathname)) {
+    return null;
   }
 
   return <>{children}</>;

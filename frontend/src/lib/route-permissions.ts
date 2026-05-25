@@ -51,6 +51,10 @@ export const ROUTE_ACCESS_RULES: Array<{
     permissions: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
   },
   {
+    pattern: /^\/submissions\/[^/]+\/compose(\/|$)/,
+    permissions: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+  },
+  {
     pattern: /^\/submissions\/compose(\/|$)/,
     permissions: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
   },

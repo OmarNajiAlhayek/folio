@@ -7,7 +7,6 @@ import { apiJson, ApiError } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
 import { getApiErrorKind } from "@/lib/api-error-message";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import {
   EMPTY_STATE_CLS,
@@ -58,8 +57,6 @@ export default function CopyeditAssignmentsPage() {
       })
       .finally(() => setLoading(false));
   }, [router, pathname, t, resolveApiError]);
-
-  useAuthRedirect();
 
   useEffect(() => {
     void Promise.resolve().then(() => loadList());
