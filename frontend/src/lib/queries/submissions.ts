@@ -8,7 +8,10 @@ import {
 import { apiJson } from "@/lib/api";
 import { ApiError } from "@/lib/api-response";
 import { queryKeys } from "@/lib/query-keys";
-import { PERMISSION_SLUGS } from "@/lib/permissions";
+import {
+  canManageAssignmentReminders,
+  PERMISSION_SLUGS,
+} from "@/lib/permissions";
 import type { MeProfile } from "@/lib/permissions";
 
 export type SubmissionListItem = {
@@ -142,7 +145,7 @@ export async function fetchSubmissionDetail(
   let reminderMap: SubmissionDetailPayload["assignmentReminders"] = {};
   if (
     isEditorView &&
-    permissions.includes(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS) &&
+    canManageAssignmentReminders(permissions) &&
     assignmentRows.length > 0
   ) {
     const entries = await Promise.all(
@@ -215,6 +218,15 @@ export function useInvalidateSubmissionDetail() {
   return (slug: string) =>
     queryClient.invalidateQueries({
       queryKey: queryKeys.submissionDetail(slug),
+    });
+}
+
+/** Summary row used by compose / lightweight submission views. */
+export function useInvalidateSubmission() {
+  const queryClient = useQueryClient();
+  return (slug: string) =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.submission(slug),
     });
 }
 

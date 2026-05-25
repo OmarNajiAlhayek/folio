@@ -33,6 +33,13 @@
     "backHome": "الذهاب إلى لوحة التحكم",
     "browsePublications": "تصفح المنشورات"
   },
+  "RouteError": {
+    "title": "حدث خطأ",
+    "description": "حدث خطأ غير متوقع أثناء تحميل هذه الصفحة. يمكنك إعادة المحاولة أو الانتقال إلى صفحة آمنة.",
+    "retry": "إعادة المحاولة",
+    "backHome": "الذهاب إلى لوحة التحكم",
+    "browsePublications": "تصفح المنشورات"
+  },
   "Nav": {
     "brand": "فوليو",
     "publications": "المنشورات",
@@ -186,10 +193,12 @@
     "pendingInvitationsTitle": "دعوات بانتظار الرد",
     "pendingInvitationsHint": "اقبل أو ارفض من هنا. لا يُعتمد شيء قبل ردّك.",
     "subsectionReviewInvites": "تحكيم الأقران",
-    "subsectionRoleInvites": "دور المحرّر",
+    "subsectionRoleInvites": "أدوار إدارية",
     "respondToReviewInvite": "الردّ",
     "invitedAt": "تاريخ الدعوة {date}",
     "roleInviteEditorLine": "دعاك {name} لتصبح محرّرًا",
+    "roleInviteJournalManagerLine": "دعاك {name} لتصبح مدير مجلة",
+    "roleInviteGenericLine": "دعاك {name} للانضمام كـ {roleSlug}",
     "acceptRole": "قبول",
     "declineRole": "رفض",
     "working": "…",
@@ -202,10 +211,10 @@
     "emailLanguageSave": "حفظ التفضيل",
     "emailLanguageSaving": "جارٍ الحفظ…",
     "emailLanguageSaved": "تم حفظ التفضيل",
-    "roleInviteAccepted": "تم قبول دور المحرّر.",
+    "roleInviteAccepted": "تم قبول الدور.",
     "roleInviteDeclined": "تم رفض الدعوة.",
-    "roleInviteAcceptFailed": "تعذّر قبول دعوة المحرّر.",
-    "roleInviteDeclineFailed": "تعذّر رفض دعوة المحرّر.",
+    "roleInviteAcceptFailed": "تعذّر قبول الدعوة.",
+    "roleInviteDeclineFailed": "تعذّر رفض الدعوة.",
     "emailLanguageSaveFailed": "تعذّر حفظ تفضيل لغة البريد."
   },
   "Submissions": {
@@ -846,7 +855,8 @@
     "header": "معاينة",
     "empty": "أضف أقسامًا في الجهة اليسرى لرؤية المعاينة هنا.",
     "approximateNotice": "تخطيط تقريبي فقط — ولِّد ملف .docx للتنسيق النهائي.",
-    "equationEmpty": "[معادلة فارغة]"
+    "equationEmpty": "[معادلة فارغة]",
+    "equationPreviewError": "تعذّر عرض هذا LaTeX."
   },
   "ConstructorValidation": {
     "checklistTitle": "قبل الإرسال، عالج هذه النقاط:",

@@ -33,6 +33,13 @@
     "backHome": "Go to dashboard",
     "browsePublications": "Browse publications"
   },
+  "RouteError": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred while loading this page. You can try again or go to a safe page.",
+    "retry": "Try again",
+    "backHome": "Go to dashboard",
+    "browsePublications": "Browse publications"
+  },
   "Nav": {
     "brand": "Folio",
     "publications": "Publications",
@@ -186,10 +193,12 @@
     "pendingInvitationsTitle": "Pending invitations",
     "pendingInvitationsHint": "Accept or decline here. Nothing is finalized until you respond.",
     "subsectionReviewInvites": "Peer review",
-    "subsectionRoleInvites": "Editor role",
+    "subsectionRoleInvites": "Staff roles",
     "respondToReviewInvite": "Respond",
     "invitedAt": "Invited {date}",
     "roleInviteEditorLine": "{name} invited you to become an editor",
+    "roleInviteJournalManagerLine": "{name} invited you to become a journal manager",
+    "roleInviteGenericLine": "{name} invited you to join as {roleSlug}",
     "acceptRole": "Accept",
     "declineRole": "Decline",
     "working": "…",
@@ -202,10 +211,10 @@
     "emailLanguageSave": "Save preference",
     "emailLanguageSaving": "Saving…",
     "emailLanguageSaved": "Preference saved",
-    "roleInviteAccepted": "Editor role accepted.",
+    "roleInviteAccepted": "Role accepted.",
     "roleInviteDeclined": "Invitation declined.",
-    "roleInviteAcceptFailed": "Could not accept the editor invitation.",
-    "roleInviteDeclineFailed": "Could not decline the editor invitation.",
+    "roleInviteAcceptFailed": "Could not accept the invitation.",
+    "roleInviteDeclineFailed": "Could not decline the invitation.",
     "emailLanguageSaveFailed": "Could not save your email language preference."
   },
   "Submissions": {
@@ -846,7 +855,8 @@
     "header": "Preview",
     "empty": "Add sections on the left to see the preview here.",
     "approximateNotice": "Approximate layout only — generate .docx for final formatting.",
-    "equationEmpty": "[Empty equation]"
+    "equationEmpty": "[Empty equation]",
+    "equationPreviewError": "Could not render this LaTeX."
   },
   "ConstructorValidation": {
     "checklistTitle": "Before you submit, address these items:",

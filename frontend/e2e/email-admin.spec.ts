@@ -2,25 +2,25 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Opt-in UI smoke for `/editor/email-settings`.
- * Requires seeded editor (`npm run seed` in backend) or matching env overrides.
+ * Requires seeded journal manager (`npm run seed` in backend) or env overrides.
  *
  * Run: `E2E_EMAIL_ADMIN_UI=1 npm run test:e2e` from `frontend/`
- * Optional: `E2E_EDITOR_EMAIL`, `E2E_EDITOR_PASSWORD` (defaults: editor@folio.local / Editor123!)
+ * Optional: `E2E_EDITOR_EMAIL`, `E2E_EDITOR_PASSWORD` (defaults: manager@folio.local / Manager123!)
  */
 const runAdminUi =
   process.env.E2E_EMAIL_ADMIN_UI === "1" ||
   process.env.E2E_EMAIL_ADMIN_UI === "true";
 
 const editorEmail =
-  process.env.E2E_EDITOR_EMAIL ?? "editor@folio.local";
+  process.env.E2E_EDITOR_EMAIL ?? "manager@folio.local";
 const editorPassword =
-  process.env.E2E_EDITOR_PASSWORD ?? "Editor123!";
+  process.env.E2E_EDITOR_PASSWORD ?? "Manager123!";
 
 test.describe("Editor email settings (opt-in)", () => {
   test.beforeEach(() => {
     test.skip(
       !runAdminUi,
-      "Set E2E_EMAIL_ADMIN_UI=1 with seeded editor (see backend seed / docs)",
+      "Set E2E_EMAIL_ADMIN_UI=1 with seeded journal manager (see backend seed / docs)",
     );
   });
 

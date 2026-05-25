@@ -7,11 +7,11 @@ import { Link } from "@/i18n/navigation";
 import { apiPostJsonOrBlob } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
 import { getApiErrorKind } from "@/lib/api-error-message";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useMe } from "@/lib/queries/auth";
 import { canManageOwnSubmissions } from "@/lib/permissions";
 import {
+  useInvalidateSubmission,
   useInvalidateSubmissionDetail,
   usePatchSubmission,
   useSubmission,
@@ -27,6 +27,7 @@ import type {
   ConstructorValidationError,
 } from "@/lib/constructor-content.types";
 import { ensureMandatoryConstructorSections } from "@/lib/constructor-mandatory-sections";
+import { sanitizeConstructorContent } from "@/lib/sanitize-constructor-html";
 import type { SubmissionArticleType } from "@/lib/constructor-section-presets";
 import { constructorDraftHasMeaningfulContent } from "@/lib/constructor-import-merge";
 import { useConstructorDocxImport } from "@/lib/use-constructor-docx-import";
@@ -51,11 +52,11 @@ export default function SubmissionConstructorPage() {
   const slug = params.slug as string;
   const showApiError = useToastApiError();
 
-  useAuthRedirect();
   const meQuery = useMe();
   const subQuery = useSubmission(slug);
   const patchSubmission = usePatchSubmission(slug);
   const invalidateDetail = useInvalidateSubmissionDetail();
+  const invalidateSubmission = useInvalidateSubmission();
   const me = meQuery.data
     ? { id: meQuery.data.id, permissions: meQuery.data.permissions }
     : null;
@@ -64,7 +65,7 @@ export default function SubmissionConstructorPage() {
     ensureMandatoryConstructorSections({ defaultDir: "ltr", sections: [] }),
   );
   const [submitBlockBanner, setSubmitBlockBanner] = useState<string | null>(null);
-  const loading = meQuery.isLoading || subQuery.isLoading;
+  const loading = meQuery.isPending || subQuery.isPending;
   const loadErrorCause = meQuery.isError
     ? meQuery.error
     : subQuery.isError
@@ -85,6 +86,7 @@ export default function SubmissionConstructorPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedJsonRef = useRef<string>("");
   const autosaveFailCountRef = useRef(0);
+  const hydratedSlugRef = useRef<string | null>(null);
   const [savedFingerprint, setSavedFingerprint] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,19 +97,25 @@ export default function SubmissionConstructorPage() {
     }
   }, [t]);
 
+  /** Hydrate editor once per slug; do not overwrite in-progress edits on refetch. */
   useEffect(() => {
-    if (!subQuery.data) return;
+    const data = subQuery.data;
+    if (!data || data.slug !== slug) return;
+    if (hydratedSlugRef.current === slug) return;
+    hydratedSlugRef.current = slug;
     const raw =
-      (subQuery.data.constructorContent as ConstructorContent | null) ?? {
+      (data.constructorContent as ConstructorContent | null) ?? {
         defaultDir: "ltr",
         sections: [],
       };
-    const initial = ensureMandatoryConstructorSections(raw);
+    const initial = sanitizeConstructorContent(
+      ensureMandatoryConstructorSections(raw),
+    );
     setContentState(initial);
     const json = JSON.stringify(initial);
     lastSavedJsonRef.current = json;
     setSavedFingerprint(json);
-  }, [subQuery.data?.id]);
+  }, [slug, subQuery.data]);
 
   const isAuthor = !!(sub && me && sub.authorId === me.id);
   const canManageOwn = me ? canManageOwnSubmissions(me.permissions) : false;
@@ -161,7 +169,9 @@ export default function SubmissionConstructorPage() {
 
   const handleChange = useCallback(
     (next: ConstructorContent) => {
-      const normalized = ensureMandatoryConstructorSections(next, guidance);
+      const normalized = sanitizeConstructorContent(
+        ensureMandatoryConstructorSections(next, guidance),
+      );
       setContentState(normalized);
       scheduleSave(normalized);
     },
@@ -174,11 +184,12 @@ export default function SubmissionConstructorPage() {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    const json = JSON.stringify(content);
+    const payload = sanitizeConstructorContent(content);
+    const json = JSON.stringify(payload);
     if (json === lastSavedJsonRef.current) return;
     setSaving(true);
     try {
-      await patchSubmission.mutateAsync({ constructorContent: content });
+      await patchSubmission.mutateAsync({ constructorContent: payload });
       lastSavedJsonRef.current = json;
       setSavedFingerprint(json);
       setSavedAt(new Date());
@@ -235,6 +246,7 @@ export default function SubmissionConstructorPage() {
         if (result.kind === "json") {
           setSavedAt(new Date());
           invalidateDetail(sub.slug);
+          invalidateSubmission(sub.slug);
           toast.success(t("attachManuscriptSuccess"), {
             id: "constructor-attach-success",
           });
@@ -260,7 +272,7 @@ export default function SubmissionConstructorPage() {
         else setGenerating(false);
       }
     },
-    [sub, content, t, flushSave, invalidateDetail],
+    [sub, content, t, flushSave, invalidateDetail, invalidateSubmission],
   );
 
   const headerActions = useMemo(() => {

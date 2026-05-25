@@ -2,14 +2,12 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { apiJson, ApiError } from "@/lib/api";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
-import { redirectToLogin } from "@/lib/auth-redirect";
+import { useMe } from "@/lib/queries/auth";
 import { toast } from "@/lib/toast";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useToastApiError } from "@/lib/use-toast-api-error";
-import type { MeProfile } from "@/lib/permissions";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
 import { submissionQueueShellCls } from "@/lib/submission-list-ui";
 
@@ -131,9 +129,8 @@ type PipelineStatus = {
 export default function EmailSettingsPage() {
   const t = useTranslations("EmailSettings");
   const locale = useLocale();
-  const pathname = usePathname();
-  const router = useRouter();
-  const [me, setMe] = useState<MeProfile | null>(null);
+  const meQuery = useMe();
+  const me = meQuery.data;
   const [error, setError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<ReminderPolicy | null>(null);
   const [policyDays, setPolicyDays] = useState("");
@@ -221,29 +218,6 @@ export default function EmailSettingsPage() {
     },
     [loadPipeline, t],
   );
-
-  useAuthRedirect();
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const profile = await apiJson<MeProfile>("/auth/me");
-        if (cancelled) return;
-        setMe(profile);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) {
-          redirectToLogin(router, pathname);
-          return;
-        }
-        setError(resolveApiError(err, t("loadFailed")));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [router, pathname, t]);
 
   useEffect(() => {
     if (
@@ -342,24 +316,6 @@ export default function EmailSettingsPage() {
     return apiJson<{ subject: string; html: string; text: string }>(
       `/admin/email/templates/${encodeURIComponent(key)}/preview${q}`,
       { method: "POST", body },
-    );
-  }
-
-  if (!me) {
-    return (
-      <main className={submissionQueueShellCls}>
-        <p className="text-sm text-ink/70">{t("loading")}</p>
-      </main>
-    );
-  }
-
-  if (!me.permissions.includes(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)) {
-    return (
-      <main className={submissionQueueShellCls}>
-        <p className="text-red-700" role="alert">
-          {t("forbidden")}
-        </p>
-      </main>
     );
   }
 

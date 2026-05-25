@@ -1,11 +1,13 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, ApiError } from "@/lib/api";
-import { redirectToLogin } from "@/lib/auth-redirect";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@/i18n/navigation";
+import { apiJson } from "@/lib/api";
 import { ApiErrorState } from "@/components/api-error-state";
+import { useMe } from "@/lib/queries/auth";
+import { queryKeys } from "@/lib/query-keys";
 import { toast } from "@/lib/toast";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useToastApiError } from "@/lib/use-toast-api-error";
@@ -51,37 +53,18 @@ type RoleInviteRow = {
 export default function DashboardPage() {
   const t = useTranslations("Dashboard");
   const locale = useLocale();
-  const pathname = usePathname();
-  const router = useRouter();
-  const [me, setMe] = useState<MeProfile | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const meQuery = useMe();
+  const me = meQuery.data ?? null;
   const [reviewInvites, setReviewInvites] = useState<ReviewInviteRow[]>([]);
   const [roleInvites, setRoleInvites] = useState<RoleInviteRow[]>([]);
   const [invitesLoaded, setInvitesLoaded] = useState(false);
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
   const [emailPref, setEmailPref] = useState<"" | "en" | "ar">("");
   const [emailPrefBusy, setEmailPrefBusy] = useState(false);
-  const [errorCause, setErrorCause] = useState<unknown>(null);
   const { resolve: resolveApiError } = useApiErrorMessages();
   const tApi = useTranslations("ApiErrors");
   const showApiError = useToastApiError();
-
-  const loadMe = useCallback(() => {
-    apiJson<MeProfile>("/auth/me")
-      .then(setMe)
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) {
-          redirectToLogin(router, pathname);
-          return;
-        }
-        setErrorCause(err);
-        setError(resolveApiError(err, t("loadFailed")));
-      });
-  }, [router, pathname, t, resolveApiError]);
-
-  useEffect(() => {
-    loadMe();
-  }, [loadMe]);
 
   useEffect(() => {
     if (!me) return;
@@ -137,7 +120,7 @@ export default function DashboardPage() {
         apiJson<MeProfile>("/auth/me"),
         apiJson<RoleInviteRow[]>("/users/me/role-invitations"),
       ]);
-      setMe(profile);
+      queryClient.setQueryData(queryKeys.me, profile);
       setRoleInvites(roles);
       toast.success(t("roleInviteAccepted"));
     } catch (err) {
@@ -175,7 +158,8 @@ export default function DashboardPage() {
           preferredLocale: emailPref === "" ? null : emailPref,
         }),
       });
-      setMe(await apiJson<MeProfile>("/auth/me"));
+      const profile = await apiJson<MeProfile>("/auth/me");
+      queryClient.setQueryData(queryKeys.me, profile);
       toast.success(t("emailLanguageSaved"));
     } catch (err) {
       // user-facing: email preference save failed
@@ -187,46 +171,20 @@ export default function DashboardPage() {
     }
   }
 
-  if (error) {
+  if (meQuery.isError) {
     return (
       <ApiErrorState
         className={PAGE_SHELL}
-        message={error}
-        error={errorCause}
-        onRetry={() => {
-          setError(null);
-          setErrorCause(null);
-          loadMe();
-        }}
+        message={resolveApiError(meQuery.error, t("loadFailed"))}
+        error={meQuery.error}
+        onRetry={() => void meQuery.refetch()}
         retryLabel={tApi("retry")}
       />
     );
   }
 
   if (!me) {
-    return (
-      <main className={PAGE_SHELL}>
-        <div className="h-9 w-52 animate-pulse rounded-lg bg-ink/10 sm:h-10 sm:w-64" />
-        <div className="mt-6 animate-pulse rounded-xl border border-ink/10 bg-surface p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-            <div className="size-14 shrink-0 rounded-full bg-ink/10" />
-            <div className="w-full flex-1 space-y-3 sm:pt-1">
-              <div className="mx-auto h-3 w-28 rounded bg-ink/10 sm:mx-0" />
-              <div className="mx-auto h-6 w-48 max-w-full rounded bg-ink/10 sm:mx-0" />
-              <div className="mx-auto h-4 w-full max-w-xs rounded bg-ink/10 sm:mx-0" />
-            </div>
-          </div>
-        </div>
-        <ul className="mt-6 space-y-2.5" aria-hidden>
-          {[1, 2, 3].map((i) => (
-            <li
-              key={i}
-              className="h-14 animate-pulse rounded-xl border border-ink/10 bg-surface shadow-sm"
-            />
-          ))}
-        </ul>
-      </main>
-    );
+    return null;
   }
 
   const canEditorQueue = me.permissions.includes(
@@ -398,9 +356,18 @@ export default function DashboardPage() {
                     >
                       <div>
                         <p className="font-medium text-ink">
-                          {t("roleInviteEditorLine", {
-                            name: r.invitedBy.displayName,
-                          })}
+                          {r.roleSlug === "editor"
+                            ? t("roleInviteEditorLine", {
+                                name: r.invitedBy.displayName,
+                              })
+                            : r.roleSlug === "journal_manager"
+                              ? t("roleInviteJournalManagerLine", {
+                                  name: r.invitedBy.displayName,
+                                })
+                              : t("roleInviteGenericLine", {
+                                  name: r.invitedBy.displayName,
+                                  roleSlug: r.roleSlug,
+                                })}
                         </p>
                         <p className="mt-1 text-xs text-ink/55">
                           {t("invitedAt", { date: dateStr })}

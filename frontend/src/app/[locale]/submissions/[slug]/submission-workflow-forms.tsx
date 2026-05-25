@@ -16,6 +16,7 @@ import {
 import {
   ABSTRACT_MAX_WORDS,
   countWords,
+  createSubmissionSchema,
   formatZodIssues,
   joinValidationBulletList,
   safeParseResult,
@@ -216,7 +217,10 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
         articleType: articleType || undefined,
       };
 
-      const parsed = safeParseResult(submissionMetadataPatchSchema, body);
+      const metadataSchema = isCreate
+        ? createSubmissionSchema
+        : submissionMetadataPatchSchema;
+      const parsed = safeParseResult(metadataSchema, body);
       if (!parsed.ok) {
         onError(
           joinValidationBulletList(formatZodIssues(tv, parsed.error.issues)),

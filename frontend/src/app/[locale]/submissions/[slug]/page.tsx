@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState, useId } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
 import {
@@ -10,7 +10,6 @@ import {
   apiUpload,
   ApiError,
 } from "@/lib/api";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import {
   ACCEPT_FIGURE,
   ACCEPT_MANUSCRIPT,
@@ -22,11 +21,13 @@ import { getApiErrorKind } from "@/lib/api-error-message";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import {
+  canManageAssignmentReminders,
   canManageOwnSubmissions,
   PERMISSION_SLUGS,
 } from "@/lib/permissions";
 import {
   useSubmissionDetail,
+  type SubmissionDetailPayload,
 } from "@/lib/queries/submissions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SimpleSelect } from "@/components/ui/select";
@@ -124,28 +125,12 @@ type SubmissionDetail = {
   } | null;
 };
 
-type Me = { id: string; permissions: string[] };
+type ReviewerCandidate = SubmissionDetailPayload["reviewerCandidates"][number];
 
-type ReviewerCandidate = {
-  id: string;
-  displayName: string;
-  email: string;
-};
+type AssignmentRow = SubmissionDetailPayload["editorAssignmentRows"][number];
 
-type AssignmentRow = {
-  id: string;
-  slug?: string | null;
-  reviewerId: string;
-  status: string;
-  reviewer?: { displayName?: string; email?: string };
-};
-
-type ReminderAdminRow = {
-  id: string;
-  kind: string;
-  sendAt: string;
-  status: string;
-};
+type ReminderAdminRow =
+  SubmissionDetailPayload["assignmentReminders"][string][number];
 
 type ReviewForEditor = {
   id: string;
@@ -302,38 +287,36 @@ export default function SubmissionDetailPage() {
   const router = useRouter();
   const fileInputId = useId();
   const reviewMethodSelectId = useId();
-  const [me, setMe] = useState<Me | null>(null);
-  const [sub, setSub] = useState<SubmissionDetail | null>(null);
   const invalidateDetail = useInvalidateSubmissionDetail();
   const patchSubmission = usePatchSubmission(slug);
-  useAuthRedirect();
   const { resolve: resolveApiError } = useApiErrorMessages();
   const tApi = useTranslations("ApiErrors");
   const showApiError = useToastApiError();
   const detailQuery = useSubmissionDetail(slug, true);
+  const detail = detailQuery.data;
+  const me = detail?.me ?? null;
+  const sub = detail
+    ? (detail.sub as unknown as SubmissionDetail)
+    : null;
+  const reviewerCandidates = detail?.reviewerCandidates ?? [];
+  const reviewersLoadError = detail
+    ? detail.reviewersLoadError === "reviewers_load_failed"
+      ? t("reviewersLoadFailed")
+      : detail.reviewersLoadError
+    : null;
+  const editorReviews = (detail?.editorReviews ?? []) as ReviewForEditor[];
+  const authorReviews = (detail?.authorReviews ?? []) as ReviewForAuthor[];
+  const reviewsError = detail?.reviewsLoadFailed ? t("reviewsLoadFailed") : null;
+  const editorAssignmentRows = detail?.editorAssignmentRows ?? [];
+  const assignmentReminders = detail?.assignmentReminders ?? {};
   const loadError = detailQuery.isError
     ? resolveApiError(detailQuery.error, t("loadFailed"))
     : null;
   const [validationError, setValidationError] = useState<string | null>(null);
   const [reviewerPick, setReviewerPick] = useState("");
-  const [reviewerCandidates, setReviewerCandidates] = useState<
-    ReviewerCandidate[]
-  >([]);
-  const [reviewersLoadError, setReviewersLoadError] = useState<string | null>(
-    null,
-  );
   const [statusPick, setStatusPick] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploadingName, setUploadingName] = useState<string | null>(null);
-  const [editorReviews, setEditorReviews] = useState<ReviewForEditor[]>([]);
-  const [authorReviews, setAuthorReviews] = useState<ReviewForAuthor[]>([]);
-  const [reviewsError, setReviewsError] = useState<string | null>(null);
-  const [editorAssignmentRows, setEditorAssignmentRows] = useState<
-    AssignmentRow[]
-  >([]);
-  const [assignmentReminders, setAssignmentReminders] = useState<
-    Record<string, ReminderAdminRow[]>
-  >({});
   const [reminderRescheduleAt, setReminderRescheduleAt] = useState<
     Record<string, string>
   >({});
@@ -347,30 +330,32 @@ export default function SubmissionDetailPage() {
       presentConstructor: false,
     });
 
+  const serverStatus = sub?.status ?? "";
   useEffect(() => {
-    const d = detailQuery.data;
-    if (!d) return;
-    setMe(d.me);
-    setSub(d.sub as SubmissionDetail);
-    setStatusPick(String(d.sub.status ?? ""));
-    setReviewerCandidates(d.reviewerCandidates);
-    const reviewersMsg =
-      d.reviewersLoadError === "reviewers_load_failed"
-        ? t("reviewersLoadFailed")
-        : d.reviewersLoadError;
-    setReviewersLoadError(reviewersMsg);
-    if (reviewersMsg) {
-      toast.error(reviewersMsg, { id: "submission-reviewers-load" });
+    if (serverStatus) setStatusPick(String(serverStatus));
+  }, [serverStatus]);
+
+  const toastedReviewersRef = useRef(false);
+  useEffect(() => {
+    if (!reviewersLoadError) {
+      toastedReviewersRef.current = false;
+      return;
     }
-    setEditorReviews(d.editorReviews as ReviewForEditor[]);
-    setAuthorReviews(d.authorReviews as ReviewForAuthor[]);
-    setReviewsError(d.reviewsLoadFailed ? t("reviewsLoadFailed") : null);
-    if (d.reviewsLoadFailed) {
-      toast.error(t("reviewsLoadFailed"), { id: "submission-reviews-load" });
+    if (toastedReviewersRef.current) return;
+    toastedReviewersRef.current = true;
+    toast.error(reviewersLoadError, { id: "submission-reviewers-load" });
+  }, [reviewersLoadError]);
+
+  const toastedReviewsRef = useRef(false);
+  useEffect(() => {
+    if (!reviewsError) {
+      toastedReviewsRef.current = false;
+      return;
     }
-    setEditorAssignmentRows(d.editorAssignmentRows);
-    setAssignmentReminders(d.assignmentReminders);
-  }, [detailQuery.data, t]);
+    if (toastedReviewsRef.current) return;
+    toastedReviewsRef.current = true;
+    toast.error(reviewsError, { id: "submission-reviews-load" });
+  }, [reviewsError]);
 
   useEffect(() => {
     if (!sub) return;
@@ -728,7 +713,7 @@ export default function SubmissionDetailPage() {
     }
   }
 
-  if (loadError && !sub) {
+  if (loadError && !detail) {
     return (
       <ApiErrorState
         message={loadError}
@@ -746,7 +731,7 @@ export default function SubmissionDetailPage() {
     );
   }
 
-  if (detailQuery.isLoading || !sub || !me) {
+  if (detailQuery.isPending || !sub || !me) {
     return (
       <main className={PAGE_SHELL_NARROW}>
         <p className="text-ink/60">{t("loading")}</p>
@@ -757,9 +742,7 @@ export default function SubmissionDetailPage() {
   const isAuthor =
     sub.authorId != null && sub.authorId !== "" && sub.authorId === me.id;
   const canManageOwn = canManageOwnSubmissions(me.permissions);
-  const isEditorView = me.permissions.includes(
-    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-  );
+  const isEditorView = detail!.isEditorView;
   const canConfigureReview =
     isEditorView &&
     (me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS) ||
@@ -1520,9 +1503,7 @@ export default function SubmissionDetailPage() {
                           {assignmentStatusLabel(a.status, tAssign)}
                         </span>
                       </div>
-                      {me.permissions.includes(
-                        PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
-                      ) && (
+                      {canManageAssignmentReminders(me.permissions) && (
                         <div className="border-t border-ink/10 pt-3 text-xs text-ink/80">
                           <p className="font-sans text-[0.8rem] font-semibold text-ink">
                             {t("emailRemindersTitle")}

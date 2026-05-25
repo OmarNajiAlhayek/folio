@@ -1,19 +1,20 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { apiPostJsonOrBlob } from "@/lib/api";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { ConstructorWorkspace } from "@/components/constructor/ConstructorWorkspace";
 import { resolveConstructorDocxFileName } from "@/lib/constructor-docx-filename";
 import { CONSTRUCTOR_IMPORT_WARNINGS_SCOPE_PRE_SLUG } from "@/lib/constructor-import-warnings-storage";
 import { ensureMandatoryConstructorSections } from "@/lib/constructor-mandatory-sections";
+import { sanitizeConstructorContent } from "@/lib/sanitize-constructor-html";
 import { useConstructorDocxImport } from "@/lib/use-constructor-docx-import";
 import { useConstructorStyleGuidance } from "@/lib/use-constructor-style-guidance";
 import { useConstructorDraft } from "@/lib/use-constructor-draft";
+import type { ConstructorContent } from "@/lib/constructor-content.types";
 
 /**
  * Pre-slug constructor: builds the article entirely client-side, persisting
@@ -25,13 +26,23 @@ import { useConstructorDraft } from "@/lib/use-constructor-draft";
 export default function NewConstructorPage() {
   const t = useTranslations("ConstructorPage");
   const locale = useLocale();
-  useAuthRedirect();
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const showApiError = useToastApiError();
 
   const { content, setContent, quotaExceeded, externalUpdateAt } =
     useConstructorDraft();
   const { guidance } = useConstructorStyleGuidance(content);
+
+  const handleContentChange = useCallback(
+    (next: ConstructorContent) => {
+      setContent(
+        sanitizeConstructorContent(
+          ensureMandatoryConstructorSections(next, guidance),
+        ),
+      );
+    },
+    [setContent, guidance],
+  );
 
   const {
     importButton,
@@ -42,7 +53,11 @@ export default function NewConstructorPage() {
     content,
     guidance,
     onContentChange: (merged) => {
-      setContent(ensureMandatoryConstructorSections(merged, guidance));
+      setContent(
+        sanitizeConstructorContent(
+          ensureMandatoryConstructorSections(merged, guidance),
+        ),
+      );
     },
     scopeKey: CONSTRUCTOR_IMPORT_WARNINGS_SCOPE_PRE_SLUG,
     canImport: true,
@@ -109,7 +124,7 @@ export default function NewConstructorPage() {
         <Suspense fallback={<p className="text-sm text-ink/60">{t("loading")}</p>}>
           <ConstructorWorkspace
             content={content}
-            onChange={setContent}
+            onChange={handleContentChange}
             notice={
             <>
               <p className="text-sm text-ink/70">{t("browserDraftNotice")}</p>
