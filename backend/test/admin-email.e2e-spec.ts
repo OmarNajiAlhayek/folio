@@ -57,7 +57,9 @@ describe('Admin email (e2e)', () => {
       passwordHash,
       displayName: 'E2E Admin Email Editor',
     });
-    await rbacService.assignRoles(editorUser.id, [ROLE_SLUGS.EDITOR]);
+    await rbacService.assignRoles(editorUser.id, [
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    ]);
 
     await usersService.create({
       email: `admin-email-author-${suffix}@test.local`,
