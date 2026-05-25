@@ -69,7 +69,14 @@ export function estimateWeightedWordCount(content: ConstructorContent): {
         words += countWordsInPlain(section.keywords);
         break;
       case "paragraph":
+      case "acknowledgments":
+      case "funding":
+      case "conflictOfInterest":
+      case "dataAvailability":
         words += countWordsInPlain(stripHtml(section.html));
+        break;
+      case "equation":
+        words += countWordsInPlain(section.latex);
         break;
       case "image":
         images += 1;
@@ -78,6 +85,7 @@ export function estimateWeightedWordCount(content: ConstructorContent): {
       case "table":
         tableRows += section.rows.length;
         words += countWordsInPlain(section.caption);
+        words += countWordsInPlain(section.notes);
         for (const row of section.rows) {
           for (const cell of row) words += countWordsInPlain(cell);
         }

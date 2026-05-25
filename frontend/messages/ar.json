@@ -14,6 +14,25 @@
     "saved": "تم الحفظ.",
     "uploadFailed": "فشل الرفع."
   },
+  "ApiErrors": {
+    "tooManyRequests": "طلبات كثيرة جداً. يُرجى الانتظار دقيقة ثم المحاولة مرة أخرى.",
+    "notFound": "المورد المطلوب غير موجود.",
+    "unauthorized": "يُرجى تسجيل الدخول للمتابعة.",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    "forbidden": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+    "badRequest": "تعذّر معالجة الطلب. تحقق من المدخلات وحاول مرة أخرى.",
+    "serverError": "حدث خطأ من جانبنا. يُرجى المحاولة لاحقاً.",
+    "networkError": "تعذّر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.",
+    "rateLimitHint": "الانتظار قليلاً قبل إعادة المحاولة يحل المشكلة عادةً.",
+    "retry": "إعادة المحاولة",
+    "goHome": "الذهاب إلى لوحة التحكم"
+  },
+  "NotFound": {
+    "title": "الصفحة غير موجودة",
+    "description": "الصفحة التي طلبتها غير موجودة أو ربما نُقلت.",
+    "backHome": "الذهاب إلى لوحة التحكم",
+    "browsePublications": "تصفح المنشورات"
+  },
   "Nav": {
     "brand": "فوليو",
     "publications": "المنشورات",
@@ -37,6 +56,70 @@
     "themeSystem": "النظام",
     "themeToggleTitle": "مظهر الألوان: {current}. انقر للتبديل.",
     "themeToggleAria": "تبديل مظهر الألوان. الحالي: {current}."
+  },
+  "Notifications": {
+    "title": "الإشعارات",
+    "pageTitle": "الإشعارات",
+    "bellAria": "الإشعارات",
+    "bellAriaWithCount": "الإشعارات، {count} غير مقروءة",
+    "bellAriaManyUnread": "الإشعارات، أكثر من 9 غير مقروءة",
+    "loadError": "تعذّر تحميل الإشعارات. يرجى المحاولة مرة أخرى.",
+    "retryLoad": "إعادة المحاولة",
+    "backToDashboard": "العودة إلى لوحة التحكم",
+    "view": "عرض",
+    "viewNotifications": "عرض الإشعارات",
+    "markRead": "تعليم كمقروء",
+    "markAllRead": "تعليم الكل كمقروء",
+    "loading": "جاري التحميل…",
+    "loadMore": "تحميل المزيد",
+    "emptyUnread": "لا توجد إشعارات غير مقروءة.",
+    "emptyRead": "لا توجد إشعارات مقروءة بعد.",
+    "emptyAll": "لا توجد إشعارات بعد.",
+    "tab": {
+      "all": "الكل",
+      "unread": "غير مقروء",
+      "read": "مقروء"
+    },
+    "reviewerInvited": {
+      "title": "دعوة تحكيم",
+      "body": "{submissionTitle} — افتح تحكيماتي للرد."
+    },
+    "submissionSubmitted": {
+      "title": "تقديم جديد",
+      "body": "قدّم {authorDisplayName} {submissionTitle}{isResubmission, select, true { (إعادة تقديم)} other {}}."
+    },
+    "submissionDecision": {
+      "title": "قرار تحريري",
+      "body": "قرار بشأن {submissionTitle}: {decision, select, accepted {مقبول} rejected {مرفوض} revisions_requested {طلب تعديلات} other {{decision}}}."
+    },
+    "copyeditAssigned": {
+      "title": "تكليف تحرير",
+      "body": "تم تكليفك بتحرير {submissionTitle}."
+    },
+    "copyeditQueries": {
+      "title": "استفسارات التحرير",
+      "body": "استفسارات تحرير جديدة على {submissionTitle}."
+    },
+    "copyeditAuthorReady": {
+      "title": "المؤلف جاهز",
+      "body": "المؤلف جاهز على {submissionTitle}."
+    },
+    "reviewAccepted": {
+      "title": "قبول التحكيم",
+      "body": "قبل {reviewerDisplayName} الدعوة لـ {submissionTitle}."
+    },
+    "reviewDeclined": {
+      "title": "رفض التحكيم",
+      "body": "رفض {reviewerDisplayName} الدعوة لـ {submissionTitle}."
+    },
+    "reviewSubmitted": {
+      "title": "تم تسليم التحكيم",
+      "body": "سلّم {reviewerDisplayName} تحكيمًا لـ {submissionTitle}."
+    },
+    "roleInvitation": {
+      "title": "دعوة محرر",
+      "body": "دعاك {invitedByDisplayName} للانضمام كـ {roleSlug}."
+    }
   },
   "Home": {
     "badge": "منصة تحكيم علمي",
@@ -120,7 +203,10 @@
     "emailLanguageSaving": "جارٍ الحفظ…",
     "emailLanguageSaved": "تم حفظ التفضيل",
     "roleInviteAccepted": "تم قبول دور المحرّر.",
-    "roleInviteDeclined": "تم رفض الدعوة."
+    "roleInviteDeclined": "تم رفض الدعوة.",
+    "roleInviteAcceptFailed": "تعذّر قبول دعوة المحرّر.",
+    "roleInviteDeclineFailed": "تعذّر رفض دعوة المحرّر.",
+    "emailLanguageSaveFailed": "تعذّر حفظ تفضيل لغة البريد."
   },
   "Submissions": {
     "title": "الطلبات",
@@ -153,8 +239,11 @@
     "titleNotUnique": "هذا العنوان مستخدم بالفعل—يرجى اختيار عنوان آخر.",
     "draftStatusBeforeSave": "لم يُحفظ بعد — احفظ أدناه لإنشاء مسودتك.",
     "manuscriptAttachHint": "اختر الملفات أدناه؛ تُرفَع إلى الخادم عند النقر على «حفظ المسودة» مع بياناتك.",
+    "presentationBeforeSaveHint": "تُحفَظ هذه الاختيارات عند حفظ المسودة. يمكنك تعديلها لاحقاً في صفحة الطلب قبل «إرسال للتحكيم».",
     "stagedFileLabel": "المحدد",
-    "clearStagedFile": "إزالة"
+    "clearStagedFile": "إزالة",
+    "constructorManuscriptBadge": "منشئ Word",
+    "editConstructorDraft": "تعديل في المنشئ"
   },
   "SubmissionDetail": {
     "back": "← الطلبات",
@@ -190,12 +279,20 @@
     "retryLoad": "إعادة المحاولة",
     "uploadFailed": "فشل الرفع",
     "submitFailed": "فشل الإرسال",
+    "submitSuccess": "تم إرسال الطلب للتحكيم.",
     "assignFailed": "فشل التعيين",
+    "assignSuccess": "تم تعيين المحكّم.",
+    "uploadSuccess": "تم رفع الملف.",
+    "fileRemovedSuccess": "تم حذف الملف.",
     "statusFailed": "فشل تحديث الحالة",
+    "statusUpdated": "تم تحديث الحالة.",
+    "invalidStatusTransition": "لا يمكن تغيير الحالة من «{from}» إلى «{to}».",
+    "reviewPackageIncomplete": "أضِف ملفًا واحدًا على الأقل من نوع المخطوطة إلى حزمة التحكيم قبل بدء التحكيم.",
     "editorPanelTitle": "إجراءات المحرّر",
     "editorPanelHint": "عيّن المحكّمين وانقل هذا الطلب عبر مسار العمل.",
     "backToEditorQueue": "قائمة التحرير",
     "editorAssignColumnHint": "اختر محكّمًا لهذه المخطوطة.",
+    "reviewerAssignClosedHint": "تعيين المحكّمين متاح فقط عندما يكون الطلب مُرسَلاً أو قيد التحكيم.",
     "editorWorkflowColumnHint": "حدّث حالة الطلب عند تقدّم مسار العمل.",
     "reviewsSectionEditor": "مراجعات الأقران",
     "reviewsSectionAuthor": "ملاحظات المحكّم",
@@ -210,8 +307,8 @@
     "reviewNoEditorComments": "لا توجد تعليقات سرية.",
     "reviewFeedbackItem": "ملاحظات {n}",
     "constructorModeNotice": "تُبنى المخطوطة الرئيسية في منشئ Word. افتحه لتعديل الأقسام، واستخدم «إرسال للتحكيم» أدناه عند اكتمال الحزمة.",
-    "constructorCompanionFilesHint": "ارفع خطاب التغطية وصفحة العنوان هنا. يُولَّد ملف المخطوطة الرئيسية من المنشئ عند الإرسال للتحكيم.",
-    "constructorUploadHint": "مطلوب: خطاب التغطية وصفحة العنوان. اختياري: أشكال، جداول، ملفات إضافية. الإرسال للتحكيم يولّد أيضًا المخطوطة الرئيسية من المنشئ.",
+    "constructorCompanionFilesHint": "اختياري: خطاب التغطية أو صفحة العنوان إذا طلبتها المجلة بشكل منفصل. يُولَّد ملف المخطوطة الرئيسية من المنشئ عند الإرسال للتحكيم.",
+    "constructorUploadHint": "اختياري: خطاب التغطية، صفحة العنوان، أشكال، جداول، ملفات إضافية. الإرسال للتحكيم يولّد المخطوطة الرئيسية من المنشئ.",
     "openConstructor": "فتح المنشئ",
     "chooseManuscriptMode": "كيف تريد تقديم المخطوطة؟",
     "chooseManuscriptModeHint": "ارفع ملف .docx جاهزًا، أو ابنِ المخطوطة قسمًا بقسم باستخدام المنشئ.",
@@ -224,6 +321,8 @@
     "reviewMethodFailed": "تعذّر تحديث نموذج التحكيم.",
     "fileStage_submission": "ملف تحريري",
     "fileStage_review": "حزمة التحكيم",
+    "filePublicBadge": "عام",
+    "attachedFilesPublishedHint": "هذا المقال منشور. الملفات للعرض والتنزيل فقط.",
     "toggleReviewPackageInclude": "إضافة لحزمة التحكيم",
     "toggleReviewPackageExclude": "إزالة من حزمة التحكيم",
     "fileStageFailed": "تعذّر تحديث مرحلة الملف.",
@@ -233,12 +332,20 @@
     "emailRemindersHint": "يمكن إعادة الجدولة أو الإلغاء للتذكيرات المعلّقة فقط. يجب أن يكون وقت الإرسال الجديد أكثر من دقيقتين من الآن (UTC).",
     "reminderKind": "النوع",
     "reminderKindOverdue": "متأخر",
+    "reminderKindDueSoon": "قريب الاستحقاق",
+    "reviewerAssignAdditionalHint": "المحكّمون الذين لديهم تعيين قيد الانتظار أو نشط على هذه المخطوطة لا يظهرون هنا. افتح القائمة لتعيين شخص آخر.",
     "reminderSendAt": "وقت الإرسال",
     "reminderStatus": "الحالة",
     "reminderActions": "إجراءات",
     "reminderReschedulePlaceholder": "وقت جديد (محلي)",
     "reminderApplyReschedule": "تطبيق",
     "reminderCancel": "إلغاء التذكير",
+    "reminderRescheduleRequired": "اختر وقت إرسال جديدًا أولًا.",
+    "reminderSendAtTooSoon": "يجب أن يكون وقت الإرسال بعد أكثر من دقيقتين من الآن.",
+    "reminderRescheduled": "تمت إعادة جدولة التذكير.",
+    "reminderRescheduleFailed": "تعذّرت إعادة جدولة التذكير.",
+    "reminderCancelled": "تم إلغاء التذكير.",
+    "reminderCancelFailed": "تعذّر إلغاء التذكير.",
     "reminderLoadFailed": "تعذّر تحميل التذكيرات",
     "reminderNoSlug": "لا معرّف للمهمة — التذكيرات غير متاحة.",
     "reminderNoneForAssignment": "لا تذكيرات معلّقة لهذه المهمة."
@@ -308,13 +415,15 @@
     "saveMetadata": "حفظ البيانات",
     "saving": "جارٍ الحفظ…",
     "saveFailed": "تعذّر حفظ البيانات",
+    "saveSuccess": "تم حفظ البيانات.",
     "yes": "نعم",
     "no": "لا",
     "requiredBadge": "(إلزامي)",
     "optionalBadge": "(اختياري)",
     "fileKind_cover_letter": "خطاب التغطية",
     "fileKind_title_page": "صفحة العنوان",
-    "fileKind_manuscript": "المخطوطة الرئيسية",
+    "fileKind_manuscript": "المخطوطة الرئيسية (مرفوعة)",
+    "fileKind_manuscript_constructor": "المخطوطة الرئيسية (منشئ Word)",
     "fileKind_figure": "أشكال (دقة عالية)",
     "fileKind_table": "جداول",
     "fileKind_supplementary": "ملحق",
@@ -394,7 +503,11 @@
     "rabbitUnavailable": "مقاييس الوسيط غير متاحة",
     "stuckReminders": "تذكيرات معلّقة تجاوزت موعد الإرسال (≈15 د)",
     "failedSamples": "آخر عمليات إرسال فاشلة (مُنقّاة)",
-    "deadOutboxSamples": "آخر صفوف صندوق الأحداث الميتة (مُنقّاة)"
+    "deadOutboxSamples": "آخر صفوف صندوق الأحداث الميتة (مُنقّاة)",
+    "requeueOutbox": "إعادة إلى الطابور",
+    "requeueOutboxBusy": "جارٍ الإعادة…",
+    "requeueOutboxOk": "أُعيد الصف إلى الطابور؛ ستعيد المحاولة خلال ثوانٍ",
+    "requeueOutboxFailed": "تعذّرت إعادة الصف إلى الطابور"
   },
   "Assignments": {
     "title": "مهام التحكيم الموكلة إليّ",
@@ -436,7 +549,9 @@
     "retryLoad": "إعادة المحاولة",
     "notFound": "لم تُعثر على هذه الدعوة.",
     "notInvited": "هذه المهمة لا تنتظر ردًّا.",
-    "actionFailed": "حدث خطأ. أعد المحاولة."
+    "actionFailed": "حدث خطأ. أعد المحاولة.",
+    "acceptSuccess": "تم قبول الدعوة.",
+    "declineSuccess": "تم رفض الدعوة."
   },
   "AssignmentsReview": {
     "back": "← المهام",
@@ -464,6 +579,7 @@
     "sending": "جارٍ الإرسال…",
     "submit": "إرسال المراجعة",
     "submitFailed": "فشل الإرسال",
+    "submitSuccess": "تم إرسال مراجعتك بنجاح",
     "commentsForAuthorRequired": "يرجى إدخال تعليقات للمؤلف.",
     "loading": "جارٍ تحميل المهمة…",
     "loadFailed": "تعذّر تحميل المهمة",
@@ -500,6 +616,39 @@
     "constructorDescription": "ابنِ المقال قسمًا بقسم. يولّد النظام ملف Word مُنسّقًا تلقائيًا.",
     "constructorBadge": "جديد"
   },
+  "ConstructorManuscript": {
+    "mainManuscriptLabel": "المخطوطة الرئيسية",
+    "selectedLabel": "المحدد",
+    "badge": "منشئ Word",
+    "editDraft": "تعديل في المنشئ",
+    "remove": "إزالة",
+    "pendingHint": "تُولَّد المخطوطة الرئيسية من المنشئ عند الإرسال للتحكيم، أو يمكنك إرفاق ملف .docx من صفحة المنشئ.",
+    "attachedHint": "ملف .docx مُولَّد من المنشئ مُرفق كمخطوطة رئيسية.",
+    "removeConstructorTitle": "إزالة مخطوطة منشئ Word؟",
+    "removeConstructorDescription": "يمسح هذا مسودة المنشئ على الخادم. يمكنك البدء من جديد في المنشئ أو التبديل لرفع ملف .docx جاهز.",
+    "removeConstructorConfirm": "إزالة المنشئ",
+    "switchToConstructor": "التبديل إلى منشئ Word",
+    "switchToConstructorTitle": "التبديل إلى منشئ Word؟",
+    "switchToConstructorDescription": "سيُحذف ملف المخطوطة الرئيسية المرفوع. لا يمكن التراجع إلا بإعادة الرفع أو الاستيراد من Word.",
+    "switchToConstructorConfirm": "تبديل وفتح المنشئ",
+    "switchToConstructorFailed": "تعذّر التبديل إلى منشئ Word",
+    "cancel": "إلغاء",
+    "openConstructor": "فتح منشئ Word",
+    "dualPathHint": "يمكنك رفع مخطوطة رئيسية جاهزة و/أو بناؤها في منشئ Word. لا يُحذف شيء عند استخدام الخيار الآخر.",
+    "clearConstructorDraft": "مسح مسودة المنشئ",
+    "clearConstructorTitle": "مسح مسودة المنشئ؟",
+    "clearConstructorDescription": "يزيل هذا أقسام المنشئ المحفوظة على الخادم فقط. الملفات المرفوعة لا تتأثر.",
+    "clearConstructorConfirm": "مسح المسودة",
+    "submitSourceLegend": "المخطوطة الرئيسية عند الإرسال",
+    "submitSourceHint": "لديك ملف مرفوع ومسودة في المنشئ. اختر أيهما يُستخدم عند الإرسال للتحكيم.",
+    "submitSourceUpload": "استخدام ملف .docx المرفوع",
+    "submitSourceConstructor": "استخدام منشئ Word (يُولّد .docx عند الإرسال)",
+    "presentationLegend": "ما يظهر للمحررين والمحكمين",
+    "presentationHint": "اختر أي نسخة (أو كلاهما) من المخطوطة الرئيسية تُضمَّن إلى حزمة التحكيم عند الإرسال.",
+    "presentationUpload": "إظهار المخطوطة المرفوعة (.docx / .pdf)",
+    "presentationConstructor": "إظهار نسخة منشئ Word (يُولّد .docx عند الإرسال)",
+    "presentationAtLeastOne": "اختر نسخة واحدة على الأقل لعرضها في التحكيم."
+  },
   "ConstructorPage": {
     "titleNew": "طلب جديد — منشئ Word",
     "subtitleNew": "ابنِ المقال بالأقسام هنا. يُحفظ بناء المستند في هذا المتصفح حتى تتابع لإنشاء الطلب.",
@@ -517,6 +666,16 @@
     "downloadDocxOnly": "تنزيل Word (.docx)",
     "generatingDocx": "جارٍ التوليد…",
     "continueToSubmission": "متابعة لإنشاء الطلب",
+    "importWord": "استيراد Word (.docx)",
+    "importingWord": "جارٍ الاستيراد…",
+    "importWordSuccess": "تم استيراد مستند Word إلى المنشئ. راجع كل قسم قبل المتابعة.",
+    "importWordFailed": "تعذّر استيراد ملف Word هذا.",
+    "importWordReplaceTitle": "استيراد مستند Word؟",
+    "importWordReplaceDescription": "يُحوَّل الملف إلى أقسام المنشئ. تُملأ حقول العنوان والملخص الفارغة من المستند؛ وتُستبدَل فقرات وعناوين المتن الحالية. تبقى الأقسام المثبتة، لكن راجع كل المحتوى بعد الاستيراد.",
+    "importWordReplaceCancel": "إلغاء",
+    "importWordReplaceAction": "استيراد المستند",
+    "importWordWarnings": "ملاحظات الاستيراد",
+    "dismissImportNotes": "إغلاق",
     "browserDraftNotice": "تُحفظ التعديلات تلقائيًا في هذا المتصفح. لا تُرسل إلى الخادم حتى تنشئ الطلب من الخطوة التالية.",
     "docxFallbackTitle": "مسودة من المنشئ",
     "docxFallbackAbstract": "تم توليدها من مسودة المنشئ.",
@@ -536,7 +695,10 @@
     "readOnlyStatus": "هذا الطلب في حالة «{status}» — التعديل معطّل.",
     "uploadModeWarning": "هذا الطلب يستخدم وضع الرفع حاليًا. إضافة محتوى المنشئ هنا ستحوّله إلى وضع المنشئ عند الحفظ.",
     "quotaExceeded": "نفدت مساحة التخزين المحلية في متصفحك. تابع لإنشاء طلبك قريبًا لتجنّب فقدان التغييرات.",
-    "externalUpdate": "تم استلام مسودة أحدث من علامة تبويب أخرى."
+    "externalUpdate": "تم استلام مسودة أحدث من علامة تبويب أخرى.",
+    "importWarning_CONSTRUCTOR_IMPORT_TABLE_NOTE_UNCERTAIN": "قد تكون فقرة بعد جدول ملاحظة للجدول — تحقق من ربطها بالجدول الصحيح.",
+    "importWarning_CONSTRUCTOR_IMPORT_BACK_MATTER_UNCERTAIN": "تم التعرف على عنوان خلفي لكن لم يُستورد نص — أضف القسم يدويًا إن لزم.",
+    "importWarning_CONSTRUCTOR_IMPORT_EQUATION_LOST": "المعادلات في Word لا تُستورد؛ أعد إدخالها بأقسام معادلات."
   },
   "ConstructorWorkspace": {
     "editorHeading": "الأقسام",
@@ -549,7 +711,8 @@
     "submitting": "جارٍ الإرسال…",
     "styleLabel": "نمط المخطوطة",
     "styleUnsavedHint": "غير محفوظ — التنزيل يعكس آخر تعديلاتك",
-    "styleCatalogError": "تعذّر تحميل أنماط المخطوطة. جرّب تحديث الصفحة."
+    "styleCatalogError": "تعذّر تحميل أنماط المخطوطة. جرّب تحديث الصفحة.",
+    "stylePinnedSectionsAdded": "أضاف هذا النمط أقسامًا مطلوبة إلى مستندك."
   },
   "ConstructorList": {
     "defaultDirLabel": "الاتجاه الافتراضي",
@@ -574,7 +737,24 @@
     "kind_paragraph": "فقرة",
     "kind_image": "شكل",
     "kind_table": "جدول",
-    "kind_references": "المراجع"
+    "kind_references": "المراجع",
+    "kind_acknowledgments": "شكر وتقدير",
+    "kind_funding": "التمويل",
+    "kind_conflictOfInterest": "تعارض المصالح",
+    "kind_dataAvailability": "توفر البيانات",
+    "kind_equation": "معادلة",
+    "pickerGroup_presets": "هياكل جاهزة",
+    "pickerGroup_headingsBody": "عناوين ونص",
+    "pickerGroup_media": "وسائط",
+    "pickerGroup_backMatter": "مقدمة / خاتمة",
+    "preset_introduction": "المقدمة",
+    "preset_literatureReview": "مراجعة الأدبيات",
+    "preset_materialsAndMethods": "المواد والطرق",
+    "preset_resultsAndDiscussion": "النتائج والمناقشة",
+    "preset_conclusions": "الخلاصة",
+    "recommendedPresetsTitle": "أقسام موصى بها لهذا النمط",
+    "insertPreset": "إدراج {label}",
+    "referencesOrderSoft": "عادةً تظهر المراجع في النهاية؛ المحتوى بعدها قد يبدو غير اعتيادي في ملف Word."
   },
   "ConstructorEditor": {
     "titleLabel": "العنوان",
@@ -617,6 +797,7 @@
     "imageNotUploaded": "لم تُرفع صورة بعد",
     "imageUploading": "جارٍ الرفع…",
     "imageUploadFailed": "فشل رفع الصورة.",
+    "imageUploadSuccess": "تم رفع الصورة.",
     "imageNeedsDraft": "احفظ المسودة أولًا لتتمكّن من رفع الصور.",
     "imageAltText": "نص بديل (لإمكانية الوصول)",
     "imageCaption": "شرح الشكل",
@@ -629,6 +810,23 @@
     "tableRemoveRow": "إزالة الصف",
     "tableRemoveColumn": "إزالة العمود",
     "tableNoMergedCells": "الخلايا المدمجة غير مدعومة في هذه النسخة.",
+    "tableNotesLabel": "ملاحظة الجدول",
+    "tableNotesPlaceholder": "ملاحظة اختيارية أسفل الجدول (نص عادي)…",
+    "richText_acknowledgments_label": "شكر وتقدير",
+    "richText_acknowledgments_hint": "شكر التمويل والدعم المؤسسي.",
+    "richText_funding_label": "التمويل",
+    "richText_funding_hint": "أرقام المنح والجهة الممولة.",
+    "richText_conflictOfInterest_label": "تعارض المصالح",
+    "richText_conflictOfInterest_hint": "أفصح عن أي مصالح متعارضة.",
+    "richText_dataAvailability_label": "توفر البيانات",
+    "richText_dataAvailability_hint": "أين يمكن الوصول إلى البيانات أو الشيفرة.",
+    "equationLabel": "معادلة",
+    "equationNumberedLabel": "معادلة {n}",
+    "equationHint": "صيغة LaTeX. تُصدَّر المعادلات كصور في Word (ليست معادلات قابلة للتحرير).",
+    "equationPlaceholder": "مثال: E = mc^2",
+    "equationNumbered": "ترقيم هذه المعادلة",
+    "equationPreviewEmpty": "أدخل LaTeX للمعاينة.",
+    "equationPreviewError": "تعذّر عرض هذا LaTeX.",
     "referencesLabel": "المراجع",
     "referencesHint": "تظهر المراجع العربية أولًا ثم الإنجليزية، مرتبّة أبجديًا داخل كل مجموعة.",
     "referencesAdd": "+ إضافة مرجع",
@@ -647,7 +845,8 @@
     "ariaLabel": "معاينة مباشرة لمستند Word المُولَّد",
     "header": "معاينة",
     "empty": "أضف أقسامًا في الجهة اليسرى لرؤية المعاينة هنا.",
-    "approximateNotice": "تخطيط تقريبي فقط — ولِّد ملف .docx للتنسيق النهائي."
+    "approximateNotice": "تخطيط تقريبي فقط — ولِّد ملف .docx للتنسيق النهائي.",
+    "equationEmpty": "[معادلة فارغة]"
   },
   "ConstructorValidation": {
     "checklistTitle": "قبل الإرسال، عالج هذه النقاط:",
@@ -660,7 +859,15 @@
     "error_CONSTRUCTOR_ABSTRACT_EN_MISSING": "أضف ملخصًا إنجليزيًا.",
     "error_CONSTRUCTOR_ABSTRACT_AR_MISSING": "أضف ملخصًا عربيًا.",
     "error_CONSTRUCTOR_REFERENCES_MISSING": "أضف قسم المراجع.",
-    "error_CONSTRUCTOR_REFERENCES_EMPTY": "أضف مرجعًا واحدًا على الأقل."
+    "error_CONSTRUCTOR_REFERENCES_EMPTY": "أضف مرجعًا واحدًا على الأقل.",
+    "error_CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE": "يُسمح بقسم شكر واحد فقط.",
+    "error_CONSTRUCTOR_FUNDING_DUPLICATE": "يُسمح بقسم تمويل واحد فقط.",
+    "error_CONSTRUCTOR_CONFLICT_OF_INTEREST_DUPLICATE": "يُسمح بقسم تعارض مصالح واحد فقط.",
+    "error_CONSTRUCTOR_DATA_AVAILABILITY_DUPLICATE": "يُسمح بقسم توفر بيانات واحد فقط.",
+    "error_CONSTRUCTOR_ACKNOWLEDGMENTS_EMPTY": "لا يمكن أن يكون قسم الشكر فارغًا لهذا النمط.",
+    "error_CONSTRUCTOR_FUNDING_EMPTY": "لا يمكن أن يكون بيان التمويل فارغًا لهذا النمط.",
+    "error_CONSTRUCTOR_CONFLICT_OF_INTEREST_EMPTY": "لا يمكن أن يكون بيان تعارض المصالح فارغًا لهذا النمط.",
+    "error_CONSTRUCTOR_DATA_AVAILABILITY_EMPTY": "لا يمكن أن يكون بيان توفر البيانات فارغًا لهذا النمط."
   },
   "Copyedit": {
     "title": "التحرير النهائي",
@@ -675,6 +882,8 @@
     "assignButton": "تعيين",
     "assigned": "تم تعيين المحرر النهائي.",
     "assignFailed": "تعذّر التعيين.",
+    "candidatesLoadFailed": "تعذّر تحميل قائمة المحررين النهائيين.",
+    "sectionLoadFailed": "تعذّر تحميل بيانات التحرير.",
     "noNotesYet": "لا توجد طلبات تحرير بعد.",
     "roundLabel": "الجولة {round}",
     "markReady": "أنجزتُ هذه الطلبات",

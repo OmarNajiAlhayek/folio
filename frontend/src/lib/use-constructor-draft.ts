@@ -5,31 +5,13 @@ import type {
   ConstructorContent,
   ConstructorDraftEnvelope,
 } from "./constructor-content.types";
+import {
+  createEmptyConstructorContent,
+  ensureMandatoryConstructorSections,
+} from "./constructor-mandatory-sections";
 
 const DRAFT_KEY = "folio.constructor-draft.v1";
 const CHANNEL_NAME = "folio.constructor-draft";
-
-function newId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return Math.random().toString(36).slice(2);
-}
-
-/** Returns a fresh document pre-populated with the 6 mandatory pinned sections. */
-function initialContent(): ConstructorContent {
-  return {
-    defaultDir: "ltr",
-    sections: [
-      { id: newId(), kind: "title",      lang: "en", text: "",              pinned: true, dir: "ltr", dirSource: "auto" },
-      { id: newId(), kind: "title",      lang: "ar", text: "",              pinned: true, dir: "rtl", dirSource: "auto" },
-      { id: newId(), kind: "authors",    authors: [],                        pinned: true, dir: "ltr", dirSource: "auto" },
-      { id: newId(), kind: "abstract",   lang: "en", text: "", keywords: "", pinned: true, dir: "ltr", dirSource: "auto" },
-      { id: newId(), kind: "abstract",   lang: "ar", text: "", keywords: "", pinned: true, dir: "rtl", dirSource: "auto" },
-      { id: newId(), kind: "references", items: [],                          pinned: true, dir: "ltr", dirSource: "auto" },
-    ],
-  };
-}
 
 /** Read the persisted constructor draft (same shape as `useConstructorDraft`). */
 export function readConstructorDraftEnvelope(): ConstructorDraftEnvelope | null {
@@ -145,14 +127,14 @@ export function useConstructorDraft(
     tabIdRef.current = newTabId();
     const env = readConstructorDraftEnvelope();
     if (env) {
-      setContentState(env.content);
+      setContentState(ensureMandatoryConstructorSections(env.content));
       lastModifiedRef.current = env.lastModified;
     } else if (!initial) {
       // No saved draft and no externally-provided content — seed with the
       // pre-populated pinned sections. Done here (client-only) so that
       // crypto.randomUUID() is never called during SSR, which would produce
       // a server/client hydration mismatch.
-      setContentState(initialContent());
+      setContentState(createEmptyConstructorContent());
     }
     if (multiTabSync && typeof BroadcastChannel !== "undefined") {
       const ch = new BroadcastChannel(CHANNEL_NAME);
@@ -161,7 +143,7 @@ export function useConstructorDraft(
         if (!incoming || incoming.tabId === tabIdRef.current) return;
         if (incoming.lastModified > lastModifiedRef.current) {
           lastModifiedRef.current = incoming.lastModified;
-          setContentState(incoming.content);
+          setContentState(ensureMandatoryConstructorSections(incoming.content));
           setExternalUpdateAt(Date.now());
         }
       };
@@ -187,11 +169,12 @@ export function useConstructorDraft(
   }, []);
 
   const setContent = useCallback((next: ConstructorContent) => {
-    setContentState(next);
+    const normalized = ensureMandatoryConstructorSections(next);
+    setContentState(normalized);
     if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
     writeTimerRef.current = setTimeout(() => {
       const env: ConstructorDraftEnvelope = {
-        content: next,
+        content: normalized,
         lastModified: new Date().toISOString(),
         tabId: tabIdRef.current || "anonymous",
       };
@@ -220,7 +203,7 @@ export function useConstructorDraft(
         // ignore
       }
     }
-    setContentState(initialContent());
+    setContentState(createEmptyConstructorContent());
     setQuotaExceeded(false);
   }, []);
 

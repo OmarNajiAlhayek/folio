@@ -9,13 +9,23 @@ import {
   apiJson,
   apiUpload,
   ApiError,
-  getStoredToken,
 } from "@/lib/api";
-import { redirectToLogin } from "@/lib/auth-redirect";
-import { toast, toastApiError } from "@/lib/toast";
-import { PERMISSION_SLUGS } from "@/lib/permissions";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import {
-  useInvalidateSubmissionDetail,
+  ACCEPT_FIGURE,
+  ACCEPT_MANUSCRIPT,
+  ACCEPT_SUPPLEMENTARY,
+} from "@/lib/upload-accept";
+import { ApiErrorState } from "@/components/api-error-state";
+import { toast } from "@/lib/toast";
+import { getApiErrorKind } from "@/lib/api-error-message";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { useToastApiError } from "@/lib/use-toast-api-error";
+import {
+  canManageOwnSubmissions,
+  PERMISSION_SLUGS,
+} from "@/lib/permissions";
+import {
   useSubmissionDetail,
 } from "@/lib/queries/submissions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -38,13 +48,29 @@ import {
   updateSubmissionStatusSchema,
 } from "@/lib/validation";
 import {
-  FILE_KIND_ORDER,
+  fileKindsForSubmissionDetail,
   SubmissionMetadataDisplay,
   SubmissionMetadataForm,
   type ContributorRow,
   type MetadataDisplayInitial,
 } from "./submission-workflow-forms";
-import { ModeSelector } from "@/components/constructor/ModeSelector";
+import { ConstructorManuscriptRow } from "@/components/constructor/ConstructorManuscriptRow";
+import { ReviewManuscriptPresentationPicker } from "@/components/constructor/ReviewManuscriptPresentationPicker";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { constructorDraftHasMeaningfulContent } from "@/lib/constructor-import-merge";
+import { resolveConstructorDocxFileName } from "@/lib/constructor-docx-filename";
+import {
+  type ReviewManuscriptPresentation,
+  detectManuscriptSources,
+  readReviewManuscriptPresentation,
+  resolveDefaultReviewManuscriptPresentation,
+  presentationIsValid,
+  writeReviewManuscriptPresentation,
+} from "@/lib/review-manuscript-presentation";
+import {
+  useInvalidateSubmissionDetail,
+  usePatchSubmission,
+} from "@/lib/queries/submissions";
 import { CopyeditSection } from "@/components/copyedit/CopyeditSection";
 import type {
   ConstructorContent,
@@ -52,6 +78,8 @@ import type {
 } from "@/lib/constructor-content.types";
 import { submitSubmissionForReview } from "@/lib/constructor-manuscript";
 import { stashConstructorSubmitErrors } from "@/lib/constructor-submit-errors";
+import { editorStatusOptions } from "@/lib/editor-status-transitions";
+import { submissionAllowsReviewConfiguration } from "@/lib/submission-review-phase";
 
 type FileRow = {
   id: string;
@@ -60,6 +88,7 @@ type FileRow = {
   kind?: string;
   /** OJS-style: `review` = visible to reviewers */
   fileStage?: string;
+  isPublic?: boolean;
 };
 
 type SubmissionDetail = {
@@ -89,6 +118,10 @@ type SubmissionDetail = {
    * "Edit in Constructor" CTA replaces it.
    */
   constructorContent?: unknown | null;
+  reviewManuscriptPresentation?: {
+    presentUploaded: boolean;
+    presentConstructor: boolean;
+  } | null;
 };
 
 type Me = { id: string; permissions: string[] };
@@ -140,6 +173,8 @@ function SubmissionFileRow({
   t,
   tWf,
   softRows,
+  showWorkflowStageBadge,
+  showPublicBadge,
   editorCanTogglePackage,
   onTogglePackage,
 }: {
@@ -151,6 +186,10 @@ function SubmissionFileRow({
   t: (key: string) => string;
   tWf: (key: string) => string;
   softRows?: boolean;
+  /** Editorial vs review-package label (active peer-review only). */
+  showWorkflowStageBadge?: boolean;
+  /** Shown on published public manuscript files. */
+  showPublicBadge?: boolean;
   editorCanTogglePackage?: boolean;
   onTogglePackage?: (f: FileRow) => void;
 }) {
@@ -168,9 +207,16 @@ function SubmissionFileRow({
         <span className="me-2 rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-ink/70">
           {tk(`fileKind_${f.kind || "manuscript"}`)}
         </span>
-        <span className="me-2 rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent/90">
-          {t(`fileStage_${stage}`)}
-        </span>
+        {showWorkflowStageBadge ? (
+          <span className="me-2 rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent/90">
+            {t(`fileStage_${stage}`)}
+          </span>
+        ) : null}
+        {showPublicBadge && f.isPublic ? (
+          <span className="me-2 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-emerald-900/90">
+            {t("filePublicBadge")}
+          </span>
+        ) : null}
         {f.originalName}
       </span>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -219,8 +265,30 @@ function recommendationLabel(
   return tCommon("recRevisions");
 }
 
+function parseInvalidStatusTransition(
+  err: ApiError,
+): { from: string; to: string } | null {
+  if (err.code === "INVALID_STATUS_TRANSITION") {
+    const from = String(err.details?.fromStatus ?? "");
+    const to = String(err.details?.toStatus ?? "");
+    if (from && to) return { from, to };
+  }
+  const match = err.message.match(/^Cannot transition from (\S+) to (\S+)$/);
+  if (match) return { from: match[1], to: match[2] };
+  return null;
+}
+
+const REMINDER_MIN_LEAD_MS = 120_000;
+
+function minReminderRescheduleDatetimeLocal(): string {
+  const d = new Date(Date.now() + REMINDER_MIN_LEAD_MS);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function SubmissionDetailPage() {
   const t = useTranslations("SubmissionDetail");
+  const tManuscript = useTranslations("ConstructorManuscript");
   const tWf = useTranslations("SubmissionWorkflow");
   const tSub = useTranslations("Submissions");
   const tCommon = useTranslations("Common");
@@ -237,13 +305,15 @@ export default function SubmissionDetailPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [sub, setSub] = useState<SubmissionDetail | null>(null);
   const invalidateDetail = useInvalidateSubmissionDetail();
-  const detailQuery = useSubmissionDetail(slug, !!getStoredToken());
-  const loadError =
-    detailQuery.isError && detailQuery.error instanceof ApiError
-      ? detailQuery.error.message
-      : detailQuery.isError
-        ? t("loadFailed")
-        : null;
+  const patchSubmission = usePatchSubmission(slug);
+  useAuthRedirect();
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
+  const showApiError = useToastApiError();
+  const detailQuery = useSubmissionDetail(slug, true);
+  const loadError = detailQuery.isError
+    ? resolveApiError(detailQuery.error, t("loadFailed"))
+    : null;
   const [validationError, setValidationError] = useState<string | null>(null);
   const [reviewerPick, setReviewerPick] = useState("");
   const [reviewerCandidates, setReviewerCandidates] = useState<
@@ -267,12 +337,15 @@ export default function SubmissionDetailPage() {
   const [reminderRescheduleAt, setReminderRescheduleAt] = useState<
     Record<string, string>
   >({});
-
-  useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-    }
-  }, [router, pathname]);
+  const [pendingRemoveFileId, setPendingRemoveFileId] = useState<string | null>(
+    null,
+  );
+  const [clearConstructorOpen, setClearConstructorOpen] = useState(false);
+  const [reviewPresentation, setReviewPresentation] =
+    useState<ReviewManuscriptPresentation>({
+      presentUploaded: true,
+      presentConstructor: false,
+    });
 
   useEffect(() => {
     const d = detailQuery.data;
@@ -281,17 +354,44 @@ export default function SubmissionDetailPage() {
     setSub(d.sub as SubmissionDetail);
     setStatusPick(String(d.sub.status ?? ""));
     setReviewerCandidates(d.reviewerCandidates);
-    setReviewersLoadError(
+    const reviewersMsg =
       d.reviewersLoadError === "reviewers_load_failed"
         ? t("reviewersLoadFailed")
-        : d.reviewersLoadError,
-    );
+        : d.reviewersLoadError;
+    setReviewersLoadError(reviewersMsg);
+    if (reviewersMsg) {
+      toast.error(reviewersMsg, { id: "submission-reviewers-load" });
+    }
     setEditorReviews(d.editorReviews as ReviewForEditor[]);
     setAuthorReviews(d.authorReviews as ReviewForAuthor[]);
     setReviewsError(d.reviewsLoadFailed ? t("reviewsLoadFailed") : null);
+    if (d.reviewsLoadFailed) {
+      toast.error(t("reviewsLoadFailed"), { id: "submission-reviews-load" });
+    }
     setEditorAssignmentRows(d.editorAssignmentRows);
     setAssignmentReminders(d.assignmentReminders);
   }, [detailQuery.data, t]);
+
+  useEffect(() => {
+    if (!sub) return;
+    const sources = detectManuscriptSources({
+      files: sub.files,
+      constructorContent: sub.constructorContent,
+    });
+    const stored = readReviewManuscriptPresentation(sub.slug);
+    const fromServer = sub.reviewManuscriptPresentation as
+      | ReviewManuscriptPresentation
+      | null
+      | undefined;
+    const next =
+      (fromServer &&
+      presentationIsValid(fromServer, sources)
+        ? fromServer
+        : null) ??
+      stored ??
+      resolveDefaultReviewManuscriptPresentation(sources);
+    setReviewPresentation(next);
+  }, [sub?.slug, sub?.updatedAt, sub?.constructorContent, sub?.files, sub?.reviewManuscriptPresentation]);
 
   async function uploadFile(f: File, kind: string) {
     if (!sub) return;
@@ -310,9 +410,10 @@ export default function SubmissionDetailPage() {
       await apiUpload(`/submissions/${encodeURIComponent(sub.slug)}/files`, f, {
         kind,
       });
+      toast.success(t("uploadSuccess"), { id: "submission-upload-success" });
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("uploadFailed"), { id: "submission-upload" });
+      showApiError(err, t("uploadFailed"), { id: "submission-upload" });
     } finally {
       setBusy(false);
       setUploadingName(null);
@@ -339,13 +440,19 @@ export default function SubmissionDetailPage() {
     }
   }
 
-  async function removeSubmissionFile(fileId: string) {
+  function requestRemoveSubmissionFile(fileId: string) {
     if (
       !sub ||
       (sub.status !== "draft" && sub.status !== "revisions_requested")
     )
       return;
-    if (!window.confirm(t("removeFileConfirm"))) return;
+    setPendingRemoveFileId(fileId);
+  }
+
+  async function confirmRemoveSubmissionFile() {
+    const fileId = pendingRemoveFileId;
+    if (!fileId || !sub) return;
+    setPendingRemoveFileId(null);
     setBusy(true);
     setValidationError(null);
     try {
@@ -355,9 +462,28 @@ export default function SubmissionDetailPage() {
           method: "DELETE",
         },
       );
+      toast.success(t("fileRemovedSuccess"), { id: "submission-delete-file-success" });
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("deleteFailed"), { id: "submission-delete-file" });
+      showApiError(err, t("deleteFailed"), { id: "submission-delete-file" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmClearConstructorDraft() {
+    if (!sub) return;
+    setClearConstructorOpen(false);
+    setBusy(true);
+    setValidationError(null);
+    try {
+      await patchSubmission.mutateAsync({ constructorContent: null });
+      toast.success(t("fileRemovedSuccess"), {
+        id: "submission-constructor-clear-success",
+      });
+      invalidateDetail(slug);
+    } catch (err) {
+      showApiError(err, t("deleteFailed"), { id: "submission-constructor-clear" });
     } finally {
       setBusy(false);
     }
@@ -371,10 +497,26 @@ export default function SubmissionDetailPage() {
       const enc = encodeURIComponent(sub.slug);
       const fresh = await apiJson<SubmissionDetail>(`/submissions/${enc}`);
       const cc = fresh.constructorContent as ConstructorContent | null | undefined;
-      await submitSubmissionForReview(sub.slug, {
-        constructorContent:
-          cc && Array.isArray(cc.sections) ? cc : null,
+      const sources = detectManuscriptSources({
+        files: fresh.files,
+        constructorContent: cc,
       });
+      if (!presentationIsValid(reviewPresentation, sources)) {
+        toast.error(tManuscript("presentationAtLeastOne"), {
+          id: "submission-presentation-required",
+        });
+        return;
+      }
+
+      await submitSubmissionForReview(sub.slug, {
+        presentUploadedManuscript: reviewPresentation.presentUploaded,
+        presentConstructorManuscript: reviewPresentation.presentConstructor,
+        constructorContent:
+          reviewPresentation.presentConstructor && sources.hasConstructorDraft
+            ? cc
+            : null,
+      });
+      toast.success(t("submitSuccess"), { id: "submission-submit-success" });
       invalidateDetail(slug);
     } catch (err) {
       if (
@@ -388,7 +530,7 @@ export default function SubmissionDetailPage() {
         router.push(`/submissions/${encodeURIComponent(sub.slug)}/compose`);
         return;
       }
-      toastApiError(err, t("submitFailed"), { id: "submission-submit" });
+      showApiError(err, t("submitFailed"), { id: "submission-submit" });
     } finally {
       setBusy(false);
     }
@@ -416,10 +558,11 @@ export default function SubmissionDetailPage() {
           body: JSON.stringify(parsed.data),
         },
       );
+      toast.success(t("assignSuccess"), { id: "submission-assign-success" });
       setReviewerPick("");
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("assignFailed"), { id: "submission-assign" });
+      showApiError(err, t("assignFailed"), { id: "submission-assign" });
     } finally {
       setBusy(false);
     }
@@ -443,9 +586,27 @@ export default function SubmissionDetailPage() {
         method: "PATCH",
         body: JSON.stringify(parsed.data),
       });
+      toast.success(t("statusUpdated"));
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("statusFailed"), { id: "submission-status" });
+      if (err instanceof ApiError && err.code === "REVIEW_PACKAGE_INCOMPLETE") {
+        toast.error(t("reviewPackageIncomplete"), { id: "submission-status" });
+        return;
+      }
+      if (err instanceof ApiError) {
+        const transition = parseInvalidStatusTransition(err);
+        if (transition) {
+          toast.error(
+            t("invalidStatusTransition", {
+              from: submissionStatusLabel(transition.from, tSub),
+              to: submissionStatusLabel(transition.to, tSub),
+            }),
+            { id: "submission-status" },
+          );
+          return;
+        }
+      }
+      showApiError(err, t("statusFailed"), { id: "submission-status" });
     } finally {
       setBusy(false);
     }
@@ -456,10 +617,21 @@ export default function SubmissionDetailPage() {
     reminderId: string,
   ) {
     if (!sub) return;
-    const raw = reminderRescheduleAt[reminderId];
-    if (!raw) return;
+    const raw = reminderRescheduleAt[reminderId]?.trim();
+    const toastId = `submission-reminder-patch-${reminderId}`;
+    if (!raw) {
+      toast.error(t("reminderRescheduleRequired"), { id: toastId });
+      return;
+    }
     const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return;
+    if (Number.isNaN(d.getTime())) {
+      toast.error(t("reminderRescheduleRequired"), { id: toastId });
+      return;
+    }
+    if (d.getTime() <= Date.now() + REMINDER_MIN_LEAD_MS) {
+      toast.error(t("reminderSendAtTooSoon"), { id: toastId });
+      return;
+    }
     setBusy(true);
     setValidationError(null);
     try {
@@ -471,11 +643,19 @@ export default function SubmissionDetailPage() {
           body: JSON.stringify({ sendAt: d.toISOString() }),
         },
       );
+      toast.success(t("reminderRescheduled"));
+      setReminderRescheduleAt((prev) => {
+        const next = { ...prev };
+        delete next[reminderId];
+        return next;
+      });
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("reminderLoadFailed"), {
-        id: `submission-reminder-patch-${reminderId}`,
-      });
+      if (err instanceof ApiError && err.code === "REMINDER_SEND_AT_TOO_SOON") {
+        toast.error(t("reminderSendAtTooSoon"), { id: toastId });
+        return;
+      }
+      showApiError(err, t("reminderRescheduleFailed"), { id: toastId });
     } finally {
       setBusy(false);
     }
@@ -488,17 +668,17 @@ export default function SubmissionDetailPage() {
     if (!sub) return;
     setBusy(true);
     setValidationError(null);
+    const toastId = `submission-reminder-cancel-${reminderId}`;
     try {
       const enc = encodeURIComponent(sub.slug);
       await apiJson(
         `/submissions/${enc}/assignments/${encodeURIComponent(assignmentSlug)}/reminders/${reminderId}/cancel`,
         { method: "POST" },
       );
+      toast.success(t("reminderCancelled"));
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("reminderLoadFailed"), {
-        id: `submission-reminder-cancel-${reminderId}`,
-      });
+      showApiError(err, t("reminderCancelFailed"), { id: toastId });
     } finally {
       setBusy(false);
     }
@@ -518,7 +698,7 @@ export default function SubmissionDetailPage() {
       );
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("reviewMethodFailed"), {
+      showApiError(err, t("reviewMethodFailed"), {
         id: "submission-review-method",
       });
     } finally {
@@ -528,6 +708,7 @@ export default function SubmissionDetailPage() {
 
   async function patchFileReviewStage(f: FileRow) {
     if (!sub) return;
+    if (!submissionAllowsReviewConfiguration(sub.status)) return;
     const next = f.fileStage === "review" ? "submission" : "review";
     setBusy(true);
     setValidationError(null);
@@ -541,7 +722,7 @@ export default function SubmissionDetailPage() {
       );
       invalidateDetail(slug);
     } catch (err) {
-      toastApiError(err, t("fileStageFailed"), { id: "submission-file-stage" });
+      showApiError(err, t("fileStageFailed"), { id: "submission-file-stage" });
     } finally {
       setBusy(false);
     }
@@ -549,18 +730,19 @@ export default function SubmissionDetailPage() {
 
   if (loadError && !sub) {
     return (
-      <main className={PAGE_SHELL_NARROW}>
-        <p className="text-red-700" role="alert">
-          {loadError}
-        </p>
-        <button
-          type="button"
-          className="mt-3 rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
-          onClick={() => void detailQuery.refetch()}
-        >
-          {t("retryLoad")}
-        </button>
-      </main>
+      <ApiErrorState
+        message={loadError}
+        error={detailQuery.error}
+        hint={
+          detailQuery.error && getApiErrorKind(detailQuery.error) === "rateLimit"
+            ? tApi("rateLimitHint")
+            : undefined
+        }
+        onRetry={() => void detailQuery.refetch()}
+        retryLabel={tApi("retry")}
+        backHref="/submissions"
+        backLabel={tSub("title")}
+      />
     );
   }
 
@@ -574,6 +756,7 @@ export default function SubmissionDetailPage() {
 
   const isAuthor =
     sub.authorId != null && sub.authorId !== "" && sub.authorId === me.id;
+  const canManageOwn = canManageOwnSubmissions(me.permissions);
   const isEditorView = me.permissions.includes(
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   );
@@ -581,15 +764,30 @@ export default function SubmissionDetailPage() {
     isEditorView &&
     (me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS) ||
       me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER));
+  const canConfigureReviewForStatus = submissionAllowsReviewConfiguration(
+    sub.status,
+  );
+  const showReviewConfiguration =
+    canConfigureReview && canConfigureReviewForStatus;
+  const allowReviewPackageEdits = showReviewConfiguration;
+  const showFileWorkflowStage = allowReviewPackageEdits;
+  const isPublishedSubmission = sub.status === "published";
+  const canAssignReviewer =
+    isEditorView &&
+    me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER) &&
+    canConfigureReviewForStatus;
   const canEditManuscript =
+    canManageOwn &&
     isAuthor &&
     (sub.status === "draft" ||
       sub.status === "revisions_requested" ||
       sub.status === "copyediting");
   const canRemoveFiles =
+    canManageOwn &&
     isAuthor &&
     (sub.status === "draft" || sub.status === "revisions_requested");
   const showMetadataForm =
+    canManageOwn &&
     isAuthor &&
     !isEditorView &&
     (sub.status === "draft" || sub.status === "revisions_requested");
@@ -623,10 +821,32 @@ export default function SubmissionDetailPage() {
     aiUsageStatement: metadataFormInitial.aiUsageStatement,
   };
   const files = sub.files ?? [];
-  const isConstructorManuscript = sub.constructorContent != null;
-  const editableFileKinds = isConstructorManuscript
-    ? FILE_KIND_ORDER.filter((row) => row.kind !== "manuscript")
-    : [...FILE_KIND_ORDER];
+  const constructorContent = sub.constructorContent as
+    | ConstructorContent
+    | null
+    | undefined;
+  const { hasUploadedManuscript, hasConstructorDraft } = detectManuscriptSources(
+    { files, constructorContent },
+  );
+  const constructorManuscriptFiles = files.filter(
+    (f) => f.kind === "manuscript_constructor",
+  );
+  const attachedConstructorFile = constructorManuscriptFiles[0];
+  const canEditConstructor =
+    canManageOwn &&
+    isAuthor &&
+    (sub.status === "draft" || sub.status === "revisions_requested");
+  const constructorDisplayName = hasConstructorDraft
+    ? attachedConstructorFile?.originalName ??
+      resolveConstructorDocxFileName(constructorContent)
+    : "";
+  const constructorStatusHint = hasConstructorDraft
+    ? attachedConstructorFile
+      ? ("attached" as const)
+      : ("pending" as const)
+    : undefined;
+  const composeHref = `/submissions/${encodeURIComponent(sub.slug)}/compose`;
+  const editableFileKinds = fileKindsForSubmissionDetail();
   const showReadonlyFiles = !canEditManuscript && files.length > 0;
 
   const mainShellCls = isEditorView
@@ -635,22 +855,37 @@ export default function SubmissionDetailPage() {
   const cardRounded = isEditorView ? "rounded-xl" : "rounded-lg";
   const contentPad = isEditorView ? "p-6 sm:p-8" : "p-6";
 
-  const statuses = [
-    "draft",
-    "submitted",
-    "under_review",
-    "revisions_requested",
-    "accepted",
-    "rejected",
-    "copyediting",
-    "published",
-  ];
+  const statuses = editorStatusOptions(sub.status);
 
   const statusLabel = submissionStatusLabel(sub.status, tSub);
   const tWfAny = tWf as unknown as (k: string) => string;
 
   return (
     <main className={mainShellCls}>
+      <ConfirmDialog
+        open={pendingRemoveFileId != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoveFileId(null);
+        }}
+        dir={locale === "ar" ? "rtl" : "ltr"}
+        title={t("removeFile")}
+        description={t("removeFileConfirm")}
+        cancelLabel={tManuscript("cancel")}
+        confirmLabel={t("removeFile")}
+        onConfirm={() => void confirmRemoveSubmissionFile()}
+        confirmDisabled={busy}
+      />
+      <ConfirmDialog
+        open={clearConstructorOpen}
+        onOpenChange={setClearConstructorOpen}
+        dir={locale === "ar" ? "rtl" : "ltr"}
+        title={tManuscript("clearConstructorTitle")}
+        description={tManuscript("clearConstructorDescription")}
+        cancelLabel={tManuscript("cancel")}
+        confirmLabel={tManuscript("clearConstructorConfirm")}
+        onConfirm={() => void confirmClearConstructorDraft()}
+        confirmDisabled={busy}
+      />
       {isEditorView ? (
         <header className="border-s-4 border-s-accent/35 ps-5">
           <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -820,24 +1055,6 @@ export default function SubmissionDetailPage() {
         </section>
       )}
 
-      {canEditManuscript &&
-        sub.constructorContent == null &&
-        files.length === 0 && (
-          <section
-            className={`mt-8 ${cardRounded} border border-ink/10 bg-surface shadow-sm ${contentPad}`}
-          >
-            <h2 className="font-serif text-lg font-semibold text-ink">
-              {t("chooseManuscriptMode")}
-            </h2>
-            <p className="mt-1 text-sm text-ink/70">
-              {t("chooseManuscriptModeHint")}
-            </p>
-            <div className="mt-4">
-              <ModeSelector slug={sub.slug} inline />
-            </div>
-          </section>
-        )}
-
       {canEditManuscript && (
         <section
           className={`mt-8 space-y-6 ${cardRounded} border border-ink/10 bg-surface shadow-sm ${contentPad}`}
@@ -846,27 +1063,24 @@ export default function SubmissionDetailPage() {
             <h2 className="font-serif text-lg font-semibold text-ink">
               {t("manuscript")}
             </h2>
-            {isConstructorManuscript ? (
-              <>
-                <p className="mt-1 text-sm text-ink/70">
-                  {t("constructorModeNotice")}
-                </p>
-                <div className="mt-4">
-                  <Link
-                    href={`/submissions/${encodeURIComponent(sub.slug)}/compose`}
-                    className="inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent/90"
-                  >
-                    {t("openConstructor")}
-                  </Link>
-                </div>
-                <p className="mt-4 text-sm text-ink/70">
-                  {t("constructorCompanionFilesHint")}
-                </p>
-              </>
-            ) : (
-              <p className="mt-1 text-sm text-ink/70">{t("uploadSubtitle")}</p>
-            )}
+            <p className="mt-1 text-sm text-ink/70">{t("uploadSubtitle")}</p>
+            {canEditConstructor ? (
+              <p className="mt-2 text-sm text-ink/65">
+                {tManuscript("dualPathHint")}
+              </p>
+            ) : null}
           </div>
+          {canEditConstructor ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href={composeHref}
+                data-testid="open-constructor"
+                className="inline-flex items-center rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40"
+              >
+                {tManuscript("openConstructor")}
+              </Link>
+            </div>
+          ) : null}
           <div className="space-y-5">
             {editableFileKinds.map(({ kind, required }) => (
               <div
@@ -888,10 +1102,32 @@ export default function SubmissionDetailPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-ink/55">{tWfAny(`fileKindHint_${kind}`)}</p>
+                {kind === "manuscript" && hasConstructorDraft ? (
+                  <div className="mt-3">
+                    <ConstructorManuscriptRow
+                      displayName={constructorDisplayName}
+                      editHref={composeHref}
+                      statusHint={constructorStatusHint}
+                      disabled={busy}
+                      onRemove={
+                        canEditConstructor
+                          ? () => setClearConstructorOpen(true)
+                          : undefined
+                      }
+                    />
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <input
                     id={`${fileInputId}-${kind}`}
                     type="file"
+                    accept={
+                      kind === "figure" || kind === "table"
+                        ? ACCEPT_FIGURE
+                        : kind === "supplementary"
+                          ? ACCEPT_SUPPLEMENTARY
+                          : ACCEPT_MANUSCRIPT
+                    }
                     className="sr-only"
                     disabled={busy}
                     onChange={(e) => {
@@ -907,6 +1143,20 @@ export default function SubmissionDetailPage() {
                     {t("chooseFile")}
                   </label>
                 </div>
+                {kind === "manuscript" && canEditConstructor ? (
+                  <div className="mt-4">
+                    <ReviewManuscriptPresentationPicker
+                      value={reviewPresentation}
+                      onChange={(next) => {
+                        setReviewPresentation(next);
+                        writeReviewManuscriptPresentation(sub.slug, next);
+                      }}
+                      hasUploadedManuscript={hasUploadedManuscript}
+                      hasConstructorDraft={hasConstructorDraft}
+                      disabled={busy}
+                    />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -916,11 +1166,7 @@ export default function SubmissionDetailPage() {
               <span className="font-medium text-ink">{uploadingName}</span>
             </p>
           )}
-          <p className="text-xs text-ink/60">
-            {isConstructorManuscript
-              ? t("constructorUploadHint")
-              : t("uploadHint")}
-          </p>
+          <p className="text-xs text-ink/60">{t("uploadHint")}</p>
           {files.length > 0 && (
             <div className="pt-2">
               <h3 className="text-sm font-medium text-ink">{t("yourFiles")}</h3>
@@ -933,10 +1179,16 @@ export default function SubmissionDetailPage() {
                     busy={busy}
                     t={t}
                     tWf={tWf}
-                    editorCanTogglePackage={canConfigureReview}
-                    onTogglePackage={(row) => void patchFileReviewStage(row)}
+                    showWorkflowStageBadge={showFileWorkflowStage}
+                    showPublicBadge={isPublishedSubmission}
+                    editorCanTogglePackage={allowReviewPackageEdits}
+                    onTogglePackage={
+                      allowReviewPackageEdits
+                        ? (row) => void patchFileReviewStage(row)
+                        : undefined
+                    }
                     onDownload={(row) => void downloadSubmissionFile(row)}
-                    onRemove={(fileId) => void removeSubmissionFile(fileId)}
+                    onRemove={(fileId) => requestRemoveSubmissionFile(fileId)}
                   />
                 ))}
               </ul>
@@ -952,6 +1204,11 @@ export default function SubmissionDetailPage() {
           <h2 className="font-serif text-lg font-semibold text-ink">
             {t("attachedFiles")}
           </h2>
+          {isEditorView && isPublishedSubmission && (
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink/70">
+              {t("attachedFilesPublishedHint")}
+            </p>
+          )}
           <ul
             className={
               isEditorView ? "mt-3 space-y-2" : "mt-2"
@@ -966,8 +1223,14 @@ export default function SubmissionDetailPage() {
                 t={t}
                 tWf={tWf}
                 softRows={isEditorView}
-                editorCanTogglePackage={canConfigureReview}
-                onTogglePackage={(row) => void patchFileReviewStage(row)}
+                showWorkflowStageBadge={showFileWorkflowStage}
+                showPublicBadge={isPublishedSubmission}
+                editorCanTogglePackage={allowReviewPackageEdits}
+                onTogglePackage={
+                  allowReviewPackageEdits
+                    ? (row) => void patchFileReviewStage(row)
+                    : undefined
+                }
                 onDownload={(row) => void downloadSubmissionFile(row)}
               />
             ))}
@@ -1090,7 +1353,7 @@ export default function SubmissionDetailPage() {
         </section>
       )}
 
-      {canEditManuscript && (
+      {canEditConstructor && (
         <div className="mt-6">
           <p className="mb-2 max-w-xl text-xs leading-relaxed text-ink/60">
             {t("submitIrreversibleHint")}
@@ -1114,7 +1377,7 @@ export default function SubmissionDetailPage() {
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink/70">
             {t("editorPanelHint")}
           </p>
-          {canConfigureReview ? (
+          {showReviewConfiguration ? (
             <div className="mt-6 rounded-lg border border-ink/10 bg-paper/40 px-4 py-4">
               <div className="flex flex-col gap-1 text-sm font-medium text-ink">
                 <span id={reviewMethodSelectId}>{t("reviewMethodLabel")}</span>
@@ -1147,53 +1410,60 @@ export default function SubmissionDetailPage() {
           ) : null}
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-ink/65">
-                {t("editorAssignColumnHint")}
-              </p>
-              {reviewersLoadError && (
-                <p className="text-sm text-red-700">{reviewersLoadError}</p>
-              )}
-              <div className="flex flex-col gap-1 text-sm font-medium text-ink">
-                <span id="reviewer-select-label">{t("reviewerLabel")}</span>
-                <SearchableSelect
-                  options={reviewerCandidates.map((c) => ({
-                    value: c.id,
-                    label: `${c.displayName} (${c.email})`,
-                    keywords: [c.displayName, c.email],
-                  }))}
-                  value={reviewerPick}
-                  onValueChange={setReviewerPick}
-                  placeholder={t("reviewerPlaceholder")}
-                  searchPlaceholder={tUi("searchPlaceholder")}
-                  emptyText={tUi("noResults")}
-                  disabled={
-                    busy ||
-                    !!reviewersLoadError ||
-                    !me.permissions.includes(
-                      PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
-                    )
-                  }
-                  className="w-full"
-                  aria-labelledby="reviewer-select-label"
-                />
-              </div>
-              <button
-                type="button"
-                disabled={busy || !reviewerPick.trim() || !!reviewersLoadError}
-                onClick={() => void assignReviewer()}
-                className="w-fit rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-accent/90 disabled:opacity-50"
-              >
-                {t("assignReviewer")}
-              </button>
-              {!reviewersLoadError &&
-                me.permissions.includes(
-                  PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
-                ) &&
-                reviewerCandidates.length === 0 && (
-                  <p className="text-sm text-ink/70">
-                    {t("noReviewersAvailable")}
+              {canAssignReviewer ? (
+                <>
+                  <p className="text-sm text-ink/65">
+                    {t("editorAssignColumnHint")}
                   </p>
-                )}
+                  {editorAssignmentRows.some(
+                    (a) => a.status === "invited" || a.status === "accepted",
+                  ) && (
+                    <p className="text-sm text-ink/70">
+                      {t("reviewerAssignAdditionalHint")}
+                    </p>
+                  )}
+                  {reviewersLoadError && (
+                    <p className="text-sm text-red-700">{reviewersLoadError}</p>
+                  )}
+                  <div className="flex flex-col gap-1 text-sm font-medium text-ink">
+                    <span id="reviewer-select-label">{t("reviewerLabel")}</span>
+                    <SearchableSelect
+                      options={reviewerCandidates.map((c) => ({
+                        value: c.id,
+                        label: `${c.displayName} (${c.email})`,
+                        keywords: [c.displayName, c.email],
+                      }))}
+                      value={reviewerPick}
+                      onValueChange={setReviewerPick}
+                      placeholder={t("reviewerPlaceholder")}
+                      searchPlaceholder={tUi("searchPlaceholder")}
+                      emptyText={tUi("noResults")}
+                      disabled={busy || !!reviewersLoadError}
+                      className="w-full"
+                      aria-labelledby="reviewer-select-label"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={
+                      busy || !reviewerPick.trim() || !!reviewersLoadError
+                    }
+                    onClick={() => void assignReviewer()}
+                    className="w-fit rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-accent/90 disabled:opacity-50"
+                  >
+                    {t("assignReviewer")}
+                  </button>
+                  {!reviewersLoadError && reviewerCandidates.length === 0 && (
+                    <p className="text-sm text-ink/70">
+                      {t("noReviewersAvailable")}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-ink/70">
+                  {t("reviewerAssignClosedHint")}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-3">
               <p className="text-sm text-ink/65">
@@ -1311,6 +1581,7 @@ export default function SubmissionDetailPage() {
                                             <input
                                               type="datetime-local"
                                               step={60}
+                                              min={minReminderRescheduleDatetimeLocal()}
                                               className="max-w-[11rem] rounded border border-ink/15 bg-paper px-2 py-1 text-ink"
                                               value={
                                                 reminderRescheduleAt[r.id] ?? ""
@@ -1323,13 +1594,16 @@ export default function SubmissionDetailPage() {
                                                   }),
                                                 )
                                               }
-                                              placeholder={t(
+                                              aria-label={t(
                                                 "reminderReschedulePlaceholder",
                                               )}
                                             />
                                             <button
                                               type="button"
-                                              disabled={busy}
+                                              disabled={
+                                                busy ||
+                                                !(reminderRescheduleAt[r.id] ?? "").trim()
+                                              }
                                               className="rounded bg-ink/80 px-2 py-1 text-paper hover:bg-ink disabled:opacity-50"
                                               onClick={() =>
                                                 void patchReminderSendAt(

@@ -12,7 +12,8 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import { apiBlob, apiUpload } from "@/lib/api";
-import { toast, toastApiError } from "@/lib/toast";
+import { toast } from "@/lib/toast";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import {
   detectDirection,
   resolveSectionDir,
@@ -26,10 +27,13 @@ import type {
   ConstructorReferenceEntry,
   ConstructorDir,
   ConstructorSection,
+  EquationSection,
   HeadingSection,
   ImageSection,
   ParagraphSection,
   ReferencesSection,
+  RichTextBlockKind,
+  RichTextBlockSection,
   TableSection,
   TitleSection,
 } from "@/lib/constructor-content.types";
@@ -38,13 +42,10 @@ interface CommonProps<T extends ConstructorSection> {
   section: T;
   defaultDir: ConstructorDir;
   onChange: (next: T) => void;
-  /**
-   * Submission slug, only required for ImageSection editor (uploads use the
-   * `/submissions/:slug/files` endpoint). When undefined, the image editor
-   * shows a "save the draft first to upload images" hint.
-   */
   slug?: string;
   readOnly?: boolean;
+  /** 1-based index among equation sections when `section.kind === 'equation'`. */
+  equationNumber?: number;
 }
 
 /**
@@ -54,7 +55,7 @@ interface CommonProps<T extends ConstructorSection> {
 export function SectionEditor(
   props: CommonProps<ConstructorSection>,
 ): ReactElement {
-  const { section } = props;
+  const { section, equationNumber } = props;
   switch (section.kind) {
     case "title":
       return (
@@ -85,6 +86,22 @@ export function SectionEditor(
     case "table":
       return (
         <TableEditor {...(props as CommonProps<TableSection>)} />
+      );
+    case "acknowledgments":
+    case "funding":
+    case "conflictOfInterest":
+    case "dataAvailability":
+      return (
+        <RichTextBlockEditor
+          {...(props as CommonProps<RichTextBlockSection>)}
+        />
+      );
+    case "equation":
+      return (
+        <EquationEditor
+          {...(props as CommonProps<EquationSection>)}
+          equationNumber={equationNumber}
+        />
       );
     case "references":
       return (
@@ -636,6 +653,7 @@ function ImageEditor({
   readOnly,
 }: CommonProps<ImageSection>) {
   const t = useTranslations("ConstructorEditor");
+  const showApiError = useToastApiError();
   const fileInputId = useId();
   const [uploading, setUploading] = useState(false);
   const dir = resolveSectionDir(section, defaultDir);
@@ -654,8 +672,9 @@ function ImageEditor({
         { kind: "figure" },
       )) as { id: string };
       onChange({ ...section, fileId: row.id });
+      toast.success(t("imageUploadSuccess"), { id: "constructor-image-upload-success" });
     } catch (e) {
-      toastApiError(e, t("imageUploadFailed"), { id: "constructor-image-upload" });
+      showApiError(e, t("imageUploadFailed"), { id: "constructor-image-upload" });
     } finally {
       setUploading(false);
     }
@@ -679,7 +698,7 @@ function ImageEditor({
           <input
             id={fileInputId}
             type="file"
-            accept="image/png,image/jpeg,image/gif,image/bmp"
+            accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp"
             className="sr-only"
             disabled={readOnly || uploading}
             onChange={(e) => {
@@ -916,6 +935,203 @@ function TableEditor({
           </button>
         </div>
         <p className="text-xs text-ink/55">{t("tableNoMergedCells")}</p>
+        <label className="block text-sm font-medium text-ink/80">
+          {t("tableNotesLabel")}
+        </label>
+        <textarea
+          dir={dir}
+          readOnly={readOnly}
+          data-testid="constructor-table-notes"
+          value={section.notes ?? ""}
+          onChange={(e) =>
+            onChange(applyAutoDir(section, { notes: e.target.value }))
+          }
+          placeholder={t("tableNotesPlaceholder")}
+          rows={3}
+          className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 text-sm shadow-sm"
+        />
+      </div>
+    </SectionFrame>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Back-matter rich text blocks
+// -----------------------------------------------------------------------------
+
+function RichTextBlockEditor({
+  section,
+  defaultDir,
+  onChange,
+  readOnly,
+}: CommonProps<RichTextBlockSection>) {
+  const t = useTranslations("ConstructorEditor");
+  const kind = section.kind as RichTextBlockKind;
+  const labelKey = `richText_${kind}_label` as const;
+  const hintKey = `richText_${kind}_hint` as const;
+  const dir = resolveSectionDir(section, defaultDir);
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          blockquote: false,
+          code: false,
+          codeBlock: false,
+          heading: false,
+          horizontalRule: false,
+          link: false,
+          strike: false,
+        }),
+      ],
+      content: section.html || "<p></p>",
+      editable: !readOnly,
+      immediatelyRender: false,
+      onUpdate: ({ editor }) => {
+        onChange(applyAutoDir(section, { html: editor.getHTML() }));
+      },
+      editorProps: {
+        attributes: {
+          class:
+            "prose prose-sm max-w-none min-h-20 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm",
+        },
+        handlePaste: (_view, event) => {
+          const items = event.clipboardData?.items;
+          if (!items) return false;
+          for (const item of items) {
+            if (item.type.startsWith("image/")) {
+              event.preventDefault();
+              return true;
+            }
+          }
+          return false;
+        },
+      },
+    },
+    [readOnly, kind],
+  );
+
+  useEffect(() => {
+    if (editor && section.html !== editor.getHTML() && !editor.isFocused) {
+      editor.commands.setContent(section.html || "<p></p>", {
+        emitUpdate: false,
+      });
+    }
+  }, [editor, section.html]);
+
+  return (
+    <SectionFrame
+      label={t(labelKey)}
+      hint={t(hintKey)}
+      headerExtra={
+        <DirectionBadge
+          section={section}
+          defaultDir={defaultDir}
+          onChange={(s) => onChange(s as RichTextBlockSection)}
+          disabled={readOnly}
+        />
+      }
+    >
+      {editor ? <Toolbar editor={editor} disabled={readOnly} /> : null}
+      <div dir={dir} data-testid={`constructor-rich-text-${kind}`}>
+        <EditorContent editor={editor} />
+      </div>
+    </SectionFrame>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Equation (LaTeX + KaTeX preview)
+// -----------------------------------------------------------------------------
+
+function EquationEditor({
+  section,
+  onChange,
+  readOnly,
+  equationNumber,
+}: CommonProps<EquationSection> & { equationNumber?: number }) {
+  const t = useTranslations("ConstructorEditor");
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const latex = section.latex.trim();
+      if (!latex) {
+        setPreviewHtml(null);
+        setPreviewError(false);
+        return;
+      }
+      try {
+        const katex = await import("katex");
+        await import("katex/dist/katex.min.css");
+        const html = katex.default.renderToString(latex, {
+          throwOnError: true,
+          displayMode: true,
+        });
+        if (!cancelled) {
+          setPreviewHtml(html);
+          setPreviewError(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewHtml(null);
+          setPreviewError(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [section.latex]);
+
+  const label =
+    section.numbered && equationNumber != null
+      ? t("equationNumberedLabel", { n: equationNumber })
+      : t("equationLabel");
+
+  return (
+    <SectionFrame label={label} hint={t("equationHint")}>
+      <div className="space-y-3">
+        <textarea
+          readOnly={readOnly}
+          data-testid="constructor-equation-latex"
+          value={section.latex}
+          onChange={(e) => onChange({ ...section, latex: e.target.value })}
+          placeholder={t("equationPlaceholder")}
+          rows={4}
+          className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 font-mono text-sm shadow-sm"
+        />
+        <label className="flex items-center gap-2 text-sm text-ink/80">
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            data-testid="constructor-equation-numbered"
+            checked={section.numbered}
+            onChange={(e) =>
+              onChange({ ...section, numbered: e.target.checked })
+            }
+          />
+          {t("equationNumbered")}
+        </label>
+        <div
+          className="min-h-12 rounded-md border border-ink/10 bg-paper/50 px-4 py-3 text-center"
+          aria-live="polite"
+        >
+          {previewError ? (
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {t("equationPreviewError")}
+            </p>
+          ) : previewHtml ? (
+            <div
+              className="katex-preview overflow-x-auto"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          ) : (
+            <p className="text-xs text-ink/50">{t("equationPreviewEmpty")}</p>
+          )}
+        </div>
       </div>
     </SectionFrame>
   );
@@ -1131,11 +1347,19 @@ export function createBlankSection(
         kind,
         caption: "",
         hasHeaderRow: true,
+        notes: "",
         rows: [
           ["", ""],
           ["", ""],
         ],
       };
+    case "acknowledgments":
+    case "funding":
+    case "conflictOfInterest":
+    case "dataAvailability":
+      return { ...base, kind, html: "<p></p>" };
+    case "equation":
+      return { ...base, kind, latex: "", numbered: false };
     case "references":
       return { ...base, kind, items: [] };
   }

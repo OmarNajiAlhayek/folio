@@ -13,12 +13,47 @@ const previewThemeSchema = z.object({
   referencesHeading: z.string(),
 });
 
+const constructorGuidanceSchema = z.object({
+  extraMandatorySlots: z
+    .array(
+      z.enum([
+        "acknowledgments",
+        "funding",
+        "conflictOfInterest",
+        "dataAvailability",
+      ]),
+    )
+    .optional(),
+  recommendedPresets: z
+    .array(
+      z.enum([
+        "introduction",
+        "literatureReview",
+        "materialsAndMethods",
+        "resultsAndDiscussion",
+        "conclusions",
+      ]),
+    )
+    .optional(),
+  requiredRichTextKinds: z
+    .array(
+      z.enum([
+        "acknowledgments",
+        "funding",
+        "conflictOfInterest",
+        "dataAvailability",
+      ]),
+    )
+    .optional(),
+});
+
 const catalogEntrySchema = z.object({
   id: z.string(),
   version: z.number(),
   displayNameKey: z.string(),
   descriptionKey: z.string(),
   previewTheme: previewThemeSchema,
+  constructorGuidance: constructorGuidanceSchema.optional(),
 });
 
 export const manuscriptStyleCatalogSchema = z.object({
@@ -28,6 +63,9 @@ export const manuscriptStyleCatalogSchema = z.object({
 });
 
 export type ManuscriptPreviewTheme = z.infer<typeof previewThemeSchema>;
+export type ManuscriptConstructorGuidance = z.infer<
+  typeof constructorGuidanceSchema
+>;
 export type ManuscriptStyleCatalogEntry = z.infer<typeof catalogEntrySchema>;
 export type ManuscriptStyleCatalog = z.infer<typeof manuscriptStyleCatalogSchema>;
 

@@ -3,11 +3,21 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken } from "@/lib/api";
-import { redirectToLogin } from "@/lib/auth-redirect";
-import { toast, toastApiError } from "@/lib/toast";
+import { Link, useRouter } from "@/i18n/navigation";
+import { apiJson } from "@/lib/api";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import {
+  ACCEPT_FIGURE,
+  ACCEPT_MANUSCRIPT,
+  ACCEPT_SUPPLEMENTARY,
+} from "@/lib/upload-accept";
+import { toast } from "@/lib/toast";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import { CONSTRUCTOR_ATTACH_INTENT_SESSION_KEY } from "@/lib/constructor-draft-intent";
+import {
+  constructorDraftHasSections,
+  resolveConstructorDocxFileName,
+} from "@/lib/constructor-docx-filename";
 import { constructorContentToSubmissionMetadataInitial } from "@/lib/constructor-to-submission-metadata";
 import {
   clearConstructorDraftStorage,
@@ -25,6 +35,20 @@ import {
   type SubmissionMetadataFormInitial,
 } from "../[slug]/submission-workflow-forms";
 import { ModeSelector } from "@/components/constructor/ModeSelector";
+import { ConstructorManuscriptRow } from "@/components/constructor/ConstructorManuscriptRow";
+import { ReviewManuscriptPresentationPicker } from "@/components/constructor/ReviewManuscriptPresentationPicker";
+import {
+  PRE_SLUG_PRESENTATION_KEY,
+  type ReviewManuscriptPresentation,
+  readReviewManuscriptPresentation,
+  resolveDefaultReviewManuscriptPresentation,
+  reviewManuscriptPresentationStorageKey,
+  writeReviewManuscriptPresentation,
+} from "@/lib/review-manuscript-presentation";
+import {
+  readPreSlugStagedManuscript,
+  writePreSlugStagedManuscript,
+} from "@/lib/pre-slug-staged-manuscript";
 
 const EMPTY_NEW_INITIAL: SubmissionMetadataFormInitial = {
   title: "",
@@ -48,6 +72,32 @@ function mergeMetadataInitial(
   return { ...EMPTY_NEW_INITIAL, ...partial };
 }
 
+function readConstructorManuscriptDisplayName(): string | null {
+  const env = readConstructorDraftEnvelope();
+  if (!constructorDraftHasSections(env?.content)) return null;
+  return resolveConstructorDocxFileName(env?.content);
+}
+
+function hasConstructorAttachIntent(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      sessionStorage.getItem(CONSTRUCTOR_ATTACH_INTENT_SESSION_KEY) === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function clearConstructorAttachIntent(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(CONSTRUCTOR_ATTACH_INTENT_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export default function NewSubmissionPage() {
   const t = useTranslations("SubmissionsNew");
   const tWf = useTranslations("SubmissionWorkflow");
@@ -55,7 +105,7 @@ export default function NewSubmissionPage() {
   const tv = useTranslations("Validation");
   const tConstructor = useTranslations("ConstructorPage");
   const router = useRouter();
-  const pathname = usePathname();
+  useAuthRedirect();
   const searchParams = useSearchParams();
   const fileInputId = useId();
   const [stagedFiles, setStagedFiles] = useState<
@@ -64,19 +114,56 @@ export default function NewSubmissionPage() {
   const [formSaving, setFormSaving] = useState(false);
   const [metadataInitial, setMetadataInitial] =
     useState<SubmissionMetadataFormInitial>(EMPTY_NEW_INITIAL);
+  const [constructorManuscriptName, setConstructorManuscriptName] = useState<
+    string | null
+  >(null);
+  const [constructorManuscriptDismissed, setConstructorManuscriptDismissed] =
+    useState(false);
+  const [reviewPresentation, setReviewPresentation] =
+    useState<ReviewManuscriptPresentation>(() => {
+      const stored = readReviewManuscriptPresentation(PRE_SLUG_PRESENTATION_KEY);
+      return (
+        stored ?? {
+          presentUploaded: true,
+          presentConstructor: false,
+        }
+      );
+    });
+  const showApiError = useToastApiError();
 
   // The mode selector links here with `?mode=upload` once the user picks
   // upload, which makes the chosen mode sticky for the lifetime of this tab.
   const mode = searchParams.get("mode");
-  const showModeSelector = mode !== "upload";
+  const tManuscript = useTranslations("ConstructorManuscript");
   const fromConstructor = searchParams.get("fromConstructor");
 
-  const getStagedFiles = useCallback(() => stagedFiles, [stagedFiles]);
-  const clearStagedFiles = useCallback(() => setStagedFiles({}), []);
+  const syncConstructorManuscriptDisplay = useCallback(() => {
+    if (!hasConstructorAttachIntent()) {
+      setConstructorManuscriptName(null);
+      return;
+    }
+    setConstructorManuscriptName(readConstructorManuscriptDisplayName());
+  }, []);
 
   useEffect(() => {
-    if (!getStoredToken()) redirectToLogin(router, pathname);
-  }, [router, pathname]);
+    syncConstructorManuscriptDisplay();
+  }, [syncConstructorManuscriptDisplay]);
+
+  useEffect(() => {
+    const cached = readPreSlugStagedManuscript();
+    if (!cached) return;
+    setStagedFiles((prev) =>
+      prev.manuscript ? prev : { ...prev, manuscript: cached },
+    );
+  }, []);
+
+  const getStagedFiles = useCallback(() => stagedFiles, [stagedFiles]);
+  const clearStagedFiles = useCallback(() => {
+    setStagedFiles({});
+    writePreSlugStagedManuscript(null);
+    setConstructorManuscriptDismissed(false);
+    syncConstructorManuscriptDisplay();
+  }, [syncConstructorManuscriptDisplay]);
 
   useEffect(() => {
     if (fromConstructor !== "1") return;
@@ -86,11 +173,17 @@ export default function NewSubmissionPage() {
     } catch {
       // ignore
     }
+    setConstructorManuscriptDismissed(false);
     const env = readConstructorDraftEnvelope();
     const partial = constructorContentToSubmissionMetadataInitial(
       env?.content,
     );
     setMetadataInitial(mergeMetadataInitial(partial));
+    if (constructorDraftHasSections(env?.content)) {
+      setConstructorManuscriptName(
+        resolveConstructorDocxFileName(env?.content),
+      );
+    }
     const nextPath =
       mode === "upload"
         ? "/submissions/new?mode=upload"
@@ -116,7 +209,7 @@ export default function NewSubmissionPage() {
             }
           } catch (e) {
             // user-facing: attach constructor draft after create failed
-            toastApiError(e, tConstructor("attachConstructorFailed"), {
+            showApiError(e, tConstructor("attachConstructorFailed"), {
               id: "new-submission-attach-constructor",
             });
           } finally {
@@ -128,9 +221,17 @@ export default function NewSubmissionPage() {
           }
         }
       }
+      writeReviewManuscriptPresentation(slug, reviewPresentation);
+      try {
+        sessionStorage.removeItem(
+          reviewManuscriptPresentationStorageKey(PRE_SLUG_PRESENTATION_KEY),
+        );
+      } catch {
+        // ignore
+      }
       router.replace(`/submissions/${encodeURIComponent(slug)}`);
     },
-    [router, tConstructor],
+    [router, showApiError, tConstructor, reviewPresentation],
   );
 
   const cardCls = "rounded-lg border border-ink/10 bg-surface shadow-sm p-6";
@@ -145,6 +246,9 @@ export default function NewSubmissionPage() {
       });
       return;
     }
+    if (kind === "manuscript") {
+      writePreSlugStagedManuscript(file);
+    }
     setStagedFiles((prev) => ({ ...prev, [kind]: file }));
   }
 
@@ -154,7 +258,40 @@ export default function NewSubmissionPage() {
       delete next[kind];
       return next;
     });
+    if (kind === "manuscript") {
+      writePreSlugStagedManuscript(null);
+      setConstructorManuscriptDismissed(false);
+      syncConstructorManuscriptDisplay();
+    }
   }
+
+  function clearConstructorManuscriptStaging() {
+    setConstructorManuscriptDismissed(true);
+    clearConstructorAttachIntent();
+    setConstructorManuscriptName(null);
+  }
+
+  const showConstructorManuscript =
+    !constructorManuscriptDismissed && constructorManuscriptName != null;
+  const hasStagedUpload = Boolean(stagedFiles.manuscript);
+  const hasStagedConstructor = showConstructorManuscript;
+  const stagedSources = {
+    hasUploadedManuscript: hasStagedUpload,
+    hasConstructorDraft: hasStagedConstructor,
+  };
+
+  useEffect(() => {
+    setReviewPresentation((prev) => {
+      const next = resolveDefaultReviewManuscriptPresentation(stagedSources);
+      if (
+        prev.presentUploaded === next.presentUploaded &&
+        prev.presentConstructor === next.presentConstructor
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [hasStagedUpload, hasStagedConstructor]);
 
   return (
     <main className={PAGE_SHELL_NARROW}>
@@ -166,11 +303,9 @@ export default function NewSubmissionPage() {
       </h1>
       <p className="mt-2 text-sm text-ink/70">{t("draftStatusBeforeSave")}</p>
 
-      {showModeSelector && (
-        <div className="mt-6">
-          <ModeSelector newSubmissionMode />
-        </div>
-      )}
+      <div className="mt-6">
+        <ModeSelector newSubmissionMode />
+      </div>
 
       <section className={`mt-6 ${cardCls}`}>
         <h2 className="font-serif text-lg font-semibold text-ink">
@@ -201,11 +336,20 @@ export default function NewSubmissionPage() {
             {tDetail("manuscript")}
           </h2>
           <p className="mt-1 text-sm text-ink/70">{tDetail("uploadSubtitle")}</p>
+          <p className="mt-2 text-sm text-ink/65">{tManuscript("dualPathHint")}</p>
           <p className="mt-2 text-sm text-ink/65">{t("manuscriptAttachHint")}</p>
+          <Link
+            href="/submissions/compose/create"
+            className="mt-3 inline-flex text-sm font-medium text-accent hover:underline"
+          >
+            {tManuscript("openConstructor")}
+          </Link>
         </div>
         <div className="space-y-5">
           {FILE_KIND_ORDER.map(({ kind, required }) => {
             const staged = stagedFiles[kind];
+            const showConstructorRow =
+              kind === "manuscript" && showConstructorManuscript;
             return (
               <div
                 key={kind}
@@ -228,10 +372,28 @@ export default function NewSubmissionPage() {
                 <p className="mt-1 text-xs text-ink/55">
                   {tWfAny(`fileKindHint_${kind}`)}
                 </p>
+                {showConstructorRow && constructorManuscriptName ? (
+                  <div className="mt-3">
+                    <ConstructorManuscriptRow
+                      displayName={constructorManuscriptName}
+                      editHref="/submissions/compose/create"
+                      onRemove={clearConstructorManuscriptStaging}
+                      removeLabel={t("clearStagedFile")}
+                      disabled={formSaving}
+                    />
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <input
                     id={`${fileInputId}-${kind}`}
                     type="file"
+                    accept={
+                      kind === "figure" || kind === "table"
+                        ? ACCEPT_FIGURE
+                        : kind === "supplementary"
+                          ? ACCEPT_SUPPLEMENTARY
+                          : ACCEPT_MANUSCRIPT
+                    }
                     className="sr-only"
                     disabled={formSaving}
                     onChange={(e) => {
@@ -261,6 +423,26 @@ export default function NewSubmissionPage() {
                     </>
                   ) : null}
                 </div>
+                {kind === "manuscript" ? (
+                  <div className="mt-4">
+                    <ReviewManuscriptPresentationPicker
+                      value={reviewPresentation}
+                      onChange={(next) => {
+                        setReviewPresentation(next);
+                        writeReviewManuscriptPresentation(
+                          PRE_SLUG_PRESENTATION_KEY,
+                          next,
+                        );
+                      }}
+                      hasUploadedManuscript={hasStagedUpload}
+                      hasConstructorDraft={hasStagedConstructor}
+                      disabled={formSaving}
+                    />
+                    <p className="mt-2 text-xs text-ink/55">
+                      {t("presentationBeforeSaveHint")}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             );
           })}

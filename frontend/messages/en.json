@@ -14,6 +14,25 @@
     "saved": "Saved.",
     "uploadFailed": "Upload failed."
   },
+  "ApiErrors": {
+    "tooManyRequests": "Too many requests. Please wait a minute and try again.",
+    "notFound": "The requested resource was not found.",
+    "unauthorized": "Please sign in to continue.",
+    "invalidCredentials": "Invalid email or password.",
+    "forbidden": "You do not have permission to do that.",
+    "badRequest": "The request could not be processed. Check your input and try again.",
+    "serverError": "Something went wrong on our side. Please try again later.",
+    "networkError": "Could not reach the server. Check your connection and try again.",
+    "rateLimitHint": "Waiting a short time before retrying usually resolves this.",
+    "retry": "Try again",
+    "goHome": "Go to dashboard"
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "description": "The page you requested does not exist or may have been moved.",
+    "backHome": "Go to dashboard",
+    "browsePublications": "Browse publications"
+  },
   "Nav": {
     "brand": "Folio",
     "publications": "Publications",
@@ -37,6 +56,70 @@
     "themeSystem": "System",
     "themeToggleTitle": "Color theme: {current}. Click to switch.",
     "themeToggleAria": "Switch color theme. Current: {current}."
+  },
+  "Notifications": {
+    "title": "Notifications",
+    "pageTitle": "Notifications",
+    "bellAria": "Notifications",
+    "bellAriaWithCount": "Notifications, {count} unread",
+    "bellAriaManyUnread": "Notifications, more than 9 unread",
+    "loadError": "Could not load notifications. Please try again.",
+    "retryLoad": "Try again",
+    "backToDashboard": "Back to dashboard",
+    "view": "View",
+    "viewNotifications": "View notifications",
+    "markRead": "Mark read",
+    "markAllRead": "Mark all as read",
+    "loading": "Loading…",
+    "loadMore": "Load more",
+    "emptyUnread": "No unread notifications.",
+    "emptyRead": "No read notifications yet.",
+    "emptyAll": "No notifications yet.",
+    "tab": {
+      "all": "All",
+      "unread": "Unread",
+      "read": "Read"
+    },
+    "reviewerInvited": {
+      "title": "Review invitation",
+      "body": "{submissionTitle} — open My reviews to respond."
+    },
+    "submissionSubmitted": {
+      "title": "New submission",
+      "body": "{authorDisplayName} submitted {submissionTitle}{isResubmission, select, true { (resubmission)} other {}}."
+    },
+    "submissionDecision": {
+      "title": "Editorial decision",
+      "body": "Decision on {submissionTitle}: {decision, select, accepted {accepted} rejected {rejected} revisions_requested {revisions requested} other {{decision}}}."
+    },
+    "copyeditAssigned": {
+      "title": "Copyedit assignment",
+      "body": "You were assigned to copyedit {submissionTitle}."
+    },
+    "copyeditQueries": {
+      "title": "Copyedit queries",
+      "body": "New copyedit queries on {submissionTitle}."
+    },
+    "copyeditAuthorReady": {
+      "title": "Author ready for copyedit",
+      "body": "The author is ready on {submissionTitle}."
+    },
+    "reviewAccepted": {
+      "title": "Reviewer accepted",
+      "body": "{reviewerDisplayName} accepted the invitation for {submissionTitle}."
+    },
+    "reviewDeclined": {
+      "title": "Reviewer declined",
+      "body": "{reviewerDisplayName} declined the invitation for {submissionTitle}."
+    },
+    "reviewSubmitted": {
+      "title": "Review submitted",
+      "body": "{reviewerDisplayName} submitted a review for {submissionTitle}."
+    },
+    "roleInvitation": {
+      "title": "Editor invitation",
+      "body": "{invitedByDisplayName} invited you to join as {roleSlug}."
+    }
   },
   "Home": {
     "badge": "Peer review workspace",
@@ -120,7 +203,10 @@
     "emailLanguageSaving": "Saving…",
     "emailLanguageSaved": "Preference saved",
     "roleInviteAccepted": "Editor role accepted.",
-    "roleInviteDeclined": "Invitation declined."
+    "roleInviteDeclined": "Invitation declined.",
+    "roleInviteAcceptFailed": "Could not accept the editor invitation.",
+    "roleInviteDeclineFailed": "Could not decline the editor invitation.",
+    "emailLanguageSaveFailed": "Could not save your email language preference."
   },
   "Submissions": {
     "title": "Submissions",
@@ -153,8 +239,11 @@
     "titleNotUnique": "This title is already in use—please choose another.",
     "draftStatusBeforeSave": "Not saved yet — save below to create your draft.",
     "manuscriptAttachHint": "Choose files below; they are sent to the server when you click “Save draft” with your metadata.",
+    "presentationBeforeSaveHint": "These choices are kept when you save the draft. On the submission page you can change them again before “Submit for review”.",
     "stagedFileLabel": "Selected",
-    "clearStagedFile": "Remove"
+    "clearStagedFile": "Remove",
+    "constructorManuscriptBadge": "Word Constructor",
+    "editConstructorDraft": "Edit in constructor"
   },
   "SubmissionDetail": {
     "back": "← Submissions",
@@ -190,12 +279,20 @@
     "retryLoad": "Try again",
     "uploadFailed": "Upload failed",
     "submitFailed": "Submit failed",
+    "submitSuccess": "Submission sent for review.",
     "assignFailed": "Assign failed",
+    "assignSuccess": "Reviewer assigned.",
+    "uploadSuccess": "File uploaded.",
+    "fileRemovedSuccess": "File removed.",
     "statusFailed": "Status update failed",
+    "statusUpdated": "Status updated.",
+    "invalidStatusTransition": "Cannot change status from “{from}” to “{to}”.",
+    "reviewPackageIncomplete": "Add at least one manuscript file to the review package before starting peer review.",
     "editorPanelTitle": "Editor actions",
     "editorPanelHint": "Assign reviewers and move this submission through the workflow.",
     "backToEditorQueue": "Editor queue",
     "editorAssignColumnHint": "Choose a reviewer for this manuscript.",
+    "reviewerAssignClosedHint": "Reviewer assignment is only available while the submission is submitted or under review.",
     "editorWorkflowColumnHint": "Update the submission status when the workflow advances.",
     "reviewsSectionEditor": "Peer reviews",
     "reviewsSectionAuthor": "Reviewer feedback",
@@ -210,8 +307,8 @@
     "reviewNoEditorComments": "No confidential comments.",
     "reviewFeedbackItem": "Feedback {n}",
     "constructorModeNotice": "The main manuscript is built in the Word Constructor. Open it to edit sections; use “Submit for review” below when the full package is ready.",
-    "constructorCompanionFilesHint": "Upload the cover letter and title page here. The main manuscript Word file is generated from the constructor when you submit.",
-    "constructorUploadHint": "Required: cover letter and title page. Optional: figures, tables, supplementary files. Submit for review also generates the main manuscript from the constructor.",
+    "constructorCompanionFilesHint": "Optional: cover letter or title page PDFs if your journal requires them separately. The main manuscript Word file is generated from the constructor when you submit.",
+    "constructorUploadHint": "Optional: cover letter, title page, figures, tables, supplementary files. Submit for review generates the main manuscript from the constructor.",
     "openConstructor": "Open constructor",
     "chooseManuscriptMode": "How will you provide the manuscript?",
     "chooseManuscriptModeHint": "Upload a finished .docx, or build it section by section in the constructor.",
@@ -224,6 +321,8 @@
     "reviewMethodFailed": "Could not update review model.",
     "fileStage_submission": "Editorial file",
     "fileStage_review": "Review package",
+    "filePublicBadge": "Public",
+    "attachedFilesPublishedHint": "This article is published. Files are read-only; use download to access them.",
     "toggleReviewPackageInclude": "Add to review package",
     "toggleReviewPackageExclude": "Remove from review package",
     "fileStageFailed": "Could not update file stage.",
@@ -233,12 +332,20 @@
     "emailRemindersHint": "Only pending reminders can be rescheduled or cancelled. New send time must be more than 2 minutes from now (UTC).",
     "reminderKind": "Kind",
     "reminderKindOverdue": "Overdue",
+    "reminderKindDueSoon": "Due soon",
+    "reviewerAssignAdditionalHint": "Reviewers with a pending or active assignment on this manuscript are hidden here. Open the list to assign someone else.",
     "reminderSendAt": "Send at",
     "reminderStatus": "Status",
     "reminderActions": "Actions",
     "reminderReschedulePlaceholder": "New time (local)",
     "reminderApplyReschedule": "Apply",
     "reminderCancel": "Cancel reminder",
+    "reminderRescheduleRequired": "Choose a new send time first.",
+    "reminderSendAtTooSoon": "Send time must be more than 2 minutes from now.",
+    "reminderRescheduled": "Reminder rescheduled.",
+    "reminderRescheduleFailed": "Could not reschedule reminder.",
+    "reminderCancelled": "Reminder cancelled.",
+    "reminderCancelFailed": "Could not cancel reminder.",
     "reminderLoadFailed": "Could not load reminders",
     "reminderNoSlug": "Assignment has no slug — reminders unavailable.",
     "reminderNoneForAssignment": "No pending reminders for this assignment."
@@ -308,13 +415,15 @@
     "saveMetadata": "Save metadata",
     "saving": "Saving…",
     "saveFailed": "Could not save metadata",
+    "saveSuccess": "Metadata saved.",
     "yes": "Yes",
     "no": "No",
     "requiredBadge": "(required)",
     "optionalBadge": "(optional)",
     "fileKind_cover_letter": "Cover letter",
     "fileKind_title_page": "Title page",
-    "fileKind_manuscript": "Main manuscript",
+    "fileKind_manuscript": "Main manuscript (uploaded)",
+    "fileKind_manuscript_constructor": "Main manuscript (Word Constructor)",
     "fileKind_figure": "Figures (high-resolution)",
     "fileKind_table": "Tables",
     "fileKind_supplementary": "Supplementary material",
@@ -394,7 +503,11 @@
     "rabbitUnavailable": "Broker metrics unavailable",
     "stuckReminders": "Pending reminders past schedule (≈15 min)",
     "failedSamples": "Recent failed sends (redacted)",
-    "deadOutboxSamples": "Recent dead outbox rows (redacted)"
+    "deadOutboxSamples": "Recent dead outbox rows (redacted)",
+    "requeueOutbox": "Requeue",
+    "requeueOutboxBusy": "Requeuing…",
+    "requeueOutboxOk": "Outbox row requeued; drainer will retry shortly",
+    "requeueOutboxFailed": "Could not requeue outbox row"
   },
   "Assignments": {
     "title": "My review assignments",
@@ -436,7 +549,9 @@
     "retryLoad": "Try again",
     "notFound": "This invitation was not found.",
     "notInvited": "This assignment is not awaiting a response.",
-    "actionFailed": "Something went wrong. Try again."
+    "actionFailed": "Something went wrong. Try again.",
+    "acceptSuccess": "Invitation accepted.",
+    "declineSuccess": "Invitation declined."
   },
   "AssignmentsReview": {
     "back": "← Assignments",
@@ -464,6 +579,7 @@
     "sending": "Sending…",
     "submit": "Submit review",
     "submitFailed": "Failed to submit",
+    "submitSuccess": "Your review was submitted successfully",
     "commentsForAuthorRequired": "Please enter comments for the author.",
     "loading": "Loading assignment…",
     "loadFailed": "Could not load assignment",
@@ -500,6 +616,39 @@
     "constructorDescription": "Build your article section by section. The system generates a journal-styled .docx for you.",
     "constructorBadge": "New"
   },
+  "ConstructorManuscript": {
+    "mainManuscriptLabel": "Main manuscript",
+    "selectedLabel": "Selected",
+    "badge": "Word Constructor",
+    "editDraft": "Edit in constructor",
+    "remove": "Remove",
+    "pendingHint": "The main manuscript will be generated from the constructor when you submit for review, or you can attach a .docx from the constructor page.",
+    "attachedHint": "A .docx generated from the constructor is attached as your main manuscript.",
+    "removeConstructorTitle": "Remove Word Constructor manuscript?",
+    "removeConstructorDescription": "This clears your constructor draft on the server. You can start again in the constructor or switch to uploading a finished .docx.",
+    "removeConstructorConfirm": "Remove constructor",
+    "switchToConstructor": "Switch to Word Constructor",
+    "switchToConstructorTitle": "Switch to Word Constructor?",
+    "switchToConstructorDescription": "Your uploaded main manuscript file will be removed. You cannot undo this without re-uploading or re-importing from Word.",
+    "switchToConstructorConfirm": "Switch and open constructor",
+    "switchToConstructorFailed": "Could not switch to Word Constructor",
+    "cancel": "Cancel",
+    "openConstructor": "Open Word Constructor",
+    "dualPathHint": "You can upload a finished main manuscript and/or build one in the Word Constructor. Nothing is removed when you use the other option.",
+    "clearConstructorDraft": "Clear constructor draft",
+    "clearConstructorTitle": "Clear constructor draft?",
+    "clearConstructorDescription": "This removes only the saved constructor sections on the server. Uploaded files are not affected.",
+    "clearConstructorConfirm": "Clear draft",
+    "submitSourceLegend": "Main manuscript for submission",
+    "submitSourceHint": "You have both an uploaded file and a constructor draft. Choose which one to use when you submit for review.",
+    "submitSourceUpload": "Use uploaded .docx",
+    "submitSourceConstructor": "Use Word Constructor (generates .docx on submit)",
+    "presentationLegend": "Visible to editors and reviewers",
+    "presentationHint": "Choose which main manuscript version(s) to include in the review package when you submit. You can select one or both.",
+    "presentationUpload": "Show uploaded main manuscript (.docx / .pdf)",
+    "presentationConstructor": "Show Word Constructor version (generates .docx on submit)",
+    "presentationAtLeastOne": "Select at least one version to present for review."
+  },
   "ConstructorPage": {
     "titleNew": "New submission — Word Constructor",
     "subtitleNew": "Build the article in sections here. Your word construction is saved in this browser until you continue to create the submission.",
@@ -517,6 +666,16 @@
     "downloadDocxOnly": "Download Word (.docx)",
     "generatingDocx": "Generating…",
     "continueToSubmission": "Continue to create submission",
+    "importWord": "Import Word (.docx)",
+    "importingWord": "Importing…",
+    "importWordSuccess": "Word document imported into the constructor. Review each section before continuing.",
+    "importWordFailed": "Could not import this Word file.",
+    "importWordReplaceTitle": "Import Word document?",
+    "importWordReplaceDescription": "The file will be parsed into constructor sections. Empty title and abstract fields will be filled from the document; existing body paragraphs and headings will be replaced. Pinned sections remain, but review all content after import.",
+    "importWordReplaceCancel": "Cancel",
+    "importWordReplaceAction": "Import document",
+    "importWordWarnings": "Import notes",
+    "dismissImportNotes": "Dismiss",
     "browserDraftNotice": "Edits are saved automatically in this browser. They are not sent to the server until you create a submission from the next step.",
     "docxFallbackTitle": "Constructor draft",
     "docxFallbackAbstract": "Generated from constructor draft.",
@@ -536,7 +695,10 @@
     "readOnlyStatus": "This submission is in “{status}” status — editing is disabled.",
     "uploadModeWarning": "This submission currently uses the upload flow. Adding constructor content here will switch it to constructor mode on save.",
     "quotaExceeded": "Your browser ran out of storage for the local draft. Continue to create your submission soon to avoid losing changes.",
-    "externalUpdate": "Picked up a newer draft from another tab."
+    "externalUpdate": "Picked up a newer draft from another tab.",
+    "importWarning_CONSTRUCTOR_IMPORT_TABLE_NOTE_UNCERTAIN": "A paragraph after a table may be a table note — please verify it is attached to the correct table.",
+    "importWarning_CONSTRUCTOR_IMPORT_BACK_MATTER_UNCERTAIN": "A back-matter heading was detected but no following text was imported — add the section manually if needed.",
+    "importWarning_CONSTRUCTOR_IMPORT_EQUATION_LOST": "Equations in Word files are not imported; re-enter them using equation sections."
   },
   "ConstructorWorkspace": {
     "editorHeading": "Sections",
@@ -549,7 +711,8 @@
     "submitting": "Submitting…",
     "styleLabel": "Manuscript style",
     "styleUnsavedHint": "unsaved — download uses your latest edits",
-    "styleCatalogError": "Could not load manuscript styles. Try refreshing the page."
+    "styleCatalogError": "Could not load manuscript styles. Try refreshing the page.",
+    "stylePinnedSectionsAdded": "This style added required sections to your document."
   },
   "ConstructorList": {
     "defaultDirLabel": "Default direction",
@@ -574,7 +737,24 @@
     "kind_paragraph": "Paragraph",
     "kind_image": "Figure",
     "kind_table": "Table",
-    "kind_references": "References"
+    "kind_references": "References",
+    "kind_acknowledgments": "Acknowledgments",
+    "kind_funding": "Funding",
+    "kind_conflictOfInterest": "Conflict of interest",
+    "kind_dataAvailability": "Data availability",
+    "kind_equation": "Equation",
+    "pickerGroup_presets": "Structure presets",
+    "pickerGroup_headingsBody": "Headings & body",
+    "pickerGroup_media": "Media",
+    "pickerGroup_backMatter": "Front / back matter",
+    "preset_introduction": "Introduction",
+    "preset_literatureReview": "Literature review",
+    "preset_materialsAndMethods": "Materials and methods",
+    "preset_resultsAndDiscussion": "Results and discussion",
+    "preset_conclusions": "Conclusions",
+    "recommendedPresetsTitle": "Recommended sections for this journal style",
+    "insertPreset": "Insert {label}",
+    "referencesOrderSoft": "References usually appear last; content after your references list may look unusual in the exported Word file."
   },
   "ConstructorEditor": {
     "titleLabel": "Title",
@@ -617,6 +797,7 @@
     "imageNotUploaded": "No image uploaded yet",
     "imageUploading": "Uploading…",
     "imageUploadFailed": "Image upload failed.",
+    "imageUploadSuccess": "Image uploaded.",
     "imageNeedsDraft": "Save the draft first to upload images.",
     "imageAltText": "Alt text (for accessibility)",
     "imageCaption": "Figure caption",
@@ -629,6 +810,23 @@
     "tableRemoveRow": "Remove row",
     "tableRemoveColumn": "Remove column",
     "tableNoMergedCells": "Merged cells are not supported in this version.",
+    "tableNotesLabel": "Table note",
+    "tableNotesPlaceholder": "Optional note below the table (plain text)…",
+    "richText_acknowledgments_label": "Acknowledgments",
+    "richText_acknowledgments_hint": "Funding thanks and institutional support.",
+    "richText_funding_label": "Funding",
+    "richText_funding_hint": "Grant numbers and sponsor disclosure.",
+    "richText_conflictOfInterest_label": "Conflict of interest",
+    "richText_conflictOfInterest_hint": "Disclose any competing interests.",
+    "richText_dataAvailability_label": "Data availability",
+    "richText_dataAvailability_hint": "Where data or code can be accessed.",
+    "equationLabel": "Equation",
+    "equationNumberedLabel": "Equation {n}",
+    "equationHint": "LaTeX syntax. Equations export as images in Word (not editable formulas).",
+    "equationPlaceholder": "E.g. E = mc^2",
+    "equationNumbered": "Number this equation",
+    "equationPreviewEmpty": "Enter LaTeX to preview.",
+    "equationPreviewError": "Could not render this LaTeX.",
     "referencesLabel": "References",
     "referencesHint": "Arabic references will be listed first, then English, sorted alphabetically within each group.",
     "referencesAdd": "+ Add reference",
@@ -647,7 +845,8 @@
     "ariaLabel": "Live preview of the generated Word document",
     "header": "Preview",
     "empty": "Add sections on the left to see the preview here.",
-    "approximateNotice": "Approximate layout only — generate .docx for final formatting."
+    "approximateNotice": "Approximate layout only — generate .docx for final formatting.",
+    "equationEmpty": "[Empty equation]"
   },
   "ConstructorValidation": {
     "checklistTitle": "Before you submit, address these items:",
@@ -660,7 +859,15 @@
     "error_CONSTRUCTOR_ABSTRACT_EN_MISSING": "Add an English abstract.",
     "error_CONSTRUCTOR_ABSTRACT_AR_MISSING": "Add an Arabic abstract.",
     "error_CONSTRUCTOR_REFERENCES_MISSING": "Add a references section.",
-    "error_CONSTRUCTOR_REFERENCES_EMPTY": "Add at least one reference."
+    "error_CONSTRUCTOR_REFERENCES_EMPTY": "Add at least one reference.",
+    "error_CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE": "Only one acknowledgments section is allowed.",
+    "error_CONSTRUCTOR_FUNDING_DUPLICATE": "Only one funding section is allowed.",
+    "error_CONSTRUCTOR_CONFLICT_OF_INTEREST_DUPLICATE": "Only one conflict of interest section is allowed.",
+    "error_CONSTRUCTOR_DATA_AVAILABILITY_DUPLICATE": "Only one data availability section is allowed.",
+    "error_CONSTRUCTOR_ACKNOWLEDGMENTS_EMPTY": "Acknowledgments cannot be empty for this style.",
+    "error_CONSTRUCTOR_FUNDING_EMPTY": "Funding statement cannot be empty for this style.",
+    "error_CONSTRUCTOR_CONFLICT_OF_INTEREST_EMPTY": "Conflict of interest statement cannot be empty for this style.",
+    "error_CONSTRUCTOR_DATA_AVAILABILITY_EMPTY": "Data availability statement cannot be empty for this style."
   },
   "Copyedit": {
     "title": "Copyediting",
@@ -675,6 +882,8 @@
     "assignButton": "Assign",
     "assigned": "Copyeditor assigned.",
     "assignFailed": "Could not assign copyeditor.",
+    "candidatesLoadFailed": "Could not load copyeditor list.",
+    "sectionLoadFailed": "Could not load copyediting data.",
     "noNotesYet": "No copyedit requests yet.",
     "roundLabel": "Round {round}",
     "markReady": "I've addressed these requests",

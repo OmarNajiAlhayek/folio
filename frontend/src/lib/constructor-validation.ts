@@ -1,21 +1,37 @@
 import type {
   ConstructorContent,
+  ConstructorGuidance,
   ConstructorValidationError,
+  RichTextBlockKind,
   TitleSection,
 } from "./constructor-content.types";
 
+const RICH_TEXT_DUPLICATE_CODES: Record<RichTextBlockKind, string> = {
+  acknowledgments: "CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE",
+  funding: "CONSTRUCTOR_FUNDING_DUPLICATE",
+  conflictOfInterest: "CONSTRUCTOR_CONFLICT_OF_INTEREST_DUPLICATE",
+  dataAvailability: "CONSTRUCTOR_DATA_AVAILABILITY_DUPLICATE",
+};
+
+const RICH_TEXT_EMPTY_CODES: Record<RichTextBlockKind, string> = {
+  acknowledgments: "CONSTRUCTOR_ACKNOWLEDGMENTS_EMPTY",
+  funding: "CONSTRUCTOR_FUNDING_EMPTY",
+  conflictOfInterest: "CONSTRUCTOR_CONFLICT_OF_INTEREST_EMPTY",
+  dataAvailability: "CONSTRUCTOR_DATA_AVAILABILITY_EMPTY",
+};
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, "").trim();
+}
+
 /**
  * Mirror of `backend/src/submissions/constructor-content-utils.ts`'s
- * `validateConstructorContentForSubmit`. The frontend version returns the
- * same { code, message } shape so the `ValidationBanner` renders identical
- * UI for both live edits and post-submit server errors.
- *
- * `messageLookup` translates a code → localized message; if a code is unknown
- * the English fallback is shown verbatim.
+ * `validateConstructorContentForSubmit`.
  */
 export function validateConstructorContentLive(
   content: ConstructorContent,
   messageLookup: (code: string) => string | null,
+  guidance?: ConstructorGuidance | null,
 ): ConstructorValidationError[] {
   const errors: ConstructorValidationError[] = [];
   const sections = content.sections;
@@ -30,6 +46,17 @@ export function validateConstructorContentLive(
     CONSTRUCTOR_REFERENCES_MISSING: "A references section is required",
     CONSTRUCTOR_REFERENCES_EMPTY:
       "The references section must contain at least one entry",
+    CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE: "Only one acknowledgments section is allowed",
+    CONSTRUCTOR_FUNDING_DUPLICATE: "Only one funding section is allowed",
+    CONSTRUCTOR_CONFLICT_OF_INTEREST_DUPLICATE:
+      "Only one conflict of interest section is allowed",
+    CONSTRUCTOR_DATA_AVAILABILITY_DUPLICATE:
+      "Only one data availability section is allowed",
+    CONSTRUCTOR_ACKNOWLEDGMENTS_EMPTY: "Acknowledgments cannot be empty",
+    CONSTRUCTOR_FUNDING_EMPTY: "Funding statement cannot be empty",
+    CONSTRUCTOR_CONFLICT_OF_INTEREST_EMPTY:
+      "Conflict of interest statement cannot be empty",
+    CONSTRUCTOR_DATA_AVAILABILITY_EMPTY: "Data availability statement cannot be empty",
   };
   const push = (code: string, sectionId?: string) =>
     errors.push({
@@ -39,7 +66,6 @@ export function validateConstructorContentLive(
     });
 
   const titles = sections.filter((s) => s.kind === "title") as TitleSection[];
-  // EN titles: lang === "en", or legacy sections without a lang field
   const titlesEn = titles.filter((t) => t.lang === "en" || !t.lang);
   const titlesAr = titles.filter((t) => t.lang === "ar");
 
@@ -67,6 +93,26 @@ export function validateConstructorContentLive(
     push("CONSTRUCTOR_ABSTRACT_EN_MISSING");
   if (!abstracts.some((a) => a.lang === "ar" && a.text?.trim()))
     push("CONSTRUCTOR_ABSTRACT_AR_MISSING");
+
+  const richKinds: RichTextBlockKind[] = [
+    "acknowledgments",
+    "funding",
+    "conflictOfInterest",
+    "dataAvailability",
+  ];
+  for (const kind of richKinds) {
+    const matches = sections.filter((s) => s.kind === kind);
+    if (matches.length > 1) {
+      push(RICH_TEXT_DUPLICATE_CODES[kind], matches[1].id);
+    }
+  }
+
+  for (const kind of guidance?.requiredRichTextKinds ?? []) {
+    const block = sections.find((s) => s.kind === kind);
+    if (!block || !stripHtml((block as { html: string }).html)) {
+      push(RICH_TEXT_EMPTY_CODES[kind], block?.id);
+    }
+  }
 
   const refs = sections.filter(
     (s): s is Extract<(typeof sections)[number], { kind: "references" }> =>

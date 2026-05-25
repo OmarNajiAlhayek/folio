@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { getApiBase } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import {
   DAMASCUS_PREVIEW_THEME_FALLBACK,
-  fetchManuscriptStyleCatalog,
   type ManuscriptPreviewTheme,
-  type ManuscriptStyleCatalog,
 } from "@/lib/manuscript-styles-catalog";
+import { ensureMandatoryConstructorSections } from "@/lib/constructor-mandatory-sections";
+import type { SubmissionArticleType } from "@/lib/constructor-section-presets";
+import {
+  guidanceFromCatalogEntry,
+  useConstructorStyleGuidance,
+} from "@/lib/use-constructor-style-guidance";
 import { SectionList } from "./SectionList";
 import { LivePreview } from "./LivePreview";
 import { validateConstructorContentLive } from "@/lib/constructor-validation";
@@ -27,8 +30,8 @@ interface ConstructorWorkspaceProps {
   blockingErrors?: ConstructorValidationError[];
   notice?: React.ReactNode;
   actions?: React.ReactNode;
-  /** True when in-memory content differs from last successful autosave payload (post-slug flows). */
   hasUnsavedChanges?: boolean;
+  articleType?: SubmissionArticleType | null;
 }
 
 export function ConstructorWorkspace({
@@ -40,47 +43,27 @@ export function ConstructorWorkspace({
   notice,
   actions,
   hasUnsavedChanges,
+  articleType = null,
 }: ConstructorWorkspaceProps) {
   const t = useTranslations("ConstructorWorkspace");
   const tValidation = useTranslations("ConstructorValidation");
   const tStyles = useTranslations("manuscriptStyles");
   const searchParams = useSearchParams();
-
-  const [catalog, setCatalog] = useState<ManuscriptStyleCatalog | null>(null);
-  const [catalogFailed, setCatalogFailed] = useState(false);
+  const previewStyleId = searchParams.get("previewStyleId")?.trim() ?? "";
+  const prevStyleId = useRef(content.manuscriptStyleId);
+  const { catalog, catalogFailed, catalogEntry, guidance } =
+    useConstructorStyleGuidance(content, { previewStyleId });
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const result = await fetchManuscriptStyleCatalog(getApiBase());
-      if (cancelled) return;
-      if (!result.ok) {
-        setCatalogFailed(true);
-        toast.error(t("styleCatalogError"));
-        return;
-      }
-      setCatalog(result.data);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
-
-  const previewStyleOverride = searchParams.get("previewStyleId")?.trim() ?? "";
+    if (catalogFailed) toast.error(t("styleCatalogError"));
+  }, [catalogFailed, t]);
 
   const previewTheme: ManuscriptPreviewTheme = useMemo(() => {
     if (!catalog) {
       return DAMASCUS_PREVIEW_THEME_FALLBACK;
     }
-    const effectiveId =
-      previewStyleOverride ||
-      content.manuscriptStyleId?.trim() ||
-      catalog.defaultStyleId;
-    const row =
-      catalog.styles.find((s) => s.id === effectiveId) ??
-      catalog.styles.find((s) => s.id === catalog.defaultStyleId);
-    return row?.previewTheme ?? DAMASCUS_PREVIEW_THEME_FALLBACK;
-  }, [catalog, previewStyleOverride, content.manuscriptStyleId]);
+    return catalogEntry?.previewTheme ?? DAMASCUS_PREVIEW_THEME_FALLBACK;
+  }, [catalog, catalogEntry]);
 
   const styleSelectDisabled = !!readOnly || catalogFailed || !catalog;
 
@@ -97,19 +80,39 @@ export function ConstructorWorkspace({
 
   const liveErrors = useMemo(
     () =>
-      validateConstructorContentLive(debouncedContent, (code) => {
-        try {
-          return tValidation(`error_${code}` as const);
-        } catch {
-          return null;
-        }
-      }),
-    [debouncedContent, tValidation],
+      validateConstructorContentLive(
+        debouncedContent,
+        (code) => {
+          try {
+            return tValidation(`error_${code}` as const);
+          } catch {
+            return null;
+          }
+        },
+        guidance,
+      ),
+    [debouncedContent, tValidation, guidance],
   );
 
   const visibleErrors =
     blockingErrors && blockingErrors.length > 0 ? blockingErrors : liveErrors;
   const errorsAreBlocking = !!(blockingErrors && blockingErrors.length > 0);
+
+  function handleStyleChange(nextStyleId: string) {
+    const nextContent: ConstructorContent = {
+      ...content,
+      manuscriptStyleId: nextStyleId || undefined,
+    };
+    const nextEntry = catalog?.styles.find((s) => s.id === nextStyleId);
+    const nextGuidance = guidanceFromCatalogEntry(nextEntry);
+    const beforeCount = content.sections.length;
+    const ensured = ensureMandatoryConstructorSections(nextContent, nextGuidance);
+    if (ensured.sections.length > beforeCount) {
+      toast.info(t("stylePinnedSectionsAdded"));
+    }
+    onChange(ensured);
+    prevStyleId.current = nextStyleId;
+  }
 
   return (
     <div className="space-y-4">
@@ -138,13 +141,7 @@ export function ConstructorWorkspace({
               className="rounded-md border border-ink/20 bg-paper px-2 py-1.5 text-ink disabled:opacity-50"
               disabled={styleSelectDisabled}
               value={selectValue}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({
-                  ...content,
-                  manuscriptStyleId: v || undefined,
-                });
-              }}
+              onChange={(e) => handleStyleChange(e.target.value)}
             >
               {catalog?.styles.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -162,6 +159,8 @@ export function ConstructorWorkspace({
             slug={slug}
             readOnly={readOnly}
             errorsAreBlocking={errorsAreBlocking}
+            articleType={articleType}
+            guidance={guidance}
           />
         </div>
         <div className="min-w-0">

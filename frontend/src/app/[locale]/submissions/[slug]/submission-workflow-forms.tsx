@@ -2,7 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { apiJson, apiUpload, ApiError } from "@/lib/api";
+import { apiJson, apiUpload } from "@/lib/api";
+import { toast } from "@/lib/toast";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import {
   KeywordTagsDisplay,
   KeywordTagsInput,
@@ -56,6 +58,11 @@ export const FILE_KIND_ORDER = [
 
 export type SubmissionFileKind = (typeof FILE_KIND_ORDER)[number]["kind"];
 
+/** File upload rows for the submission detail page (all kinds, including manuscript). */
+export function fileKindsForSubmissionDetail(_isConstructor?: boolean) {
+  return [...FILE_KIND_ORDER];
+}
+
 type SubmissionMetadataFormProps =
   | {
       createMode: true;
@@ -101,6 +108,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
   const t = useTranslations("SubmissionWorkflow");
   const tv = useTranslations("Validation");
   const tDetail = useTranslations("SubmissionDetail");
+  const { resolve: resolveApiError } = useApiErrorMessages();
   const [title, setTitle] = useState(initial.title);
   const [titleAr, setTitleAr] = useState(initial.titleAr);
   const [abstract, setAbstract] = useState(initial.abstract);
@@ -239,8 +247,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             );
           } catch (e) {
             if (!uploadErr) {
-              uploadErr =
-                e instanceof ApiError ? e.message : tDetail("uploadFailed");
+              uploadErr = resolveApiError(e, tDetail("uploadFailed"));
             }
           }
         }
@@ -252,10 +259,11 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
           method: "PATCH",
           body: JSON.stringify(parsed.data),
         });
+        toast.success(t("saveSuccess"), { id: "submission-metadata-save-success" });
         onSavedNext?.();
       }
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : t("saveFailed"));
+      onError(resolveApiError(e, t("saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -283,6 +291,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     t,
     tDetail,
     tv,
+    resolveApiError,
   ]);
 
   function setCorresponding(idx: number) {

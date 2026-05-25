@@ -17,6 +17,8 @@ import type {
   ImageSection,
   ParagraphSection,
   ReferencesSection,
+  EquationSection,
+  RichTextBlockSection,
   TableSection,
   TitleSection,
 } from "@/lib/constructor-content.types";
@@ -52,6 +54,7 @@ export function LivePreview({
     const map = new Map<string, number>();
     let figure = 0;
     let table = 0;
+    let equation = 0;
     for (const s of debouncedContent.sections) {
       if (s.kind === "image") {
         figure += 1;
@@ -59,6 +62,9 @@ export function LivePreview({
       } else if (s.kind === "table") {
         table += 1;
         map.set(s.id, table);
+      } else if (s.kind === "equation") {
+        equation += 1;
+        map.set(s.id, equation);
       }
     }
     return map;
@@ -170,6 +176,24 @@ function PreviewSection({
           style={wrapperStyle}
           number={figureOrTableNumber ?? 0}
           previewTheme={previewTheme}
+        />
+      );
+    case "acknowledgments":
+    case "funding":
+    case "conflictOfInterest":
+    case "dataAvailability":
+      return (
+        <PreviewRichTextBlock
+          section={section as RichTextBlockSection}
+          dir={dir}
+          style={wrapperStyle}
+        />
+      );
+    case "equation":
+      return (
+        <PreviewEquation
+          section={section}
+          number={figureOrTableNumber ?? 0}
         />
       );
     case "references":
@@ -504,6 +528,66 @@ function PreviewTable({
           {captionEl}
         </>
       )}
+      {section.notes?.trim() ? (
+        <p
+          dir={dir}
+          style={{
+            fontSize: "10pt",
+            marginTop: "0.35rem",
+            textAlign: dir === "rtl" ? "right" : "left",
+          }}
+        >
+          {section.notes}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PreviewRichTextBlock({
+  section,
+  dir,
+  style,
+}: {
+  section: RichTextBlockSection;
+  dir: ConstructorDir;
+  style: React.CSSProperties;
+}) {
+  return (
+    <div
+      dir={dir}
+      style={{ ...style, margin: "0.75rem 0", fontSize: "11pt" }}
+      className="constructor-preview-html"
+      dangerouslySetInnerHTML={{ __html: section.html || "<p></p>" }}
+    />
+  );
+}
+
+function PreviewEquation({
+  section,
+  number,
+}: {
+  section: EquationSection;
+  number: number;
+}) {
+  const t = useTranslations("ConstructorPreview");
+  const label =
+    section.numbered && number > 0 ? ` (${number})` : "";
+  return (
+    <div
+      style={{
+        margin: "0.75rem 0",
+        textAlign: "center",
+        fontFamily: "monospace",
+        fontSize: "11pt",
+      }}
+    >
+      {section.latex.trim() ? (
+        <code>{section.latex}</code>
+      ) : (
+        <span className="text-ink/45">{t("equationEmpty")}</span>
+      )}
+      {label ? <span>{label}</span> : null}
     </div>
   );
 }

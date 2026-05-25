@@ -1,13 +1,18 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { apiPostJsonOrBlob, getStoredToken } from "@/lib/api";
-import { redirectToLogin } from "@/lib/auth-redirect";
-import { toastApiError } from "@/lib/toast";
+import { useLocale, useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
+import { apiPostJsonOrBlob } from "@/lib/api";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { ConstructorWorkspace } from "@/components/constructor/ConstructorWorkspace";
+import { resolveConstructorDocxFileName } from "@/lib/constructor-docx-filename";
+import { CONSTRUCTOR_IMPORT_WARNINGS_SCOPE_PRE_SLUG } from "@/lib/constructor-import-warnings-storage";
+import { ensureMandatoryConstructorSections } from "@/lib/constructor-mandatory-sections";
+import { useConstructorDocxImport } from "@/lib/use-constructor-docx-import";
+import { useConstructorStyleGuidance } from "@/lib/use-constructor-style-guidance";
 import { useConstructorDraft } from "@/lib/use-constructor-draft";
 
 /**
@@ -19,18 +24,34 @@ import { useConstructorDraft } from "@/lib/use-constructor-draft";
  */
 export default function NewConstructorPage() {
   const t = useTranslations("ConstructorPage");
-  const router = useRouter();
-  const pathname = usePathname();
+  const locale = useLocale();
+  useAuthRedirect();
   const [downloadingDocx, setDownloadingDocx] = useState(false);
+  const showApiError = useToastApiError();
 
   const { content, setContent, quotaExceeded, externalUpdateAt } =
     useConstructorDraft();
+  const { guidance } = useConstructorStyleGuidance(content);
+
+  const {
+    importButton,
+    importWarningsNotice,
+    confirmDialog,
+    importing: importingDocx,
+  } = useConstructorDocxImport({
+    content,
+    guidance,
+    onContentChange: (merged) => {
+      setContent(ensureMandatoryConstructorSections(merged, guidance));
+    },
+    scopeKey: CONSTRUCTOR_IMPORT_WARNINGS_SCOPE_PRE_SLUG,
+    canImport: true,
+    locale,
+    t,
+    actionsDisabled: downloadingDocx,
+  });
 
   const [now, setNow] = useState<number>(() => Date.now());
-
-  useEffect(() => {
-    if (!getStoredToken()) redirectToLogin(router, pathname);
-  }, [router, pathname]);
 
   useEffect(() => {
     if (!externalUpdateAt) return;
@@ -41,35 +62,9 @@ export default function NewConstructorPage() {
   const externalNotice =
     externalUpdateAt != null && now - externalUpdateAt < 4000;
 
-  function sanitizeFileNamePart(value: string): string {
-    return value
-      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function resolveDocxFileName(): string {
-    const sections = content.sections ?? [];
-    const arabicTitle = sections.find(
-      (s) =>
-        s.kind === "title" &&
-        typeof (s as { lang?: string }).lang === "string" &&
-        (s as { lang?: string }).lang === "ar" &&
-        typeof (s as { text?: string }).text === "string" &&
-        (s as { text?: string }).text?.trim(),
-    ) as { text?: string } | undefined;
-    const fallbackArabicName = "مقال-منشئ-وورد";
-    const base = sanitizeFileNamePart(arabicTitle?.text ?? fallbackArabicName);
-    return `${base || fallbackArabicName}.docx`;
-  }
-
   async function handleDownloadDocx() {
     setDownloadingDocx(true);
     try {
-      if (!getStoredToken()) {
-        redirectToLogin(router, pathname);
-        return;
-      }
       const result = await apiPostJsonOrBlob(
         "/submissions/generate-docx-standalone",
         { content, attach: false },
@@ -79,13 +74,13 @@ export default function NewConstructorPage() {
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;
-      a.download = resolveDocxFileName();
+      a.download = resolveConstructorDocxFileName(content);
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(dlUrl);
     } catch (e) {
-      toastApiError(e, t("generateFailed"), { id: "constructor-new-download" });
+      showApiError(e, t("generateFailed"), { id: "constructor-new-download" });
     } finally {
       setDownloadingDocx(false);
     }
@@ -93,6 +88,8 @@ export default function NewConstructorPage() {
 
   return (
     <main className={PAGE_SHELL}>
+      {confirmDialog}
+
       <Link
         href="/submissions/new"
         className="text-sm text-accent hover:underline"
@@ -116,13 +113,14 @@ export default function NewConstructorPage() {
             notice={
             <>
               <p className="text-sm text-ink/70">{t("browserDraftNotice")}</p>
+              {importWarningsNotice}
               {quotaExceeded ? (
                 <div className="rounded-md border border-amber-300/70 bg-amber-100/70 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/35 dark:bg-amber-500/12 dark:text-amber-200">
                   {t("quotaExceeded")}
                 </div>
               ) : null}
               {externalNotice ? (
-                <div className="rounded-md border border-sky-300/70 bg-sky-100/70 px-3 py-2 text-sm text-sky-900 dark:border-sky-500/35 dark:bg-sky-500/12 dark:text-sky-200">
+                <div className="rounded-md border border-amber-300/70 bg-sky-100/70 px-3 py-2 text-sm text-sky-900 dark:border-sky-500/35 dark:bg-sky-500/12 dark:text-sky-200">
                   {t("externalUpdate")}
                 </div>
               ) : null}
@@ -130,10 +128,11 @@ export default function NewConstructorPage() {
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
+              {importButton}
               <button
                 type="button"
                 onClick={() => void handleDownloadDocx()}
-                disabled={downloadingDocx}
+                disabled={downloadingDocx || importingDocx}
                 data-testid="constructor-download-docx-only"
                 className="inline-flex rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 disabled:opacity-50"
               >

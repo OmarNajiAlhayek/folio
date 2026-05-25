@@ -19,11 +19,9 @@ interface ModeSelectorProps {
 }
 
 /**
- * Two-card chooser shown only when a submission has not yet committed to a
- * mode (no manuscript file AND no constructor content). Once a mode is
- * chosen the host page hides the selector and renders the corresponding
- * flow. Switching modes later requires a deliberate "Switch mode" action
- * with cleanup confirmation (see plan section A).
+ * Shortcuts to upload files on `/submissions/new` or open the pre-slug
+ * constructor. On saved drafts, authors can use both upload and constructor
+ * from the submission detail page without either path removing the other.
  */
 export function ModeSelector({
   newSubmissionMode = false,
@@ -42,65 +40,78 @@ export function ModeSelector({
       : undefined;
 
   const cardCls =
-    "block rounded-lg border border-ink/10 bg-paper/50 p-5 text-start transition-colors hover:border-accent/40 hover:bg-paper focus:outline-none focus:ring-2 focus:ring-accent/40";
+    "block min-w-0 rounded-lg border border-ink/10 bg-paper/50 p-5 text-start transition-colors hover:border-accent/40 hover:bg-paper focus:outline-none focus:ring-2 focus:ring-accent/40";
 
-  const wrapperCls = inline
-    ? "grid gap-4 sm:grid-cols-2"
-    : "rounded-lg border border-ink/10 bg-surface shadow-sm p-6";
+  const gridCls = "grid gap-4 sm:grid-cols-2";
 
-  return (
-    <section className={wrapperCls} aria-labelledby="constructor-mode-heading">
-      {!inline && (
-        <>
-          <h2
-            id="constructor-mode-heading"
-            className="font-serif text-lg font-semibold text-ink"
-          >
-            {t("heading")}
-          </h2>
-          <p className="mt-1 text-sm text-ink/65">{t("subheading")}</p>
-        </>
-      )}
-      <div className={inline ? "" : "mt-5 grid gap-4 sm:grid-cols-2"}>
-        {uploadHref ? (
-          <Link
-            href={uploadHref}
-            className={cardCls}
-            data-testid="constructor-mode-upload"
-          >
-            <ModeCardBody
-              title={t("uploadTitle")}
-              description={t("uploadDescription")}
-            />
-          </Link>
-        ) : (
+  const cards = (
+    <>
+      {uploadHref ? (
+        <Link
+          href={uploadHref}
+          className={cardCls}
+          data-testid="constructor-mode-upload"
+        >
+          <ModeCardBody
+            title={t("uploadTitle")}
+            description={t("uploadDescription")}
+          />
+        </Link>
+      ) : (
+        <div className={cardCls}>
           <ModeCardBody
             title={t("uploadTitle")}
             description={t("uploadDescription")}
             disabled
           />
-        )}
-        {constructorHref ? (
-          <Link
-            href={constructorHref}
-            className={cardCls}
-            data-testid="constructor-mode-builder"
-          >
-            <ModeCardBody
-              title={t("constructorTitle")}
-              description={t("constructorDescription")}
-              badge={t("constructorBadge")}
-            />
-          </Link>
-        ) : (
+        </div>
+      )}
+      {constructorHref ? (
+        <Link
+          href={constructorHref}
+          className={cardCls}
+          data-testid="constructor-mode-builder"
+        >
+          <ModeCardBody
+            title={t("constructorTitle")}
+            description={t("constructorDescription")}
+            badge={t("constructorBadge")}
+          />
+        </Link>
+      ) : (
+        <div className={cardCls}>
           <ModeCardBody
             title={t("constructorTitle")}
             description={t("constructorDescription")}
             badge={t("constructorBadge")}
             disabled
           />
-        )}
+        </div>
+      )}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className={gridCls} role="group">
+        {cards}
       </div>
+    );
+  }
+
+  return (
+    <section
+      className="rounded-lg border border-ink/10 bg-surface shadow-sm p-6"
+      aria-labelledby="constructor-mode-heading"
+    >
+      <h2
+        id="constructor-mode-heading"
+        className="font-serif text-lg font-semibold text-ink"
+      >
+        {t("heading")}
+      </h2>
+      <p className="mt-1 text-sm text-ink/65">{t("subheading")}</p>
+      <div className={`mt-5 ${gridCls}`}>{cards}</div>
     </section>
   );
 }
@@ -122,17 +133,17 @@ function ModeCardBody({
         disabled ? "opacity-50" : ""
       }`}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="font-serif text-base font-semibold text-ink">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <span className="min-w-0 flex-1 font-serif text-base font-semibold text-ink">
           {title}
         </span>
         {badge ? (
-          <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
+          <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
             {badge}
           </span>
         ) : null}
       </div>
-      <p className="text-sm text-ink/70">{description}</p>
+      <p className="text-sm leading-relaxed text-ink/70">{description}</p>
     </div>
   );
 }
