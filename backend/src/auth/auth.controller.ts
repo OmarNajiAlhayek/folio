@@ -81,7 +81,8 @@ export class AuthController {
   @Post('logout')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth('JWT')
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.authService.revokeSessionFromRequest(req);
     clearAuthCookies(res, this.config);
     return { ok: true };
   }

@@ -4,12 +4,14 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { jwtFromCookieOrBearer } from '../jwt-from-request.util';
+import { RevokedTokensService } from '../revoked-tokens.service';
 import { UsersService } from '../../users/users.service';
 import { RbacService } from '../../rbac/rbac.service';
 
 export type JwtPayload = {
   sub: string;
   email: string;
+  jti: string;
 };
 
 @Injectable()
@@ -18,6 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     config: ConfigService,
     private readonly usersService: UsersService,
     private readonly rbacService: RbacService,
+    private readonly revokedTokens: RevokedTokensService,
   ) {
     super({
       jwtFromRequest: (req: Request) => jwtFromCookieOrBearer(req),
@@ -27,6 +30,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload) {
+    if (!payload.jti) {
+      throw new UnauthorizedException({
+        message: 'Invalid token',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    if (await this.revokedTokens.isRevoked(payload.jti)) {
+      throw new UnauthorizedException({
+        message: 'Session ended',
+        code: 'UNAUTHORIZED',
+      });
+    }
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException({

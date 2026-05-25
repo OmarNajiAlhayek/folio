@@ -1,21 +1,31 @@
+import { randomUUID } from 'crypto';
 import {
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { jwtFromCookieOrBearer } from './jwt-from-request.util';
+import { RevokedTokensService } from './revoked-tokens.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 
 const SALT_ROUNDS = 10;
 
+type VerifiedJwt = JwtPayload & { exp: number };
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly revokedTokens: RevokedTokensService,
   ) {}
 
   async register(dto: RegisterDto): Promise<{
@@ -94,8 +104,31 @@ export class AuthService {
     return { accessToken, user: profile };
   }
 
+  /** Revoke the JWT used for this request (per-session logout). */
+  async revokeSessionFromRequest(req: Request): Promise<void> {
+    const token = jwtFromCookieOrBearer(req);
+    if (!token) {
+      return;
+    }
+    try {
+      const payload = this.jwtService.verify<VerifiedJwt>(token);
+      if (!payload.jti) {
+        return;
+      }
+      await this.revokedTokens.revoke(
+        payload.jti,
+        payload.sub,
+        new Date(payload.exp * 1000),
+      );
+    } catch (err) {
+      this.logger.debug(
+        `Logout: could not revoke session (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+  }
+
   private sign(sub: string, email: string): string {
-    const payload: JwtPayload = { sub, email };
+    const payload: JwtPayload = { sub, email, jti: randomUUID() };
     return this.jwtService.sign(payload);
   }
 }
