@@ -2,11 +2,20 @@ import { routing } from "@/i18n/routing";
 
 const PLACEHOLDER_BASE = "https://placeholder.invalid";
 
+import { normalizePathname } from "@/lib/route-permissions";
+
 /** Locale-stripped pathnames that never require auth sync redirect to login. */
 const PUBLIC_PATHNAMES = new Set(["/", "/login", "/register"]);
 
 export function isPublicPathname(pathname: string): boolean {
-  return PUBLIC_PATHNAMES.has(pathname);
+  const norm = normalizePathname(pathname);
+  if (PUBLIC_PATHNAMES.has(norm)) return true;
+  if (norm === "/publications" || norm.startsWith("/publications/")) return true;
+  return false;
+}
+
+export function requiresAuthPathname(pathname: string): boolean {
+  return !isPublicPathname(pathname);
 }
 
 /**

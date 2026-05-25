@@ -9,6 +9,7 @@ import { AuthStorageSync } from "@/components/auth-storage-sync";
 import { QueryProvider } from "@/components/query-provider";
 import { LocaleDirectionProvider } from "@/components/locale-direction-provider";
 import { Nav } from "@/components/Nav";
+import { ProtectedShell } from "@/components/protected-shell";
 import { NotificationStreamSync } from "@/components/notification-stream-sync";
 import { routing } from "@/i18n/routing";
 
@@ -50,7 +51,7 @@ export default async function LocaleLayout({ children, params }: Props) {
           <AppToaster locale={locale} />
           <Nav />
           <div className="bg-page flex min-h-0 flex-1 flex-col pb-8">
-            {children}
+            <ProtectedShell>{children}</ProtectedShell>
           </div>
         </LocaleDirectionProvider>
       </QueryProvider>

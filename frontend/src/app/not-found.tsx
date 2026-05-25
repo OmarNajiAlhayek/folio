@@ -1,14 +1,16 @@
+import NextLink from "next/link";
 import { getTranslations } from "next-intl/server";
-import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { PAGE_SHELL_NARROW } from "@/lib/page-shell";
 
 /** Fallback when no `[locale]` segment matches (invalid locale, etc.). */
 export default async function RootNotFound() {
+  const locale = routing.defaultLocale;
   const t = await getTranslations({
-    locale: routing.defaultLocale,
+    locale,
     namespace: "NotFound",
   });
+  const localePrefix = `/${locale}`;
 
   return (
     <main className={PAGE_SHELL_NARROW}>
@@ -23,18 +25,18 @@ export default async function RootNotFound() {
           {t("description")}
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/dashboard"
+          <NextLink
+            href={`${localePrefix}/dashboard`}
             className="inline-flex rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
           >
             {t("backHome")}
-          </Link>
-          <Link
-            href="/publications"
+          </NextLink>
+          <NextLink
+            href={`${localePrefix}/publications`}
             className="inline-flex rounded-md border border-ink/15 bg-paper px-4 py-2.5 text-sm font-medium text-ink hover:bg-ink/5"
           >
             {t("browsePublications")}
-          </Link>
+          </NextLink>
         </div>
       </div>
     </main>
