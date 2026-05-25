@@ -49,20 +49,19 @@ export const registerSchema = z.object({
   willingToReview: z.boolean().optional(),
 });
 
-/** backend/src/submissions/dto/create-submission.dto.ts (minimal create) */
-export const createSubmissionSchema = z.object({
-  title: z.string().trim().min(1).max(500),
-  titleAr: z.string().trim().min(1).max(500),
-  abstract: z.string().trim().min(1).max(20000),
-  abstractAr: z.string().trim().min(1).max(20000),
-});
-
 const optionalTrimmedMax = (max: number) =>
   z.preprocess((v) => {
     if (v === undefined || v === null) return undefined;
     const s = String(v).trim();
     return s === "" ? undefined : s;
   }, z.string().max(max).optional());
+
+const optionalTrimmedMinMax = (min: number, max: number) =>
+  z.preprocess((v) => {
+    if (v === undefined || v === null) return undefined;
+    const s = String(v).trim();
+    return s === "" ? undefined : s;
+  }, z.string().min(min).max(max).optional());
 
 function optionalEmailField() {
   return z.preprocess((v) => {
@@ -95,6 +94,52 @@ export function countWords(s: string): number {
   return t.split(/\s+/).filter(Boolean).length;
 }
 
+function refineAbstractWordLimits(
+  data: { abstract: string; abstractAr?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (countWords(data.abstract) > ABSTRACT_MAX_WORDS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "abstractMaxWordsEn",
+      path: ["abstract"],
+    });
+  }
+  const ar = data.abstractAr ?? "";
+  if (ar && countWords(ar) > ABSTRACT_MAX_WORDS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "abstractMaxWordsAr",
+      path: ["abstractAr"],
+    });
+  }
+}
+
+/** backend/src/submissions/dto/create-submission.dto.ts */
+export const createSubmissionSchema = z
+  .object({
+    title: z.string().trim().min(1).max(500),
+    titleAr: optionalTrimmedMinMax(1, 500),
+    abstract: z.string().trim().min(1).max(20000),
+    abstractAr: optionalTrimmedMinMax(1, 20000),
+    articleType: articleTypeFromForm,
+    keywords: optionalTrimmedMax(800),
+    keywordsAr: optionalTrimmedMax(800),
+    fundingStatement: optionalTrimmedMax(8000),
+    conflictOfInterestStatement: optionalTrimmedMax(8000),
+    ethicalApprovalReference: optionalTrimmedMax(2000),
+    originalityConfirmed: z.boolean().optional(),
+    aiUsageStatement: optionalTrimmedMax(4000),
+    contributors: z.preprocess((val) => {
+      if (!Array.isArray(val)) return undefined;
+      const filtered = val.filter((c) =>
+        String((c as { fullName?: string })?.fullName ?? "").trim(),
+      );
+      return filtered.length > 0 ? filtered : undefined;
+    }, z.array(contributorRowSchema).optional()),
+  })
+  .superRefine(refineAbstractWordLimits);
+
 /**
  * PATCH body from SubmissionMetadataForm — mirrors backend UpdateSubmissionDto
  * (backend/src/submissions/dto/update-submission.dto.ts).
@@ -116,20 +161,10 @@ export const submissionMetadataPatchSchema = z
     contributors: z.array(contributorRowSchema).min(1),
   })
   .superRefine((data, ctx) => {
-    if (countWords(data.abstract) > ABSTRACT_MAX_WORDS) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "abstractMaxWordsEn",
-        path: ["abstract"],
-      });
-    }
-    if (countWords(data.abstractAr) > ABSTRACT_MAX_WORDS) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "abstractMaxWordsAr",
-        path: ["abstractAr"],
-      });
-    }
+    refineAbstractWordLimits(
+      { abstract: data.abstract, abstractAr: data.abstractAr },
+      ctx,
+    );
   });
 
 const reviewCommentTrim = z.preprocess(

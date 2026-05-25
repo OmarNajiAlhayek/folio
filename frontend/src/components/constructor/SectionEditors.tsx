@@ -20,6 +20,10 @@ import {
 } from "@/lib/constructor-direction";
 import { parseKeywordsFromStorage, serializeKeywords } from "@/lib/keywords";
 import { KeywordTagsInput } from "@/components/ui/keyword-tags-input";
+import {
+  sanitizeConstructorTipTapHtml,
+  sanitizeKatexPreviewHtml,
+} from "@/lib/sanitize-constructor-html";
 import type {
   AbstractSection,
   AuthorsSection,
@@ -502,12 +506,15 @@ function ParagraphEditor({
           strike: false,
         }),
       ],
-      content: section.html || "<p></p>",
+      content: sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
       editable: !readOnly,
       immediatelyRender: false, // required for SSR (Next.js)
       onUpdate: ({ editor }) => {
-        const html = editor.getHTML();
-        onChange(applyAutoDir(section, { html }));
+        onChange(
+          applyAutoDir(section, {
+            html: sanitizeConstructorTipTapHtml(editor.getHTML()),
+          }),
+        );
       },
       editorProps: {
         attributes: {
@@ -517,6 +524,7 @@ function ParagraphEditor({
           class:
             "prose prose-sm max-w-none min-h-24 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm",
         },
+        transformPastedHTML: sanitizeConstructorTipTapHtml,
         // Prevent pasting images (would inline as base64)
         handlePaste: (_view, event) => {
           const items = event.clipboardData?.items;
@@ -538,9 +546,10 @@ function ParagraphEditor({
   // editor is empty or the HTML differs significantly to avoid cursor jumps.
   useEffect(() => {
     if (editor && section.html !== editor.getHTML() && !editor.isFocused) {
-      editor.commands.setContent(section.html || "<p></p>", {
-        emitUpdate: false,
-      });
+      editor.commands.setContent(
+        sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
+        { emitUpdate: false },
+      );
     }
   }, [editor, section.html]);
 
@@ -984,17 +993,22 @@ function RichTextBlockEditor({
           strike: false,
         }),
       ],
-      content: section.html || "<p></p>",
+      content: sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
       editable: !readOnly,
       immediatelyRender: false,
       onUpdate: ({ editor }) => {
-        onChange(applyAutoDir(section, { html: editor.getHTML() }));
+        onChange(
+          applyAutoDir(section, {
+            html: sanitizeConstructorTipTapHtml(editor.getHTML()),
+          }),
+        );
       },
       editorProps: {
         attributes: {
           class:
             "prose prose-sm max-w-none min-h-20 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm",
         },
+        transformPastedHTML: sanitizeConstructorTipTapHtml,
         handlePaste: (_view, event) => {
           const items = event.clipboardData?.items;
           if (!items) return false;
@@ -1013,9 +1027,10 @@ function RichTextBlockEditor({
 
   useEffect(() => {
     if (editor && section.html !== editor.getHTML() && !editor.isFocused) {
-      editor.commands.setContent(section.html || "<p></p>", {
-        emitUpdate: false,
-      });
+      editor.commands.setContent(
+        sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
+        { emitUpdate: false },
+      );
     }
   }, [editor, section.html]);
 
@@ -1126,7 +1141,9 @@ function EquationEditor({
           ) : previewHtml ? (
             <div
               className="katex-preview overflow-x-auto"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
+              dangerouslySetInnerHTML={{
+                __html: sanitizeKatexPreviewHtml(previewHtml),
+              }}
             />
           ) : (
             <p className="text-xs text-ink/50">{t("equationPreviewEmpty")}</p>

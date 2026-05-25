@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { resolveSectionDir } from "@/lib/constructor-direction";
+import {
+  sanitizeConstructorTipTapHtml,
+  sanitizeKatexPreviewHtml,
+} from "@/lib/sanitize-constructor-html";
 import { apiBlob } from "@/lib/api";
 import { parseKeywordsFromStorage } from "@/lib/keywords";
 import { KeywordTagsDisplay } from "@/components/ui/keyword-tags-input";
@@ -342,6 +346,10 @@ function PreviewParagraph({
   dir: ConstructorDir;
   style: React.CSSProperties;
 }) {
+  const safeHtml = useMemo(
+    () => sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
+    [section.html],
+  );
   return (
     <div
       dir={dir}
@@ -351,7 +359,7 @@ function PreviewParagraph({
         lineHeight: 1.4,
         margin: "0 0 0.5rem",
       }}
-      dangerouslySetInnerHTML={{ __html: section.html || "<p></p>" }}
+      dangerouslySetInnerHTML={{ __html: safeHtml }}
     />
   );
 }
@@ -553,12 +561,16 @@ function PreviewRichTextBlock({
   dir: ConstructorDir;
   style: React.CSSProperties;
 }) {
+  const safeHtml = useMemo(
+    () => sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
+    [section.html],
+  );
   return (
     <div
       dir={dir}
       style={{ ...style, margin: "0.75rem 0", fontSize: "11pt" }}
       className="constructor-preview-html"
-      dangerouslySetInnerHTML={{ __html: section.html || "<p></p>" }}
+      dangerouslySetInnerHTML={{ __html: safeHtml }}
     />
   );
 }
@@ -571,20 +583,58 @@ function PreviewEquation({
   number: number;
 }) {
   const t = useTranslations("ConstructorPreview");
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const latex = section.latex.trim();
+      if (!latex) {
+        setPreviewHtml(null);
+        setPreviewError(false);
+        return;
+      }
+      try {
+        const katex = await import("katex");
+        await import("katex/dist/katex.min.css");
+        const html = katex.default.renderToString(latex, {
+          throwOnError: true,
+          displayMode: true,
+        });
+        if (!cancelled) {
+          setPreviewHtml(html);
+          setPreviewError(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewHtml(null);
+          setPreviewError(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [section.latex]);
+
   const label =
     section.numbered && number > 0 ? ` (${number})` : "";
+
   return (
-    <div
-      style={{
-        margin: "0.75rem 0",
-        textAlign: "center",
-        fontFamily: "monospace",
-        fontSize: "11pt",
-      }}
-    >
-      {section.latex.trim() ? (
-        <code>{section.latex}</code>
-      ) : (
+    <div style={{ margin: "0.75rem 0", textAlign: "center" }}>
+      {previewError ? (
+        <p className="text-xs text-amber-800 dark:text-amber-200">
+          {t("equationPreviewError")}
+        </p>
+      ) : previewHtml ? (
+        <div
+          className="katex-preview overflow-x-auto"
+          dangerouslySetInnerHTML={{
+            __html: sanitizeKatexPreviewHtml(previewHtml),
+          }}
+        />
+      ) : section.latex.trim() ? null : (
         <span className="text-ink/45">{t("equationEmpty")}</span>
       )}
       {label ? <span>{label}</span> : null}
