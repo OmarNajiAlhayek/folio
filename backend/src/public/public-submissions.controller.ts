@@ -37,7 +37,6 @@ export class PublicSubmissionsController {
       author: s.author
         ? {
             displayName: s.author.displayName,
-            email: s.author.email,
           }
         : undefined,
       files: files.map((f) => ({

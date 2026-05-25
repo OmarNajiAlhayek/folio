@@ -15,6 +15,7 @@ import { RbacService } from '../rbac/rbac.service';
 import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ROUTING_KEY } from '../messaging/contracts/email-events';
 import {
   submissionDecisionKey,
@@ -95,7 +96,14 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       providers: [
         SubmissionsService,
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
-        { provide: getRepositoryToken(SubmissionFile), useValue: {} },
+        {
+          provide: getRepositoryToken(SubmissionFile),
+          useValue: {
+            find: jest.fn().mockResolvedValue([{ kind: 'manuscript' }]),
+            save: jest.fn().mockResolvedValue(undefined),
+            count: jest.fn().mockResolvedValue(1),
+          },
+        },
         { provide: getRepositoryToken(ReviewAssignment), useValue: {} },
         { provide: getRepositoryToken(Review), useValue: {} },
         { provide: getRepositoryToken(CopyeditAssignment), useValue: {} },
@@ -118,6 +126,13 @@ describe('SubmissionsService phase2 email (outbox)', () => {
           },
         },
         { provide: EventPublisherService, useValue: eventPublisher },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createIfAbsent: jest.fn().mockResolvedValue(null),
+            emitCreated: jest.fn(),
+          },
+        },
         {
           provide: ConfigService,
           useValue: {

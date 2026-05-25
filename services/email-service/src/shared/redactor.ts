@@ -1,6 +1,9 @@
 /**
- * Mirror of `packages/shared/messaging/redactor.ts`. See the backend
- * mirror at `backend/src/messaging/shared/redactor.ts`.
+ * PII redactor for logs and DLQ inspection tooling. Drops reviewer and
+ * invitedBy blocks before any payload approaches a logger.
+ *
+ * Keep `type`, `idempotencyKey`, `assignmentSlug`, `occurredAt` so logs
+ * remain operationally useful without leaking emails or display names.
  */
 
 export type RedactedPayload = {

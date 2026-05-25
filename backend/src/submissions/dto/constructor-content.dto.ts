@@ -63,4 +63,9 @@ export class GenerateDocxDto {
   @IsOptional()
   @IsBoolean()
   attach?: boolean;
+
+  /** File kind when `attach` is true. Defaults to `manuscript`. */
+  @ApiPropertyOptional({ enum: ['manuscript', 'manuscript_constructor'] })
+  @IsOptional()
+  attachKind?: 'manuscript' | 'manuscript_constructor';
 }

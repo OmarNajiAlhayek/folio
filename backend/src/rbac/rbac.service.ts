@@ -28,6 +28,11 @@ export class RbacService implements OnModuleInit {
   async ensureSeed(): Promise<void> {
     const permissionDefs: { slug: string; description: string }[] = [
       {
+        slug: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+        description:
+          'Create and manage own manuscript submissions (draft, submit, files)',
+      },
+      {
         slug: PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
         description: 'View submissions queue (non-draft)',
       },
@@ -113,10 +118,12 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.COPYEDIT_PUBLISH,
     ];
 
+    const authorPerms = [PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN];
+
+    await this.ensureRolePermissions(ROLE_SLUGS.AUTHOR, authorPerms);
     await this.ensureRolePermissions(ROLE_SLUGS.EDITOR, editorPerms);
     await this.ensureRolePermissions(ROLE_SLUGS.REVIEWER, reviewerPerms);
     await this.ensureRolePermissions(ROLE_SLUGS.COPYEDITOR, copyeditorPerms);
-    // author: no extra permissions
   }
 
   private async ensureRolePermissions(

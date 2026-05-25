@@ -83,6 +83,17 @@ const damascusUniversityJournalV1Core = {
     headingText: 'References',
     entrySpacing: { before: 60, after: 60 },
   },
+  constructor: {
+    recommendedPresets: [
+      'introduction',
+      'literatureReview',
+      'materialsAndMethods',
+      'resultsAndDiscussion',
+      'conclusions',
+    ],
+    requiredRichTextKinds: [],
+    extraMandatorySlots: [],
+  },
   previewTheme: {
     fontFamilyLatinStack: '"Times New Roman", "Liberation Serif", serif',
     fontFamilyArabicStack:

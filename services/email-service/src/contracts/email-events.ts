@@ -1,6 +1,36 @@
 /**
 
- * Mirror of `packages/shared/contracts/email-events.ts` — keep in sync.
+ * Event payloads shared between the Nest backend (publisher) and the
+
+ * email microservice (consumer). Canonical definitions live here; each app
+
+ * also keeps a byte-identical mirror under its `src/` for Nest `tsc`
+
+ * layout — keep mirrors in sync when changing contracts.
+
+ *
+
+ * Routing keys live on the topic exchange `folio.events`:
+
+ *   reviewer.invited       -> ReviewerInvitedEvent
+
+ *   reminder.due           -> ReminderDueEvent
+
+ *   copyedit.assigned      -> CopyeditAssignedEvent
+
+ *   copyedit.queries_sent  -> CopyeditQueriesSentEvent
+
+ *   copyedit.author_ready  -> CopyeditAuthorReadyEvent
+ *   submission.submitted   -> SubmissionSubmittedEvent
+ *   submission.decision    -> SubmissionDecisionEvent
+
+ *
+
+ * Idempotency keys are produced by the publisher and consumed by the
+
+ * email-service `email_log.idempotencyKey` unique index. See
+
+ * `idempotency.ts` in this package for the canonical builders.
 
  */
 
@@ -66,6 +96,8 @@ export type ReviewerInvitedEvent = {
 
   submissionTitle: string;
 
+  /** Resolved locale for templates + reminder snapshot (`en` | `ar`). Omitted in legacy payloads → consumer treats as `en`. */
+
   emailLocale?: 'en' | 'ar';
 
   reviewer: ReviewerIdentity;
@@ -97,6 +129,8 @@ export type ReminderDueEvent = {
   kind: ReminderKind;
 
   assignmentSlug: string;
+
+  /** Snapshot from reminder row (invitation-time locale). */
 
   emailLocale?: 'en' | 'ar';
 

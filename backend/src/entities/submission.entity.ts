@@ -17,6 +17,7 @@ import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
 import type { SubmissionContributorJson } from '../submissions/submission-json.types';
 import type { ConstructorContent } from '../submissions/constructor-content.types';
+import type { ReviewManuscriptPresentation } from '../submissions/review-manuscript-presentation.types';
 
 @Entity('submissions')
 export class Submission {
@@ -94,6 +95,13 @@ export class Submission {
    */
   @Column({ name: 'constructor_content', type: 'jsonb', nullable: true })
   constructorContent: ConstructorContent | null;
+
+  /**
+   * Set on submit: which main manuscript sources are placed in the review package
+   * (uploaded file and/or constructor-generated .docx).
+   */
+  @Column({ name: 'review_manuscript_presentation', type: 'jsonb', nullable: true })
+  reviewManuscriptPresentation: ReviewManuscriptPresentation | null;
 
   @Column({
     type: 'enum',

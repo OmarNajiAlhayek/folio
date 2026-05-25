@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -22,6 +23,7 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { AdminEmailService } from './admin-email.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
+import { OutboxRepairService } from '../messaging/outbox-repair.service';
 import {
   PatchEmailTemplateDto,
   PreviewEmailTemplateDto,
@@ -36,6 +38,7 @@ export class AdminEmailController {
   constructor(
     private readonly adminEmail: AdminEmailService,
     private readonly pipelineObservability: EmailPipelineObservabilityService,
+    private readonly outboxRepair: OutboxRepairService,
   ) {}
 
   @Get('pipeline-status')
@@ -45,6 +48,18 @@ export class AdminEmailController {
   @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
   getPipelineStatus() {
     return this.pipelineObservability.getPipelineStatus();
+  }
+
+  @Post('outbox/:id/requeue')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Requeue a dead outbox row (resets attempts; drainer publishes when broker is healthy)',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  requeueDeadOutbox(@Param('id', ParseUUIDPipe) id: string) {
+    return this.outboxRepair.requeueDead(id);
   }
 
   @Get('reminder-policy')

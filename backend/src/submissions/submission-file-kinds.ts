@@ -1,5 +1,7 @@
 export const SUBMISSION_FILE_KINDS = [
   'manuscript',
+  /** Generated from Word Constructor; coexists with uploaded `manuscript`. */
+  'manuscript_constructor',
   'cover_letter',
   'title_page',
   'figure',

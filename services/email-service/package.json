@@ -11,7 +11,9 @@
     "migrate:generate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:generate -d src/db/data-source.ts",
     "migrate:revert": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:revert -d src/db/data-source.ts",
     "test": "jest",
-    "test:cov": "jest --coverage"
+    "test:cov": "jest --coverage",
+    "sync:shared": "node ../../scripts/sync-shared-mirrors.mjs",
+    "check:shared": "node ../../scripts/check-shared-mirrors.mjs"
   },
   "jest": {
     "moduleFileExtensions": ["js", "json", "ts"],

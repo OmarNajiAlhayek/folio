@@ -12,6 +12,7 @@ function statusToCode(status: number): string {
   if (status === 401) return 'UNAUTHORIZED';
   if (status === 403) return 'FORBIDDEN';
   if (status === 404) return 'NOT_FOUND';
+  if (status === 429) return 'TOO_MANY_REQUESTS';
   return 'HTTP_ERROR';
 }
 
@@ -36,9 +37,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
         typeof excResponse === 'string'
           ? excResponse
           : (excResponse as { message?: string | string[] }).message;
-      const message = Array.isArray(messageRaw)
+      let message = Array.isArray(messageRaw)
         ? messageRaw.join('; ')
         : (messageRaw ?? exception.message);
+      if (status === 429) {
+        message = 'Too many requests. Please try again in a minute.';
+      }
       return res.status(status).json({
         message,
         code: statusToCode(status),

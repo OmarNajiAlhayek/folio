@@ -74,13 +74,23 @@ export class ManuscriptStyleRegistryService {
 
   getCatalog(): ManuscriptStyleCatalogResponseDto {
     const defaultStyleId = this.resolveDefaultStyleId();
-    const styles = [...this.profiles.values()].map((p) => ({
-      id: p.id,
-      version: p.version,
-      displayNameKey: p.displayNameKey,
-      descriptionKey: p.descriptionKey,
-      previewTheme: p.previewTheme,
-    }));
+    const styles = [...this.profiles.values()].map((p) => {
+      const entry: ManuscriptStyleCatalogResponseDto['styles'][number] = {
+        id: p.id,
+        version: p.version,
+        displayNameKey: p.displayNameKey,
+        descriptionKey: p.descriptionKey,
+        previewTheme: p.previewTheme,
+      };
+      if (p.constructor) {
+        entry.constructorGuidance = {
+          extraMandatorySlots: p.constructor.extraMandatorySlots,
+          recommendedPresets: p.constructor.recommendedPresets,
+          requiredRichTextKinds: p.constructor.requiredRichTextKinds,
+        };
+      }
+      return entry;
+    });
     return { defaultStyleId, styles };
   }
 

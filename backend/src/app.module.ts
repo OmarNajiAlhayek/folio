@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
@@ -12,12 +13,39 @@ import { PublicModule } from './public/public.module';
 import { RbacModule } from './rbac/rbac.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { AdminEmailModule } from './admin-email/admin-email.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { CsrfGuard } from './common/guards/csrf.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const ttl = parseInt(config.get<string>('THROTTLE_TTL_MS', '60000'), 10);
+        return [
+          {
+            name: 'login',
+            ttl,
+            limit: parseInt(
+              config.get<string>('THROTTLE_LOGIN_LIMIT', '10'),
+              10,
+            ),
+          },
+          {
+            name: 'register',
+            ttl,
+            limit: parseInt(
+              config.get<string>('THROTTLE_REGISTER_LIMIT', '5'),
+              10,
+            ),
+          },
+        ];
+      },
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -42,11 +70,16 @@ import { AdminEmailModule } from './admin-email/admin-email.module';
     SubmissionsModule,
     PublicModule,
     AdminEmailModule,
+    NotificationsModule,
   ],
   providers: [
     {
       provide: APP_FILTER,
       useClass: ApiExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
     },
   ],
 })

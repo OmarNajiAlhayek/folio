@@ -36,6 +36,25 @@ export interface ManuscriptPreviewTheme {
   referencesHeading: string;
 }
 
+export type ConstructorPresetId =
+  | 'introduction'
+  | 'literatureReview'
+  | 'materialsAndMethods'
+  | 'resultsAndDiscussion'
+  | 'conclusions';
+
+export type ConstructorRichTextKind =
+  | 'acknowledgments'
+  | 'funding'
+  | 'conflictOfInterest'
+  | 'dataAvailability';
+
+export interface ManuscriptConstructorGuidance {
+  extraMandatorySlots?: ConstructorRichTextKind[];
+  recommendedPresets?: ConstructorPresetId[];
+  requiredRichTextKinds?: ConstructorRichTextKind[];
+}
+
 export interface ManuscriptStyleProfile {
   id: string;
   version: number;
@@ -86,6 +105,14 @@ export interface ManuscriptStyleProfile {
   };
   /** Safe projection for `GET /public/manuscript-styles` — see {@link ManuscriptPreviewTheme}. */
   previewTheme: ManuscriptPreviewTheme;
+  /** Word constructor editorial rules (optional per profile). */
+  constructor?: ManuscriptConstructorGuidance;
+}
+
+export interface ManuscriptConstructorGuidanceDto {
+  extraMandatorySlots?: ConstructorRichTextKind[];
+  recommendedPresets?: ConstructorPresetId[];
+  requiredRichTextKinds?: ConstructorRichTextKind[];
 }
 
 export interface ManuscriptStyleCatalogEntryDto {
@@ -94,6 +121,7 @@ export interface ManuscriptStyleCatalogEntryDto {
   displayNameKey: string;
   descriptionKey: string;
   previewTheme: ManuscriptPreviewTheme;
+  constructorGuidance?: ManuscriptConstructorGuidanceDto;
 }
 
 /**

@@ -9,6 +9,7 @@ function fileToJson(f: {
   mimeType: string;
   kind: string;
   fileStage: SubmissionFileStage;
+  isPublic: boolean;
 }) {
   return {
     id: f.id,
@@ -16,6 +17,7 @@ function fileToJson(f: {
     mimeType: f.mimeType,
     kind: f.kind,
     fileStage: f.fileStage,
+    isPublic: f.isPublic,
   };
 }
 
@@ -85,6 +87,10 @@ export function submissionToViewerJson(
 
   if (viewer !== 'copyeditor') {
     base.constructorContent = s.constructorContent;
+  }
+
+  if (viewer === 'author' || viewer === 'editor') {
+    base.reviewManuscriptPresentation = s.reviewManuscriptPresentation;
   }
 
   if (viewer === 'editor' && s.reviewAssignments?.length) {

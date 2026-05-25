@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { config } from 'dotenv';
-import { join } from 'path';
-import { unlinkSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { extname, join } from 'path';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import * as bcrypt from 'bcrypt';
 import { NestFactory } from '@nestjs/core';
 import { DataSource, In, Like } from 'typeorm';
@@ -32,20 +33,34 @@ function uploadRoot(): string {
   return join(process.cwd(), rel);
 }
 
+/** Same `_tmp` layout as submission-file-multer diskStorage. */
+function uploadTmpDir(): string {
+  const tmp = join(uploadRoot(), '_tmp');
+  if (!existsSync(tmp)) {
+    mkdirSync(tmp, { recursive: true });
+  }
+  return tmp;
+}
+
+/** Writes a real temp file so SubmissionsService.addFile can rename it. */
 function sampleMulterFile(
   originalname: string,
   buffer: Buffer,
 ): Express.Multer.File {
+  const ext = extname(originalname).toLowerCase() || '.pdf';
+  const filename = `${randomUUID()}${ext}`;
+  const destination = uploadTmpDir();
+  const path = join(destination, filename);
+  writeFileSync(path, buffer);
   return {
     fieldname: 'file',
     originalname,
     encoding: '7bit',
     mimetype: 'application/pdf',
     size: buffer.length,
-    buffer,
-    destination: '',
-    filename: '',
-    path: '',
+    destination,
+    filename,
+    path,
   } as Express.Multer.File;
 }
 
@@ -300,7 +315,7 @@ async function run() {
     email: 'copyeditor@folio.local',
     password: 'Copyeditor123!',
     displayName: 'P. Copyeditor',
-    roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.COPYEDITOR],
+    roleSlugs: [ROLE_SLUGS.COPYEDITOR],
     profile: {
       affiliation: 'Folio Journal — Editorial office',
     },
@@ -536,12 +551,7 @@ async function run() {
     await submissionsService.addFile(
       s.slug!,
       authorReq,
-      {
-        buffer: pdfBytes,
-        originalname: 'published-revision.pdf',
-        mimetype: 'application/pdf',
-        size: pdfBytes.length,
-      } as Express.Multer.File,
+      sampleMulterFile('published-revision.pdf', pdfBytes),
       'manuscript',
     );
     await submissionsService.markCopyeditAuthorReady(
@@ -556,7 +566,7 @@ async function run() {
   console.log('author@folio.local      / Author123!      roles: author');
   console.log('editor@folio.local      / Editor123!      roles: author, editor, reviewer');
   console.log('reviewer@folio.local    / Reviewer123!    roles: author, reviewer');
-  console.log('copyeditor@folio.local  / Copyeditor123!  roles: author, copyeditor');
+  console.log('copyeditor@folio.local  / Copyeditor123!  roles: copyeditor');
   console.log('\n--- Sample submissions (title prefix [SAMPLE]) ---');
   console.log(`${tDraft} — author: draft with file`);
   console.log(`${tQueue} — editor queue: submitted`);

@@ -1,5 +1,7 @@
 /** Stable slugs — keep in sync with seed and frontend */
 export const PERMISSION_SLUGS = {
+  /** Create drafts, edit metadata/files, and submit manuscripts (author role only). */
+  SUBMISSION_MANAGE_OWN: 'submission.manage_own',
   SUBMISSION_VIEW_EDITOR_QUEUE: 'submission.view_editor_queue',
   SUBMISSION_CHANGE_STATUS: 'submission.change_status',
   SUBMISSION_ASSIGN_REVIEWER: 'submission.assign_reviewer',

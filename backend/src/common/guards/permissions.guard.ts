@@ -29,6 +29,7 @@ export class PermissionsGuard implements CanActivate {
       });
     }
     const set = new Set(user.permissionSlugs);
+    // OR: see JSDoc on @Permissions()
     const ok = required.some((p) => set.has(p));
     if (!ok) {
       throw new ForbiddenException({

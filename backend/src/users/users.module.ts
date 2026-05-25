@@ -4,12 +4,17 @@ import { User } from '../entities/user.entity';
 import { RoleInvitation } from '../entities/role-invitation.entity';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RbacModule } from '../rbac/rbac.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersController } from './users.controller';
 import { RoleInvitationsController } from './role-invitations.controller';
 import { UsersService } from './users.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, RoleInvitation]), RbacModule],
+  imports: [
+    TypeOrmModule.forFeature([User, RoleInvitation]),
+    RbacModule,
+    NotificationsModule,
+  ],
   controllers: [UsersController, RoleInvitationsController],
   providers: [UsersService, PermissionsGuard],
   exports: [UsersService],

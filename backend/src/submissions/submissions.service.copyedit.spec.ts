@@ -18,6 +18,7 @@ import { RbacService } from '../rbac/rbac.service';
 import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
+import { notificationsServiceMock } from '../notifications/notifications.service.mock';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import type { RequestUser } from '../common/types/request-user';
 
@@ -161,6 +162,7 @@ describe('SubmissionsService copyedit workflow', () => {
           useValue: {},
         },
         { provide: EventPublisherService, useValue: eventPublisher },
+        notificationsServiceMock,
         {
           provide: ConfigService,
           useValue: {

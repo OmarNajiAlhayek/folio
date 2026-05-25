@@ -1,7 +1,16 @@
 /**
- * Mirror of `packages/shared/messaging/idempotency.ts` — keep in sync
- * with the backend mirror at
- * `backend/src/messaging/shared/idempotency.ts`.
+ * Canonical idempotency key builders. Both the publisher (backend) and
+ * the consumer (email-service) MUST produce/recognize identical strings,
+ * so the rules live in one place.
+ *
+ * Rules are documented in the plan §7a:
+ *   - ReviewerInvited -> "reviewer_invited:" + assignmentSlug
+ *   - ReminderDue     -> "reminder_due:"     + reminderId
+ *   - CopyeditAssigned -> "copyedit_assigned:" + assignmentSlug
+ *   - CopyeditQueriesSent -> "copyedit_queries:" + assignmentSlug + ":" + round
+ *   - CopyeditAuthorReady -> "copyedit_author_ready:" + assignmentSlug + ":" + round
+ *   - SubmissionSubmitted -> "submission_submitted:" + submissionSlug + ":" + editorUserId
+ *   - SubmissionDecision   -> "submission_decision:" + submissionSlug + ":" + decision
  */
 
 export function reviewerInvitedKey(assignmentSlug: string): string {

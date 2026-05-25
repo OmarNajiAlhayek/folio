@@ -7,10 +7,7 @@ import { AdminEmailService } from './admin-email.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([OutboundEvent]),
-    MessagingModule,
-  ],
+  imports: [TypeOrmModule.forFeature([OutboundEvent]), MessagingModule],
   controllers: [AdminEmailController],
   providers: [AdminEmailService, EmailPipelineObservabilityService],
   exports: [AdminEmailService],

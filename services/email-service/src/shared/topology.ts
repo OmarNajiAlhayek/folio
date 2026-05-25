@@ -1,6 +1,15 @@
 /**
- * Mirror of `packages/shared/messaging/topology.ts`. See the backend
- * mirror at `backend/src/messaging/shared/topology.ts`.
+ * RabbitMQ topology declaration. Both backend and email-service call
+ * `assertTopology(channel)` on bootstrap so the exchange / DLX / queues /
+ * bindings are guaranteed to match the spec in plan §6a — without this
+ * helper, two repos could silently disagree.
+ *
+ * Idempotent: amqplib's assertExchange / assertQueue / bindQueue are
+ * safe to re-run with identical arguments.
+ *
+ * Typed against amqplib's Channel via a structural duck-typed interface
+ * so this file does not import amqplib directly (keeps `packages/shared`
+ * runtime-dep-free; each app brings its own amqplib).
  */
 
 export type AssertableChannel = {

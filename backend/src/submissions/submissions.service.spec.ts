@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
 import {
   ReviewAssignment,
@@ -21,6 +22,7 @@ import { RbacService } from '../rbac/rbac.service';
 import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
+import { notificationsServiceMock } from '../notifications/notifications.service.mock';
 import { ROUTING_KEY } from '../messaging/contracts/email-events';
 import { reviewerInvitedKey } from '../messaging/shared/idempotency';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
@@ -48,6 +50,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     id: 'sub-1',
     slug: 'paper-one',
     title: 'Paper Title',
+    status: SubmissionStatus.SUBMITTED,
   } as Submission;
 
   const reviewer: User = {
@@ -131,6 +134,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
           },
         },
         { provide: EventPublisherService, useValue: eventPublisher },
+        notificationsServiceMock,
         {
           provide: ConfigService,
           useValue: {
@@ -241,6 +245,23 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
 
   it('rejects when user is not a reviewer', async () => {
     rbacUserHasPermission.mockResolvedValueOnce(false);
+
+    await expect(
+      service.assignReviewer(
+        'paper-one',
+        reviewer.id,
+        editorUser,
+        undefined,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(eventPublisher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('rejects when submission is published', async () => {
+    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValueOnce({
+      ...submission,
+      status: SubmissionStatus.PUBLISHED,
+    } as Submission);
 
     await expect(
       service.assignReviewer(

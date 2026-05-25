@@ -50,7 +50,11 @@ export class UsersController {
     @Body() dto: CreateRoleInvitationDto,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.usersService.createEditorInvitation(user.sub, id);
+    return this.usersService.createRoleInvitation(
+      user.sub,
+      id,
+      dto.roleSlug,
+    );
   }
 
   @Patch(':id/roles')

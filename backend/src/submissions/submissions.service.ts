@@ -12,6 +12,14 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, EntityManager } from 'typeorm';
 import { EventPublisherService } from '../messaging/event-publisher.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_TYPE } from '../notifications/notification-types';
+import {
+  reviewInvitationAcceptedKey,
+  reviewInvitationDeclinedKey,
+  reviewSubmittedKey,
+} from '../notifications/notification-idempotency';
+import { Notification } from '../entities/notification.entity';
 import { ROUTING_KEY } from '../messaging/contracts/email-events';
 import type {
   CopyeditAssignedEvent,
@@ -58,7 +66,18 @@ import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { ContributorDto } from './dto/contributor.dto';
 import { slugifySubmissionTitle } from './slugify-submission-title';
-import { normalizeSubmissionFileKind } from './submission-file-kinds';
+import {
+  normalizeSubmissionFileKind,
+  type SubmissionFileKind,
+} from './submission-file-kinds';
+import {
+  resolveSubmitPresentation,
+  type ReviewManuscriptPresentation,
+} from './review-manuscript-presentation.types';
+import {
+  isExtensionAllowedForKind,
+  sniffUploadMime,
+} from './submission-file-upload.policy';
 import type { SubmissionContributorJson } from './submission-json.types';
 import type {
   ConstructorContent,
@@ -66,6 +85,7 @@ import type {
 } from './constructor-content.types';
 import {
   diffOrphanedFileIds,
+  hasMeaningfulConstructorContent,
   validateConstructorContentForSubmit,
 } from './constructor-content-utils';
 import { DocxGeneratorService } from './docx-generator.service';
@@ -99,6 +119,12 @@ const DECISION_STATUS_TO_KIND: Partial<
   [SubmissionStatus.REJECTED]: 'rejected',
 };
 
+/** Statuses where editors may invite reviewers or reconfigure the review package. */
+const REVIEW_CONFIGURATION_STATUSES: readonly SubmissionStatus[] = [
+  SubmissionStatus.SUBMITTED,
+  SubmissionStatus.UNDER_REVIEW,
+];
+
 @Injectable()
 export class SubmissionsService implements OnModuleInit {
   private readonly logger = new Logger(SubmissionsService.name);
@@ -122,8 +148,15 @@ export class SubmissionsService implements OnModuleInit {
     private readonly docxGeneratorService: DocxGeneratorService,
     private readonly manuscriptStyles: ManuscriptStyleRegistryService,
     private readonly eventPublisher: EventPublisherService,
+    private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
   ) {}
+
+  private emitPendingNotifications(pending: Notification[]): void {
+    if (pending.length > 0) {
+      this.notifications.emitCreated(pending);
+    }
+  }
 
   async onModuleInit(): Promise<void> {
     await this.migrateLegacyAssignmentStatus();
@@ -185,14 +218,14 @@ export class SubmissionsService implements OnModuleInit {
   }
 
   private async assertHasReviewManuscriptPackage(submissionId: string): Promise<void> {
-    const ok = await this.filesRepo.exists({
+    const count = await this.filesRepo.count({
       where: {
         submissionId,
-        kind: 'manuscript',
         fileStage: SubmissionFileStage.REVIEW,
+        kind: In(['manuscript', 'manuscript_constructor']),
       },
     });
-    if (!ok) {
+    if (count < 1) {
       throw new BadRequestException({
         message:
           'Add at least one manuscript file to the review package (editor file stage) before starting peer review',
@@ -247,7 +280,10 @@ export class SubmissionsService implements OnModuleInit {
   /**
    * Editorial-style completeness check before first submit / resubmit.
    */
-  private async assertReadyForSubmit(s: Submission): Promise<void> {
+  private async assertReadyForSubmit(
+    s: Submission,
+    presentation: ReviewManuscriptPresentation,
+  ): Promise<void> {
     if (!s.articleType) {
       throw new BadRequestException({
         message: 'Select an article type before submitting',
@@ -342,18 +378,48 @@ export class SubmissionsService implements OnModuleInit {
       where: { submissionId: s.id },
     });
     const kinds = new Set(files.map((f) => f.kind));
-    const need: { kind: string; label: string }[] = [
-      { kind: 'cover_letter', label: 'cover letter' },
-      { kind: 'title_page', label: 'title page' },
-      { kind: 'manuscript', label: 'main manuscript' },
-    ];
+    const need: { kind: string; label: string }[] = [];
+    if (presentation.presentUploaded) {
+      need.push(
+        { kind: 'cover_letter', label: 'cover letter' },
+        { kind: 'title_page', label: 'title page' },
+        { kind: 'manuscript', label: 'uploaded main manuscript' },
+      );
+    }
+    if (presentation.presentConstructor) {
+      need.push({
+        kind: 'manuscript_constructor',
+        label: 'constructor main manuscript',
+      });
+    }
     for (const { kind, label } of need) {
       if (!kinds.has(kind)) {
         throw new BadRequestException({
-          message: `Upload at least one file of type: ${label}`,
+          message: `Upload or generate at least one file of type: ${label}`,
           code: 'SUBMISSION_INCOMPLETE_FILES',
         });
       }
+    }
+  }
+
+  private async applyReviewManuscriptPresentation(
+    submissionId: string,
+    presentation: ReviewManuscriptPresentation,
+  ): Promise<void> {
+    const files = await this.filesRepo.find({ where: { submissionId } });
+    for (const file of files) {
+      if (file.kind === 'manuscript') {
+        file.fileStage = presentation.presentUploaded
+          ? SubmissionFileStage.REVIEW
+          : SubmissionFileStage.SUBMISSION;
+      } else if (file.kind === 'manuscript_constructor') {
+        file.fileStage = presentation.presentConstructor
+          ? SubmissionFileStage.REVIEW
+          : SubmissionFileStage.SUBMISSION;
+      }
+    }
+    if (files.length > 0) {
+      await this.filesRepo.save(files);
     }
   }
 
@@ -365,7 +431,9 @@ export class SubmissionsService implements OnModuleInit {
   validateConstructorContentForSubmit(
     content: ConstructorContent | null | undefined,
   ): ConstructorValidationError[] {
-    return validateConstructorContentForSubmit(content);
+    const styleId = this.manuscriptStyles.resolveEffectiveStyleId(content);
+    const profile = this.manuscriptStyles.getProfile(styleId);
+    return validateConstructorContentForSubmit(content, profile.constructor);
   }
 
   private uploadRoot(): string {
@@ -379,6 +447,16 @@ export class SubmissionsService implements OnModuleInit {
       mkdirSync(dir, { recursive: true });
     }
     return dir;
+  }
+
+  private async unlinkUploadTemp(file: Express.Multer.File): Promise<void> {
+    if (!file.path) return;
+    const fs = await import('fs/promises');
+    try {
+      await fs.unlink(file.path);
+    } catch {
+      /* ignore missing temp */
+    }
   }
 
   private async assertSubmissionSlugAvailable(
@@ -666,7 +744,16 @@ export class SubmissionsService implements OnModuleInit {
     }
   }
 
-  async submit(slug: string, user: RequestUser): Promise<Submission> {
+  async submit(
+    slug: string,
+    user: RequestUser,
+    options?: {
+      constructorContent?: ConstructorContent;
+      useUploadedManuscript?: boolean;
+      presentUploadedManuscript?: boolean;
+      presentConstructorManuscript?: boolean;
+    },
+  ): Promise<Submission> {
     const s = await this.getBySlugOrThrow(slug);
     if (s.authorId !== user.sub) {
       throw new ForbiddenException({
@@ -683,9 +770,57 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    if (s.constructorContent) {
-      this.manuscriptStyles.assertConstructorContentStyleKnown(s.constructorContent);
-      const errors = validateConstructorContentForSubmit(s.constructorContent);
+    const contentForDoc =
+      options?.constructorContent ?? s.constructorContent ?? null;
+    const hasUploadedManuscript =
+      (
+        await this.filesRepo.find({
+          where: { submissionId: s.id, kind: 'manuscript' },
+          take: 1,
+        })
+      ).length > 0;
+    const hasConstructorDraft = hasMeaningfulConstructorContent(contentForDoc);
+    const presentation = resolveSubmitPresentation({
+      presentUploadedManuscript: options?.presentUploadedManuscript,
+      presentConstructorManuscript: options?.presentConstructorManuscript,
+      useUploadedManuscript: options?.useUploadedManuscript,
+      hasUploadedManuscript,
+      hasConstructorDraft,
+    });
+    if (!presentation.presentUploaded && !presentation.presentConstructor) {
+      throw new BadRequestException({
+        message:
+          'Select at least one main manuscript to present for review (uploaded file and/or Word Constructor)',
+        code: 'SUBMISSION_MANUSCRIPT_PRESENTATION_REQUIRED',
+      });
+    }
+    if (presentation.presentUploaded && !hasUploadedManuscript) {
+      throw new BadRequestException({
+        message: 'Upload a main manuscript file before submitting with that option',
+        code: 'SUBMISSION_INCOMPLETE_FILES',
+      });
+    }
+    if (presentation.presentConstructor) {
+      if (!contentForDoc || !hasConstructorDraft) {
+        throw new BadRequestException({
+          message: 'Constructor content is required for this submission',
+          code: 'CONSTRUCTOR_VALIDATION_FAILED',
+          errors: [
+            {
+              code: 'CONSTRUCTOR_EMPTY',
+              message: 'Constructor content is empty',
+            },
+          ],
+        });
+      }
+      this.manuscriptStyles.assertConstructorContentStyleKnown(contentForDoc);
+      const styleId =
+        this.manuscriptStyles.resolveEffectiveStyleId(contentForDoc);
+      const profile = this.manuscriptStyles.getProfile(styleId);
+      const errors = validateConstructorContentForSubmit(
+        contentForDoc,
+        profile.constructor,
+      );
       if (errors.length > 0) {
         throw new BadRequestException({
           message:
@@ -694,24 +829,38 @@ export class SubmissionsService implements OnModuleInit {
           errors,
         });
       }
+      await this.generateDocx(slug, user, contentForDoc, {
+        attach: true,
+        attachKind: 'manuscript_constructor',
+      });
     }
-    await this.assertReadyForSubmit(s);
+    await this.assertReadyForSubmit(s, presentation);
+    await this.applyReviewManuscriptPresentation(s.id, presentation);
+    s.reviewManuscriptPresentation = presentation;
+    await this.submissionsRepo.save(s);
     const previousStatus = s.status;
     const isResubmission = previousStatus === SubmissionStatus.REVISIONS_REQUESTED;
 
-    return this.submissionsRepo.manager.transaction(async (em) => {
-      const submissionRepo = em.getRepository(Submission);
-      s.status = SubmissionStatus.SUBMITTED;
-      const saved = await submissionRepo.save(s);
-      await this.enqueueSubmissionSubmittedForEditors(
-        {
-          submission: saved,
-          isResubmission,
-        },
-        em,
-      );
-      return saved;
-    });
+    const pending: Notification[] = [];
+    return this.submissionsRepo.manager
+      .transaction(async (em) => {
+        const submissionRepo = em.getRepository(Submission);
+        s.status = SubmissionStatus.SUBMITTED;
+        const saved = await submissionRepo.save(s);
+        const created = await this.enqueueSubmissionSubmittedForEditors(
+          {
+            submission: saved,
+            isResubmission,
+          },
+          em,
+        );
+        pending.push(...created);
+        return saved;
+      })
+      .then((saved) => {
+        this.emitPendingNotifications(pending);
+        return saved;
+      });
   }
 
   /**
@@ -728,7 +877,10 @@ export class SubmissionsService implements OnModuleInit {
     submissionSlug: string,
     user: RequestUser,
     content: ConstructorContent,
-    options: { attach?: boolean } = {},
+    options: {
+      attach?: boolean;
+      attachKind?: SubmissionFileKind;
+    } = {},
   ): Promise<{ kind: 'buffer'; data: Buffer } | { kind: 'attached'; file: SubmissionFile }> {
     const s = await this.getBySlugOrThrow(submissionSlug);
     if (s.authorId !== user.sub) {
@@ -769,9 +921,12 @@ export class SubmissionsService implements OnModuleInit {
     if (!options.attach) {
       return { kind: 'buffer', data: buffer };
     }
-    // Replace any existing manuscript file
+    const attachKind =
+      options.attachKind === 'manuscript_constructor'
+        ? 'manuscript_constructor'
+        : 'manuscript';
     const existing = await this.filesRepo.find({
-      where: { submissionId: s.id, kind: 'manuscript' },
+      where: { submissionId: s.id, kind: attachKind },
     });
     for (const row of existing) {
       try {
@@ -797,7 +952,7 @@ export class SubmissionsService implements OnModuleInit {
       path: '',
       stream: Readable.from(buffer),
     };
-    const file = await this.addFile(submissionSlug, user, fakeFile, 'manuscript');
+    const file = await this.addFile(submissionSlug, user, fakeFile, attachKind);
     return { kind: 'attached', file };
   }
 
@@ -829,7 +984,9 @@ export class SubmissionsService implements OnModuleInit {
     if (!allowed?.includes(next)) {
       throw new BadRequestException({
         message: `Cannot transition from ${s.status} to ${next}`,
-        code: 'VALIDATION_ERROR',
+        code: 'INVALID_STATUS_TRANSITION',
+        fromStatus: s.status,
+        toStatus: next,
       });
     }
     if (next === SubmissionStatus.UNDER_REVIEW) {
@@ -837,30 +994,37 @@ export class SubmissionsService implements OnModuleInit {
     }
     const decisionKind = DECISION_STATUS_TO_KIND[next];
 
-    return this.submissionsRepo.manager.transaction(async (em) => {
-      const submissionRepo = em.getRepository(Submission);
-      s.status = next;
-      if (next === SubmissionStatus.PUBLISHED) {
-        s.publishedAt = new Date();
-        await em.getRepository(SubmissionFile).update(
-          { submissionId: s.id, kind: 'manuscript' },
-          { isPublic: true },
-        );
-      }
-      const saved = await submissionRepo.save(s);
-      if (decisionKind) {
-        await this.enqueueSubmissionDecisionEvent(
-          {
-            submission: saved,
-            decision: decisionKind,
-            editorId: user.sub,
-            editorFolioLocale,
-          },
-          em,
-        );
-      }
-      return saved;
-    });
+    const pending: Notification[] = [];
+    return this.submissionsRepo.manager
+      .transaction(async (em) => {
+        const submissionRepo = em.getRepository(Submission);
+        s.status = next;
+        if (next === SubmissionStatus.PUBLISHED) {
+          s.publishedAt = new Date();
+          await em.getRepository(SubmissionFile).update(
+            { submissionId: s.id, kind: 'manuscript' },
+            { isPublic: true },
+          );
+        }
+        const saved = await submissionRepo.save(s);
+        if (decisionKind) {
+          const n = await this.enqueueSubmissionDecisionEvent(
+            {
+              submission: saved,
+              decision: decisionKind,
+              editorId: user.sub,
+              editorFolioLocale,
+            },
+            em,
+          );
+          if (n) pending.push(n);
+        }
+        return saved;
+      })
+      .then((saved) => {
+        this.emitPendingNotifications(pending);
+        return saved;
+      });
   }
 
   private assertEditorMayConfigureReview(user: RequestUser): void {
@@ -875,6 +1039,18 @@ export class SubmissionsService implements OnModuleInit {
     }
   }
 
+  private assertSubmissionAllowsReviewConfiguration(
+    submission: Submission,
+  ): void {
+    if (!REVIEW_CONFIGURATION_STATUSES.includes(submission.status)) {
+      throw new BadRequestException({
+        message:
+          'Peer review can only be configured while the submission is submitted or under review',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+  }
+
   async updateReviewMethod(
     slug: string,
     user: RequestUser,
@@ -882,6 +1058,7 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<Submission> {
     this.assertEditorMayConfigureReview(user);
     const s = await this.getBySlugOrThrow(slug);
+    this.assertSubmissionAllowsReviewConfiguration(s);
     s.reviewMethod = method;
     return this.submissionsRepo.save(s);
   }
@@ -894,6 +1071,7 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<SubmissionFile> {
     this.assertEditorMayConfigureReview(user);
     const s = await this.getBySlugOrThrow(submissionSlug);
+    this.assertSubmissionAllowsReviewConfiguration(s);
     const file = await this.filesRepo.findOne({
       where: { id: fileId, submissionId: s.id },
     });
@@ -920,6 +1098,7 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
     const submission = await this.getBySlugOrThrow(submissionSlug);
+    this.assertSubmissionAllowsReviewConfiguration(submission);
     if (!submission.slug) {
       throw new BadRequestException({
         message: 'Submission has no public slug',
@@ -957,27 +1136,34 @@ export class SubmissionsService implements OnModuleInit {
     }
     const assignmentSlug = await this.nextAssignmentSlug(submission.slug);
 
-    return this.assignmentsRepo.manager.transaction(async (em) => {
-      const assignmentRepo = em.getRepository(ReviewAssignment);
-      const row = assignmentRepo.create({
-        submissionId,
-        reviewerId,
-        status: AssignmentStatus.INVITED,
-        slug: assignmentSlug,
+    const pending: Notification[] = [];
+    return this.assignmentsRepo.manager
+      .transaction(async (em) => {
+        const assignmentRepo = em.getRepository(ReviewAssignment);
+        const row = assignmentRepo.create({
+          submissionId,
+          reviewerId,
+          status: AssignmentStatus.INVITED,
+          slug: assignmentSlug,
+        });
+        const saved = await assignmentRepo.save(row);
+        const n = await this.enqueueReviewerInvitedEvent(
+          {
+            assignment: saved,
+            submission,
+            reviewer,
+            editorId: editor.sub,
+            editorFolioLocale,
+          },
+          em,
+        );
+        if (n) pending.push(n);
+        return saved;
+      })
+      .then((saved) => {
+        this.emitPendingNotifications(pending);
+        return saved;
       });
-      const saved = await assignmentRepo.save(row);
-      await this.enqueueReviewerInvitedEvent(
-        {
-          assignment: saved,
-          submission,
-          reviewer,
-          editorId: editor.sub,
-          editorFolioLocale,
-        },
-        em,
-      );
-      return saved;
-    });
   }
 
   /**
@@ -994,7 +1180,7 @@ export class SubmissionsService implements OnModuleInit {
       editorFolioLocale?: string;
     },
     em: EntityManager,
-  ): Promise<void> {
+  ): Promise<Notification | null> {
     const { assignment, submission, reviewer, editorId, editorFolioLocale } =
       args;
     if (!assignment.slug || !submission.slug) {
@@ -1047,6 +1233,19 @@ export class SubmissionsService implements OnModuleInit {
       payload as unknown as Record<string, unknown>,
       em,
     );
+    return this.notifications.createIfAbsent(
+      {
+        userId: reviewer.id,
+        type: NOTIFICATION_TYPE.REVIEWER_INVITED,
+        params: {
+          submissionTitle: submission.title,
+          submissionSlug: submission.slug,
+        },
+        href: '/assignments',
+        idempotencyKey: reviewerInvitedKey(assignment.slug),
+      },
+      em,
+    );
   }
 
   private async enqueueSubmissionSubmittedForEditors(
@@ -1055,8 +1254,9 @@ export class SubmissionsService implements OnModuleInit {
       isResubmission: boolean;
     },
     em: EntityManager,
-  ): Promise<void> {
+  ): Promise<Notification[]> {
     const { submission, isResubmission } = args;
+    const created: Notification[] = [];
     if (!submission.slug) {
       throw new InternalServerErrorException({
         message: 'Cannot enqueue submission submitted: missing slug',
@@ -1080,7 +1280,7 @@ export class SubmissionsService implements OnModuleInit {
       this.logger.warn(
         `submission.submitted: no editors to notify for slug=${submission.slug}`,
       );
-      return;
+      return created;
     }
     const editors = await em.getRepository(User).find({
       where: { id: In(editorIds) },
@@ -1119,7 +1319,23 @@ export class SubmissionsService implements OnModuleInit {
         payload as unknown as Record<string, unknown>,
         em,
       );
+      const n = await this.notifications.createIfAbsent(
+        {
+          userId: editor.id,
+          type: NOTIFICATION_TYPE.SUBMISSION_SUBMITTED,
+          params: {
+            submissionTitle: submission.title,
+            authorDisplayName: author.displayName,
+            isResubmission: isResubmission ? 'true' : 'false',
+          },
+          href: `/submissions/${submission.slug}`,
+          idempotencyKey: submissionSubmittedKey(submission.slug, editor.id),
+        },
+        em,
+      );
+      if (n) created.push(n);
     }
+    return created;
   }
 
   private async enqueueSubmissionDecisionEvent(
@@ -1130,7 +1346,7 @@ export class SubmissionsService implements OnModuleInit {
       editorFolioLocale?: string;
     },
     em: EntityManager,
-  ): Promise<void> {
+  ): Promise<Notification | null> {
     const { submission, decision, editorId, editorFolioLocale } = args;
     if (!submission.slug) {
       throw new InternalServerErrorException({
@@ -1188,6 +1404,48 @@ export class SubmissionsService implements OnModuleInit {
       payload as unknown as Record<string, unknown>,
       em,
     );
+    return this.notifications.createIfAbsent(
+      {
+        userId: author.id,
+        type: NOTIFICATION_TYPE.SUBMISSION_DECISION,
+        params: {
+          submissionTitle: submission.title,
+          decision,
+        },
+        href: `/submissions/${submission.slug}`,
+        idempotencyKey: submissionDecisionKey(submission.slug, decision),
+      },
+      em,
+    );
+  }
+
+  private async notifyAllEditors(
+    em: EntityManager,
+    input: {
+      type: (typeof NOTIFICATION_TYPE)[keyof typeof NOTIFICATION_TYPE];
+      params: Record<string, unknown>;
+      href: string;
+      idempotencyKeyForEditor: (editorId: string) => string;
+    },
+  ): Promise<Notification[]> {
+    const editorIds = await this.rbacService.listUserIdsWithPermission(
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    );
+    const created: Notification[] = [];
+    for (const editorId of editorIds) {
+      const n = await this.notifications.createIfAbsent(
+        {
+          userId: editorId,
+          type: input.type,
+          params: input.params,
+          href: input.href,
+          idempotencyKey: input.idempotencyKeyForEditor(editorId),
+        },
+        em,
+      );
+      if (n) created.push(n);
+    }
+    return created;
   }
 
   async acceptReviewInvitation(
@@ -1196,7 +1454,7 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<ReviewAssignment> {
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug, reviewerId },
-      relations: ['submission'],
+      relations: ['submission', 'reviewer'],
     });
     if (!assignment) {
       throw new NotFoundException({
@@ -1210,19 +1468,39 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    assignment.status = AssignmentStatus.ACCEPTED;
-    await this.assignmentsRepo.save(assignment);
+    const reviewer = assignment.reviewer;
     const submissionRow =
       assignment.submission ??
       (await this.submissionsRepo.findOne({
         where: { id: assignment.submissionId },
       }));
-    if (submissionRow?.status === SubmissionStatus.SUBMITTED) {
-      await this.assertHasReviewManuscriptPackage(submissionRow.id);
-      submissionRow.status = SubmissionStatus.UNDER_REVIEW;
-      await this.submissionsRepo.save(submissionRow);
-    }
-    return assignment;
+    const pending: Notification[] = [];
+    const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
+      const assignmentRepo = em.getRepository(ReviewAssignment);
+      assignment.status = AssignmentStatus.ACCEPTED;
+      const row = await assignmentRepo.save(assignment);
+      if (submissionRow?.status === SubmissionStatus.SUBMITTED) {
+        await this.assertHasReviewManuscriptPackage(submissionRow.id);
+        submissionRow.status = SubmissionStatus.UNDER_REVIEW;
+        await em.getRepository(Submission).save(submissionRow);
+      }
+      if (submissionRow?.slug && assignment.slug && reviewer) {
+        const created = await this.notifyAllEditors(em, {
+          type: NOTIFICATION_TYPE.REVIEW_INVITATION_ACCEPTED,
+          params: {
+            submissionTitle: submissionRow.title,
+            reviewerDisplayName: reviewer.displayName,
+          },
+          href: `/submissions/${submissionRow.slug}`,
+          idempotencyKeyForEditor: (editorId) =>
+            `${reviewInvitationAcceptedKey(assignment.slug!)}:${editorId}`,
+        });
+        pending.push(...created);
+      }
+      return row;
+    });
+    this.emitPendingNotifications(pending);
+    return saved;
   }
 
   async declineReviewInvitation(
@@ -1231,6 +1509,7 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<ReviewAssignment> {
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug, reviewerId },
+      relations: ['submission', 'reviewer'],
     });
     if (!assignment) {
       throw new NotFoundException({
@@ -1244,9 +1523,30 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    assignment.status = AssignmentStatus.DECLINED;
-    await this.assignmentsRepo.save(assignment);
-    return assignment;
+    const submissionRow = assignment.submission;
+    const reviewer = assignment.reviewer;
+    const pending: Notification[] = [];
+    const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
+      const assignmentRepo = em.getRepository(ReviewAssignment);
+      assignment.status = AssignmentStatus.DECLINED;
+      const row = await assignmentRepo.save(assignment);
+      if (submissionRow?.slug && assignment.slug && reviewer) {
+        const created = await this.notifyAllEditors(em, {
+          type: NOTIFICATION_TYPE.REVIEW_INVITATION_DECLINED,
+          params: {
+            submissionTitle: submissionRow.title,
+            reviewerDisplayName: reviewer.displayName,
+          },
+          href: `/submissions/${submissionRow.slug}`,
+          idempotencyKeyForEditor: (editorId) =>
+            `${reviewInvitationDeclinedKey(assignment.slug!)}:${editorId}`,
+        });
+        pending.push(...created);
+      }
+      return row;
+    });
+    this.emitPendingNotifications(pending);
+    return saved;
   }
 
   async listAssignments(
@@ -1350,7 +1650,7 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<Review> {
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug, reviewerId },
-      relations: ['submission'],
+      relations: ['submission', 'reviewer'],
     });
     if (!assignment) {
       throw new NotFoundException({
@@ -1383,18 +1683,43 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    const review = this.reviewsRepo.create({
-      assignmentId,
-      commentsForAuthor: authorPart,
-      commentsToEditorOnly: editorPart,
-      recommendation,
-      submittedAt: new Date(),
+    const pending: Notification[] = [];
+    const review = await this.assignmentsRepo.manager.transaction(async (em) => {
+      const reviewRepo = em.getRepository(Review);
+      const assignmentRepo = em.getRepository(ReviewAssignment);
+      const row = reviewRepo.create({
+        assignmentId,
+        commentsForAuthor: authorPart,
+        commentsToEditorOnly: editorPart,
+        recommendation,
+        submittedAt: new Date(),
+      });
+      await reviewRepo.save(row);
+      assignment.status = AssignmentStatus.COMPLETED;
+      await assignmentRepo.save(assignment);
+      const submission = assignment.submission;
+      const reviewer = await em.getRepository(User).findOne({
+        where: { id: reviewerId },
+        select: ['id', 'displayName'],
+      });
+      if (submission?.slug && assignment.slug && reviewer) {
+        const created = await this.notifyAllEditors(em, {
+          type: NOTIFICATION_TYPE.REVIEW_SUBMITTED,
+          params: {
+            submissionTitle: submission.title,
+            reviewerDisplayName: reviewer.displayName,
+          },
+          href: `/submissions/${submission.slug}`,
+          idempotencyKeyForEditor: (editorId) =>
+            `${reviewSubmittedKey(assignment.slug!)}:${editorId}`,
+        });
+        pending.push(...created);
+      }
+      return row;
     });
-    await this.reviewsRepo.save(review);
-    assignment.status = AssignmentStatus.COMPLETED;
-    await this.assignmentsRepo.save(assignment);
+    this.emitPendingNotifications(pending);
     return this.reviewsRepo.findOneOrFail({
-      where: { assignmentId },
+      where: { assignmentId: review.assignmentId },
       relations: ['assignment'],
     });
   }
@@ -1432,16 +1757,48 @@ export class SubmissionsService implements OnModuleInit {
         });
       }
     }
-    const dir = this.ensureUploadDir();
-    const storageKey = `${randomUUID()}${extname(file.originalname)}`;
-    const fs = await import('fs/promises');
-    await fs.writeFile(join(dir, storageKey), file.buffer);
     const kind = normalizeSubmissionFileKind(kindRaw);
+    if (!isExtensionAllowedForKind(file.originalname, kind)) {
+      await this.unlinkUploadTemp(file);
+      throw new BadRequestException({
+        message: `File type not allowed for ${kind}`,
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const ext = extname(file.originalname).toLowerCase();
+    const tempPath = file.path;
+    if (!tempPath) {
+      throw new BadRequestException({
+        message: 'Upload temp file missing',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const fs = await import('fs/promises');
+    const handle = await fs.open(tempPath, 'r');
+    const sniffBuf = Buffer.alloc(4096);
+    await handle.read(sniffBuf, 0, 4096, 0);
+    await handle.close();
+
+    const sniff = sniffUploadMime(sniffBuf, ext, kind);
+    if (!sniff.ok) {
+      await this.unlinkUploadTemp(file);
+      throw new BadRequestException({
+        message: sniff.reason,
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const dir = this.ensureUploadDir();
+    const storageKey = `${randomUUID()}${ext}`;
+    await fs.rename(tempPath, join(dir, storageKey));
+
     const row = this.filesRepo.create({
       submissionId,
       storageKey,
       originalName: file.originalname,
-      mimeType: file.mimetype,
+      mimeType: sniff.mimeType,
       sizeBytes: String(file.size),
       kind,
       fileStage: SubmissionFileStage.SUBMISSION,
@@ -1560,6 +1917,7 @@ export class SubmissionsService implements OnModuleInit {
       originalityConfirmed: s.originalityConfirmed,
       aiUsageStatement: s.aiUsageStatement,
       constructorContent: s.constructorContent,
+      reviewManuscriptPresentation: s.reviewManuscriptPresentation,
       status: s.status,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
@@ -1584,7 +1942,6 @@ export class SubmissionsService implements OnModuleInit {
       author: s.author
         ? {
             displayName: s.author.displayName,
-            email: s.author.email,
           }
         : undefined,
     };
@@ -1663,7 +2020,7 @@ export class SubmissionsService implements OnModuleInit {
       editorId: string;
     },
     em: EntityManager,
-  ): Promise<void> {
+  ): Promise<Notification | null> {
     const { assignment, submission, copyeditor, editorId } = args;
     if (!assignment.slug || !submission.slug) {
       throw new InternalServerErrorException({
@@ -1710,6 +2067,16 @@ export class SubmissionsService implements OnModuleInit {
       payload as unknown as Record<string, unknown>,
       em,
     );
+    return this.notifications.createIfAbsent(
+      {
+        userId: copyeditor.id,
+        type: NOTIFICATION_TYPE.COPYEDIT_ASSIGNED,
+        params: { submissionTitle: submission.title },
+        href: `/copyedit-assignments/${assignment.slug}`,
+        idempotencyKey: copyeditAssignedKey(assignment.slug),
+      },
+      em,
+    );
   }
 
   private async enqueueCopyeditQueriesSentEvent(
@@ -1721,7 +2088,7 @@ export class SubmissionsService implements OnModuleInit {
       note: CopyeditNote;
     },
     em: EntityManager,
-  ): Promise<void> {
+  ): Promise<Notification | null> {
     const { assignment, submission, author, copyeditor, note } = args;
     if (!assignment.slug || !submission.slug) {
       throw new InternalServerErrorException({
@@ -1761,6 +2128,16 @@ export class SubmissionsService implements OnModuleInit {
       payload as unknown as Record<string, unknown>,
       em,
     );
+    return this.notifications.createIfAbsent(
+      {
+        userId: author.id,
+        type: NOTIFICATION_TYPE.COPYEDIT_QUERIES_SENT,
+        params: { submissionTitle: submission.title },
+        href: `/submissions/${submission.slug}`,
+        idempotencyKey: copyeditQueriesSentKey(assignment.slug, note.round),
+      },
+      em,
+    );
   }
 
   private async enqueueCopyeditAuthorReadyEvent(
@@ -1772,7 +2149,7 @@ export class SubmissionsService implements OnModuleInit {
       round: number;
     },
     em: EntityManager,
-  ): Promise<void> {
+  ): Promise<Notification | null> {
     const { assignment, submission, author, copyeditor, round } = args;
     if (!assignment.slug || !submission.slug) {
       throw new InternalServerErrorException({
@@ -1809,6 +2186,16 @@ export class SubmissionsService implements OnModuleInit {
     await this.eventPublisher.enqueue(
       ROUTING_KEY.copyeditAuthorReady,
       payload as unknown as Record<string, unknown>,
+      em,
+    );
+    return this.notifications.createIfAbsent(
+      {
+        userId: copyeditor.id,
+        type: NOTIFICATION_TYPE.COPYEDIT_AUTHOR_READY,
+        params: { submissionTitle: submission.title },
+        href: `/copyedit-assignments/${assignment.slug}`,
+        idempotencyKey: copyeditAuthorReadyKey(assignment.slug, round),
+      },
       em,
     );
   }
@@ -1864,23 +2251,30 @@ export class SubmissionsService implements OnModuleInit {
     }
     const slug = await this.nextCopyeditAssignmentSlug(submission.slug!);
 
-    return this.copyeditAssignmentsRepo.manager.transaction(async (em) => {
-      const assignmentRepo = em.getRepository(CopyeditAssignment);
-      const assignment = assignmentRepo.create({
-        submissionId: submission.id,
-        copyeditorId,
-        status: CopyeditAssignmentStatus.ACTIVE,
-        slug,
+    const pending: Notification[] = [];
+    return this.copyeditAssignmentsRepo.manager
+      .transaction(async (em) => {
+        const assignmentRepo = em.getRepository(CopyeditAssignment);
+        const assignment = assignmentRepo.create({
+          submissionId: submission.id,
+          copyeditorId,
+          status: CopyeditAssignmentStatus.ACTIVE,
+          slug,
+        });
+        const saved = await assignmentRepo.save(assignment);
+        submission.status = SubmissionStatus.COPYEDITING;
+        await em.getRepository(Submission).save(submission);
+        const n = await this.enqueueCopyeditAssignedEvent(
+          { assignment: saved, submission, copyeditor, editorId: editor.sub },
+          em,
+        );
+        if (n) pending.push(n);
+        return saved;
+      })
+      .then((saved) => {
+        this.emitPendingNotifications(pending);
+        return saved;
       });
-      const saved = await assignmentRepo.save(assignment);
-      submission.status = SubmissionStatus.COPYEDITING;
-      await em.getRepository(Submission).save(submission);
-      await this.enqueueCopyeditAssignedEvent(
-        { assignment: saved, submission, copyeditor, editorId: editor.sub },
-        em,
-      );
-      return saved;
-    });
   }
 
   async listCopyeditAssignments(
@@ -1984,30 +2378,38 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
 
-    return this.copyeditAssignmentsRepo.manager.transaction(async (em) => {
-      const noteRepo = em.getRepository(CopyeditNote);
-      const assignmentRepo = em.getRepository(CopyeditAssignment);
-      const round =
-        (await noteRepo.count({ where: { assignmentId: assignment.id } })) + 1;
-      const note = noteRepo.create({
-        assignmentId: assignment.id,
-        round,
-        noteForAuthor: authorPart,
-        noteToEditorOnly: (noteToEditorOnly ?? '').trim(),
-        submittedAt: new Date(),
+    const pending: Notification[] = [];
+    return this.copyeditAssignmentsRepo.manager
+      .transaction(async (em) => {
+        const noteRepo = em.getRepository(CopyeditNote);
+        const assignmentRepo = em.getRepository(CopyeditAssignment);
+        const round =
+          (await noteRepo.count({ where: { assignmentId: assignment.id } })) +
+          1;
+        const note = noteRepo.create({
+          assignmentId: assignment.id,
+          round,
+          noteForAuthor: authorPart,
+          noteToEditorOnly: (noteToEditorOnly ?? '').trim(),
+          submittedAt: new Date(),
+        });
+        await noteRepo.save(note);
+        assignment.status = CopyeditAssignmentStatus.AWAITING_AUTHOR;
+        await assignmentRepo.save(assignment);
+        const n = await this.enqueueCopyeditQueriesSentEvent(
+          { assignment, submission, author, copyeditor, note },
+          em,
+        );
+        if (n) pending.push(n);
+        return noteRepo.findOneOrFail({
+          where: { id: note.id },
+          relations: ['assignment'],
+        });
+      })
+      .then((note) => {
+        this.emitPendingNotifications(pending);
+        return note;
       });
-      await noteRepo.save(note);
-      assignment.status = CopyeditAssignmentStatus.AWAITING_AUTHOR;
-      await assignmentRepo.save(assignment);
-      await this.enqueueCopyeditQueriesSentEvent(
-        { assignment, submission, author, copyeditor, note },
-        em,
-      );
-      return noteRepo.findOneOrFail({
-        where: { id: note.id },
-        relations: ['assignment'],
-      });
-    });
   }
 
   async markCopyeditAuthorReady(
@@ -2064,22 +2466,29 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
 
-    return this.copyeditAssignmentsRepo.manager.transaction(async (em) => {
-      const assignmentRepo = em.getRepository(CopyeditAssignment);
-      assignment.status = CopyeditAssignmentStatus.READY_FOR_REVIEW;
-      const saved = await assignmentRepo.save(assignment);
-      await this.enqueueCopyeditAuthorReadyEvent(
-        {
-          assignment: saved,
-          submission,
-          author,
-          copyeditor,
-          round: latest.round,
-        },
-        em,
-      );
-      return saved;
-    });
+    const pending: Notification[] = [];
+    return this.copyeditAssignmentsRepo.manager
+      .transaction(async (em) => {
+        const assignmentRepo = em.getRepository(CopyeditAssignment);
+        assignment.status = CopyeditAssignmentStatus.READY_FOR_REVIEW;
+        const saved = await assignmentRepo.save(assignment);
+        const n = await this.enqueueCopyeditAuthorReadyEvent(
+          {
+            assignment: saved,
+            submission,
+            author,
+            copyeditor,
+            round: latest.round,
+          },
+          em,
+        );
+        if (n) pending.push(n);
+        return saved;
+      })
+      .then((saved) => {
+        this.emitPendingNotifications(pending);
+        return saved;
+      });
   }
 
   async listCopyeditNotes(

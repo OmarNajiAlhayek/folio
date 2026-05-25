@@ -4,6 +4,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AdminEmailController } from './admin-email.controller';
 import { AdminEmailService } from './admin-email.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
+import { OutboxRepairService } from '../messaging/outbox-repair.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 
 class AllowGuard implements CanActivate {
@@ -47,6 +48,10 @@ describe('AdminEmailController (integration)', () => {
         {
           provide: EmailPipelineObservabilityService,
           useValue: pipelineObservability,
+        },
+        {
+          provide: OutboxRepairService,
+          useValue: { requeueDead: jest.fn() },
         },
       ],
     })

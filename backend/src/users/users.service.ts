@@ -12,6 +12,9 @@ import {
 } from '../entities/role-invitation.entity';
 import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_TYPE } from '../notifications/notification-types';
+import { roleInvitationCreatedKey } from '../notifications/notification-idempotency';
 
 export type ReviewerCandidate = {
   id: string;
@@ -54,6 +57,7 @@ export class UsersService {
     @InjectRepository(RoleInvitation)
     private readonly roleInvRepo: Repository<RoleInvitation>,
     private readonly rbacService: RbacService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
@@ -246,7 +250,21 @@ export class UsersService {
     return profile;
   }
 
-  async createEditorInvitation(
+  async createRoleInvitation(
+    actorUserId: string,
+    targetUserId: string,
+    roleSlug: string,
+  ): Promise<RoleInvitation> {
+    if (roleSlug !== ROLE_SLUGS.EDITOR) {
+      throw new BadRequestException({
+        message: 'Only editor role invitations are supported',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    return this.createEditorInvitation(actorUserId, targetUserId);
+  }
+
+  private async createEditorInvitation(
     actorUserId: string,
     targetUserId: string,
   ): Promise<RoleInvitation> {
@@ -283,6 +301,7 @@ export class UsersService {
         code: 'VALIDATION_ERROR',
       });
     }
+    const invitedBy = await this.findById(actorUserId);
     const row = this.roleInvRepo.create({
       inviteeUserId: targetUserId,
       invitedByUserId: actorUserId,
@@ -290,7 +309,21 @@ export class UsersService {
       status: RoleInvitationStatus.INVITED,
       resolvedAt: null,
     });
-    return this.roleInvRepo.save(row);
+    const saved = await this.roleInvRepo.save(row);
+    const n = await this.notifications.createIfAbsent({
+      userId: targetUserId,
+      type: NOTIFICATION_TYPE.ROLE_INVITATION_CREATED,
+      params: {
+        invitedByDisplayName: invitedBy?.displayName ?? 'Editor',
+        roleSlug: ROLE_SLUGS.EDITOR,
+      },
+      href: '/dashboard',
+      idempotencyKey: roleInvitationCreatedKey(saved.id),
+    });
+    if (n) {
+      this.notifications.emitCreated([n]);
+    }
+    return saved;
   }
 
   async listMyPendingRoleInvitations(

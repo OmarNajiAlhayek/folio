@@ -26,14 +26,17 @@ import type {
   AuthorsSection,
   ConstructorContent,
   ConstructorDir,
+  EquationSection,
   HeadingSection,
   ImageSection,
   ParagraphSection,
   ReferencesSection,
+  RichTextBlockSection,
   TableSection,
   TitleSection,
 } from './constructor-content.types';
 import { resolveSectionDir } from './constructor-content.types';
+import { EquationRenderService } from './equation-render.service';
 
 type Node = DefaultTreeAdapterMap['node'];
 type Element = DefaultTreeAdapterMap['element'];
@@ -62,6 +65,8 @@ function toAlignmentType(a: ManuscriptAlignment) {
 
 @Injectable()
 export class DocxGeneratorService {
+  constructor(private readonly equationRender: EquationRenderService) {}
+
   /**
    * Builds a `.docx` Buffer from a ConstructorContent payload.
    *
@@ -79,6 +84,7 @@ export class DocxGeneratorService {
     const defaultDir = content.defaultDir;
     let figureCounter = 0;
     let tableCounter = 0;
+    let equationCounter = 0;
 
     const children: Array<Paragraph | Table> = [];
 
@@ -120,11 +126,33 @@ export class DocxGeneratorService {
           children.push(...this.buildTable(section, dir, tableCounter, profile));
           break;
         }
+        case 'acknowledgments':
+        case 'funding':
+        case 'conflictOfInterest':
+        case 'dataAvailability':
+          children.push(
+            ...this.buildRichTextBlock(section as RichTextBlockSection, dir, profile),
+          );
+          break;
+        case 'equation': {
+          equationCounter += 1;
+          children.push(
+            ...(await this.buildEquation(
+              section,
+              dir,
+              equationCounter,
+              profile,
+            )),
+          );
+          break;
+        }
         case 'references':
           children.push(...this.buildReferences(section, profile));
           break;
       }
     }
+
+    this.equationRender.clearCache();
 
     const mm = profile.pageMarginsMm;
     const doc = new Document({
@@ -255,6 +283,11 @@ export class DocxGeneratorService {
       p.id.toLowerCase().includes('figure'),
     );
     return fig?.id ?? 'FigureCaption';
+  }
+
+  private tableNoteStyleId(profile: ManuscriptStyleProfile): string {
+    const found = profile.paragraphStyles.find((s) => s.id === 'TableNote');
+    return found?.id ?? 'Normal';
   }
 
   private tableCaptionStyleId(profile: ManuscriptStyleProfile): string {
@@ -522,6 +555,86 @@ export class DocxGeneratorService {
     } else {
       if (tableBlock) out.push(tableBlock);
       out.push(captionPara);
+    }
+    const notes = section.notes?.trim();
+    if (notes) {
+      const noteStyle = this.tableNoteStyleId(profile);
+      out.push(
+        new Paragraph({
+          style: noteStyle,
+          bidirectional: dir === 'rtl',
+          alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+          children: [this.run(notes, dir, profile)],
+        }),
+      );
+    }
+    return out;
+  }
+
+  private buildRichTextBlock(
+    section: RichTextBlockSection,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+  ): Paragraph[] {
+    return this.buildParagraph(
+      { ...section, kind: 'paragraph', html: section.html },
+      dir,
+      profile,
+    );
+  }
+
+  private async buildEquation(
+    section: EquationSection,
+    dir: ConstructorDir,
+    equationNumber: number,
+    profile: ManuscriptStyleProfile,
+  ): Promise<Paragraph[]> {
+    const out: Paragraph[] = [];
+    const latex = section.latex?.trim();
+    if (!latex) {
+      out.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            this.run('[Empty equation]', dir, profile, { italics: true }),
+          ],
+        }),
+      );
+      return out;
+    }
+    try {
+      const png = await this.equationRender.renderLatexToPng(latex);
+      const children: ParagraphChild[] = [
+        new ImageRun({
+          type: 'png',
+          data: png,
+          transformation: { width: 400, height: 80 },
+        }),
+      ];
+      if (section.numbered) {
+        children.push(
+          this.run(` (${equationNumber})`, dir, profile),
+        );
+      }
+      out.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          bidirectional: dir === 'rtl',
+          children,
+        }),
+      );
+    } catch {
+      out.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            this.run(`[Equation: ${latex}]`, dir, profile, { italics: true }),
+            ...(section.numbered
+              ? [this.run(` (${equationNumber})`, dir, profile)]
+              : []),
+          ],
+        }),
+      );
     }
     return out;
   }

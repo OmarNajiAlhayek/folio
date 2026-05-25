@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { OutboundEvent } from '../entities/outbound-event.entity';
@@ -16,6 +17,7 @@ import { OutboundEvent } from '../entities/outbound-event.entity';
  */
 @ApiTags('health')
 @Controller('health/outbox')
+@SkipThrottle()
 export class OutboxHealthController {
   constructor(
     @InjectRepository(OutboundEvent)

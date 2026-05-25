@@ -1,7 +1,9 @@
 /**
- * Mirror of `packages/shared/messaging/redactor.ts`. Strips PII fields
- * (reviewer, invitedBy, email-shaped strings) before payloads approach
- * any logger or DLQ inspection tooling. Keep in sync with email-service.
+ * PII redactor for logs and DLQ inspection tooling. Drops reviewer and
+ * invitedBy blocks before any payload approaches a logger.
+ *
+ * Keep `type`, `idempotencyKey`, `assignmentSlug`, `occurredAt` so logs
+ * remain operationally useful without leaking emails or display names.
  */
 
 export type RedactedPayload = {

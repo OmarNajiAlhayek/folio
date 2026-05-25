@@ -18,9 +18,11 @@ import {
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { submissionFileMulterOptions } from './submission-file-multer.options';
 import { createReadStream } from 'fs';
 import { SubmissionsService } from './submissions.service';
+import { DocxImportService } from './docx-import.service';
+import { constructorDocxMulterOptions } from './constructor-docx-multer.options';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/types/request-user';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
@@ -31,6 +33,7 @@ import { AssignCopyeditorDto } from './dto/assign-copyeditor.dto';
 import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
 import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage.dto';
 import { GenerateDocxDto } from './dto/constructor-content.dto';
+import { SubmitSubmissionDto } from './dto/submit-submission.dto';
 import type { ConstructorContent } from './constructor-content.types';
 import { Readable } from 'stream';
 import { Permissions } from '../common/decorators/permissions.decorator';
@@ -44,11 +47,58 @@ import { SUBMISSION_FILE_KINDS } from './submission-file-kinds';
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
 @ApiBearerAuth('JWT')
 export class SubmissionsController {
-  constructor(private readonly submissionsService: SubmissionsService) {}
+  constructor(
+    private readonly submissionsService: SubmissionsService,
+    private readonly docxImportService: DocxImportService,
+  ) {}
 
   @Post()
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   create(@CurrentUser() user: RequestUser, @Body() dto: CreateSubmissionDto) {
     return this.submissionsService.create(user.sub, dto);
+  }
+
+  /**
+   * Generate a Word file directly from constructor content without requiring
+   * an existing submission slug. Declared before `:slug/*` routes.
+   */
+  /**
+   * Parse a `.docx` into `ConstructorContent` for the Word Constructor UI.
+   * Declared before `:slug/*` routes.
+   */
+  @Post('import-docx-to-constructor')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file', constructorDocxMulterOptions))
+  importDocxToConstructor(@UploadedFile() file: Express.Multer.File) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException({
+        message: 'Word file is required',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    return this.docxImportService.importFromBuffer(file.buffer);
+  }
+
+  @Post('generate-docx-standalone')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  async generateStandaloneDocx(
+    @Body() dto: GenerateDocxDto,
+    @CurrentUser() _user: RequestUser,
+  ) {
+    const buffer = await this.submissionsService.generateDocxStandalone(
+      dto.content as unknown as ConstructorContent,
+    );
+    return new StreamableFile(Readable.from(buffer), {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      disposition: 'attachment; filename="constructor.docx"',
+    });
   }
 
   @Get()
@@ -105,6 +155,7 @@ export class SubmissionsController {
   }
 
   @Patch(':slug')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   update(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
@@ -114,8 +165,20 @@ export class SubmissionsController {
   }
 
   @Post(':slug/submit')
-  submit(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
-    return this.submissionsService.submit(slug, user);
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  submit(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SubmitSubmissionDto,
+  ) {
+    return this.submissionsService.submit(slug, user, {
+      constructorContent: dto.constructorContent as
+        | ConstructorContent
+        | undefined,
+      useUploadedManuscript: dto.useUploadedManuscript,
+      presentUploadedManuscript: dto.presentUploadedManuscript,
+      presentConstructorManuscript: dto.presentConstructorManuscript,
+    });
   }
 
   @Patch(':slug/status')
@@ -198,6 +261,7 @@ export class SubmissionsController {
   }
 
   @Post(':slug/files')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   @ApiConsumes('multipart/form-data')
   @ApiQuery({
     name: 'kind',
@@ -214,12 +278,7 @@ export class SubmissionsController {
       },
     },
   })
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 25 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', submissionFileMulterOptions))
   async uploadFile(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
@@ -253,6 +312,7 @@ export class SubmissionsController {
   }
 
   @Delete(':slug/files/:fileId')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   deleteFile(
     @Param('slug') slug: string,
     @Param('fileId', ParseUUIDPipe) fileId: string,
@@ -271,6 +331,7 @@ export class SubmissionsController {
    *   default      → stream the binary as a download.
    */
   @Post(':slug/generate-docx')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   async generateDocx(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
@@ -279,11 +340,15 @@ export class SubmissionsController {
   ) {
     const attach =
       dto.attach === true || attachQuery === 'true' || attachQuery === '1';
+    const attachKind =
+      dto.attachKind === 'manuscript_constructor'
+        ? 'manuscript_constructor'
+        : 'manuscript';
     const result = await this.submissionsService.generateDocx(
       slug,
       user,
       dto.content as unknown as ConstructorContent,
-      { attach },
+      { attach, attachKind },
     );
     if (result.kind === 'attached') {
       return result.file;
@@ -294,21 +359,4 @@ export class SubmissionsController {
     });
   }
 
-  /**
-   * Generate a Word file directly from constructor content without requiring
-   * an existing submission slug. Intended for the pre-submission constructor flow.
-   */
-  @Post('generate-docx-standalone')
-  async generateStandaloneDocx(
-    @Body() dto: GenerateDocxDto,
-    @CurrentUser() _user: RequestUser,
-  ) {
-    const buffer = await this.submissionsService.generateDocxStandalone(
-      dto.content as unknown as ConstructorContent,
-    );
-    return new StreamableFile(Readable.from(buffer), {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      disposition: 'attachment; filename="constructor.docx"',
-    });
-  }
 }

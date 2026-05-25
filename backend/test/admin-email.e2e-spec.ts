@@ -204,6 +204,32 @@ describe('Admin email (e2e)', () => {
     expect(typeof b.text).toBe('string');
   });
 
+  it('POST /admin/email/outbox/:id/requeue without auth returns 401', () => {
+    return request(app.getHttpServer())
+      .post(
+        '/api/v1/admin/email/outbox/00000000-0000-4000-8000-000000000001/requeue',
+      )
+      .expect(401);
+  });
+
+  it('POST /admin/email/outbox/:id/requeue as author returns 403', () => {
+    return request(app.getHttpServer())
+      .post(
+        '/api/v1/admin/email/outbox/00000000-0000-4000-8000-000000000001/requeue',
+      )
+      .set('Authorization', `Bearer ${authorToken}`)
+      .expect(403);
+  });
+
+  it('POST /admin/email/outbox/:id/requeue as editor returns 404 for unknown id', () => {
+    return request(app.getHttpServer())
+      .post(
+        '/api/v1/admin/email/outbox/00000000-0000-4000-8000-000000000099/requeue',
+      )
+      .set('Authorization', `Bearer ${editorToken}`)
+      .expect(404);
+  });
+
   it('GET /admin/email/pipeline-status without auth returns 401', () => {
     return request(app.getHttpServer())
       .get('/api/v1/admin/email/pipeline-status')

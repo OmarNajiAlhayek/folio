@@ -1,7 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
+import type { Request } from 'express';
+import { jwtFromCookieOrBearer } from '../jwt-from-request.util';
 import { UsersService } from '../../users/users.service';
 import { RbacService } from '../../rbac/rbac.service';
 
@@ -18,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly rbacService: RbacService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: (req: Request) => jwtFromCookieOrBearer(req),
       ignoreExpiration: false,
       secretOrKey: config.getOrThrow<string>('JWT_SECRET'),
     });

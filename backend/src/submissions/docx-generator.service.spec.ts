@@ -1,11 +1,12 @@
 import { DocxGeneratorService } from './docx-generator.service';
+import { EquationRenderService } from './equation-render.service';
 import type { ConstructorContent } from './constructor-content.types';
 import { validateConstructorContentForSubmit } from './constructor-content-utils';
 import { damascusUniversityJournalV1 } from '../manuscript-styles/profiles/damascus-university-journal-v1.profile';
 import { extractDocumentXml } from './ooxml-docx.test-utils';
 
 describe('DocxGeneratorService', () => {
-  const service = new DocxGeneratorService();
+  const service = new DocxGeneratorService(new EquationRenderService());
 
   /**
    * Minimal end-to-end: build a tiny ConstructorContent with mixed RTL/LTR,

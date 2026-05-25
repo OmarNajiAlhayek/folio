@@ -14,6 +14,13 @@
 
 export type ConstructorDir = 'ltr' | 'rtl';
 
+export type ConstructorPresetId =
+  | 'introduction'
+  | 'literatureReview'
+  | 'materialsAndMethods'
+  | 'resultsAndDiscussion'
+  | 'conclusions';
+
 export type ConstructorSectionKind =
   | 'title'
   | 'authors'
@@ -24,7 +31,18 @@ export type ConstructorSectionKind =
   | 'paragraph'
   | 'image'
   | 'table'
-  | 'references';
+  | 'references'
+  | 'acknowledgments'
+  | 'funding'
+  | 'conflictOfInterest'
+  | 'dataAvailability'
+  | 'equation';
+
+export type RichTextBlockKind =
+  | 'acknowledgments'
+  | 'funding'
+  | 'conflictOfInterest'
+  | 'dataAvailability';
 
 export interface BaseConstructorSection {
   id: string;
@@ -35,6 +53,8 @@ export interface BaseConstructorSection {
   dirSource?: 'auto' | 'manual';
   /** When true, the section is mandatory and its remove button is disabled in the UI. */
   pinned?: boolean;
+  /** Set when inserted from an IMRaD structure preset; used for profile recommendations. */
+  presetSourceId?: ConstructorPresetId;
 }
 
 export interface TitleSection extends BaseConstructorSection {
@@ -72,6 +92,11 @@ export interface ParagraphSection extends BaseConstructorSection {
   html: string;
 }
 
+export interface RichTextBlockSection extends BaseConstructorSection {
+  kind: RichTextBlockKind;
+  html: string;
+}
+
 export interface ImageSection extends BaseConstructorSection {
   kind: 'image';
   /** `submission_files.id` of an image uploaded with kind=figure. */
@@ -86,6 +111,16 @@ export interface TableSection extends BaseConstructorSection {
   caption: string;
   hasHeaderRow: boolean;
   rows: string[][];
+  /** Plain-text table note below the grid (TableNote style in docx). */
+  notes?: string;
+}
+
+export interface EquationSection extends BaseConstructorSection {
+  kind: 'equation';
+  latex: string;
+  numbered: boolean;
+  /** Omit on save — docx/preview derive "(1)", "(2)" from document order when numbered. */
+  label?: string;
 }
 
 export interface ReferencesSection extends BaseConstructorSection {
@@ -113,8 +148,10 @@ export type ConstructorSection =
   | AbstractSection
   | HeadingSection
   | ParagraphSection
+  | RichTextBlockSection
   | ImageSection
   | TableSection
+  | EquationSection
   | ReferencesSection;
 
 export interface ConstructorContent {
@@ -145,3 +182,9 @@ export interface ConstructorValidationError {
   message: string;
   sectionId?: string;
 }
+
+export type ConstructorGuidance = {
+  extraMandatorySlots?: RichTextBlockKind[];
+  recommendedPresets?: ConstructorPresetId[];
+  requiredRichTextKinds?: RichTextBlockKind[];
+};
