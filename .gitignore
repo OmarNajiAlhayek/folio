@@ -7,6 +7,10 @@ node_modules/
 !.env.example
 !.env.local.example
 
+# TLS / crypto keys (never commit)
+*.key
+*.pem
+
 # Build outputs & bundler caches (never commit generated assets or dev caches)
 dist/
 build/
@@ -43,3 +47,15 @@ Thumbs.db
 
 # Uploads (when you add local file storage)
 uploads/
+
+# Local DOCX / equation debugging (never commit)
+_docx-inspect/
+_inspect.docx
+_inspect.zip
+equation-probe-out/
+test-equation-out.docx
+*-probe.png
+katex-probe.png
+user-equation.png
+7bf54f8d7fe083dbcd2b54436a6d859addd90efe.png
+extracted-*.png
