@@ -11,6 +11,7 @@ RabbitMQ is **not** required for these commands: unit tests mock RabbitMQ and DB
 | `cd services/email-service && npm test` | Handlers, templates, idempotency, redactor, reminder scheduler (mocked RabbitMQ / DB). |
 | `cd backend && npm test` | Outbox drainer, event publisher enqueue, `SubmissionsService.assignReviewer` outbox contract (mocked DB), **`RemindersService`** (mocked `DataSource`; no `email` schema required), **pipeline observability** (mocked repositories + queue metrics). |
 | `cd backend && npm run test:e2e` | HTTP app + database: `GET /api/v1/health` and `GET /api/v1/health/outbox`; [`admin-email.e2e-spec.ts`](../backend/test/admin-email.e2e-spec.ts) (401/403/422 always; policy/template/preview/**pipeline-status**/409 when schema **`email`** and seed rows exist — otherwise DB-backed `it` blocks no-op with a console warning). Needs the same **`DB_*`** vars as `backend/.env`. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB user cannot read/update `email.*` (includes **`SELECT` on `email.email_log`** for pipeline status). |
+| `cd backend && npm run test:pipeline` | **Opt-in** real broker test: [`email-pipeline.integration.spec.ts`](../backend/test/email-pipeline.integration.spec.ts) — assign reviewer → outbox `published` → message on a test-bound `reviewer.invited` queue. Needs Postgres + RabbitMQ; sets `EMAIL_PIPELINE_INTEGRATION=1` and `AUTH_RETURN_BEARER=true`. From repo root: `npm run test:pipeline`. |
 
 ## Journal email admin API (templates & policy)
 
@@ -27,6 +28,7 @@ Editors with JWT + **`email.manage_reminders`** can manage the singleton reminde
 | `PATCH` | `/api/v1/admin/email/templates/:templateKey` — full template fields + `expectedUpdatedAt`; mismatch → **409** |
 | `POST` | `/api/v1/admin/email/templates/:templateKey/preview` — optional `{ "isOverdue": true }` for reminder-due branch; **does not send mail** |
 | `GET` | `/api/v1/admin/email/pipeline-status` — outbox + `email_log` + `email.reminder` + cached RabbitMQ queue depths (redacted samples; requires **`SELECT` on `email.email_log`**) |
+| `POST` | `/api/v1/admin/email/outbox/:id/requeue` — reset a **`dead`** outbox row to `pending` (fix broker, then requeue; drainer republishes within ~10s). **404** if missing, **409** if not `dead`. |
 
 **DB:** tables live in schema **`email`** (same database as backend). Run email-service migrations first. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB role cannot read/update `email.*`.
 
@@ -109,7 +111,7 @@ orphan rows) consistent with app payload shape, or **manually** publish to
 RabbitMQ in staging — follow [`plans/email-service.md`](plans/email-service.md)
 event contract.
 
-There is no single npm script that boots Docker, both apps, and asserts on queues automatically; add Testcontainers or a compose profile in CI when you want that fully automated.
+The opt-in **`npm run test:pipeline`** script automates the publisher half (outbox + RabbitMQ). A full consumer + `email.email_log` check still requires the email-service worker running; use the manual steps below for that sign-off.
 
 ## Operator runbooks (pipeline visibility)
 
@@ -125,7 +127,9 @@ There is no single npm script that boots Docker, both apps, and asserts on queue
 
 **`dead` outbox rows**
 
-- Meaning: the drainer exceeded its retry cap talking to the broker. Inspect `last_error` in Postgres (`public.outbound_event_outbox`). After fixing the root cause, recovery is **manual** (re-insert a correct row or republish with care — there is no “magic requeue” API in v1).
+- Meaning: the drainer exceeded its retry cap talking to the broker. Inspect `last_error` in Postgres (`public.outbound_event_outbox`) or the dead samples on **Email settings** / `GET …/pipeline-status`.
+- After fixing the root cause (broker up, credentials correct): **`POST /api/v1/admin/email/outbox/:id/requeue`** (JWT + `email.manage_reminders`) or the **Requeue** control in the email-settings UI. That resets `status` to `pending`, `attempts` to `0`, and clears `last_error`; the drainer republishes on the next tick (~10s).
+- For **orphan assignments** with no outbox row at all, requeue does not apply — see [Orphan assignments](#orphan-assignments-historical--manual-repair) below.
 
 **`email.email_log` status `failed` and DLQ depth**
 

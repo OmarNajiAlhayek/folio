@@ -31,6 +31,9 @@ export default defineConfig({
       url: `http://localhost:${backendPort}/api/v1/health`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
+      env: {
+        AUTH_RETURN_BEARER: "true",
+      },
     },
     {
       command: "npm run dev",

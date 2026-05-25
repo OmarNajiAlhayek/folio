@@ -1,6 +1,6 @@
 # API notes (NestJS, MVP)
 
-High-level REST contract for the NestJS app in `backend/`. Implementation follows this sketch; data and statuses match [`DATA-MODEL.md`](./DATA-MODEL.md) and behaviors [`USER-STORIES.md`](./USER-STORIES.md).
+High-level REST contract for the NestJS app in `backend/`. Implementation follows this sketch; data and statuses match [`DATA-MODEL.md`](./DATA-MODEL.md) and role workflows in [`feature-report.md`](./feature-report.md).
 
 ## Conventions
 
@@ -18,7 +18,10 @@ High-level REST contract for the NestJS app in `backend/`. Implementation follow
 
 Use stable `code` values for the frontend (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`). Optionally align later with [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) Problem Details (`application/problem+json`).
 
-- **Auth:** **JWT** access token in `Authorization: Bearer <token>`. Optional refresh token route in a later iteration. Nest: `JwtAuthGuard` + role guards (`RolesGuard`) checking claims or DB roles.
+- **Auth (browser):** httpOnly cookie `folio_access` (JWT) on `Path=/api/v1`, plus double-submit CSRF cookie `folio_csrf` and header `X-CSRF-Token` on `POST`/`PUT`/`PATCH`/`DELETE`. Frontend calls the API same-origin via Next.js rewrite (`/api/v1` → Nest).
+- **Auth (automation):** `Authorization: Bearer <token>` when `AUTH_RETURN_BEARER=true` (Playwright, scripts). Bearer requests skip CSRF.
+- **Rate limits:** `POST /auth/login` and `POST /auth/register` return `429` with `code: TOO_MANY_REQUESTS` when exceeded (`THROTTLE_*` env).
+- **Uploads:** `POST /submissions/:slug/files` validates extension + magic bytes per `kind`; max 25MB; temp disk then move to `UPLOAD_DIR`.
 
 ### Submission `status` in API
 
@@ -53,8 +56,8 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
 | POST | `/auth/register` | Public | Create user; default role author. Body: email, password, displayName; optional affiliation, orcid (0000-0000-0000-000X), reviewKeywords, willingToReview. |
-| POST | `/auth/login` | Public | Returns access JWT (+ refresh if implemented). |
-| POST | `/auth/logout` | Authenticated | Optional; mainly client discards token if stateless. |
+| POST | `/auth/login` | Public | Sets auth cookies; JSON `{ user }` only (adds `accessToken` when `AUTH_RETURN_BEARER=true`). |
+| POST | `/auth/logout` | Authenticated | Clears cookies; requires CSRF when using cookie session. |
 | GET | `/auth/me` | Authenticated | Current user + roles. |
 
 ### Users (minimal)
@@ -128,7 +131,7 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
   same [`email-service`](./plans/email-service.md) pipeline as reviewer/copyedit mail.
 - **Still deferred:** review-submitted → editor, published → author, role-invitation
   email, auth/welcome mail.
-- WebSockets or SSE for in-app notifications.
+- **Shipped:** in-app notifications (REST inbox, SSE live updates, header bell). See `GET /notifications`, `GET /notifications/stream`.
 - Refresh tokens, OAuth, ORCID.
 
 ## Eventing
@@ -160,6 +163,27 @@ and recent failed rows (no recipient), `email.reminder` counts plus
 depths (`folio.events.dlq`, `email.reviewer_invited`, `email.reminder_due`).
 When the broker is unreachable, database sections still return; `rabbitMq.available`
 is `false`. Tune cache TTL with `EMAIL_QUEUE_METRICS_CACHE_MS` (default 20000).
+
+`POST /admin/email/outbox/:id/requeue` resets a **`dead`** outbox row to
+`pending` (clears attempts and `last_error`) so the drainer can republish
+after the broker is healthy. **404** if the id is unknown; **409** if the
+row is not `dead`.
+
+---
+
+## In-app notifications
+
+Persisted per-user inbox (PostgreSQL `notifications`). Live updates via SSE while the app is open.
+
+| Method | Path | Who | Notes |
+|--------|------|-----|--------|
+| GET | `/notifications` | JWT | `filter=all \| unread \| read` (default `all`), `limit` (max 50), `cursor` for pagination |
+| GET | `/notifications/unread-count` | JWT | Badge count |
+| PATCH | `/notifications/read-all` | JWT | Mark all unread read |
+| PATCH | `/notifications/:id/read` | JWT | Mark one read (scoped to current user) |
+| GET | `/notifications/stream` | JWT (cookie) | SSE: `connected` (unread count), `notification` (new row), `heartbeat` |
+
+**SSE scaling:** `NotificationHub` is in-process only (one Node replica). Multi-instance deploys need a shared pub/sub fan-out — see `backend/src/notifications/README.md`.
 
 ---
 

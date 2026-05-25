@@ -17,18 +17,42 @@ export function normalizePathname(pathname: string): string {
   return p;
 }
 
-/** First matching rule wins — list specific patterns before broad ones. */
+/**
+ * Static route → permission map for {@link PermissionRouteGate}.
+ *
+ * First matching rule wins — list specific patterns before broad ones.
+ * Multiple slugs on one rule mean the user needs any one (OR).
+ *
+ * Not listed here (by design): resource routes such as `/submissions/[slug]`,
+ * where access depends on the submission and is enforced by the API.
+ */
 export const ROUTE_ACCESS_RULES: Array<{
   pattern: RegExp;
   permissions: string | string[];
 }> = [
   {
-    pattern: /^\/editor(\/|$)/,
+    pattern: /^\/editor\/email-settings(\/|$)/,
+    permissions: PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+  },
+  {
+    pattern: /^\/editor(?!\/email-settings)(\/|$)/,
     permissions: PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   },
   {
     pattern: /^\/assignments(\/|$)/,
     permissions: PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
+  },
+  {
+    pattern: /^\/copyedit-assignments(\/|$)/,
+    permissions: PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE,
+  },
+  {
+    pattern: /^\/submissions\/new(\/|$)/,
+    permissions: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+  },
+  {
+    pattern: /^\/submissions\/compose(\/|$)/,
+    permissions: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
   },
 ];
 

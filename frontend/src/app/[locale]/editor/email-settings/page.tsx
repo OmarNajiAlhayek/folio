@@ -3,9 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { toast, toastApiError } from "@/lib/toast";
+import { toast } from "@/lib/toast";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import type { MeProfile } from "@/lib/permissions";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
 import { submissionQueueShellCls } from "@/lib/submission-list-ui";
@@ -147,6 +150,9 @@ export default function EmailSettingsPage() {
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [requeueOutboxId, setRequeueOutboxId] = useState<string | null>(null);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const showApiError = useToastApiError();
 
   const loadAll = useCallback(async () => {
     const q = `?locale=${encodeURIComponent(editTemplateLocale)}`;
@@ -192,19 +198,33 @@ export default function EmailSettingsPage() {
       );
       setPipeline(p);
     } catch (err) {
-      setPipelineError(
-        err instanceof ApiError ? err.message : t("pipelineFailed"),
-      );
+      setPipelineError(resolveApiError(err, t("pipelineFailed")));
     } finally {
       setPipelineLoading(false);
     }
-  }, [t]);
+  }, [t, resolveApiError]);
+
+  const requeueDeadOutbox = useCallback(
+    async (id: string) => {
+      setRequeueOutboxId(id);
+      try {
+        await apiJson(`/admin/email/outbox/${encodeURIComponent(id)}/requeue`, {
+          method: "POST",
+        });
+        toast.success(t("requeueOutboxOk"));
+        await loadPipeline();
+      } catch (err) {
+        showApiError(err, t("requeueOutboxFailed"));
+      } finally {
+        setRequeueOutboxId(null);
+      }
+    },
+    [loadPipeline, t],
+  );
+
+  useAuthRedirect();
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     let cancelled = false;
     void (async () => {
       try {
@@ -217,7 +237,7 @@ export default function EmailSettingsPage() {
           redirectToLogin(router, pathname);
           return;
         }
-        setError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setError(resolveApiError(err, t("loadFailed")));
       }
     })();
     return () => {
@@ -237,7 +257,7 @@ export default function EmailSettingsPage() {
         await Promise.all([loadAll(), loadPipeline()]);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setError(resolveApiError(err, t("loadFailed")));
       }
     })();
     return () => {
@@ -273,7 +293,7 @@ export default function EmailSettingsPage() {
         toast.error(t("conflict"), { id: "email-settings-conflict" });
         await loadAll().catch(() => undefined);
       } else {
-        toastApiError(err, t("loadFailed"), { id: "email-settings-policy-save" });
+        showApiError(err, t("loadFailed"), { id: "email-settings-policy-save" });
       }
     } finally {
       setBusyPolicy(false);
@@ -304,7 +324,7 @@ export default function EmailSettingsPage() {
         toast.error(t("conflict"), { id: "email-settings-conflict" });
         await loadAll().catch(() => undefined);
       } else {
-        toastApiError(err, t("loadFailed"), {
+        showApiError(err, t("loadFailed"), {
           id: `email-settings-template-${key}`,
         });
       }
@@ -356,7 +376,7 @@ export default function EmailSettingsPage() {
             setError(null);
             void Promise.all([
               loadAll().catch((err) => {
-                setError(err instanceof ApiError ? err.message : t("loadFailed"));
+                setError(resolveApiError(err, t("loadFailed")));
               }),
               loadPipeline(),
             ]);
@@ -425,10 +445,25 @@ export default function EmailSettingsPage() {
                   <p className="text-xs font-medium text-ink/70">
                     {t("deadOutboxSamples")}
                   </p>
-                  <ul className="mt-1 max-h-32 space-y-1 overflow-auto font-mono text-xs text-ink/75">
+                  <ul className="mt-1 max-h-48 space-y-2 overflow-auto font-mono text-xs text-ink/75">
                     {pipeline.outbox.deadSample.map((r) => (
-                      <li key={r.id}>
-                        {r.routingKey} · {r.lastErrorRedacted ?? "—"}
+                      <li
+                        key={r.id}
+                        className="flex flex-wrap items-center justify-between gap-2"
+                      >
+                        <span>
+                          {r.routingKey} · {r.lastErrorRedacted ?? "—"}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded border border-ink/20 px-2 py-0.5 font-sans text-xs text-ink hover:bg-ink/5 disabled:opacity-50"
+                          disabled={requeueOutboxId === r.id}
+                          onClick={() => void requeueDeadOutbox(r.id)}
+                        >
+                          {requeueOutboxId === r.id
+                            ? t("requeueOutboxBusy")
+                            : t("requeueOutbox")}
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -717,6 +752,7 @@ function TemplateFields({
   showOverduePreview?: boolean;
 }) {
   const tEmail = useTranslations("EmailSettings");
+  const showApiError = useToastApiError();
   const [pv, setPv] = useState<string | null>(null);
   const [pvBusy, setPvBusy] = useState(false);
 
@@ -732,7 +768,7 @@ function TemplateFields({
       );
     } catch (err) {
       // user-facing: template preview failed
-      toastApiError(err, tEmail("previewFailed"), { id: "email-settings-preview" });
+      showApiError(err, tEmail("previewFailed"), { id: "email-settings-preview" });
       setPv(null);
     } finally {
       setPvBusy(false);

@@ -9,6 +9,7 @@ import { AuthStorageSync } from "@/components/auth-storage-sync";
 import { QueryProvider } from "@/components/query-provider";
 import { LocaleDirectionProvider } from "@/components/locale-direction-provider";
 import { Nav } from "@/components/Nav";
+import { NotificationStreamSync } from "@/components/notification-stream-sync";
 import { routing } from "@/i18n/routing";
 
 type Props = {
@@ -43,6 +44,7 @@ export default async function LocaleLayout({ children, params }: Props) {
       <DocumentLocaleSync />
       <QueryProvider>
         <ApiAuthSync />
+        <NotificationStreamSync />
         <AuthStorageSync />
         <LocaleDirectionProvider locale={locale}>
           <AppToaster locale={locale} />

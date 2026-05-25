@@ -4,11 +4,17 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getStoredToken, setStoredToken } from "@/lib/api";
+import { apiJson } from "@/lib/api";
+import { broadcastAuthLogout } from "@/components/auth-storage-sync";
+import { clearCsrfToken } from "@/lib/csrf-token";
 import { useMe } from "@/lib/queries/auth";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { PERMISSION_SLUGS } from "@/lib/permissions";
+import { NotificationBell } from "@/components/notification-bell";
+import {
+  canBrowseSubmissionsNav,
+  PERMISSION_SLUGS,
+} from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 function isNavActive(
@@ -65,19 +71,14 @@ export function Nav() {
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const meQuery = useMe(!!token);
+  const meQuery = useMe();
   const perms = new Set(meQuery.data?.permissions ?? []);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelLogoutRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const descId = useId();
-
-  useEffect(() => {
-    void Promise.resolve().then(() => setToken(getStoredToken()));
-  }, [pathname]);
 
   useEffect(() => {
     const d = dialogRef.current;
@@ -97,11 +98,16 @@ export function Nav() {
     return () => cancelAnimationFrame(id);
   }, [logoutDialogOpen]);
 
-  function confirmLogout() {
+  async function confirmLogout() {
     const d = dialogRef.current;
     if (d?.open) d.close();
-    setStoredToken(null);
-    setToken(null);
+    try {
+      await apiJson("/auth/logout", { method: "POST" });
+    } catch {
+      /* session may already be gone */
+    }
+    clearCsrfToken();
+    broadcastAuthLogout();
     queryClient.clear();
     router.push("/login");
     router.refresh();
@@ -134,14 +140,16 @@ export function Nav() {
             <NavTextLink href="/publications" match="prefix">
               {t("publications")}
             </NavTextLink>
-            {token ? (
+            {meQuery.isSuccess && meQuery.data ? (
               <>
                 <NavTextLink href="/dashboard" match="exact">
                   {t("dashboard")}
                 </NavTextLink>
-                <NavTextLink href="/submissions" match="prefix">
-                  {t("submissions")}
-                </NavTextLink>
+                {canBrowseSubmissionsNav(perms) && (
+                  <NavTextLink href="/submissions" match="prefix">
+                    {t("submissions")}
+                  </NavTextLink>
+                )}
                 {perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE) && (
                   <NavTextLink href="/editor" match="exact">
                     {t("editor")}
@@ -162,6 +170,7 @@ export function Nav() {
                     {t("copyediting")}
                   </NavTextLink>
                 )}
+                <NotificationBell />
                 <div className="mx-1 h-4 w-px shrink-0 bg-ink/12" aria-hidden />
                 <button
                   type="button"

@@ -1,0 +1,10 @@
+{
+  "name": "folio",
+  "private": true,
+  "description": "Folio peer-review monorepo (frontend, backend, email-service)",
+  "scripts": {
+    "sync:shared": "node scripts/sync-shared-mirrors.mjs",
+    "check:shared": "node scripts/check-shared-mirrors.mjs",
+    "test:pipeline": "npm run test:pipeline --prefix backend"
+  }
+}

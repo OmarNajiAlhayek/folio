@@ -5,6 +5,8 @@ that owns all outbound mail in Folio (immediate reviewer-invite emails
 and scheduled reminders). It mirrors the executed plan and the trade-offs
 made along the way. Companion plan: `.cursor/plans/email-microservice-with-rabbitmq_*.plan.md`.
 
+Informal end-to-end walkthrough (may lag this doc): [`email-details.md`](../../email-details.md) at repo root.
+
 ## Why a separate service
 
 The Nest backend is a modular monolith ([`PROJECT-CONTEXT.md`](../PROJECT-CONTEXT.md)). Two

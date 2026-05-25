@@ -3,8 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
+import { ApiErrorState } from "@/components/api-error-state";
+import { getApiErrorKind } from "@/lib/api-error-message";
 import { redirectToLogin } from "@/lib/auth-redirect";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import {
   EMPTY_STATE_CLS,
   SubmissionListSkeleton,
@@ -30,10 +34,14 @@ export default function CopyeditAssignmentsPage() {
   const router = useRouter();
   const [items, setItems] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
 
   const loadList = useCallback(() => {
     setLoadError(null);
+    setLoadErrorCause(null);
     apiJson<Row[]>("/copyedit-assignments/me")
       .then((data) => setItems(data))
       .catch((err) => {
@@ -45,26 +53,32 @@ export default function CopyeditAssignmentsPage() {
           setLoadError(t("needCopyeditorRole"));
           return;
         }
-        setLoadError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setLoadErrorCause(err);
+        setLoadError(resolveApiError(err, t("loadFailed")));
       })
       .finally(() => setLoading(false));
-  }, [router, pathname, t]);
+  }, [router, pathname, t, resolveApiError]);
+
+  useAuthRedirect();
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     void Promise.resolve().then(() => loadList());
-  }, [router, pathname, loadList]);
+  }, [loadList]);
 
   if (loadError) {
     return (
-      <main className={submissionQueueShellCls}>
-        <p className="text-red-700" role="alert">
-          {loadError}
-        </p>
-      </main>
+      <ApiErrorState
+        className={submissionQueueShellCls}
+        message={loadError}
+        error={loadErrorCause}
+        hint={
+          loadErrorCause && getApiErrorKind(loadErrorCause) === "rateLimit"
+            ? tApi("rateLimitHint")
+            : undefined
+        }
+        onRetry={() => loadList()}
+        retryLabel={tApi("retry")}
+      />
     );
   }
 

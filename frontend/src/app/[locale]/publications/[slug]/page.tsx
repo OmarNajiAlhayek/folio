@@ -4,9 +4,12 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
-import { publicJson } from "@/lib/public-api";
+import { ApiErrorState } from "@/components/api-error-state";
+import { getApiErrorKind } from "@/lib/api-error-message";
 import { getApiBase } from "@/lib/api";
+import { publicJson } from "@/lib/public-api";
 import { PAGE_SHELL_NARROW } from "@/lib/page-shell";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 
 type Detail = {
   id: string;
@@ -16,7 +19,7 @@ type Detail = {
   abstract: string;
   abstractAr?: string | null;
   publishedAt: string | null;
-  author?: { displayName: string; email: string };
+  author?: { displayName: string };
   files: { id: string; originalName: string; mimeType: string }[];
 };
 
@@ -30,24 +33,29 @@ function formatDate(iso: string | null, locale: string) {
 export default function PublicationDetailPage() {
   const t = useTranslations("PublicationDetail");
   const tWf = useTranslations("SubmissionWorkflow");
+  const tApi = useTranslations("ApiErrors");
   const locale = useLocale();
+  const { resolve: resolveApiError } = useApiErrorMessages();
   const params = useParams();
   const routeSlug = params.slug as string;
   const [data, setData] = useState<Detail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
 
   const loadDetail = useCallback(() => {
     setLoadError(null);
+    setLoadErrorCause(null);
     setData(null);
     setLoading(true);
     publicJson<Detail>(`/public/submissions/${encodeURIComponent(routeSlug)}`)
       .then(setData)
-      .catch((e) =>
-        setLoadError(e instanceof Error ? e.message : t("notFound")),
-      )
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(resolveApiError(err, t("notFound")));
+      })
       .finally(() => setLoading(false));
-  }, [routeSlug, t]);
+  }, [routeSlug, t, resolveApiError]);
 
   useEffect(() => {
     void Promise.resolve().then(() => loadDetail());
@@ -65,24 +73,18 @@ export default function PublicationDetailPage() {
   }
 
   if (loadError || !data) {
+    const kind = loadErrorCause ? getApiErrorKind(loadErrorCause) : "generic";
     return (
-      <main className={PAGE_SHELL_NARROW}>
-        <Link href="/publications" className="text-sm text-accent hover:underline">
-          {t("back")}
-        </Link>
-        <p className="mt-8 text-ink/70" role="alert">
-          {loadError ?? t("loading")}
-        </p>
-        {loadError ? (
-          <button
-            type="button"
-            className="mt-3 rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
-            onClick={() => void loadDetail()}
-          >
-            {t("retryLoad")}
-          </button>
-        ) : null}
-      </main>
+      <ApiErrorState
+        message={loadError ?? t("notFound")}
+        error={loadErrorCause ?? undefined}
+        title={kind === "notFound" ? t("notFound") : undefined}
+        hint={kind === "rateLimit" ? tApi("rateLimitHint") : undefined}
+        onRetry={() => void loadDetail()}
+        retryLabel={tApi("retry")}
+        backHref="/publications"
+        backLabel={t("back")}
+      />
     );
   }
 

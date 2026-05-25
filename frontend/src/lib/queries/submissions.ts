@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiJson, getStoredToken } from "@/lib/api";
+import { apiJson } from "@/lib/api";
 import { ApiError } from "@/lib/api-response";
 import { queryKeys } from "@/lib/query-keys";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
@@ -19,6 +19,13 @@ export type SubmissionListItem = {
   updatedAt: string;
 };
 
+export type SubmissionArticleType =
+  | "original_research"
+  | "review_article"
+  | "case_report"
+  | "short_communication"
+  | "other";
+
 export type SubmissionSummary = {
   id: string;
   slug: string;
@@ -26,6 +33,8 @@ export type SubmissionSummary = {
   authorId: string;
   constructorContent?: unknown | null;
   title?: string;
+  articleType?: SubmissionArticleType | null;
+  files?: Array<{ id: string; kind: string; originalName: string }>;
 };
 
 export type SubmissionDetailPayload = {
@@ -175,7 +184,8 @@ export function useSubmissionsList() {
   return useQuery({
     queryKey: queryKeys.submissions(),
     queryFn: () => apiJson<SubmissionListItem[]>("/submissions"),
-    enabled: !!getStoredToken(),
+    enabled: true,
+    retry: false,
   });
 }
 
@@ -186,7 +196,8 @@ export function useSubmission(slug: string, enabled = true) {
       apiJson<SubmissionSummary>(
         `/submissions/${encodeURIComponent(slug)}`,
       ),
-    enabled: enabled && !!getStoredToken() && !!slug,
+    enabled: enabled && !!slug,
+    retry: false,
   });
 }
 
@@ -194,7 +205,8 @@ export function useSubmissionDetail(slug: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.submissionDetail(slug),
     queryFn: () => fetchSubmissionDetail(slug),
-    enabled: enabled && !!getStoredToken() && !!slug,
+    enabled: enabled && !!slug,
+    retry: false,
   });
 }
 
@@ -226,6 +238,9 @@ export function usePatchSubmission(slug: string) {
                 }
               : old,
         );
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.submissionDetail(slug),
+        });
         return;
       }
       void queryClient.invalidateQueries({

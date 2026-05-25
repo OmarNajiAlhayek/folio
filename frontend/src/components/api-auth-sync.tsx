@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { setApiUnauthorizedHandler, setStoredToken } from "@/lib/api";
+import { setApiUnauthorizedHandler } from "@/lib/api";
 import { isPublicPathname, redirectToLogin } from "@/lib/auth-redirect";
 
 /**
@@ -15,7 +15,6 @@ export function ApiAuthSync() {
 
   useEffect(() => {
     setApiUnauthorizedHandler(() => {
-      setStoredToken(null);
       if (isPublicPathname(pathname)) return;
       redirectToLogin(router, pathname);
     });

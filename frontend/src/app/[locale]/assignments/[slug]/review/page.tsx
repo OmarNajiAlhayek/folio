@@ -4,9 +4,13 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
-import { apiBlob, apiJson, ApiError, getStoredToken } from "@/lib/api";
+import { apiBlob, apiJson, ApiError } from "@/lib/api";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { toast, toastApiError } from "@/lib/toast";
+import { ApiErrorState } from "@/components/api-error-state";
+import { toast } from "@/lib/toast";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { cn } from "@/lib/utils";
 import {
@@ -125,10 +129,15 @@ export default function ReviewFormPage() {
   const [contextMissing, setContextMissing] = useState<
     "notFound" | "invited" | "notOpen" | null
   >(null);
+  const [contextErrorCause, setContextErrorCause] = useState<unknown>(null);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
+  const showApiError = useToastApiError();
 
   const loadContext = useCallback(async () => {
     setPageLoading(true);
     setContextError(null);
+    setContextErrorCause(null);
     setContextMissing(null);
     setAssignment(null);
     try {
@@ -158,17 +167,16 @@ export default function ReviewFormPage() {
         setContextError(tAssignments("needReviewerRole"));
         return;
       }
-      setContextError(err instanceof ApiError ? err.message : t("loadFailed"));
+      setContextErrorCause(err);
+      setContextError(resolveApiError(err, t("loadFailed")));
     } finally {
       setPageLoading(false);
     }
-  }, [slug, router, pathname, t, tAssignments]);
+  }, [slug, router, pathname, t, tAssignments, resolveApiError]);
+
+  useAuthRedirect();
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     loadContext().catch(() => {
       setContextError(t("loadFailed"));
       setPageLoading(false);
@@ -195,9 +203,10 @@ export default function ReviewFormPage() {
         method: "POST",
         body: JSON.stringify(parsed.data),
       });
+      toast.success(t("submitSuccess"), { id: "assignment-review-submit-success" });
       router.push("/assignments");
     } catch (err) {
-      toastApiError(err, t("submitFailed"), { id: "assignment-review-submit" });
+      showApiError(err, t("submitFailed"), { id: "assignment-review-submit" });
     } finally {
       setSubmitting(false);
     }
@@ -266,21 +275,16 @@ export default function ReviewFormPage() {
       )}
 
       {!pageLoading && contextError && (
-        <div className="mt-8 rounded-xl border border-red-200 bg-red-50/90 p-5 shadow-sm">
-          <p className="text-sm text-red-900">{contextError}</p>
-          <button
-            type="button"
-            className="mt-4 rounded-md border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
-            onClick={() => void loadContext()}
-          >
-            {t("retryLoad")}
-          </button>
-          <Link
-            href="/assignments"
-            className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
-          >
-            {t("backToAssignments")}
-          </Link>
+        <div className="mt-8">
+          <ApiErrorState
+            className="max-w-none px-0 py-0"
+            message={contextError}
+            error={contextErrorCause}
+            onRetry={() => void loadContext()}
+            retryLabel={tApi("retry")}
+            backHref="/assignments"
+            backLabel={t("backToAssignments")}
+          />
         </div>
       )}
 

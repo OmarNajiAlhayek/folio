@@ -16,7 +16,9 @@ Use this before running Folio locally. Full run instructions are in the reposito
 | Frontend | `frontend/.env.local.example` → `frontend/.env.local` |
 | Email service | `services/email-service/.env.example` → `services/email-service/.env` |
 
-Set `DB_*`, `JWT_SECRET`, API URL / CORS as needed. For email in dev, `EMAIL_PROVIDER=noop` is enough for the email service.
+Set `DB_*`, `JWT_SECRET`, API URL / CORS as needed. **Mail:** only `services/email-service/.env` — never put `SMTP_*` or `EMAIL_PROVIDER` in `backend/.env` (the API refuses to start). For email in dev, `EMAIL_PROVIDER=noop` is enough for the email service.
+
+**Production:** set `NODE_ENV=production` and replace example `JWT_SECRET` / `DB_PASSWORD` (both apps validate on startup). Use strong RabbitMQ credentials, not `guest:guest`.
 
 ## Run order (typical)
 
@@ -29,6 +31,6 @@ Health: backend `/api/v1/health` (see [`README.md`](../README.md) for ports).
 
 ## Further reading
 
-- User stories: [`USER-STORIES.md`](./USER-STORIES.md)
+- Features by role: [`feature-report.md`](./feature-report.md)
 - Data model: [`DATA-MODEL.md`](./DATA-MODEL.md)
 - API notes: [`API-NOTES.md`](./API-NOTES.md)

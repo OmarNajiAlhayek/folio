@@ -6,7 +6,7 @@ Folio is a **manuscript submission and peer-review** workspace: editors manage a
 
 - Roles: author, editor, reviewer (users may hold multiple roles).
 - Submissions with structured metadata, files, status transitions, assignments, and reviews.
-- Details and acceptance-style criteria: [`USER-STORIES.md`](./USER-STORIES.md).
+- Role-based features and workflows: [`feature-report.md`](./feature-report.md).
 
 ## Data and API
 

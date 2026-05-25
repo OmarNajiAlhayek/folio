@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { request, type APIRequestContext } from "@playwright/test";
 
 export interface E2EUserCredentials {
@@ -122,6 +124,42 @@ export async function createSubmission(
   } catch {
     throw new Error(
       `Expected JSON from POST submissions, got: ${text.slice(0, 240)}`,
+    );
+  }
+}
+
+const E2E_FIXTURE_DOCX = join(
+  process.cwd(),
+  "e2e",
+  "fixtures",
+  "minimal-import.docx",
+);
+
+export async function uploadManuscriptFile(
+  api: APIRequestContext,
+  token: string,
+  slug: string,
+  filePath: string = E2E_FIXTURE_DOCX,
+): Promise<void> {
+  const buffer = readFileSync(filePath);
+  const res = await api.post(
+    apiV1Absolute(`submissions/${encodeURIComponent(slug)}/files`),
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: {
+          name: "minimal-import.docx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          buffer,
+        },
+        kind: "manuscript",
+      },
+    },
+  );
+  if (!res.ok()) {
+    throw new Error(
+      `Failed upload manuscript for ${slug}: ${res.status()} ${await res.text()}`,
     );
   }
 }

@@ -4,9 +4,13 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
+import { ApiErrorState } from "@/components/api-error-state";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { toastApiError } from "@/lib/toast";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { toast } from "@/lib/toast";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 
 type AssignmentRow = {
@@ -39,10 +43,15 @@ export default function AssignmentInvitePage() {
   const [abstractExpandedEn, setAbstractExpandedEn] = useState(false);
   const [abstractExpandedAr, setAbstractExpandedAr] = useState(false);
   const [acting, setActing] = useState(false);
+  const [errorCause, setErrorCause] = useState<unknown>(null);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
+  const showApiError = useToastApiError();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorCause(null);
     setAssignment(null);
     try {
       const items = await apiJson<AssignmentRow[]>("/assignments/me");
@@ -65,19 +74,18 @@ export default function AssignmentInvitePage() {
         setError(tAssignments("needReviewerRole"));
         return;
       }
-      setError(err instanceof ApiError ? err.message : t("loadFailed"));
+      setErrorCause(err);
+      setError(resolveApiError(err, t("loadFailed")));
     } finally {
       setLoading(false);
     }
-  }, [slug, router, pathname, t, tAssignments]);
+  }, [slug, router, pathname, t, tAssignments, resolveApiError]);
+
+  useAuthRedirect();
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     void load();
-  }, [load, router, pathname]);
+  }, [load]);
 
   async function accept() {
     setActing(true);
@@ -85,9 +93,10 @@ export default function AssignmentInvitePage() {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/accept`, {
         method: "POST",
       });
+      toast.success(t("acceptSuccess"), { id: "assignment-invite-accept-success" });
       router.push(`/assignments/${encodeURIComponent(slug)}/review`);
     } catch (err) {
-      toastApiError(err, t("actionFailed"), { id: "assignment-invite-accept" });
+      showApiError(err, t("actionFailed"), { id: "assignment-invite-accept" });
     } finally {
       setActing(false);
     }
@@ -99,9 +108,10 @@ export default function AssignmentInvitePage() {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/decline`, {
         method: "POST",
       });
+      toast.success(t("declineSuccess"), { id: "assignment-invite-decline-success" });
       router.push("/assignments");
     } catch (err) {
-      toastApiError(err, t("actionFailed"), { id: "assignment-invite-decline" });
+      showApiError(err, t("actionFailed"), { id: "assignment-invite-decline" });
     } finally {
       setActing(false);
     }
@@ -139,21 +149,16 @@ export default function AssignmentInvitePage() {
       )}
 
       {!loading && error && (
-        <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 shadow-sm">
-          <p className="text-sm text-ink/80">{error}</p>
-          <button
-            type="button"
-            className="mt-4 rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
-            onClick={() => void load()}
-          >
-            {t("retryLoad")}
-          </button>
-          <Link
-            href="/assignments"
-            className="mt-6 inline-block text-sm font-medium text-accent hover:underline"
-          >
-            {t("backToAssignments")}
-          </Link>
+        <div className="mt-8">
+          <ApiErrorState
+            className="max-w-none px-0 py-0"
+            message={error}
+            error={errorCause}
+            onRetry={() => void load()}
+            retryLabel={tApi("retry")}
+            backHref="/assignments"
+            backLabel={t("backToAssignments")}
+          />
         </div>
       )}
 

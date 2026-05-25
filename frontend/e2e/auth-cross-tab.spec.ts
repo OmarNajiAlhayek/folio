@@ -1,50 +1,42 @@
 import { test, expect } from "@playwright/test";
-import {
-  loginAndGetToken,
-  withApiContext,
-  workerCredentials,
-} from "./helpers/e2e-api";
+import { workerCredentials } from "./helpers/e2e-api";
+
+async function signIn(
+  page: import("@playwright/test").Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  await page.goto("/en/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).not.toHaveURL(/\/en\/login/, { timeout: 30_000 });
+}
 
 test("unauthenticated submissions redirects to login with next, then returns after login", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    try {
-      window.localStorage.removeItem("folio_token");
-      window.sessionStorage.removeItem("folio_token");
-    } catch {
-      /* ignore */
-    }
-  });
+  await page.context().clearCookies();
   await page.goto("/en/submissions");
   await expect(page).toHaveURL(/\/en\/login\?next=/, { timeout: 15_000 });
   const u = new URL(page.url());
   expect(u.searchParams.get("next")).toBe("/submissions");
 
   const creds = workerCredentials(0);
-  await page.getByLabel("Email").fill(creds.email);
-  await page.getByLabel("Password", { exact: true }).fill(creds.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page, creds.email, creds.password);
+  await page.goto("/en/submissions");
   await expect(page).toHaveURL(/\/en\/submissions(\?|$)/, { timeout: 30_000 });
 });
 
 test("logout in one tab redirects other tab off dashboard", async ({
   browser,
 }) => {
-  const token = await withApiContext(async (api) =>
-    loginAndGetToken(api, workerCredentials(0)),
-  );
+  const creds = workerCredentials(0);
   const context = await browser.newContext();
   const page1 = await context.newPage();
   const page2 = await context.newPage();
-  await page1.addInitScript((t: string) => {
-    window.localStorage.setItem("folio_token", t);
-  }, token);
-  await page2.addInitScript((t: string) => {
-    window.localStorage.setItem("folio_token", t);
-  }, token);
 
-  await page1.goto("/en/dashboard");
+  await signIn(page1, creds.email, creds.password);
   await page2.goto("/en/dashboard");
   await expect(page1.getByRole("button", { name: /log out/i })).toBeVisible({
     timeout: 30_000,

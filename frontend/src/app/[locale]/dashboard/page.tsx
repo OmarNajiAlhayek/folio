@@ -3,11 +3,17 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
 import { redirectToLogin } from "@/lib/auth-redirect";
-import { toast, toastApiError } from "@/lib/toast";
+import { ApiErrorState } from "@/components/api-error-state";
+import { toast } from "@/lib/toast";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import type { MeProfile } from "@/lib/permissions";
-import { PERMISSION_SLUGS } from "@/lib/permissions";
+import {
+  canBrowseSubmissionsNav,
+  PERMISSION_SLUGS,
+} from "@/lib/permissions";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { formatSubmissionUpdatedAt } from "@/lib/submission-list-ui";
 function RowChevron() {
@@ -55,6 +61,10 @@ export default function DashboardPage() {
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
   const [emailPref, setEmailPref] = useState<"" | "en" | "ar">("");
   const [emailPrefBusy, setEmailPrefBusy] = useState(false);
+  const [errorCause, setErrorCause] = useState<unknown>(null);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
+  const showApiError = useToastApiError();
 
   const loadMe = useCallback(() => {
     apiJson<MeProfile>("/auth/me")
@@ -64,17 +74,14 @@ export default function DashboardPage() {
           redirectToLogin(router, pathname);
           return;
         }
-        setError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setErrorCause(err);
+        setError(resolveApiError(err, t("loadFailed")));
       });
-  }, [router, pathname, t]);
+  }, [router, pathname, t, resolveApiError]);
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     loadMe();
-  }, [router, pathname, loadMe]);
+  }, [loadMe]);
 
   useEffect(() => {
     if (!me) return;
@@ -135,7 +142,9 @@ export default function DashboardPage() {
       toast.success(t("roleInviteAccepted"));
     } catch (err) {
       // user-facing: role invite acceptance failed
-      toastApiError(err, t("loadFailed"), { id: "dashboard-role-invite-accept" });
+      showApiError(err, t("roleInviteAcceptFailed"), {
+        id: "dashboard-role-invite-accept",
+      });
     } finally {
       setRoleBusyId(null);
     }
@@ -149,7 +158,9 @@ export default function DashboardPage() {
       toast.success(t("roleInviteDeclined"));
     } catch (err) {
       // user-facing: role invite decline failed
-      toastApiError(err, t("loadFailed"), { id: "dashboard-role-invite-decline" });
+      showApiError(err, t("roleInviteDeclineFailed"), {
+        id: "dashboard-role-invite-decline",
+      });
     } finally {
       setRoleBusyId(null);
     }
@@ -168,7 +179,9 @@ export default function DashboardPage() {
       toast.success(t("emailLanguageSaved"));
     } catch (err) {
       // user-facing: email preference save failed
-      toastApiError(err, t("loadFailed"), { id: "dashboard-email-pref" });
+      showApiError(err, t("emailLanguageSaveFailed"), {
+        id: "dashboard-email-pref",
+      });
     } finally {
       setEmailPrefBusy(false);
     }
@@ -176,24 +189,17 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <main className={PAGE_SHELL}>
-        <div
-          className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
-          role="alert"
-        >
-          <p>{error}</p>
-          <button
-            type="button"
-            className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
-            onClick={() => {
-              setError(null);
-              loadMe();
-            }}
-          >
-            {t("retryLoad")}
-          </button>
-        </div>
-      </main>
+      <ApiErrorState
+        className={PAGE_SHELL}
+        message={error}
+        error={errorCause}
+        onRetry={() => {
+          setError(null);
+          setErrorCause(null);
+          loadMe();
+        }}
+        retryLabel={tApi("retry")}
+      />
     );
   }
 
@@ -234,7 +240,9 @@ export default function DashboardPage() {
     me.displayName?.trim()?.charAt(0)?.toLocaleUpperCase() ?? "?";
 
   const links: { href: string; label: string }[] = [
-    { href: "/submissions", label: t("mySubmissions") },
+    ...(canBrowseSubmissionsNav(me.permissions)
+      ? [{ href: "/submissions", label: t("mySubmissions") } as const]
+      : []),
     ...(canEditorQueue
       ? [{ href: "/editor", label: t("editorQueue") } as const]
       : []),

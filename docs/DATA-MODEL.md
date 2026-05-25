@@ -1,6 +1,6 @@
 # Data model (MVP)
 
-PostgreSQL as the system of record. User stories: [`USER-STORIES.md`](./USER-STORIES.md). API resources: [`API-NOTES.md`](./API-NOTES.md).
+PostgreSQL as the system of record. Role workflows: [`feature-report.md`](./feature-report.md). API resources: [`API-NOTES.md`](./API-NOTES.md).
 
 ## Entities
 
@@ -12,7 +12,7 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 
 - Identity: email (unique), password hash, display name.
 - Researcher profile (editorial-manager style): optional **affiliation** (text), optional **ORCID** (unique when set), optional **review keywords / interests** (text), **willing to review** (boolean). New accounts default to **author**; reviewer candidates for assignment are users with the reviewer role **and** `willing_to_review = true`.
-- Roles: `user_roles` join to `role` (and role → permission). MVP allows multiple roles per user.
+- Roles: `user_roles` join to `role` (and role → permission). MVP allows multiple roles per user. Manuscript create/edit/submit is gated by permission **`submission.manage_own`** (author role only); staff roles (editor, reviewer, copyeditor) do not receive it unless they also hold the author role.
 
 ### Submission
 
@@ -44,6 +44,12 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 - Belongs to one `ReviewAssignment` (one review document per assignment).
 - Fields: `comments_for_author` (text, may be shown to the author), `comments_to_editor_only` (text, confidential to editors), `recommendation` (e.g. `accept` | `reject` | `revisions`), `submitted_at`. **At least one** of the two comment fields must be non-empty on submit.
 
+### Notification (in-app inbox)
+
+- Belongs to one **recipient** `User` (`user_id`).
+- Fields: `type` (stable string, e.g. `submission_submitted`), `title_key` / `body_key` (frontend i18n keys), `params` (JSONB, no email addresses), `href` (locale-less app path), `idempotency_key` (unique), `read_at` (null = unread), `created_at`.
+- Rows are retained in v1 (no delete); SSE emits only **after** the insert transaction commits.
+
 ---
 
 ## Review method × files × metadata (API responses for reviewers)
@@ -70,7 +76,7 @@ Canonical **`status`** values on `Submission` (use these strings in API and UI):
 | `rejected` | Terminal; not published. |
 | `published` | Visible in public catalog with file access per policy. |
 
-**State machine (narrative):** The author creates a `draft`, then moves to `submitted`. The editor assigns reviewers and typically sets `under_review`. When enough reviews exist, the editor sets `accepted`, `rejected`, or `revisions_requested`. From `revisions_requested`, the author resubmits and status returns to `submitted` (then editor may set `under_review` again). From `accepted`, the editor transitions to `published`. `rejected` does not move to `published` without a new submission (out of scope unless you define reopen).
+**State machine (narrative):** The author creates a `draft`, then moves to `submitted`. The editor assigns reviewers and sets `under_review` via `PATCH .../status` (or status advances automatically on the first reviewer **accept** while still `submitted`, if a review-package manuscript exists). When enough reviews exist, the editor sets `accepted`, `rejected`, or `revisions_requested`. From `revisions_requested`, the author resubmits and status returns to `submitted` (then the editor may set `under_review` again). From `accepted`, copyediting and publish follow [`API-NOTES.md`](./API-NOTES.md). `rejected` does not move to `published` without a new submission (out of scope unless you define reopen).
 
 Adjust edge cases in implementation, but **keep the same status strings** as [`API-NOTES.md`](./API-NOTES.md).
 

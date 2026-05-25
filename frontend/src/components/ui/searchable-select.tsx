@@ -55,14 +55,19 @@ export function SearchableSelect({
   const listId = useId();
   const selected = options.find((o) => o.value === value);
 
+  function optionSearchValue(o: SearchableSelectOption): string {
+    const email = o.keywords?.find((k) => k.includes("@")) ?? "";
+    return email ? `${o.label} — ${email}` : o.label;
+  }
+
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={setOpen} modal={false}>
       <Popover.Trigger asChild>
         <button
           type="button"
           role="combobox"
           aria-expanded={open}
-          aria-controls={listId}
+          aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledBy}
@@ -80,14 +85,22 @@ export function SearchableSelect({
       <Popover.Portal>
         <Popover.Content
           align="start"
+          side="bottom"
           sideOffset={4}
-          className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 z-50 w-[var(--radix-popover-trigger-width)] min-w-[12rem] origin-[var(--radix-popover-content-transform-origin)] overflow-hidden rounded-lg border border-ink/15 bg-surface text-ink shadow-lg outline-none data-[state=closed]:animate-out data-[state=open]:animate-in"
+          className="data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 z-[100] w-[var(--radix-popover-trigger-width)] min-w-[12rem] origin-[var(--radix-popover-content-transform-origin)] overflow-hidden rounded-lg border border-ink/15 bg-surface text-ink shadow-lg outline-none data-[state=closed]:animate-out data-[state=open]:animate-in"
           onCloseAutoFocus={(e) => e.preventDefault()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Command
             className="flex max-h-[min(20rem,calc(100vh-6rem))] flex-col"
             label={searchPlaceholder}
             shouldFilter={options.length > 0}
+            filter={(searchValue, query) => {
+              if (!query.trim()) return 1;
+              const haystack = searchValue.toLowerCase();
+              const needle = query.trim().toLowerCase();
+              return haystack.includes(needle) ? 1 : 0;
+            }}
           >
             <Command.Input
               placeholder={searchPlaceholder}
@@ -104,13 +117,13 @@ export function SearchableSelect({
                 {options.map((o) => (
                   <Command.Item
                     key={o.value}
-                    value={o.value}
+                    value={optionSearchValue(o)}
                     keywords={[o.label, ...(o.keywords ?? [])]}
                     onSelect={() => {
                       onValueChange(o.value);
                       setOpen(false);
                     }}
-                    className="cursor-pointer rounded-md px-3 py-2 text-sm text-ink outline-none aria-selected:bg-accent/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                    className="cursor-pointer rounded-md px-3 py-2 text-sm text-ink outline-none aria-selected:bg-accent/10 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50"
                   >
                     {o.label}
                   </Command.Item>

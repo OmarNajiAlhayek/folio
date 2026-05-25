@@ -1,5 +1,6 @@
 /** Keep aligned with backend `permission-slugs.ts` */
 export const PERMISSION_SLUGS = {
+  SUBMISSION_MANAGE_OWN: "submission.manage_own",
   SUBMISSION_VIEW_EDITOR_QUEUE: "submission.view_editor_queue",
   SUBMISSION_CHANGE_STATUS: "submission.change_status",
   SUBMISSION_ASSIGN_REVIEWER: "submission.assign_reviewer",
@@ -20,6 +21,19 @@ export const ROLE_SLUGS = {
   REVIEWER: "reviewer",
   COPYEDITOR: "copyeditor",
 } as const;
+
+export function canManageOwnSubmissions(permissions: Iterable<string>): boolean {
+  return [...permissions].includes(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN);
+}
+
+/** Author manuscript list or editor queue (not copyeditor-only staff). */
+export function canBrowseSubmissionsNav(permissions: Iterable<string>): boolean {
+  const set = new Set(permissions);
+  return (
+    set.has(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN) ||
+    set.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
+  );
+}
 
 export type MeProfile = {
   id: string;

@@ -1,3 +1,5 @@
+> **Canonical spec:** [`docs/plans/email-service.md`](docs/plans/email-service.md) (design record). This file is an informal, implementation-aligned walkthrough; when they disagree, trust the plan and [`docs/API-NOTES.md`](docs/API-NOTES.md) event tables.
+
 Here’s a structured walkthrough of how the feature works end-to-end, aligned with what’s actually in the repo.
 
 ## 1. What problem this solves
@@ -226,9 +228,12 @@ Reason (from implementation notes): Nest **`tsc`** roots at each app’s `src/`;
 
 ## 10. Documentation that describes this
 
-- Full design narrative: [`docs/plans/email-service.md`](docs/plans/email-service.md)
-- API / Phase 2 / eventing table: [`docs/API-NOTES.md`](docs/API-NOTES.md)
-- Automated / manual test commands and full-stack smoke steps: [`docs/testing-email-pipeline.md`](docs/testing-email-pipeline.md)
+| Doc | Role |
+|-----|------|
+| [`docs/plans/email-service.md`](docs/plans/email-service.md) | **Canonical** design record |
+| [`docs/API-NOTES.md`](docs/API-NOTES.md) | REST + routing keys / Phase 2 events |
+| [`docs/testing-email-pipeline.md`](docs/testing-email-pipeline.md) | Manual and automated pipeline checks |
+| This file (`email-details.md`) | Informal end-to-end narrative (may lag the plan) |
 
 ---
 

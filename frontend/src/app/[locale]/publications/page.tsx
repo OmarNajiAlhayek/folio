@@ -3,8 +3,11 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
+import { ApiErrorState } from "@/components/api-error-state";
+import { getApiErrorKind } from "@/lib/api-error-message";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { publicJson } from "@/lib/public-api";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 
 type Item = {
   id: string;
@@ -14,7 +17,7 @@ type Item = {
   abstract: string;
   abstractAr?: string | null;
   publishedAt: string | null;
-  author?: { displayName: string; email: string };
+  author?: { displayName: string };
 };
 
 function formatDate(iso: string | null, locale: string) {
@@ -49,24 +52,29 @@ function CatalogSkeleton() {
 export default function PublicationsPage() {
   const t = useTranslations("Publications");
   const tWf = useTranslations("SubmissionWorkflow");
+  const tApi = useTranslations("ApiErrors");
   const locale = useLocale();
+  const { resolve: resolveApiError } = useApiErrorMessages();
   const [items, setItems] = useState<Item[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
 
   const loadCatalog = useCallback(() => {
     setLoadError(null);
+    setLoadErrorCause(null);
     publicJson<Item[]>("/public/submissions")
       .then((data) => {
         setItems(data);
       })
       .catch((e) => {
-        setLoadError(e instanceof Error ? e.message : t("loadFailed"));
+        setLoadErrorCause(e);
+        setLoadError(resolveApiError(e, t("loadFailed")));
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [t]);
+  }, [t, resolveApiError]);
 
   useEffect(() => {
     void Promise.resolve().then(() => loadCatalog());
@@ -87,21 +95,22 @@ export default function PublicationsPage() {
         </header>
 
         {loadError ? (
-          <div
-            className="mt-8 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-red-800 shadow-sm"
-            role="alert"
-          >
-            <p>{loadError}</p>
-            <button
-              type="button"
-              className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
-              onClick={() => {
+          <div className="mt-8">
+            <ApiErrorState
+              className="max-w-none px-0 py-0"
+              message={loadError}
+              error={loadErrorCause}
+              hint={
+                loadErrorCause && getApiErrorKind(loadErrorCause) === "rateLimit"
+                  ? tApi("rateLimitHint")
+                  : undefined
+              }
+              onRetry={() => {
                 setLoading(true);
                 loadCatalog();
               }}
-            >
-              {t("retryLoad")}
-            </button>
+              retryLabel={tApi("retry")}
+            />
           </div>
         ) : null}
 

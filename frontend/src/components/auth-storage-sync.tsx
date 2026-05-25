@@ -1,46 +1,31 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter } from "@/i18n/navigation";
-import { getStoredToken } from "@/lib/api";
-import { isPublicPathname, redirectToLogin } from "@/lib/auth-redirect";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@/i18n/navigation";
 
-const TOKEN_KEY = "folio_token";
+const AUTH_CHANNEL = "folio-auth";
 
-/**
- * Sync auth state across browser tabs when `localStorage` changes in another tab.
- *
- * - `key === null`: another tab called `localStorage.clear()` — treat as logout.
- * - `folio_token` removed: treat as logout.
- * - `folio_token` set in another tab: **no-op** (do not `router.refresh()`). Tab A
- *   may hold in-flight forms; the user can navigate. Optional future: refresh only
- *   when pathname is `/login` or `/register`.
- *
- * Note: `storage` does **not** fire in the tab that performed `removeItem` / `clear`
- * (e.g. DevTools `localStorage.clear()` in *this* tab is expected to skip this listener).
- */
+/** Sync logout across tabs when another tab signs out. */
 export function AuthStorageSync() {
-  const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.storageArea !== window.localStorage) return;
-
-      const fullClear = e.key === null;
-      const tokenTouched = e.key === TOKEN_KEY;
-      if (!fullClear && !tokenTouched) return;
-
-      if (getStoredToken()) return;
-
-      if (isPublicPathname(pathname)) return;
-
-      redirectToLogin(router, pathname);
+    const bc = new BroadcastChannel(AUTH_CHANNEL);
+    bc.onmessage = (event: MessageEvent<string>) => {
+      if (event.data !== "logout") return;
+      queryClient.clear();
+      router.push("/login");
+      router.refresh();
     };
-
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [pathname, router]);
+    return () => bc.close();
+  }, [queryClient, router]);
 
   return null;
+}
+
+export function broadcastAuthLogout(): void {
+  if (typeof BroadcastChannel === "undefined") return;
+  new BroadcastChannel(AUTH_CHANNEL).postMessage("logout");
 }

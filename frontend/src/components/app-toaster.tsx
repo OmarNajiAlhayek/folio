@@ -7,7 +7,7 @@ type Props = { locale: string };
 /**
  * Toast stacking policy (single source of truth — do not duplicate in lib/toast.ts):
  * - visibleToasts={3}: at most three toasts visible at once (explicit; avoids silent default changes).
- * - Parallel identical API errors: pass a stable `id` via toastApiError(..., { id }) so Sonner
+ * - Parallel identical API errors: pass a stable `id` via useToastApiError() / toastApiError(..., { id }) so Sonner
  *   replaces the same toast instead of flooding the stack.
  */
 export function AppToaster({ locale }: Props) {

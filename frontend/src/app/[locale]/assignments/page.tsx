@@ -3,8 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
+import { ApiErrorState } from "@/components/api-error-state";
+import { getApiErrorKind } from "@/lib/api-error-message";
 import { redirectToLogin } from "@/lib/auth-redirect";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import {
   AssignmentQueueRow,
   EMPTY_STATE_CLS,
@@ -28,11 +32,15 @@ export default function AssignmentsPage() {
   const router = useRouter();
   const [items, setItems] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [showRetry, setShowRetry] = useState(true);
   const [loading, setLoading] = useState(true);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
 
   const loadList = useCallback(() => {
     setLoadError(null);
+    setLoadErrorCause(null);
     apiJson<Row[]>("/assignments/me")
       .then((data) => {
         setItems(data);
@@ -48,44 +56,43 @@ export default function AssignmentsPage() {
           setShowRetry(false);
           return;
         }
-        setLoadError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setLoadErrorCause(err);
+        setLoadError(resolveApiError(err, t("loadFailed")));
         setShowRetry(true);
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [router, pathname, t]);
+  }, [router, pathname, t, resolveApiError]);
+
+  useAuthRedirect();
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     void Promise.resolve().then(() => loadList());
-  }, [router, pathname, loadList]);
+  }, [loadList]);
 
   if (loadError) {
     return (
-      <main className={submissionQueueShellCls}>
-        <div
-          className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
-          role="alert"
-        >
-          <p>{loadError}</p>
-          {showRetry ? (
-            <button
-              type="button"
-              className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
-              onClick={() => {
+      <ApiErrorState
+        className={submissionQueueShellCls}
+        message={loadError}
+        error={loadErrorCause}
+        hint={
+          loadErrorCause && getApiErrorKind(loadErrorCause) === "rateLimit"
+            ? tApi("rateLimitHint")
+            : undefined
+        }
+        onRetry={
+          showRetry
+            ? () => {
                 setLoading(true);
                 loadList();
-              }}
-            >
-              {t("retryLoad")}
-            </button>
-          ) : null}
-        </div>
-      </main>
+              }
+            : undefined
+        }
+        retryLabel={showRetry ? tApi("retry") : undefined}
+        disableRetry={!showRetry}
+      />
     );
   }
 

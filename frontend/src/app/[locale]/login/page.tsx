@@ -4,9 +4,9 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
-import { apiJson, setStoredToken } from "@/lib/api";
+import { apiJson } from "@/lib/api";
 import { sanitizeNextParam } from "@/lib/auth-redirect";
-import { toastApiError } from "@/lib/toast";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { PasswordInputWithToggle } from "@/components/password-input-with-toggle";
 import {
@@ -32,6 +32,7 @@ function LoginForm() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const showApiError = useToastApiError();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,16 +47,15 @@ function LoginForm() {
     }
     setLoading(true);
     try {
-      const data = await apiJson<{ accessToken: string }>("/auth/login", {
+      await apiJson("/auth/login", {
         method: "POST",
         body: JSON.stringify(parsed.data),
       });
-      setStoredToken(data.accessToken);
       const next = sanitizeNextParam(searchParams.get("next"));
       router.push(next ?? "/dashboard");
       router.refresh();
     } catch (err) {
-      toastApiError(err, t("loginFailed"), { id: "login-failed" });
+      showApiError(err, t("loginFailed"), { id: "login-failed" });
     } finally {
       setLoading(false);
     }

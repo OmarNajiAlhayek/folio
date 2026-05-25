@@ -3,8 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, getStoredToken, ApiError } from "@/lib/api";
+import { apiJson, ApiError } from "@/lib/api";
+import { ApiErrorState } from "@/components/api-error-state";
+import { getApiErrorKind } from "@/lib/api-error-message";
 import { redirectToLogin } from "@/lib/auth-redirect";
+import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { MultiSelect } from "@/components/ui/multi-select";
 import {
   EMPTY_STATE_CLS,
@@ -42,10 +46,14 @@ export default function EditorPage() {
   const [items, setItems] = useState<Submission[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
+  const { resolve: resolveApiError } = useApiErrorMessages();
+  const tApi = useTranslations("ApiErrors");
 
   const loadList = useCallback(() => {
     setLoadError(null);
+    setLoadErrorCause(null);
     void (async () => {
       setLoading(true);
       try {
@@ -56,20 +64,19 @@ export default function EditorPage() {
           redirectToLogin(router, pathname);
           return;
         }
-        setLoadError(err instanceof ApiError ? err.message : t("loadFailed"));
+        setLoadErrorCause(err);
+        setLoadError(resolveApiError(err, t("loadFailed")));
       } finally {
         setLoading(false);
       }
     })();
-  }, [router, pathname, t]);
+  }, [router, pathname, t, resolveApiError]);
+
+  useAuthRedirect();
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      redirectToLogin(router, pathname);
-      return;
-    }
     loadList();
-  }, [router, pathname, loadList]);
+  }, [loadList]);
 
   const statusOptions = useMemo(
     () =>
@@ -87,21 +94,18 @@ export default function EditorPage() {
 
   if (loadError) {
     return (
-      <main className={submissionQueueShellCls}>
-        <div
-          className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-800"
-          role="alert"
-        >
-          <p>{loadError}</p>
-          <button
-            type="button"
-            className="mt-3 rounded-lg border border-red-300 bg-paper px-3 py-1.5 text-sm font-medium text-red-900 hover:bg-red-50"
-            onClick={() => loadList()}
-          >
-            {t("retryLoad")}
-          </button>
-        </div>
-      </main>
+      <ApiErrorState
+        className={submissionQueueShellCls}
+        message={loadError}
+        error={loadErrorCause}
+        hint={
+          loadErrorCause && getApiErrorKind(loadErrorCause) === "rateLimit"
+            ? tApi("rateLimitHint")
+            : undefined
+        }
+        onRetry={() => loadList()}
+        retryLabel={tApi("retry")}
+      />
     );
   }
 

@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { apiJson, apiUpload, ApiError } from "@/lib/api";
-import { toast, toastApiError } from "@/lib/toast";
+import { apiJson, apiUpload } from "@/lib/api";
+import { toast } from "@/lib/toast";
+import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { statusPillClass } from "@/lib/submission-list-ui";
 import { fileExceedsUploadLimit, MAX_UPLOAD_MB } from "@/lib/validation";
+import { ACCEPT_MANUSCRIPT } from "@/lib/upload-accept";
 
 type CopyeditorCandidate = {
   id: string;
@@ -61,6 +63,7 @@ export function CopyeditSection({
   const [notes, setNotes] = useState<CopyeditNoteRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const showApiError = useToastApiError();
 
   const load = useCallback(async () => {
     const noteRows = await apiJson<CopyeditNoteRow[]>(
@@ -77,15 +80,21 @@ export function CopyeditSection({
 
   useEffect(() => {
     if (!isAuthor && !isEditor) return;
-    void load().catch(() => undefined);
-  }, [isAuthor, isEditor, load]);
+    void load().catch((err) => {
+      showApiError(err, t("sectionLoadFailed"), { id: "copyedit-section-load" });
+    });
+  }, [isAuthor, isEditor, load, showApiError, t]);
 
   useEffect(() => {
     if (!canAssign || submissionStatus !== "accepted") return;
     void apiJson<CopyeditorCandidate[]>("/users/copyeditor-candidates")
       .then(setCandidates)
-      .catch(() => undefined);
-  }, [canAssign, submissionStatus]);
+      .catch((err) => {
+        showApiError(err, t("candidatesLoadFailed"), {
+          id: "copyedit-candidates-load",
+        });
+      });
+  }, [canAssign, submissionStatus, showApiError, t]);
 
   async function assignCopyeditor() {
     if (!selectedCopyeditor) return;
@@ -100,7 +109,7 @@ export function CopyeditSection({
       onReload();
       await load();
     } catch (err) {
-      toastApiError(err, t("assignFailed"));
+      showApiError(err, t("assignFailed"), { id: "copyedit-assign" });
     } finally {
       setBusy(false);
     }
@@ -116,7 +125,7 @@ export function CopyeditSection({
       onReload();
       await load();
     } catch (err) {
-      toastApiError(err, t("readyFailed"));
+      showApiError(err, t("readyFailed"), { id: "copyedit-mark-ready" });
     } finally {
       setBusy(false);
     }
@@ -124,7 +133,9 @@ export function CopyeditSection({
 
   async function uploadRevision(file: File) {
     if (fileExceedsUploadLimit(file)) {
-      toast.error(t("fileTooLarge", { maxMb: String(MAX_UPLOAD_MB) }));
+      toast.error(t("fileTooLarge", { maxMb: String(MAX_UPLOAD_MB) }), {
+        id: "copyedit-file-too-large",
+      });
       return;
     }
     setUploading(true);
@@ -135,7 +146,7 @@ export function CopyeditSection({
       toast.success(t("revisionUploaded"));
       onReload();
     } catch (err) {
-      toastApiError(err, t("uploadFailed"));
+      showApiError(err, t("uploadFailed"), { id: "copyedit-upload" });
     } finally {
       setUploading(false);
     }
@@ -246,6 +257,7 @@ export function CopyeditSection({
             </label>
             <input
               type="file"
+              accept={ACCEPT_MANUSCRIPT}
               className="mt-2 block w-full text-sm"
               disabled={uploading}
               onChange={(e) => {

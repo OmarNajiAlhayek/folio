@@ -11,7 +11,7 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 | Document | Purpose |
 |----------|---------|
 | [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) | Product context, stack, MVP summary |
-| [`docs/USER-STORIES.md`](docs/USER-STORIES.md) | User stories and acceptance criteria |
+| [`docs/feature-report.md`](docs/feature-report.md) | Features and workflows by role |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Entities, submission lifecycle, ERD |
 | [`docs/API-NOTES.md`](docs/API-NOTES.md) | REST contract |
 | [`docs/PREP-STEPS.md`](docs/PREP-STEPS.md) | Checklist and tooling |
@@ -27,6 +27,20 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 | `docs/` | Specs |
 | `uploads/` | Created at runtime for manuscript files (gitignored at repo root) |
 
+### Shared messaging contracts
+
+Event types, RabbitMQ topology, idempotency keys, and the log redactor are authored under **`packages/shared/`** and copied into `backend/` and `services/email-service/` (Nest `tsc` layout). After editing shared code:
+
+```bash
+# from repository root
+npm run sync:shared    # copy canonical → mirrors
+npm run check:shared   # fail if mirrors drift (CI-friendly)
+```
+
+See [`packages/shared/README.md`](packages/shared/README.md).
+
+**Email ops (RabbitMQ, grants, outbox repair, manual E2E):** [`docs/testing-email-pipeline.md`](docs/testing-email-pipeline.md) — operator runbooks, `grant-email-reminder-admin.sql`, and opt-in `npm run test:pipeline` for assign → outbox → queue.
+
 ## Prerequisites
 
 - Node.js LTS
@@ -35,9 +49,11 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 
 ## Configuration
 
-1. **Backend:** copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and set `DB_*`, `JWT_SECRET`, optional `FRONTEND_ORIGIN` (default `http://localhost:5240`), plus the RabbitMQ + `APP_BASE_URL` block (used to publish reviewer-invite events to the email-service). OpenAPI is on by default in non-production; set `SWAGGER_ENABLED=true` to expose it when `NODE_ENV=production`.
-2. **Frontend:** copy [`frontend/.env.local.example`](frontend/.env.local.example) to `frontend/.env.local` and set `PORT` (default `5240`, matches `npm run dev`) and `NEXT_PUBLIC_API_URL` (default `http://localhost:5243`, must match the backend `PORT`).
+1. **Backend:** copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and set `DB_*`, `JWT_SECRET`, optional `FRONTEND_ORIGIN` (default `http://localhost:5240`), plus the RabbitMQ + `APP_BASE_URL` block (used to publish reviewer-invite events to the email-service). Do **not** put `SMTP_*` or `EMAIL_PROVIDER` here — mail is configured only in the email-service. OpenAPI is on by default in non-production; set `SWAGGER_ENABLED=true` to expose it when `NODE_ENV=production`.
+2. **Frontend:** copy [`frontend/.env.local.example`](frontend/.env.local.example) to `frontend/.env.local`. Leave `NEXT_PUBLIC_API_URL` empty so the browser calls same-origin `/api/v1` (Next.js rewrites to the API on `API_PROXY_TARGET`, default `http://127.0.0.1:5243`). A direct `NEXT_PUBLIC_API_URL=http://localhost:5243` breaks httpOnly cookie auth and is blocked by CSP (`connect-src 'self'`).
 3. **Email service:** copy [`services/email-service/.env.example`](services/email-service/.env.example) to `services/email-service/.env`. Default `EMAIL_PROVIDER=noop` logs would-be sends and requires no SMTP server.
+
+**Production:** both apps refuse example `DB_PASSWORD` / weak `JWT_SECRET` (backend) and `guest:guest` RabbitMQ when `NODE_ENV=production`. Generate secrets before deploy; see [`docs/PREP-STEPS.md`](docs/PREP-STEPS.md).
 
 ## Run locally
 
@@ -122,8 +138,12 @@ Users with the **reviewer** role appear in the editor’s assign-reviewer list o
 Authors who do not have a `.docx` ready can build their manuscript section by section in the **Word Constructor** instead of uploading a file. The flow is:
 
 1. From `/submissions/new`, pick *Use Word Constructor* in the mode selector.
-2. The pre-slug constructor (`/submissions/constructor/new`) saves to `localStorage` and syncs across tabs via `BroadcastChannel`. Click **Save draft** to create a real submission record.
-3. The post-slug constructor (`/submissions/[slug]/constructor`) auto-saves every 1.5 s, generates a real `.docx` via the backend, and submits the manuscript through the same `/submissions/:slug/submit` endpoint as the upload flow.
+2. The pre-slug compose flow (`/submissions/compose/create`) saves to `localStorage` and syncs across tabs via `BroadcastChannel`. Continue to **New submission** to create a server record (legacy `/submissions/constructor/*` redirects here).
+3. The post-slug compose page (`/submissions/[slug]/compose`) auto-saves every 1.5 s, generates a styled `.docx` via the backend, and attaches it from the submission detail page (submit for review uses the same `/submissions/:slug/submit` endpoint as upload mode).
+
+**Section kinds (v2):** mandatory bilingual titles, authors, abstracts, and references; optional IMRaD structure presets (tracked via `presetSourceId`); headings, paragraphs, figures, tables (with optional table notes), four back-matter rich-text blocks (acknowledgments, funding, conflict of interest, data availability), and LaTeX equations (rendered to PNG in `.docx` — not editable OMML formulas). Docx import maps headings heuristically and emits stable warning codes when attribution is uncertain.
+
+**Backend equation rendering** uses `katex` + `sharp` (adds native image dependencies — account for this in Docker/CI images).
 
 Generated `.docx` files apply curated **publication styles** from [`backend/src/manuscript-styles`](backend/src/manuscript-styles) (API: `GET /api/v1/public/manuscript-styles`). The Damascus profile matches [docs/styles/damascus-university-journal-v1.md](docs/styles/damascus-university-journal-v1.md) (Simplified Arabic 12 pt for RTL, Times New Roman 11 pt for LTR, headings, figure/table captions, RTL-aware paragraphs).
 
@@ -137,7 +157,8 @@ Generated `.docx` files apply curated **publication styles** from [`backend/src/
 | `.docx` generation | [`backend/src/submissions/docx-generator.service.ts`](backend/src/submissions/docx-generator.service.ts) | Uses `docx`, `parse5`, `sanitize-html` |
 | API endpoints | [`backend/src/submissions/submissions.controller.ts`](backend/src/submissions/submissions.controller.ts) | `PATCH /submissions/:slug` accepts `constructorContent`, `POST /submissions/:slug/generate-docx` returns or attaches the `.docx` |
 | Editor UI | [`frontend/src/components/constructor/`](frontend/src/components/constructor/) | `SectionEditors`, `LivePreview`, `SectionList`, `ValidationBanner`, `ModeSelector`, `ConstructorWorkspace` |
-| Pages | [`frontend/src/app/[locale]/submissions/constructor/new/page.tsx`](frontend/src/app/%5Blocale%5D/submissions/constructor/new/page.tsx), [`frontend/src/app/[locale]/submissions/[slug]/constructor/page.tsx`](frontend/src/app/%5Blocale%5D/submissions/%5Bslug%5D/constructor/page.tsx) | Pre-slug + post-slug routes |
+| Pages | [`frontend/src/app/[locale]/submissions/compose/create/page.tsx`](frontend/src/app/%5Blocale%5D/submissions/compose/create/page.tsx), [`frontend/src/app/[locale]/submissions/[slug]/compose/page.tsx`](frontend/src/app/%5Blocale%5D/submissions/%5Bslug%5D/compose/page.tsx) | Pre-slug + post-slug compose routes |
+| IMRaD presets | [`frontend/src/lib/constructor-section-presets.ts`](frontend/src/lib/constructor-section-presets.ts) | Preset bundles + `articleType` matrix for the add picker |
 | Plan / decisions | [`docs/plans/word-constructor.md`](docs/plans/word-constructor.md) | Full design rationale & v1 limitations |
 
 ### Adding a new section kind

@@ -70,7 +70,7 @@
 stateDiagram-v2
     [*] --> draft : Author creates
     draft --> submitted : Author submits
-    submitted --> under_review : Reviewer accepts
+    submitted --> under_review : Editor sets status
     under_review --> revisions_requested : Editor decision
     revisions_requested --> submitted : Author resubmits
     under_review --> rejected : Editor decision
@@ -80,6 +80,8 @@ stateDiagram-v2
     rejected --> [*]
     published --> [*]
 ```
+
+Editors move a submission to `under_review` with `PATCH /submissions/:slug/status` (requires a review-package manuscript). While still `submitted`, the first reviewer **accept** can also advance status to `under_review` when that package exists — see [`API-NOTES.md`](./API-NOTES.md).
 
 ---
 
