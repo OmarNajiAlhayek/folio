@@ -12,7 +12,7 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 
 - Identity: email (unique), password hash, display name.
 - Researcher profile (editorial-manager style): optional **affiliation** (text), optional **ORCID** (unique when set), optional **review keywords / interests** (text), **willing to review** (boolean). New accounts default to **author**; reviewer candidates for assignment are users with the reviewer role **and** `willing_to_review = true`.
-- Roles: `user_roles` join to `role` (and role → permission). MVP allows multiple roles per user. Manuscript create/edit/submit is gated by permission **`submission.manage_own`** (author role only); staff roles (editor, reviewer, copyeditor) do not receive it unless they also hold the author role.
+- Roles: `user_roles` join to `role` (and role → permission). MVP allows multiple roles per user. Manuscript create/edit/submit is gated by permission **`submission.manage_own`** (author role only). Staff roles: **`editor`** (handling editor — workflow decisions), **`journal_manager`** (users, email platform, queue oversight), **`reviewer`**, **`copyeditor`**. Editor and journal manager require invitation; reviewer/copyeditor can be assigned by a journal manager via `PATCH /users/:id/roles`.
 
 ### Submission
 

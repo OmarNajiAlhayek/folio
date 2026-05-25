@@ -15,7 +15,7 @@ RabbitMQ is **not** required for these commands: unit tests mock RabbitMQ and DB
 
 ## Journal email admin API (templates & policy)
 
-Editors with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all five transactional templates (`reviewer-invited`, `reminder-due`, and the three `copyedit-*` keys — unknown keys return **422**):
+Journal managers with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all five transactional templates (`reviewer-invited`, `reminder-due`, and the three `copyedit-*` keys — unknown keys return **422**):
 
 | Method | Path |
 |--------|------|
@@ -38,7 +38,7 @@ Editors with JWT + **`email.manage_reminders`** can manage the singleton reminde
 
 ## Reminder admin API (per assignment)
 
-Editors with JWT + permission **`email.manage_reminders`** can list, read, reschedule (`PATCH` `sendAt`), or cancel pending rows in **`email.reminder`** for a known assignment:
+Users with JWT + **`email.manage_reminders`** or **`email.manage_assignment_reminders`** can list, read, reschedule (`PATCH` `sendAt`), or cancel pending rows in **`email.reminder`** for a known assignment:
 
 - `GET /api/v1/submissions/:submissionSlug/assignments/:assignmentSlug/reminders`
 - `GET /api/v1/submissions/:submissionSlug/assignments/:assignmentSlug/reminders/:reminderId`
@@ -150,7 +150,7 @@ Use this for a release or staging sign-off (copy into a PR if you prefer not to 
 
 1. Run **email-service** migrations so schema `email` exists, including policy + template tables/rows (e.g. migration `1714600000001-email-templates-and-policy.ts` in `services/email-service`).
 2. If the backend DB user is not a superuser, apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) (adjust `TO` to match `DB_USERNAME`).
-3. **App RBAC:** log in as a user with **Editor** (or any role with `email.manage_reminders`). Confirm the nav link and **`/[locale]/editor/email-settings`** load policy and both templates without error.
+3. **App RBAC:** log in as a **journal manager** (`manager@folio.local` after seed) or any user with `email.manage_reminders`. Confirm the nav link and **`/[locale]/editor/email-settings`** load policy and templates without error.
 4. **Optimistic lock:** open two tabs, change reminder policy in both, save the stale tab second → expect **409** (`EMAIL_POLICY_CONFLICT` / refresh message).
 5. **Preview:** use **POST** `…/preview` (or the UI preview buttons) for `reminder-due` with and without overdue; response is rendered HTML/text only (no mail).
 6. **Submission reminders:** as the same editor, open a submission with assignments; confirm the per-assignment reminder table and reschedule/cancel actions hit `/api/v1/submissions/.../reminders` as expected (network tab or backend logs).

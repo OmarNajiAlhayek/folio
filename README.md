@@ -102,7 +102,8 @@ The service connects to RabbitMQ, runs its own migrations into a dedicated `emai
 
 | Email | Password | Roles |
 |--------|----------|--------|
-| `editor@folio.local` | `Editor123!` | Author, editor, reviewer |
+| `manager@folio.local` | `Manager123!` | Author, journal manager (users, email admin, queue oversight) |
+| `editor@folio.local` | `Editor123!` | Author, editor, reviewer (handling editor — decisions, assignments) |
 | `reviewer@folio.local` | `Reviewer123!` | Author, reviewer |
 | `author@folio.local` | `Author123!` | Author |
 | `copyeditor@folio.local` | `Copyeditor123!` | Author, copyeditor |
@@ -113,13 +114,13 @@ After **accepted**, an editor assigns one or more **copyeditors** (`POST /api/v1
 
 Email templates (admin): `copyedit-assigned`, `copyedit-queries-sent`, `copyedit-author-ready`.
 
-New self-registered users are **authors** with a researcher profile (affiliation, optional ORCID, review interests). **Reviewer** (and other non-editor roles) can be merged by an existing editor with `users.manage_roles` via `PATCH /api/v1/users/:id/roles`. **Adding the `editor` role** requires an in-app invitation the user accepts:
+New self-registered users are **authors** with a researcher profile (affiliation, optional ORCID, review interests). **Reviewer** and **copyeditor** can be assigned by a **journal manager** (`users.manage_roles`) via `PATCH /api/v1/users/:id/roles`. **Editor** and **journal manager** roles require an in-app invitation:
 
-- `POST /api/v1/users/:id/role-invitations` with body `{ "roleSlug": "editor" }` (inviter must have `users.manage_roles`).
+- `POST /api/v1/users/:id/role-invitations` with body `{ "roleSlug": "editor" }` or `{ "roleSlug": "journal_manager" }` (inviter must have `users.manage_roles`).
 - Invitee sees the pending invite on the **Dashboard** and calls `POST /api/v1/role-invitations/:invitationId/accept` or `.../decline`.
-- `PATCH .../roles` **rejects** payloads that newly add `editor` without going through this flow; removing `editor` or changing other roles still uses `PATCH` as before.
+- `PATCH .../roles` **rejects** payloads that newly add `editor` or `journal_manager` without going through this flow.
 
-Seeded accounts (`editor@folio.local`, etc.) get roles directly from the seed script, not via invitations.
+**Journal manager** handles user onboarding, email templates/reminder policy, and can browse the editor queue. **Editor** (handling editor) makes workflow decisions, assigns reviewers/copyeditors, and receives new-submission notifications. Seeded accounts get roles directly from the seed script, not via invitations.
 
 To reset only seeded sample submissions before re-seeding: `npm run seed:reset` (sets `SEED_RESET_SAMPLE=1`; legacy `SEED_RESET_DEMO=1` is still accepted).
 
@@ -143,7 +144,7 @@ Authors who do not have a `.docx` ready can build their manuscript section by se
 
 **Section kinds (v2):** mandatory bilingual titles, authors, abstracts, and references; optional IMRaD structure presets (tracked via `presetSourceId`); headings, paragraphs, figures, tables (with optional table notes), four back-matter rich-text blocks (acknowledgments, funding, conflict of interest, data availability), and LaTeX equations (rendered to PNG in `.docx` — not editable OMML formulas). Docx import maps headings heuristically and emits stable warning codes when attribution is uncertain.
 
-**Backend equation rendering** uses `katex` + `sharp` (adds native image dependencies — account for this in Docker/CI images).
+**Backend equation rendering** uses the same **KaTeX** output as the constructor preview, rasterized to PNG via **Playwright** (Edge/Chrome on Windows, bundled Chromium elsewhere). Falls back to MathJax + `sharp` when Playwright is unavailable. Equations in Word are embedded images (not editable OMML). For local dev on Windows, Edge or Chrome is used automatically; elsewhere run `npx playwright install chromium` in `backend/` if needed.
 
 Generated `.docx` files apply curated **publication styles** from [`backend/src/manuscript-styles`](backend/src/manuscript-styles) (API: `GET /api/v1/public/manuscript-styles`). The Damascus profile matches [docs/styles/damascus-university-journal-v1.md](docs/styles/damascus-university-journal-v1.md) (Simplified Arabic 12 pt for RTL, Times New Roman 11 pt for LTR, headings, figure/table captions, RTL-aware paragraphs).
 

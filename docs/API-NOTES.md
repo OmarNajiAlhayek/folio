@@ -57,7 +57,7 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 |--------|------|-----|--------|
 | POST | `/auth/register` | Public | Create user; default role author. Body: email, password, displayName; optional affiliation, orcid (0000-0000-0000-000X), reviewKeywords, willingToReview. |
 | POST | `/auth/login` | Public | Sets auth cookies; JSON `{ user }` only (adds `accessToken` when `AUTH_RETURN_BEARER=true`). |
-| POST | `/auth/logout` | Authenticated | Clears cookies; requires CSRF when using cookie session. |
+| POST | `/auth/logout` | Authenticated | Clears cookies and revokes the current JWT session id (`jti`) server-side; other devices/sessions stay signed in until their tokens expire. Requires CSRF when using cookie session (not when using `Authorization: Bearer`). |
 | GET | `/auth/me` | Authenticated | Current user + roles. |
 
 ### Users (minimal)
@@ -66,11 +66,11 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 |--------|------|-----|--------|
 | GET | `/users/me` | Authenticated | Profile; may duplicate `/auth/me`—pick one pattern. |
 | GET | `/users/me/role-invitations` | Authenticated | Pending editor (etc.) invitations for the current user. |
-| POST | `/users/:id/role-invitations` | Editor (`users.manage_roles`) | Body: `{ "roleSlug": "editor" }`. Creates invitation; does not grant role until accept. |
+| POST | `/users/:id/role-invitations` | Journal manager (`users.manage_roles`) | Body: `{ "roleSlug": "editor" }` or `"journal_manager"`. Creates invitation; does not grant role until accept. |
 | POST | `/role-invitations/:id/accept` | Invitee | JWT only; merges role into user’s roles. |
 | POST | `/role-invitations/:id/decline` | Invitee | JWT only. |
 | PATCH | `/users/me` | Authenticated | Update display name; role changes **editor-only** or seed-only for MVP. |
-| PATCH | `/users/:id/roles` | Editor (`users.manage_roles`) | Replace role set. **Cannot** newly add `editor` unless invitee accepted a role invitation—use `POST .../role-invitations` first. |
+| PATCH | `/users/:id/roles` | Journal manager (`users.manage_roles`) | Replace role set. **Cannot** newly add `editor` or `journal_manager` without invitation—use `POST .../role-invitations` first. |
 
 ### Submissions
 
@@ -155,7 +155,7 @@ Operational view (counts only, no PII):
 `GET /health/outbox` returns the backend outbox state (`pending`,
 `published`, `dead` plus the oldest pending row).
 
-Editors with JWT and permission `email.manage_reminders` may call
+Journal managers with JWT and permission `email.manage_reminders` may call
 `GET /admin/email/pipeline-status` for a fuller operational snapshot:
 outbox counts and redacted samples of dead rows, `email.email_log` counts
 and recent failed rows (no recipient), `email.reminder` counts plus
