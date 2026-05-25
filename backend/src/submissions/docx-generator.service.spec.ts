@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 import { DocxGeneratorService } from './docx-generator.service';
 import { EquationRenderService } from './equation-render.service';
 import type { ConstructorContent } from './constructor-content.types';
@@ -102,6 +103,50 @@ describe('DocxGeneratorService', () => {
       ],
     };
     expect(validateConstructorContentForSubmit(valid)).toEqual([]);
+  });
+
+  it('embeds a full typeset equation PNG in the docx (not a clipped band)', async () => {
+    const content: ConstructorContent = {
+      defaultDir: 'ltr',
+      sections: [
+        { id: 't', kind: 'title', text: 'Equation doc' },
+        {
+          id: 'a-en',
+          kind: 'abstract',
+          lang: 'en',
+          text: 'Abstract.',
+          keywords: '',
+        },
+        {
+          id: 'a-ar',
+          kind: 'abstract',
+          lang: 'ar',
+          text: 'ملخص.',
+          keywords: '',
+        },
+        { id: 'eq', kind: 'equation', latex: 'E = mc^2', numbered: true },
+        {
+          id: 'r',
+          kind: 'references',
+          items: [{ lang: 'en', text: 'Ref.' }],
+        },
+      ],
+    };
+
+    const buffer = await service.generate(
+      content,
+      async () => null,
+      damascusUniversityJournalV1,
+    );
+    const zip = await JSZip.loadAsync(buffer);
+    const mediaKeys = Object.keys(zip.files).filter(
+      (k) => k.startsWith('word/media/') && k.endsWith('.png'),
+    );
+    expect(mediaKeys.length).toBeGreaterThanOrEqual(1);
+    const png = await zip.file(mediaKeys[0]!)!.async('nodebuffer');
+    expect(png.length).toBeGreaterThan(2000);
+    const docXml = await extractDocumentXml(buffer);
+    expect(docXml).not.toContain('[Equation:');
   });
 
   it('reports missing title and missing references', () => {

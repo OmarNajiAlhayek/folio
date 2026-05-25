@@ -18,7 +18,7 @@ import {
   type ParagraphChild,
 } from 'docx';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
-import sanitizeHtml from 'sanitize-html';
+import { sanitizeConstructorTipTapHtml } from './sanitize-constructor-html';
 import type { ManuscriptAlignment } from '../manuscript-styles/manuscript-style.types';
 import type { ManuscriptStyleProfile } from '../manuscript-styles/manuscript-style.types';
 import type {
@@ -81,6 +81,8 @@ export class DocxGeneratorService {
     ) => Promise<{ data: Buffer; mime: string } | null>,
     profile: ManuscriptStyleProfile,
   ): Promise<Buffer> {
+    this.equationRender.clearCache();
+
     const defaultDir = content.defaultDir;
     let figureCounter = 0;
     let tableCounter = 0;
@@ -403,21 +405,7 @@ export class DocxGeneratorService {
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
   ): Paragraph[] {
-    const sanitized = sanitizeHtml(section.html ?? '', {
-      allowedTags: [
-        'p',
-        'strong',
-        'b',
-        'em',
-        'i',
-        'u',
-        'ul',
-        'ol',
-        'li',
-        'br',
-      ],
-      allowedAttributes: {},
-    });
+    const sanitized = sanitizeConstructorTipTapHtml(section.html ?? '');
     const wrapped = `<root>${sanitized}</root>`;
     const root = parse(wrapped, {
       sourceCodeLocationInfo: false,
@@ -603,12 +591,28 @@ export class DocxGeneratorService {
       return out;
     }
     try {
-      const png = await this.equationRender.renderLatexToPng(latex);
+      const { png, widthPx, heightPx } =
+        await this.equationRender.renderLatexToPngWithSize(latex);
+      // PNG is captured at deviceScaleFactor=2, so logical pixel dimensions are half.
+      // maxW≈A4 text column (160 mm at 96 dpi); maxH handles fractions/integrals/matrices.
+      // Never upscale — short equations stay at their natural logical size.
+      const logicalW = Math.round(widthPx / 2);
+      const logicalH = Math.round(heightPx / 2);
+      const maxW = 440;
+      const maxH = 180;
+      let scale = 1;
+      if (logicalW > maxW) scale = maxW / logicalW;
+      if (logicalH * scale > maxH) {
+        scale = Math.min(scale, maxH / logicalH);
+      }
       const children: ParagraphChild[] = [
         new ImageRun({
           type: 'png',
           data: png,
-          transformation: { width: 400, height: 80 },
+          transformation: {
+            width: Math.round(logicalW * scale),
+            height: Math.round(logicalH * scale),
+          },
         }),
       ];
       if (section.numbered) {

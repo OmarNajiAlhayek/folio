@@ -1,6 +1,7 @@
 import { Submission } from '../entities/submission.entity';
 import { SubmissionReviewMethod } from '../entities/submission-review-method.enum';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
+import { sanitizeConstructorContent } from './sanitize-constructor-html';
 import type { SubmissionViewerRole } from './submission-viewer-role';
 
 function fileToJson(f: {
@@ -86,7 +87,7 @@ export function submissionToViewerJson(
   base.aiUsageStatement = s.aiUsageStatement;
 
   if (viewer !== 'copyeditor') {
-    base.constructorContent = s.constructorContent;
+    base.constructorContent = sanitizeConstructorContent(s.constructorContent);
   }
 
   if (viewer === 'author' || viewer === 'editor') {
