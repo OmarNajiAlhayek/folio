@@ -231,6 +231,29 @@ export class UsersService {
         });
       }
     }
+
+    const hadJournalManager = before.roleSlugs.includes(
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    );
+    const willHaveJournalManager = unique.includes(ROLE_SLUGS.JOURNAL_MANAGER);
+    if (!hadJournalManager && willHaveJournalManager) {
+      throw new BadRequestException({
+        message:
+          'Adding the journal_manager role requires an invitation. Use POST /users/:id/role-invitations with {"roleSlug":"journal_manager"}; the user accepts in the app.',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (hadJournalManager && !willHaveJournalManager) {
+      const n = await this.rbacService.countUsersWithRoleSlug(
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      );
+      if (n <= 1) {
+        throw new BadRequestException({
+          message: 'Cannot remove the last journal manager',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+    }
     try {
       await this.rbacService.assignRoles(targetUserId, unique);
     } catch (e) {
@@ -255,18 +278,34 @@ export class UsersService {
     targetUserId: string,
     roleSlug: string,
   ): Promise<RoleInvitation> {
-    if (roleSlug !== ROLE_SLUGS.EDITOR) {
+    if (
+      roleSlug !== ROLE_SLUGS.EDITOR &&
+      roleSlug !== ROLE_SLUGS.JOURNAL_MANAGER
+    ) {
       throw new BadRequestException({
-        message: 'Only editor role invitations are supported',
+        message:
+          'Only editor and journal_manager role invitations are supported',
         code: 'VALIDATION_ERROR',
       });
     }
-    return this.createEditorInvitation(actorUserId, targetUserId);
+    if (roleSlug === ROLE_SLUGS.EDITOR) {
+      return this.createPrivilegedRoleInvitation(
+        actorUserId,
+        targetUserId,
+        ROLE_SLUGS.EDITOR,
+      );
+    }
+    return this.createPrivilegedRoleInvitation(
+      actorUserId,
+      targetUserId,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    );
   }
 
-  private async createEditorInvitation(
+  private async createPrivilegedRoleInvitation(
     actorUserId: string,
     targetUserId: string,
+    roleSlug: typeof ROLE_SLUGS.EDITOR | typeof ROLE_SLUGS.JOURNAL_MANAGER,
   ): Promise<RoleInvitation> {
     if (actorUserId === targetUserId) {
       throw new BadRequestException({
@@ -282,22 +321,22 @@ export class UsersService {
       });
     }
     const before = await this.rbacService.getEffectiveForUser(targetUserId);
-    if (before.roleSlugs.includes(ROLE_SLUGS.EDITOR)) {
+    if (before.roleSlugs.includes(roleSlug)) {
       throw new BadRequestException({
-        message: 'User is already an editor',
+        message: `User already has the ${roleSlug} role`,
         code: 'VALIDATION_ERROR',
       });
     }
     const pending = await this.roleInvRepo.findOne({
       where: {
         inviteeUserId: targetUserId,
-        roleSlug: ROLE_SLUGS.EDITOR,
+        roleSlug,
         status: RoleInvitationStatus.INVITED,
       },
     });
     if (pending) {
       throw new BadRequestException({
-        message: 'A pending editor invitation already exists for this user',
+        message: `A pending ${roleSlug} invitation already exists for this user`,
         code: 'VALIDATION_ERROR',
       });
     }
@@ -305,7 +344,7 @@ export class UsersService {
     const row = this.roleInvRepo.create({
       inviteeUserId: targetUserId,
       invitedByUserId: actorUserId,
-      roleSlug: ROLE_SLUGS.EDITOR,
+      roleSlug,
       status: RoleInvitationStatus.INVITED,
       resolvedAt: null,
     });
@@ -314,8 +353,8 @@ export class UsersService {
       userId: targetUserId,
       type: NOTIFICATION_TYPE.ROLE_INVITATION_CREATED,
       params: {
-        invitedByDisplayName: invitedBy?.displayName ?? 'Editor',
-        roleSlug: ROLE_SLUGS.EDITOR,
+        invitedByDisplayName: invitedBy?.displayName ?? 'Journal manager',
+        roleSlug,
       },
       href: '/dashboard',
       idempotencyKey: roleInvitationCreatedKey(saved.id),

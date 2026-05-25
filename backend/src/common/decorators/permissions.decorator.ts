@@ -4,7 +4,11 @@ export const PERMISSIONS_KEY = 'permissions';
 
 /**
  * Requires the authenticated user to hold at least one of the given permission
- * slugs (OR). Used with {@link PermissionsGuard}.
+ * slugs (OR). Used with {@link PermissionsGuard} on controllers that apply the
+ * guard.
+ *
+ * On guarded controllers, handlers without `@Permissions()` are denied unless
+ * they use {@link AllowAuthenticated} for JWT-only, user-scoped routes.
  *
  * A single slug means that permission is required. Multiple slugs mean any one
  * is sufficient — e.g. editor queue or reviewer assignment for review setup.

@@ -38,6 +38,7 @@ export class CopyeditAssignmentsController {
   }
 
   @Post(':slug/ready')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   markAuthorReady(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,

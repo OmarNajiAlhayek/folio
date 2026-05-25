@@ -11,6 +11,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AllowAuthenticated } from '../common/decorators/allow-authenticated.decorator';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import type { RequestUser } from '../common/types/request-user';
@@ -27,6 +28,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me/role-invitations')
+  @AllowAuthenticated()
   myRoleInvitations(@CurrentUser() user: RequestUser) {
     return this.usersService.listMyPendingRoleInvitations(user.sub);
   }

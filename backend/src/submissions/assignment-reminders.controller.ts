@@ -26,7 +26,10 @@ export class AssignmentRemindersController {
   constructor(private readonly reminders: RemindersService) {}
 
   @Get('reminders')
-  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  @Permissions(
+    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+  )
   list(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,
@@ -40,7 +43,10 @@ export class AssignmentRemindersController {
   }
 
   @Get('reminders/:reminderId')
-  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  @Permissions(
+    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+  )
   getOne(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,
@@ -56,7 +62,10 @@ export class AssignmentRemindersController {
   }
 
   @Patch('reminders/:reminderId')
-  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  @Permissions(
+    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+  )
   patch(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,
@@ -74,7 +83,10 @@ export class AssignmentRemindersController {
   }
 
   @Post('reminders/:reminderId/cancel')
-  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  @Permissions(
+    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+  )
   cancel(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,

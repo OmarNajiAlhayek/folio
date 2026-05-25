@@ -65,6 +65,11 @@ export class RbacService implements OnModuleInit {
         description: 'Configure email reminder rules and templates',
       },
       {
+        slug: PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+        description:
+          'Reschedule or cancel pending review reminders on an assignment',
+      },
+      {
         slug: PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
         description: 'Assign a copyeditor to an accepted submission',
       },
@@ -91,6 +96,7 @@ export class RbacService implements OnModuleInit {
     const roleDefs: { slug: string; name: string }[] = [
       { slug: ROLE_SLUGS.AUTHOR, name: 'Author' },
       { slug: ROLE_SLUGS.EDITOR, name: 'Editor' },
+      { slug: ROLE_SLUGS.JOURNAL_MANAGER, name: 'Journal manager' },
       { slug: ROLE_SLUGS.REVIEWER, name: 'Reviewer' },
       { slug: ROLE_SLUGS.COPYEDITOR, name: 'Copyeditor' },
     ];
@@ -105,8 +111,14 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
       PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
+      PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+    ];
+    const journalManagerPerms = [
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
       PERMISSION_SLUGS.USERS_MANAGE_ROLES,
       PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+      PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
     ];
     const reviewerPerms = [
       PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
@@ -120,21 +132,29 @@ export class RbacService implements OnModuleInit {
 
     const authorPerms = [PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN];
 
-    await this.ensureRolePermissions(ROLE_SLUGS.AUTHOR, authorPerms);
-    await this.ensureRolePermissions(ROLE_SLUGS.EDITOR, editorPerms);
-    await this.ensureRolePermissions(ROLE_SLUGS.REVIEWER, reviewerPerms);
-    await this.ensureRolePermissions(ROLE_SLUGS.COPYEDITOR, copyeditorPerms);
+    await this.syncRolePermissions(ROLE_SLUGS.AUTHOR, authorPerms);
+    await this.syncRolePermissions(ROLE_SLUGS.EDITOR, editorPerms);
+    await this.syncRolePermissions(
+      ROLE_SLUGS.JOURNAL_MANAGER,
+      journalManagerPerms,
+    );
+    await this.syncRolePermissions(ROLE_SLUGS.REVIEWER, reviewerPerms);
+    await this.syncRolePermissions(ROLE_SLUGS.COPYEDITOR, copyeditorPerms);
   }
 
-  private async ensureRolePermissions(
+  /** Upsert links for `permissionSlugs` and remove any other permissions on the role. */
+  private async syncRolePermissions(
     roleSlug: string,
     permissionSlugs: string[],
   ): Promise<void> {
     const role = await this.roleRepo.findOne({ where: { slug: roleSlug } });
     if (!role) return;
+
+    const desiredPermIds: string[] = [];
     for (const slug of permissionSlugs) {
       const perm = await this.permRepo.findOne({ where: { slug } });
       if (!perm) continue;
+      desiredPermIds.push(perm.id);
       const exists = await this.rpRepo.findOne({
         where: { roleId: role.id, permissionId: perm.id },
       });
@@ -142,6 +162,17 @@ export class RbacService implements OnModuleInit {
         await this.rpRepo.save({
           roleId: role.id,
           permissionId: perm.id,
+        });
+      }
+    }
+
+    const existing = await this.rpRepo.find({ where: { roleId: role.id } });
+    const desiredSet = new Set(desiredPermIds);
+    for (const rp of existing) {
+      if (!desiredSet.has(rp.permissionId)) {
+        await this.rpRepo.delete({
+          roleId: role.id,
+          permissionId: rp.permissionId,
         });
       }
     }

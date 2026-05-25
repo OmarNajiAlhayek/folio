@@ -289,6 +289,15 @@ async function run() {
       willingToReview: false,
     },
   });
+  await ensureUser(usersService, rbacService, {
+    email: 'manager@folio.local',
+    password: 'Manager123!',
+    displayName: 'M. Journal Manager',
+    roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.JOURNAL_MANAGER],
+    profile: {
+      affiliation: 'Folio Journal — Editorial office',
+    },
+  });
   const editor = await ensureUser(usersService, rbacService, {
     email: 'editor@folio.local',
     password: 'Editor123!',
@@ -564,6 +573,7 @@ async function run() {
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
   console.log('author@folio.local      / Author123!      roles: author');
+  console.log('manager@folio.local     / Manager123!     roles: author, journal_manager');
   console.log('editor@folio.local      / Editor123!      roles: author, editor, reviewer');
   console.log('reviewer@folio.local    / Reviewer123!    roles: author, reviewer');
   console.log('copyeditor@folio.local  / Copyeditor123!  roles: copyeditor');
