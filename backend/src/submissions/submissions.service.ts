@@ -93,6 +93,7 @@ import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-
 import { readFile } from 'fs/promises';
 import { SubmissionReviewMethod } from '../entities/submission-review-method.enum';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
+import { sanitizeConstructorContent } from './sanitize-constructor-html';
 import { submissionToViewerJson } from './submission-response.mapper';
 import type { SubmissionViewerRole } from './submission-viewer-role';
 const EDITOR_TRANSITIONS: Partial<
@@ -581,11 +582,22 @@ export class SubmissionsService implements OnModuleInit {
     return s;
   }
 
+  /** Drafts are author-only until submit; editor queue must not read them by slug. */
+  private assertEditorQueueSubmissionVisible(submission: Submission): void {
+    if (submission.status === SubmissionStatus.DRAFT) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
+    }
+  }
+
   async assertCanRead(
     submission: Submission,
     user: RequestUser,
   ): Promise<void> {
     if (this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)) {
+      this.assertEditorQueueSubmissionVisible(submission);
       return;
     }
     if (submission.authorId === user.sub) {
@@ -704,7 +716,9 @@ export class SubmissionsService implements OnModuleInit {
     let orphanedFileIds: string[] = [];
     if (dto.constructorContent !== undefined) {
       const oldContent = s.constructorContent;
-      const newContent = (dto.constructorContent as ConstructorContent | null) ?? null;
+      const rawContent =
+        (dto.constructorContent as ConstructorContent | null) ?? null;
+      const newContent = sanitizeConstructorContent(rawContent);
       if (newContent) {
         this.manuscriptStyles.assertConstructorContentStyleKnown(newContent);
       }
@@ -770,8 +784,9 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    const contentForDoc =
-      options?.constructorContent ?? s.constructorContent ?? null;
+    const contentForDoc = sanitizeConstructorContent(
+      options?.constructorContent ?? s.constructorContent ?? null,
+    );
     const hasUploadedManuscript =
       (
         await this.filesRepo.find({
@@ -962,9 +977,14 @@ export class SubmissionsService implements OnModuleInit {
    * the user only wants to download a Word file.
    */
   async generateDocxStandalone(content: ConstructorContent): Promise<Buffer> {
-    const styleId = this.manuscriptStyles.resolveEffectiveStyleId(content);
+    const sanitized = sanitizeConstructorContent(content)!;
+    const styleId = this.manuscriptStyles.resolveEffectiveStyleId(sanitized);
     const profile = this.manuscriptStyles.getProfile(styleId);
-    return this.docxGeneratorService.generate(content, async () => null, profile);
+    return this.docxGeneratorService.generate(
+      sanitized,
+      async () => null,
+      profile,
+    );
   }
 
   async updateStatus(
@@ -1256,7 +1276,6 @@ export class SubmissionsService implements OnModuleInit {
     em: EntityManager,
   ): Promise<Notification[]> {
     const { submission, isResubmission } = args;
-    const created: Notification[] = [];
     if (!submission.slug) {
       throw new InternalServerErrorException({
         message: 'Cannot enqueue submission submitted: missing slug',
@@ -1274,13 +1293,13 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
     const editorIds = await this.rbacService.listUserIdsWithPermission(
-      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
     );
     if (editorIds.length === 0) {
       this.logger.warn(
-        `submission.submitted: no editors to notify for slug=${submission.slug}`,
+        `submission.submitted: no handling editors to notify for slug=${submission.slug}`,
       );
-      return created;
+      return [];
     }
     const editors = await em.getRepository(User).find({
       where: { id: In(editorIds) },
@@ -1289,7 +1308,7 @@ export class SubmissionsService implements OnModuleInit {
     const siteDefault = this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en');
     const editorQueueUrl = `${this.appBaseUrl()}/submissions/${submission.slug}`;
     const occurredAt = new Date().toISOString();
-    for (const editor of editors) {
+    const outboxEvents = editors.map((editor) => {
       const emailLocale = resolveEmailLocale({
         recipientPreferred: editor.preferredLocale,
         siteDefault,
@@ -1314,28 +1333,26 @@ export class SubmissionsService implements OnModuleInit {
         },
         editorQueueUrl,
       };
-      await this.eventPublisher.enqueue(
-        ROUTING_KEY.submissionSubmitted,
-        payload as unknown as Record<string, unknown>,
-        em,
-      );
-      const n = await this.notifications.createIfAbsent(
-        {
-          userId: editor.id,
-          type: NOTIFICATION_TYPE.SUBMISSION_SUBMITTED,
-          params: {
-            submissionTitle: submission.title,
-            authorDisplayName: author.displayName,
-            isResubmission: isResubmission ? 'true' : 'false',
-          },
-          href: `/submissions/${submission.slug}`,
-          idempotencyKey: submissionSubmittedKey(submission.slug, editor.id),
+      return {
+        routingKey: ROUTING_KEY.submissionSubmitted,
+        payload: payload as unknown as Record<string, unknown>,
+      };
+    });
+    await this.eventPublisher.enqueueMany(outboxEvents, em);
+    return this.notifications.createManyIfAbsent(
+      editors.map((editor) => ({
+        userId: editor.id,
+        type: NOTIFICATION_TYPE.SUBMISSION_SUBMITTED,
+        params: {
+          submissionTitle: submission.title,
+          authorDisplayName: author.displayName,
+          isResubmission: isResubmission ? 'true' : 'false',
         },
-        em,
-      );
-      if (n) created.push(n);
-    }
-    return created;
+        href: `/submissions/${submission.slug}`,
+        idempotencyKey: submissionSubmittedKey(submission.slug, editor.id),
+      })),
+      em,
+    );
   }
 
   private async enqueueSubmissionDecisionEvent(
@@ -1429,23 +1446,21 @@ export class SubmissionsService implements OnModuleInit {
     },
   ): Promise<Notification[]> {
     const editorIds = await this.rbacService.listUserIdsWithPermission(
-      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
     );
-    const created: Notification[] = [];
-    for (const editorId of editorIds) {
-      const n = await this.notifications.createIfAbsent(
-        {
-          userId: editorId,
-          type: input.type,
-          params: input.params,
-          href: input.href,
-          idempotencyKey: input.idempotencyKeyForEditor(editorId),
-        },
-        em,
-      );
-      if (n) created.push(n);
+    if (editorIds.length === 0) {
+      return [];
     }
-    return created;
+    return this.notifications.createManyIfAbsent(
+      editorIds.map((editorId) => ({
+        userId: editorId,
+        type: input.type,
+        params: input.params,
+        href: input.href,
+        idempotencyKey: input.idempotencyKeyForEditor(editorId),
+      })),
+      em,
+    );
   }
 
   async acceptReviewInvitation(
@@ -1560,6 +1575,7 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
     const sub = await this.getBySlugOrThrow(submissionSlug);
+    this.assertEditorQueueSubmissionVisible(sub);
     return this.assignmentsRepo.find({
       where: { submissionId: sub.id },
       relations: ['reviewer'],
@@ -1916,7 +1932,7 @@ export class SubmissionsService implements OnModuleInit {
       ethicalApprovalReference: s.ethicalApprovalReference,
       originalityConfirmed: s.originalityConfirmed,
       aiUsageStatement: s.aiUsageStatement,
-      constructorContent: s.constructorContent,
+      constructorContent: sanitizeConstructorContent(s.constructorContent),
       reviewManuscriptPresentation: s.reviewManuscriptPresentation,
       status: s.status,
       createdAt: s.createdAt,
@@ -2288,6 +2304,7 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
     const sub = await this.getBySlugOrThrow(submissionSlug);
+    this.assertEditorQueueSubmissionVisible(sub);
     return this.copyeditAssignmentsRepo.find({
       where: { submissionId: sub.id },
       relations: ['copyeditor', 'notes'],

@@ -26,7 +26,7 @@ import type { RequestUser } from '../common/types/request-user';
 
 describe('SubmissionsService phase2 email (outbox)', () => {
   let service: SubmissionsService;
-  let eventPublisher: { enqueue: jest.Mock };
+  let eventPublisher: { enqueue: jest.Mock; enqueueMany: jest.Mock };
   let submissionsRepo: {
     manager: { transaction: jest.Mock };
     save: jest.Mock;
@@ -60,7 +60,10 @@ describe('SubmissionsService phase2 email (outbox)', () => {
   } as Submission;
 
   beforeEach(async () => {
-    eventPublisher = { enqueue: jest.fn().mockResolvedValue(undefined) };
+    eventPublisher = {
+      enqueue: jest.fn().mockResolvedValue(undefined),
+      enqueueMany: jest.fn().mockResolvedValue(undefined),
+    };
     submissionsRepo = {
       save: jest.fn(async (s: Submission) => s),
       manager: {
@@ -130,6 +133,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
           provide: NotificationsService,
           useValue: {
             createIfAbsent: jest.fn().mockResolvedValue(null),
+            createManyIfAbsent: jest.fn().mockResolvedValue([]),
             emitCreated: jest.fn(),
           },
         },
@@ -214,16 +218,16 @@ describe('SubmissionsService phase2 email (outbox)', () => {
 
     await service.submit('paper-one', authorUser);
 
-    expect(eventPublisher.enqueue).toHaveBeenCalledTimes(2);
-    const keys = eventPublisher.enqueue.mock.calls.map(
-      (c) => (c[1] as Record<string, unknown>).idempotencyKey,
-    );
+    expect(eventPublisher.enqueueMany).toHaveBeenCalledTimes(1);
+    const [events] = eventPublisher.enqueueMany.mock.calls[0] as [
+      { routingKey: string; payload: Record<string, unknown> }[],
+    ];
+    expect(events).toHaveLength(2);
+    const keys = events.map((e) => e.payload.idempotencyKey);
     expect(keys).toContain(submissionSubmittedKey('paper-one', 'editor-1'));
     expect(keys).toContain(submissionSubmittedKey('paper-one', 'editor-2'));
-    expect(
-      eventPublisher.enqueue.mock.calls.every(
-        (c) => c[0] === ROUTING_KEY.submissionSubmitted,
-      ),
-    ).toBe(true);
+    expect(events.every((e) => e.routingKey === ROUTING_KEY.submissionSubmitted)).toBe(
+      true,
+    );
   });
 });

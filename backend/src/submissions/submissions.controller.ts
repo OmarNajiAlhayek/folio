@@ -38,7 +38,11 @@ import type { ConstructorContent } from './constructor-content.types';
 import { Readable } from 'stream';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import {
+  PERMISSION_SLUGS,
+  SUBMISSION_LIST_PERMISSIONS,
+  SUBMISSION_READ_PERMISSIONS,
+} from '../rbac/permission-slugs';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SUBMISSION_FILE_KINDS } from './submission-file-kinds';
 
@@ -102,6 +106,7 @@ export class SubmissionsController {
   }
 
   @Get()
+  @Permissions(...SUBMISSION_LIST_PERMISSIONS)
   findAll(@CurrentUser() user: RequestUser, @Query('status') status?: string) {
     let s: SubmissionStatus | undefined;
     if (
@@ -114,6 +119,7 @@ export class SubmissionsController {
   }
 
   @Get(':slug')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
   findOne(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
     return this.submissionsService.findOneForUser(slug, user);
   }
@@ -223,6 +229,7 @@ export class SubmissionsController {
   }
 
   @Get(':slug/reviews')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
   listReviews(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
     return this.submissionsService.listReviews(slug, user);
   }
@@ -247,6 +254,7 @@ export class SubmissionsController {
   }
 
   @Get(':slug/copyedit-notes')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
   listCopyeditNotes(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
@@ -295,6 +303,7 @@ export class SubmissionsController {
   }
 
   @Get(':slug/files/:fileId')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
   async downloadFile(
     @Param('slug') slug: string,
     @Param('fileId', ParseUUIDPipe) fileId: string,
