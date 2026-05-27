@@ -31,11 +31,11 @@ export const ROUTE_ACCESS_RULES: Array<{
   permissions: string | string[];
 }> = [
   {
-    pattern: /^\/editor\/email-settings(\/|$)/,
+    pattern: /^\/journal-manager\/email-settings(\/|$)/,
     permissions: PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
   },
   {
-    pattern: /^\/editor(?!\/email-settings)(\/|$)/,
+    pattern: /^\/editor(\/|$)/,
     permissions: PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   },
   {
@@ -45,6 +45,10 @@ export const ROUTE_ACCESS_RULES: Array<{
   {
     pattern: /^\/copyedit-assignments(\/|$)/,
     permissions: PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE,
+  },
+  {
+    pattern: /^\/submissions\/?$/,
+    permissions: PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
   },
   {
     pattern: /^\/submissions\/new(\/|$)/,

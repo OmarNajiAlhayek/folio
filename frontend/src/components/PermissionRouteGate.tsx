@@ -22,6 +22,7 @@ export function PermissionRouteGate({ children }: Props) {
   const me = useMe();
   const { resolve } = useApiErrorMessages();
   const tApi = useTranslations("ApiErrors");
+  const tCommon = useTranslations("Common");
 
   useEffect(() => {
     if (!me.isSuccess || !me.data) return;
@@ -32,7 +33,7 @@ export function PermissionRouteGate({ children }: Props) {
   }, [me.isSuccess, me.data, pathname, router]);
 
   if (me.isPending && !me.isSuccess) {
-    return <AuthGateFallback />;
+    return <AuthGateFallback label={tCommon("loading")} />;
   }
 
   if (me.isError) {

@@ -9,6 +9,7 @@ import {
   KeywordTagsDisplay,
   KeywordTagsInput,
 } from "@/components/ui/keyword-tags-input";
+import { Spinner } from "@/components/ui/spinner";
 import {
   parseKeywordsFromStorage,
   serializeKeywords,
@@ -23,6 +24,8 @@ import {
   submissionMetadataPatchSchema,
   SUBMISSION_ARTICLE_TYPES,
 } from "@/lib/validation";
+import { SubmissionDisciplinePanel } from "@/components/submission-discipline-panel";
+import type { SubmissionDisciplineFields } from "@/lib/discipline-labels";
 
 export type ContributorRow = {
   fullName: string;
@@ -46,6 +49,12 @@ export type SubmissionMetadataFormInitial = {
   ethicalApprovalReference: string | null;
   originalityConfirmed: boolean;
   aiUsageStatement: string | null;
+  discipline?: string | null;
+  disciplineSource?: string | null;
+  disciplineSuggested?: string | null;
+  disciplineSuggestedConfidence?: number | null;
+  disciplineScopeInJournal?: boolean | null;
+  disciplineScopeWarning?: string | null;
 };
 
 export const FILE_KIND_ORDER = [
@@ -86,6 +95,7 @@ type SubmissionMetadataFormProps =
       onSaved: () => void;
       onError: (msg: string) => void;
       saveButtonLabel?: string;
+      onDisciplineUpdated?: () => void;
     };
 
 export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
@@ -105,6 +115,10 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     isCreate && "clearStagedFiles" in props ? props.clearStagedFiles : undefined;
   const onSavingChange =
     isCreate && "onSavingChange" in props ? props.onSavingChange : undefined;
+  const onDisciplineUpdated =
+    !isCreate && "onDisciplineUpdated" in props
+      ? props.onDisciplineUpdated
+      : undefined;
 
   const t = useTranslations("SubmissionWorkflow");
   const tv = useTranslations("Validation");
@@ -616,19 +630,42 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
         </div>
       </div>
 
+      {!isCreate && slug && onDisciplineUpdated && (
+        <SubmissionDisciplinePanel
+          slug={slug}
+          mode="author"
+          canEdit
+          fields={{
+            discipline: initial.discipline ?? null,
+            disciplineSource: initial.disciplineSource ?? null,
+            disciplineSuggested: initial.disciplineSuggested ?? null,
+            disciplineSuggestedConfidence:
+              initial.disciplineSuggestedConfidence ?? null,
+            disciplineScopeInJournal: initial.disciplineScopeInJournal ?? null,
+            disciplineScopeWarning: initial.disciplineScopeWarning ?? null,
+          }}
+          onUpdated={onDisciplineUpdated}
+        />
+      )}
+
       <button
         type="button"
         disabled={saving}
+        aria-busy={saving}
+        aria-label={saving ? t("saving") : undefined}
         onClick={() => void save()}
-        className="rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-paper disabled:opacity-60"
+        className="inline-flex min-w-[7rem] items-center justify-center rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-paper disabled:opacity-60"
       >
-        {saving ? t("saving") : saveLabelOverride ?? t("saveMetadata")}
+        {saving ? <Spinner size="sm" className="border-ink/30 border-t-paper" /> : (saveLabelOverride ?? t("saveMetadata"))}
       </button>
     </div>
   );
 }
 
-export type MetadataDisplayInitial = {
+export type MetadataDisplayInitial = MetadataDisplayInitialBase &
+  SubmissionDisciplineFields;
+
+type MetadataDisplayInitialBase = {
   articleType: string | null;
   keywords: string | null;
   keywordsAr: string | null;
@@ -658,8 +695,43 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
     )
       ? tKey(`articleType_${initial.articleType}`)
       : initial.articleType;
+  const disciplineFields: SubmissionDisciplineFields = {
+    discipline: initial.discipline ?? null,
+    disciplineSource: initial.disciplineSource ?? null,
+    disciplineSuggested: initial.disciplineSuggested ?? null,
+    disciplineSuggestedConfidence: initial.disciplineSuggestedConfidence ?? null,
+    disciplineScopeInJournal: initial.disciplineScopeInJournal ?? null,
+    disciplineScopeWarning: initial.disciplineScopeWarning ?? null,
+  };
+
   return (
     <div className="space-y-4">
+      {(disciplineFields.disciplineSuggested || disciplineFields.discipline) && (
+        <div className="rounded-md border border-ink/10 bg-paper/40 px-3 py-2 text-sm" dir="auto">
+          {disciplineFields.disciplineSuggested && (
+            <p className="text-ink/85">
+              <span className="font-medium text-ink">{t("disciplineAiSuggestion")}: </span>
+              {disciplineFields.disciplineSuggested}
+              {disciplineFields.disciplineSuggestedConfidence != null && (
+                <span className="ms-1 text-ink/55">
+                  ({disciplineFields.disciplineSuggestedConfidence.toFixed(1)}%)
+                </span>
+              )}
+            </p>
+          )}
+          {disciplineFields.discipline && (
+            <p className="mt-1 text-ink/85">
+              <span className="font-medium text-ink">{t("disciplineConfirmed")}: </span>
+              {disciplineFields.discipline}
+            </p>
+          )}
+          {disciplineFields.disciplineScopeWarning === "suggested_out_of_journal_scope" && (
+            <p className="mt-2 text-xs font-medium text-amber-900">
+              {t("disciplineScopeWarning")}
+            </p>
+          )}
+        </div>
+      )}
       {initial.articleType && (
         <p>
           <span className="font-medium text-ink">{t("articleType")}: </span>

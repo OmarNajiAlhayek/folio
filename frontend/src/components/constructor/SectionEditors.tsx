@@ -20,6 +20,7 @@ import {
 } from "@/lib/constructor-direction";
 import { parseKeywordsFromStorage, serializeKeywords } from "@/lib/keywords";
 import { KeywordTagsInput } from "@/components/ui/keyword-tags-input";
+import { Spinner } from "@/components/ui/spinner";
 import {
   sanitizeConstructorTipTapHtml,
   sanitizeKatexPreviewHtml,
@@ -729,7 +730,10 @@ function ImageEditor({
             <span className="text-xs text-ink/50">{t("imageNotUploaded")}</span>
           )}
           {uploading ? (
-            <span className="text-xs text-ink/60">{t("imageUploading")}</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink/60">
+              <Spinner size="sm" />
+              <span className="sr-only">{t("imageUploading")}</span>
+            </span>
           ) : null}
         </div>
         {section.fileId && slug ? (

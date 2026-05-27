@@ -18,6 +18,7 @@ import {
 } from "@/lib/queries/notifications";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { cn } from "@/lib/utils";
+import { LoadingCenter, Spinner } from "@/components/ui/spinner";
 
 const TABS: NotificationFilter[] = ["all", "unread", "read"];
 
@@ -115,7 +116,7 @@ export default function NotificationsPage() {
       )}
 
       {listQuery.isLoading && (
-        <p className="text-sm text-ink/60">{t("loading")}</p>
+        <LoadingCenter label={t("loading")} className="text-ink/60" compact />
       )}
 
       {!listQuery.isLoading && !loadError && items.length === 0 && (
@@ -194,11 +195,13 @@ export default function NotificationsPage() {
         <div className="mt-6 text-center">
           <button
             type="button"
-            className="rounded-md border border-ink/15 px-4 py-2 text-sm text-ink/80 hover:bg-ink/5"
+            className="inline-flex min-w-[7rem] items-center justify-center rounded-md border border-ink/15 px-4 py-2 text-sm text-ink/80 hover:bg-ink/5 disabled:opacity-50"
             disabled={listQuery.isFetchingNextPage}
+            aria-busy={listQuery.isFetchingNextPage}
+            aria-label={listQuery.isFetchingNextPage ? t("loading") : undefined}
             onClick={() => void listQuery.fetchNextPage()}
           >
-            {listQuery.isFetchingNextPage ? t("loading") : t("loadMore")}
+            {listQuery.isFetchingNextPage ? <Spinner size="sm" /> : t("loadMore")}
           </button>
         </div>
       )}

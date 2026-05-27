@@ -23,6 +23,7 @@ type Submission = {
   title: string;
   status: string;
   updatedAt: string;
+  disciplineSuggested?: string | null;
 };
 
 const EDITOR_FILTER_STATUSES = [
@@ -154,6 +155,7 @@ export default function EditorPage() {
               updatedAt={s.updatedAt}
               locale={locale}
               t={tSub}
+              disciplineSuggested={s.disciplineSuggested}
             />
           ))}
         </ul>

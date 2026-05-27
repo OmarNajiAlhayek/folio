@@ -7,11 +7,9 @@ import { ApiErrorState } from "@/components/api-error-state";
 import { getApiErrorKind } from "@/lib/api-error-message";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useMe } from "@/lib/queries/auth";
-import {
-  canBrowseSubmissionsNav,
-  canManageOwnSubmissions,
-} from "@/lib/permissions";
+import { canManageOwnSubmissions } from "@/lib/permissions";
 import { useSubmissionsList } from "@/lib/queries/submissions";
+import { LoadingCenter } from "@/components/ui/spinner";
 import {
   EMPTY_STATE_CLS,
   SubmissionListSkeleton,
@@ -21,20 +19,22 @@ import {
 
 export default function SubmissionsPage() {
   const t = useTranslations("Submissions");
+  const tCommon = useTranslations("Common");
   const tApi = useTranslations("ApiErrors");
   const locale = useLocale();
   const router = useRouter();
   const { resolve: resolveApiError } = useApiErrorMessages();
   const meQuery = useMe();
-  const canBrowse = meQuery.data
-    ? canBrowseSubmissionsNav(meQuery.data.permissions)
-    : false;
-  const canCreate = meQuery.data
+  const canManageOwn = meQuery.data
     ? canManageOwnSubmissions(meQuery.data.permissions)
     : false;
 
   useEffect(() => {
-    if (meQuery.isSuccess && meQuery.data && !canBrowseSubmissionsNav(meQuery.data.permissions)) {
+    if (
+      meQuery.isSuccess &&
+      meQuery.data &&
+      !canManageOwnSubmissions(meQuery.data.permissions)
+    ) {
       router.replace("/dashboard");
     }
   }, [meQuery.isSuccess, meQuery.data, router]);
@@ -48,10 +48,10 @@ export default function SubmissionsPage() {
   const items = listQuery.data ?? [];
   const loading = listQuery.isLoading;
 
-  if (meQuery.isLoading || (meQuery.isSuccess && !canBrowse)) {
+  if (meQuery.isLoading || (meQuery.isSuccess && !canManageOwn)) {
     return (
       <main className={submissionQueueShellCls}>
-        <p className="text-ink/60">Loading…</p>
+        <LoadingCenter label={tCommon("loading")} className="text-ink/60" />
       </main>
     );
   }
@@ -85,7 +85,7 @@ export default function SubmissionsPage() {
               {t("hint")}
             </p>
           </div>
-          {canCreate && (
+          {canManageOwn && (
             <Link
               href="/submissions/new"
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-95 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -110,7 +110,7 @@ export default function SubmissionsPage() {
         <div className={EMPTY_STATE_CLS}>
           <p className="font-serif text-base text-ink">{t("empty")}</p>
           <p className="max-w-md text-sm text-ink/65">{t("emptyHint")}</p>
-          {canCreate && (
+          {canManageOwn && (
             <Link
               href="/submissions/new"
               className="mt-1 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 hover:shadow-md"

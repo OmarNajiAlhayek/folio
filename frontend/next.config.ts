@@ -69,6 +69,12 @@ const nextConfig: NextConfig = {
         destination: "/:locale/submissions/:slug/compose",
         permanent: true,
       },
+      // Email admin moved from editor to journal-manager scope.
+      {
+        source: "/:locale/editor/email-settings",
+        destination: "/:locale/journal-manager/email-settings",
+        permanent: true,
+      },
     ];
   },
 };

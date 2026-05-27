@@ -155,6 +155,7 @@ type SubmissionQueueRowProps = {
   updatedAt: string;
   locale: string;
   t: SubmissionsListTranslator;
+  disciplineSuggested?: string | null;
 };
 
 export function SubmissionQueueRow({
@@ -164,6 +165,7 @@ export function SubmissionQueueRow({
   updatedAt,
   locale,
   t,
+  disciplineSuggested,
 }: SubmissionQueueRowProps) {
   const label = submissionStatusLabel(status, t);
   const dateStr = formatSubmissionUpdatedAt(updatedAt, locale);
@@ -180,11 +182,14 @@ export function SubmissionQueueRow({
           <span className={statusPillClass(status)}>{label}</span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink/55">
-          {dateStr ? (
-            <span>{t("updatedLabel", { date: dateStr })}</span>
-          ) : (
-            <span />
-          )}
+          <span className="flex min-w-0 flex-col gap-0.5">
+            {dateStr ? <span>{t("updatedLabel", { date: dateStr })}</span> : null}
+            {disciplineSuggested ? (
+              <span className="truncate text-xs text-ink/65" dir="auto" title={disciplineSuggested}>
+                {disciplineSuggested}
+              </span>
+            ) : null}
+          </span>
           <span className="inline-flex items-center gap-1 font-medium text-accent opacity-80 transition group-hover:opacity-100">
             <span className="text-xs font-semibold tracking-wide">
               {t("view")}

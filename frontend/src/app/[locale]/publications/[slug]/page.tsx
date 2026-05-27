@@ -9,6 +9,11 @@ import { getApiErrorKind } from "@/lib/api-error-message";
 import { getApiBase } from "@/lib/api";
 import { publicJson } from "@/lib/public-api";
 import { PAGE_SHELL_NARROW } from "@/lib/page-shell";
+import { LoadingCenter } from "@/components/ui/spinner";
+import {
+  RelatedPublications,
+  type RelatedPublication,
+} from "@/components/related-publications";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 
 type Detail = {
@@ -42,6 +47,8 @@ export default function PublicationDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
+  const [related, setRelated] = useState<RelatedPublication[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
 
   const loadDetail = useCallback(() => {
     setLoadError(null);
@@ -61,13 +68,28 @@ export default function PublicationDetailPage() {
     void Promise.resolve().then(() => loadDetail());
   }, [loadDetail]);
 
+  useEffect(() => {
+    const slug = data?.slug ?? routeSlug;
+    if (!slug || loadError) {
+      return;
+    }
+    setRelated([]);
+    setRelatedLoading(true);
+    publicJson<RelatedPublication[]>(
+      `/public/submissions/${encodeURIComponent(slug)}/related`,
+    )
+      .then(setRelated)
+      .catch(() => setRelated([]))
+      .finally(() => setRelatedLoading(false));
+  }, [data?.slug, routeSlug, loadError]);
+
   if (loading && !loadError) {
     return (
       <main className={PAGE_SHELL_NARROW}>
         <Link href="/publications" className="text-sm text-accent hover:underline">
           {t("back")}
         </Link>
-        <p className="mt-8 text-ink/70">{t("loading")}</p>
+        <LoadingCenter label={t("loading")} className="mt-8 text-ink/70" />
       </main>
     );
   }
@@ -147,6 +169,7 @@ export default function PublicationDetailPage() {
           </ul>
         </section>
       )}
+      <RelatedPublications items={related} loading={relatedLoading} />
     </main>
   );
 }

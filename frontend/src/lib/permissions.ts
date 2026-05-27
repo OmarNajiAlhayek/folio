@@ -39,13 +39,11 @@ export function canManageOwnSubmissions(permissions: Iterable<string>): boolean 
   return [...permissions].includes(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN);
 }
 
-/** Author manuscript list or editor queue (not copyeditor-only staff). */
-export function canBrowseSubmissionsNav(permissions: Iterable<string>): boolean {
-  const set = new Set(permissions);
-  return (
-    set.has(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN) ||
-    set.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
-  );
+/** Author workspace: own manuscript list and new draft (not the editor queue). */
+export function canBrowseAuthorSubmissionsNav(
+  permissions: Iterable<string>,
+): boolean {
+  return canManageOwnSubmissions(permissions);
 }
 
 export type MeProfile = {

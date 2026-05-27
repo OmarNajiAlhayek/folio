@@ -25,6 +25,7 @@ import { toast } from "@/lib/toast";
 
 import { useToastApiError } from "@/lib/use-toast-api-error";
 
+import { LoadingCenter } from "@/components/ui/spinner";
 import { submissionQueueShellCls } from "@/lib/submission-list-ui";
 
 
@@ -255,7 +256,7 @@ export default function CopyeditWorkbenchPage() {
 
       <main className={submissionQueueShellCls}>
 
-        <p className="text-sm text-ink/70">{t("loading")}</p>
+        <LoadingCenter label={t("loading")} className="text-ink/70" compact />
 
       </main>
 

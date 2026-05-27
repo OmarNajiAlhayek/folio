@@ -9,6 +9,7 @@ import { sanitizeNextParam } from "@/lib/auth-redirect";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { PasswordInputWithToggle } from "@/components/password-input-with-toggle";
+import { Spinner } from "@/components/ui/spinner";
 import {
   firstIssueByTopLevelPath,
   registerSchema,
@@ -248,9 +249,11 @@ function RegisterForm() {
         <button
           type="submit"
           disabled={loading}
-          className="mt-2 rounded-md bg-accent py-2.5 text-sm font-medium text-white disabled:opacity-60"
+          aria-busy={loading}
+          aria-label={loading ? t("creating") : undefined}
+          className="mt-2 inline-flex min-w-[7rem] items-center justify-center rounded-md bg-accent py-2.5 text-sm font-medium text-white disabled:opacity-60"
         >
-          {loading ? t("creating") : t("createAccount")}
+          {loading ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("createAccount")}
         </button>
       </form>
       <p className="mt-6 text-center text-sm text-ink/70">

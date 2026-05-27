@@ -9,6 +9,7 @@ import { sanitizeNextParam } from "@/lib/auth-redirect";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { PasswordInputWithToggle } from "@/components/password-input-with-toggle";
+import { Spinner } from "@/components/ui/spinner";
 import {
   firstIssueByTopLevelPath,
   loginSchema,
@@ -61,8 +62,6 @@ function LoginForm() {
     }
   }
 
-  const showDevHint = process.env.NODE_ENV === "development";
-
   return (
     <main className={PAGE_SHELL}>
       <div className="grid gap-6 md:grid-cols-[1fr_minmax(0,480px)] md:items-start md:gap-8">
@@ -91,16 +90,6 @@ function LoginForm() {
           <h1 className="font-serif text-2xl font-semibold text-ink md:hidden">
             {t("title")}
           </h1>
-          {showDevHint && (
-            <p className="mt-3 text-xs leading-relaxed text-ink/50 md:mt-0">
-              {t("demoHint", {
-                email: "editor@folio.local",
-                password: "Editor123!",
-                seedCmd: "npm run seed",
-                backend: "backend",
-              })}
-            </p>
-          )}
           <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-ink">{t("email")}</span>
@@ -141,9 +130,11 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-2 rounded-md bg-accent py-2.5 text-sm font-medium text-white disabled:opacity-60"
+              aria-busy={loading}
+              aria-label={loading ? t("signingIn") : undefined}
+              className="mt-2 inline-flex min-w-[7rem] items-center justify-center rounded-md bg-accent py-2.5 text-sm font-medium text-white disabled:opacity-60"
             >
-              {loading ? t("signingIn") : t("signIn")}
+              {loading ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("signIn")}
             </button>
           </form>
           <p className="mt-6 text-center text-sm text-ink/70">

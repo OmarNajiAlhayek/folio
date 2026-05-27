@@ -11,6 +11,7 @@ import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { toast } from "@/lib/toast";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
+import { Spinner } from "@/components/ui/spinner";
 
 type AssignmentRow = {
   id: string;
@@ -251,10 +252,12 @@ export default function AssignmentInvitePage() {
             <button
               type="button"
               disabled={acting}
+              aria-busy={acting}
+              aria-label={acting ? t("working") : undefined}
               onClick={() => void accept()}
-              className="rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+              className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-95 disabled:opacity-50"
             >
-              {acting ? t("working") : t("accept")}
+              {acting ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("accept")}
             </button>
             <button
               type="button"

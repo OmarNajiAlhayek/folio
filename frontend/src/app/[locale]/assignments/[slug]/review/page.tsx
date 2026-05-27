@@ -12,6 +12,7 @@ import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PAGE_SHELL } from "@/lib/page-shell";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 import {
   createReviewSchema,
   formatZodIssues,
@@ -584,9 +585,11 @@ export default function ReviewFormPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-lg bg-accent py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-busy={submitting}
+                  aria-label={submitting ? t("sending") : undefined}
+                  className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {submitting ? t("sending") : t("submit")}
+                  {submitting ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("submit")}
                 </button>
               </form>
             </section>

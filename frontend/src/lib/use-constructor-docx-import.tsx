@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { useTranslations } from "next-intl";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Spinner } from "@/components/ui/spinner";
 import {
   constructorDraftHasMeaningfulContent,
   mergeImportedConstructorContent,
@@ -162,9 +163,11 @@ export function useConstructorDocxImport({
       <label
         htmlFor={importInputId}
         data-testid="constructor-import-docx"
-        className={`inline-flex cursor-pointer rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 ${importDisabled ? "pointer-events-none opacity-50" : ""}`}
+        aria-busy={importingDocx}
+        aria-label={importingDocx ? t("importingWord") : undefined}
+        className={`inline-flex min-w-[7rem] cursor-pointer items-center justify-center rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 ${importDisabled ? "pointer-events-none opacity-50" : ""}`}
       >
-        {importingDocx ? t("importingWord") : t("importWord")}
+        {importingDocx ? <Spinner size="sm" /> : t("importWord")}
       </label>
     </>
   );

@@ -32,6 +32,7 @@ import type { SubmissionArticleType } from "@/lib/constructor-section-presets";
 import { constructorDraftHasMeaningfulContent } from "@/lib/constructor-import-merge";
 import { useConstructorDocxImport } from "@/lib/use-constructor-docx-import";
 import { useConstructorStyleGuidance } from "@/lib/use-constructor-style-guidance";
+import { LoadingCenter, Spinner } from "@/components/ui/spinner";
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 /** Autosave surface: toast-after-3 — show one error toast only after this many consecutive failures. */
@@ -280,7 +281,10 @@ export default function SubmissionConstructorPage() {
     return (
       <div className="flex flex-wrap items-center gap-2">
         {saving ? (
-          <span className="text-xs text-ink/55">{tCommon("autosaving")}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-ink/55">
+            <Spinner size="sm" />
+            <span className="sr-only">{tCommon("autosaving")}</span>
+          </span>
         ) : savedAt ? (
           <span className="text-xs text-ink/55">
             {tCommon("savedAt", {
@@ -293,19 +297,23 @@ export default function SubmissionConstructorPage() {
           type="button"
           onClick={() => void generate(false)}
           disabled={generating || attaching || !canEdit || importingDocx}
+          aria-busy={generating}
+          aria-label={generating ? tCommon("generating") : undefined}
           data-testid="constructor-generate-docx"
-          className="rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
+          className="inline-flex min-w-[7rem] items-center justify-center rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
         >
-          {generating ? tCommon("generating") : tCommon("downloadDocx")}
+          {generating ? <Spinner size="sm" /> : tCommon("downloadDocx")}
         </button>
         <button
           type="button"
           onClick={() => void generate(true)}
           disabled={generating || attaching || !canEdit || importingDocx}
+          aria-busy={attaching}
+          aria-label={attaching ? t("attachingManuscript") : undefined}
           data-testid="constructor-attach-manuscript"
-          className="rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
+          className="inline-flex min-w-[7rem] items-center justify-center rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
         >
-          {attaching ? t("attachingManuscript") : t("attachManuscript")}
+          {attaching ? <Spinner size="sm" /> : t("attachManuscript")}
         </button>
         <Link
           href={`/submissions/${encodeURIComponent(sub.slug)}`}
@@ -336,7 +344,7 @@ export default function SubmissionConstructorPage() {
   if (loading) {
     return (
       <main className={PAGE_SHELL}>
-        <p className="text-sm text-ink/60">{t("loading")}</p>
+        <LoadingCenter label={t("loading")} className="text-ink/60" compact />
       </main>
     );
   }
@@ -420,7 +428,7 @@ export default function SubmissionConstructorPage() {
       <section className="mt-6">
         <Suspense
           fallback={
-            <p className="text-sm text-ink/60">{t("loading")}</p>
+            <LoadingCenter label={t("loading")} className="text-ink/60" compact />
           }
         >
           <ConstructorWorkspace

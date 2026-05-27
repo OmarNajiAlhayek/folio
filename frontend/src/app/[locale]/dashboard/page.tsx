@@ -13,10 +13,11 @@ import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import type { MeProfile } from "@/lib/permissions";
 import {
-  canBrowseSubmissionsNav,
+  canBrowseAuthorSubmissionsNav,
   PERMISSION_SLUGS,
 } from "@/lib/permissions";
 import { PAGE_SHELL } from "@/lib/page-shell";
+import { Spinner } from "@/components/ui/spinner";
 import { formatSubmissionUpdatedAt } from "@/lib/submission-list-ui";
 function RowChevron() {
   return (
@@ -198,7 +199,7 @@ export default function DashboardPage() {
     me.displayName?.trim()?.charAt(0)?.toLocaleUpperCase() ?? "?";
 
   const links: { href: string; label: string }[] = [
-    ...(canBrowseSubmissionsNav(me.permissions)
+    ...(canBrowseAuthorSubmissionsNav(me.permissions)
       ? [{ href: "/submissions", label: t("mySubmissions") } as const]
       : []),
     ...(canEditorQueue
@@ -273,10 +274,12 @@ export default function DashboardPage() {
           <button
             type="button"
             disabled={emailPrefBusy}
+            aria-busy={emailPrefBusy}
+            aria-label={emailPrefBusy ? t("emailLanguageSaving") : undefined}
             onClick={() => void saveEmailPref()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-50"
+            className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-50"
           >
-            {emailPrefBusy ? t("emailLanguageSaving") : t("emailLanguageSave")}
+            {emailPrefBusy ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("emailLanguageSave")}
           </button>
         </div>
       </section>
@@ -377,10 +380,12 @@ export default function DashboardPage() {
                         <button
                           type="button"
                           disabled={busy}
+                          aria-busy={busy}
+                          aria-label={busy ? t("working") : undefined}
                           onClick={() => void acceptRoleInvite(r.id)}
-                          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-50"
+                          className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-95 disabled:opacity-50"
                         >
-                          {busy ? t("working") : t("acceptRole")}
+                          {busy ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("acceptRole")}
                         </button>
                         <button
                           type="button"

@@ -12,7 +12,7 @@ import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notification-bell";
 import {
-  canBrowseSubmissionsNav,
+  canBrowseAuthorSubmissionsNav,
   PERMISSION_SLUGS,
 } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -145,7 +145,7 @@ export function Nav() {
                 <NavTextLink href="/dashboard" match="exact">
                   {t("dashboard")}
                 </NavTextLink>
-                {canBrowseSubmissionsNav(perms) && (
+                {canBrowseAuthorSubmissionsNav(perms) && (
                   <NavTextLink href="/submissions" match="prefix">
                     {t("submissions")}
                   </NavTextLink>
@@ -156,7 +156,7 @@ export function Nav() {
                   </NavTextLink>
                 )}
                 {perms.has(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS) && (
-                  <NavTextLink href="/editor/email-settings" match="prefix">
+                  <NavTextLink href="/journal-manager/email-settings" match="prefix">
                     {t("emailSettings")}
                   </NavTextLink>
                 )}

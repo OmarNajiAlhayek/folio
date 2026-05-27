@@ -14,6 +14,7 @@ import { sanitizeConstructorContent } from "@/lib/sanitize-constructor-html";
 import { useConstructorDocxImport } from "@/lib/use-constructor-docx-import";
 import { useConstructorStyleGuidance } from "@/lib/use-constructor-style-guidance";
 import { useConstructorDraft } from "@/lib/use-constructor-draft";
+import { LoadingCenter, Spinner } from "@/components/ui/spinner";
 import type { ConstructorContent } from "@/lib/constructor-content.types";
 
 /**
@@ -121,7 +122,11 @@ export default function NewConstructorPage() {
       </header>
 
       <section className="mt-6">
-        <Suspense fallback={<p className="text-sm text-ink/60">{t("loading")}</p>}>
+        <Suspense
+          fallback={
+            <LoadingCenter label={t("loading")} className="text-ink/60" compact />
+          }
+        >
           <ConstructorWorkspace
             content={content}
             onChange={handleContentChange}
@@ -148,10 +153,12 @@ export default function NewConstructorPage() {
                 type="button"
                 onClick={() => void handleDownloadDocx()}
                 disabled={downloadingDocx || importingDocx}
+                aria-busy={downloadingDocx}
+                aria-label={downloadingDocx ? t("generatingDocx") : undefined}
                 data-testid="constructor-download-docx-only"
-                className="inline-flex rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 disabled:opacity-50"
+                className="inline-flex min-w-[7rem] items-center justify-center rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 disabled:opacity-50"
               >
-                {downloadingDocx ? t("generatingDocx") : t("downloadDocxOnly")}
+                {downloadingDocx ? <Spinner size="sm" /> : t("downloadDocxOnly")}
               </button>
               <Link
                 href="/submissions/new?fromConstructor=1"

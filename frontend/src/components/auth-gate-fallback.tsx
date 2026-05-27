@@ -1,7 +1,14 @@
-export function AuthGateFallback() {
+import { LoadingCenter } from "@/components/ui/spinner";
+
+type Props = {
+  label: string;
+};
+
+export function AuthGateFallback({ label }: Props) {
   return (
-    <div className="mx-auto max-w-lg px-4 py-10 text-sm text-ink/70 sm:py-12">
-      Loading…
-    </div>
+    <LoadingCenter
+      label={label}
+      className="mx-auto max-w-lg px-4 text-sm text-ink/70"
+    />
   );
 }

@@ -10,6 +10,7 @@ import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import { PERMISSION_SLUGS } from "@/lib/permissions";
 import { submissionQueueShellCls } from "@/lib/submission-list-ui";
+import { LoadingCenter, Spinner } from "@/components/ui/spinner";
 
 type ReminderPolicy = {
   id: number;
@@ -148,32 +149,38 @@ export default function EmailSettingsPage() {
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [requeueOutboxId, setRequeueOutboxId] = useState<string | null>(null);
+  const [dlqReplayBusy, setDlqReplayBusy] = useState(false);
+  const [dlqReplayLimit, setDlqReplayLimit] = useState("1");
+  const [templatesLoading, setTemplatesLoading] = useState(false);
   const { resolve: resolveApiError } = useApiErrorMessages();
   const showApiError = useToastApiError();
 
-  const loadAll = useCallback(async () => {
-    const q = `?locale=${encodeURIComponent(editTemplateLocale)}`;
+  const loadPolicy = useCallback(async () => {
+    const p = await apiJson<ReminderPolicy>("/admin/email/reminder-policy");
+    setPolicy(p);
+    setPolicyDays(String(p.reviewDueInDays));
+  }, []);
+
+  const loadTemplates = useCallback(async (templateLocale: "en" | "ar") => {
+    const q = `?locale=${encodeURIComponent(templateLocale)}`;
     const allKeys: EmailTemplateKey[] = [
       ...REVIEW_TEMPLATE_KEYS,
       ...WORKFLOW_TEMPLATE_KEYS,
       ...COPYEDIT_TEMPLATE_KEYS,
     ];
-    const [p, ...loaded] = await Promise.all([
-      apiJson<ReminderPolicy>("/admin/email/reminder-policy"),
-      ...allKeys.map((key) =>
+    const loaded = await Promise.all(
+      allKeys.map((key) =>
         apiJson<EmailTemplate>(
           `/admin/email/templates/${encodeURIComponent(key)}${q}`,
         ),
       ),
-    ]);
-    setPolicy(p);
-    setPolicyDays(String(p.reviewDueInDays));
+    );
     const next: Partial<Record<EmailTemplateKey, EmailTemplate>> = {};
     allKeys.forEach((key, i) => {
       next[key] = loaded[i];
     });
     setTemplates(next);
-  }, [editTemplateLocale]);
+  }, []);
 
   function patchTemplate(
     key: EmailTemplateKey,
@@ -216,8 +223,48 @@ export default function EmailSettingsPage() {
         setRequeueOutboxId(null);
       }
     },
-    [loadPipeline, t],
+    [loadPipeline, t, showApiError],
   );
+
+  const replayDlq = useCallback(async () => {
+    const limit = Math.min(25, Math.max(1, parseInt(dlqReplayLimit, 10) || 1));
+    setDlqReplayBusy(true);
+    try {
+      const res = await apiJson<{
+        requested: number;
+        replayed: number;
+        empty: boolean;
+        items: Array<{ routingKey: string; replayed: boolean; error?: string }>;
+      }>("/admin/email/dlq/replay", {
+        method: "POST",
+        body: JSON.stringify({ limit }),
+      });
+      if (res.empty) {
+        toast.info(t("replayDlqEmpty"), { id: "email-dlq-replay" });
+      } else if (res.replayed === res.requested) {
+        toast.success(t("replayDlqOk", { count: res.replayed }), {
+          id: "email-dlq-replay",
+        });
+      } else if (res.replayed > 0) {
+        toast.success(
+          t("replayDlqPartial", { ok: res.replayed, total: res.items.length }),
+          { id: "email-dlq-replay" },
+        );
+      } else {
+        const firstErr = res.items.find((i) => i.error)?.error;
+        showApiError(
+          new Error(firstErr ?? "replay failed"),
+          t("replayDlqFailed"),
+          { id: "email-dlq-replay" },
+        );
+      }
+      await loadPipeline();
+    } catch (err) {
+      showApiError(err, t("replayDlqFailed"), { id: "email-dlq-replay" });
+    } finally {
+      setDlqReplayBusy(false);
+    }
+  }, [dlqReplayLimit, loadPipeline, t, showApiError]);
 
   useEffect(() => {
     if (
@@ -228,7 +275,7 @@ export default function EmailSettingsPage() {
     let cancelled = false;
     void (async () => {
       try {
-        await Promise.all([loadAll(), loadPipeline()]);
+        await Promise.all([loadPolicy(), loadPipeline()]);
       } catch (err) {
         if (cancelled) return;
         setError(resolveApiError(err, t("loadFailed")));
@@ -237,7 +284,28 @@ export default function EmailSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [me, loadAll, loadPipeline, t]);
+  }, [me, loadPolicy, loadPipeline, t, resolveApiError]);
+
+  useEffect(() => {
+    if (
+      !me?.permissions.includes(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+    ) {
+      return;
+    }
+    let cancelled = false;
+    setTemplatesLoading(true);
+    void loadTemplates(editTemplateLocale)
+      .catch((err) => {
+        if (cancelled) return;
+        showApiError(err, t("loadFailed"), { id: "email-settings-templates" });
+      })
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [me, editTemplateLocale, loadTemplates, t, showApiError]);
 
   useEffect(() => {
     setEditTemplateLocale(locale === "ar" ? "ar" : "en");
@@ -265,7 +333,7 @@ export default function EmailSettingsPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         toast.error(t("conflict"), { id: "email-settings-conflict" });
-        await loadAll().catch(() => undefined);
+        await loadTemplates(editTemplateLocale).catch(() => undefined);
       } else {
         showApiError(err, t("loadFailed"), { id: "email-settings-policy-save" });
       }
@@ -296,7 +364,7 @@ export default function EmailSettingsPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         toast.error(t("conflict"), { id: "email-settings-conflict" });
-        await loadAll().catch(() => undefined);
+        await loadTemplates(editTemplateLocale).catch(() => undefined);
       } else {
         showApiError(err, t("loadFailed"), {
           id: `email-settings-template-${key}`,
@@ -331,7 +399,10 @@ export default function EmailSettingsPage() {
           onClick={() => {
             setError(null);
             void Promise.all([
-              loadAll().catch((err) => {
+              loadPolicy().catch((err) => {
+                setError(resolveApiError(err, t("loadFailed")));
+              }),
+              loadTemplates(editTemplateLocale).catch((err) => {
                 setError(resolveApiError(err, t("loadFailed")));
               }),
               loadPipeline(),
@@ -348,8 +419,8 @@ export default function EmailSettingsPage() {
     <main className={submissionQueueShellCls}>
       <header className="border-s-4 border-s-accent/35 ps-5">
         <p className="text-sm text-ink/65">
-          <Link href="/editor" className="text-accent hover:underline">
-            {t("backToEditor")}
+          <Link href="/dashboard" className="text-accent hover:underline">
+            {t("backToDashboard")}
           </Link>
         </p>
         <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-ink">
@@ -368,10 +439,12 @@ export default function EmailSettingsPage() {
           <button
             type="button"
             disabled={pipelineLoading}
+            aria-busy={pipelineLoading}
+            aria-label={pipelineLoading ? t("pipelineLoading") : undefined}
             onClick={() => void loadPipeline()}
-            className="rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+            className="inline-flex min-w-[7rem] items-center justify-center rounded-lg border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
           >
-            {pipelineLoading ? t("pipelineLoading") : t("pipelineRefresh")}
+            {pipelineLoading ? <Spinner size="sm" /> : t("pipelineRefresh")}
           </button>
         </div>
         <p className="mt-2 text-sm text-ink/65">{t("pipelineHint")}</p>
@@ -381,7 +454,11 @@ export default function EmailSettingsPage() {
           </p>
         ) : null}
         {pipelineLoading && !pipeline ? (
-          <p className="mt-3 text-sm text-ink/60">{t("pipelineLoading")}</p>
+          <LoadingCenter
+            label={t("pipelineLoading")}
+            className="mt-3 text-ink/60"
+            compact
+          />
         ) : null}
         {pipeline ? (
           <div
@@ -412,13 +489,21 @@ export default function EmailSettingsPage() {
                         </span>
                         <button
                           type="button"
-                          className="rounded border border-ink/20 px-2 py-0.5 font-sans text-xs text-ink hover:bg-ink/5 disabled:opacity-50"
+                          className="inline-flex min-w-[5.5rem] items-center justify-center rounded border border-ink/20 px-2 py-0.5 font-sans text-xs text-ink hover:bg-ink/5 disabled:opacity-50"
                           disabled={requeueOutboxId === r.id}
+                          aria-busy={requeueOutboxId === r.id}
+                          aria-label={
+                            requeueOutboxId === r.id
+                              ? t("requeueOutboxBusy")
+                              : undefined
+                          }
                           onClick={() => void requeueDeadOutbox(r.id)}
                         >
-                          {requeueOutboxId === r.id
-                            ? t("requeueOutboxBusy")
-                            : t("requeueOutbox")}
+                          {requeueOutboxId === r.id ? (
+                            <Spinner size="sm" />
+                          ) : (
+                            t("requeueOutbox")
+                          )}
                         </button>
                       </li>
                     ))}
@@ -460,7 +545,7 @@ export default function EmailSettingsPage() {
                 </li>
               </ul>
             </div>
-            <div>
+            <div className="md:col-span-2">
               <h3 className="font-medium text-ink">{t("rabbitLabel")}</h3>
               {!pipeline.rabbitMq.available ? (
                 <p className="mt-2 text-ink/75">
@@ -473,7 +558,14 @@ export default function EmailSettingsPage() {
                 <ul className="mt-2 space-y-1 text-ink/80">
                   {Object.entries(pipeline.rabbitMq.queues).map(
                     ([name, q]) => (
-                      <li key={name}>
+                      <li
+                        key={name}
+                        className={
+                          name.includes("dlq")
+                            ? "font-medium text-ink"
+                            : undefined
+                        }
+                      >
                         {name}: msg {q.messageCount}, consumers{" "}
                         {q.consumerCount}
                       </li>
@@ -485,6 +577,42 @@ export default function EmailSettingsPage() {
                 cached {pipeline.rabbitMq.cachedAt} · refresh ≤{" "}
                 {pipeline.rabbitMq.staleAfterSeconds}s
               </p>
+              <div className="mt-4 rounded-lg border border-amber-200/80 bg-amber-50/60 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+                <h4 className="text-sm font-medium text-ink">
+                  {t("dlqLabel")}
+                </h4>
+                <p className="mt-1 text-xs leading-relaxed text-ink/70">
+                  {t("dlqHint")}
+                </p>
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1 text-xs font-medium text-ink">
+                    <span>{t("replayDlqLimit")}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={25}
+                      value={dlqReplayLimit}
+                      onChange={(e) => setDlqReplayLimit(e.target.value)}
+                      disabled={dlqReplayBusy || !pipeline.rabbitMq.available}
+                      className="w-20 rounded-md border border-ink/15 bg-paper px-2 py-1.5 text-sm text-ink"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={dlqReplayBusy || !pipeline.rabbitMq.available}
+                    aria-busy={dlqReplayBusy}
+                    aria-label={dlqReplayBusy ? t("replayDlqBusy") : undefined}
+                    onClick={() => void replayDlq()}
+                    className="inline-flex min-w-[8rem] items-center justify-center rounded-lg border border-amber-300/80 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:bg-amber-100/50 disabled:opacity-50 dark:border-amber-800/60 dark:hover:bg-amber-950/40"
+                  >
+                    {dlqReplayBusy ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      t("replayDlq")
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
@@ -515,19 +643,25 @@ export default function EmailSettingsPage() {
               !Number.isFinite(parseInt(policyDays, 10)) ||
               parseInt(policyDays, 10) < 4
             }
+            aria-busy={busyPolicy}
+            aria-label={busyPolicy ? t("saving") : undefined}
             onClick={() => void savePolicy()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent/90 disabled:opacity-50"
+            className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent/90 disabled:opacity-50"
           >
-            {busyPolicy ? t("saving") : t("savePolicy")}
+            {busyPolicy ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("savePolicy")}
           </button>
         </div>
       </section>
 
       <div className="mt-10 flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-ink">{t("templateLocale")}</span>
+        {templatesLoading ? (
+          <Spinner size="sm" aria-label={t("templatesLoading")} />
+        ) : null}
         <div className="inline-flex rounded-lg border border-ink/15 p-0.5">
           <button
             type="button"
+            disabled={templatesLoading}
             onClick={() => setEditTemplateLocale("en")}
             className={`rounded-md px-3 py-1.5 text-sm ${
               editTemplateLocale === "en"
@@ -539,6 +673,7 @@ export default function EmailSettingsPage() {
           </button>
           <button
             type="button"
+            disabled={templatesLoading}
             onClick={() => setEditTemplateLocale("ar")}
             className={`rounded-md px-3 py-1.5 text-sm ${
               editTemplateLocale === "ar"
@@ -556,7 +691,7 @@ export default function EmailSettingsPage() {
       </h2>
       {REVIEW_TEMPLATE_KEYS.map((key) => (
         <EmailTemplateEditorSection
-          key={key}
+          key={`${editTemplateLocale}-${key}`}
           templateKey={key}
           tpl={templates[key]}
           meta={TEMPLATE_I18N[key]}
@@ -579,7 +714,7 @@ export default function EmailSettingsPage() {
       </h2>
       {WORKFLOW_TEMPLATE_KEYS.map((key) => (
         <EmailTemplateEditorSection
-          key={key}
+          key={`${editTemplateLocale}-${key}`}
           templateKey={key}
           tpl={templates[key]}
           meta={TEMPLATE_I18N[key]}
@@ -597,7 +732,7 @@ export default function EmailSettingsPage() {
       </h2>
       {COPYEDIT_TEMPLATE_KEYS.map((key) => (
         <EmailTemplateEditorSection
-          key={key}
+          key={`${editTemplateLocale}-${key}`}
           templateKey={key}
           tpl={templates[key]}
           meta={TEMPLATE_I18N[key]}
@@ -766,18 +901,22 @@ function TemplateFields({
         <button
           type="button"
           disabled={busy}
+          aria-busy={busy}
+          aria-label={busy ? t("saving") : undefined}
           onClick={onSave}
-          className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/90 disabled:opacity-50"
+          className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/90 disabled:opacity-50"
         >
-          {busy ? t("saving") : t("saveTemplate")}
+          {busy ? <Spinner size="sm" className="border-ink/30 border-t-paper" /> : t("saveTemplate")}
         </button>
         <button
           type="button"
           disabled={pvBusy}
+          aria-busy={pvBusy}
+          aria-label={pvBusy ? t("previewing") : undefined}
           onClick={() => void runPreview(onPreview)}
-          className="rounded-lg border border-ink/20 bg-paper px-4 py-2 text-sm text-ink hover:bg-ink/5"
+          className="inline-flex min-w-[7rem] items-center justify-center rounded-lg border border-ink/20 bg-paper px-4 py-2 text-sm text-ink hover:bg-ink/5 disabled:opacity-50"
         >
-          {pvBusy ? t("previewing") : t("preview")}
+          {pvBusy ? <Spinner size="sm" /> : t("preview")}
         </button>
         {showOverduePreview && onPreviewOverdue && (
           <button

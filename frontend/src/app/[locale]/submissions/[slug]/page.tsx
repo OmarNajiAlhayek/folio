@@ -16,6 +16,7 @@ import {
   ACCEPT_SUPPLEMENTARY,
 } from "@/lib/upload-accept";
 import { ApiErrorState } from "@/components/api-error-state";
+import { LoadingCenter, Spinner } from "@/components/ui/spinner";
 import { toast } from "@/lib/toast";
 import { getApiErrorKind } from "@/lib/api-error-message";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
@@ -73,6 +74,7 @@ import {
   usePatchSubmission,
 } from "@/lib/queries/submissions";
 import { CopyeditSection } from "@/components/copyedit/CopyeditSection";
+import { SubmissionDisciplinePanel } from "@/components/submission-discipline-panel";
 import type {
   ConstructorContent,
   ConstructorValidationError,
@@ -123,6 +125,12 @@ type SubmissionDetail = {
     presentUploaded: boolean;
     presentConstructor: boolean;
   } | null;
+  discipline?: string | null;
+  disciplineSource?: string | null;
+  disciplineSuggested?: string | null;
+  disciplineSuggestedConfidence?: number | null;
+  disciplineScopeInJournal?: boolean | null;
+  disciplineScopeWarning?: string | null;
 };
 
 type ReviewerCandidate = SubmissionDetailPayload["reviewerCandidates"][number];
@@ -734,7 +742,7 @@ export default function SubmissionDetailPage() {
   if (detailQuery.isPending || !sub || !me) {
     return (
       <main className={PAGE_SHELL_NARROW}>
-        <p className="text-ink/60">{t("loading")}</p>
+        <LoadingCenter label={t("loading")} className="text-ink/60" />
       </main>
     );
   }
@@ -791,6 +799,12 @@ export default function SubmissionDetailPage() {
     ethicalApprovalReference: sub.ethicalApprovalReference ?? null,
     originalityConfirmed: sub.originalityConfirmed === true,
     aiUsageStatement: sub.aiUsageStatement ?? null,
+    discipline: sub.discipline ?? null,
+    disciplineSource: sub.disciplineSource ?? null,
+    disciplineSuggested: sub.disciplineSuggested ?? null,
+    disciplineSuggestedConfidence: sub.disciplineSuggestedConfidence ?? null,
+    disciplineScopeInJournal: sub.disciplineScopeInJournal ?? null,
+    disciplineScopeWarning: sub.disciplineScopeWarning ?? null,
   };
   const metadataDisplayInitial: MetadataDisplayInitial = {
     articleType: metadataFormInitial.articleType,
@@ -802,6 +816,12 @@ export default function SubmissionDetailPage() {
     ethicalApprovalReference: metadataFormInitial.ethicalApprovalReference,
     originalityConfirmed: metadataFormInitial.originalityConfirmed,
     aiUsageStatement: metadataFormInitial.aiUsageStatement,
+    discipline: metadataFormInitial.discipline,
+    disciplineSource: metadataFormInitial.disciplineSource,
+    disciplineSuggested: metadataFormInitial.disciplineSuggested,
+    disciplineSuggestedConfidence: metadataFormInitial.disciplineSuggestedConfidence,
+    disciplineScopeInJournal: metadataFormInitial.disciplineScopeInJournal,
+    disciplineScopeWarning: metadataFormInitial.disciplineScopeWarning,
   };
   const files = sub.files ?? [];
   const constructorContent = sub.constructorContent as
@@ -996,6 +1016,7 @@ export default function SubmissionDetailPage() {
               canEdit
               initial={metadataFormInitial}
               onSaved={() => invalidateDetail(slug)}
+              onDisciplineUpdated={() => invalidateDetail(slug)}
               onError={(msg) => {
                 if (msg.trim()) toast.error(msg, { id: "submission-metadata-form" });
               }}
@@ -1144,9 +1165,10 @@ export default function SubmissionDetailPage() {
             ))}
           </div>
           {uploadingName && (
-            <p className="text-sm text-ink/70">
-              {t("uploading")}{" "}
+            <p className="flex items-center gap-2 text-sm text-ink/70">
+              <Spinner size="sm" />
               <span className="font-medium text-ink">{uploadingName}</span>
+              <span className="sr-only">{t("uploading")}</span>
             </p>
           )}
           <p className="text-xs text-ink/60">{t("uploadHint")}</p>
@@ -1360,6 +1382,27 @@ export default function SubmissionDetailPage() {
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink/70">
             {t("editorPanelHint")}
           </p>
+          <div className="mt-5">
+            <SubmissionDisciplinePanel
+              slug={sub.slug}
+              mode="editor"
+              canEdit={
+                sub.status === "submitted" ||
+                sub.status === "under_review" ||
+                sub.status === "revisions_requested"
+              }
+              fields={{
+                discipline: sub.discipline ?? null,
+                disciplineSource: sub.disciplineSource ?? null,
+                disciplineSuggested: sub.disciplineSuggested ?? null,
+                disciplineSuggestedConfidence:
+                  sub.disciplineSuggestedConfidence ?? null,
+                disciplineScopeInJournal: sub.disciplineScopeInJournal ?? null,
+                disciplineScopeWarning: sub.disciplineScopeWarning ?? null,
+              }}
+              onUpdated={() => invalidateDetail(slug)}
+            />
+          </div>
           {showReviewConfiguration ? (
             <div className="mt-6 rounded-lg border border-ink/10 bg-paper/40 px-4 py-4">
               <div className="flex flex-col gap-1 text-sm font-medium text-ink">

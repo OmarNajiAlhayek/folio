@@ -22,6 +22,7 @@ export function AuthGate({ children }: Props) {
   const me = useMe();
   const { resolve } = useApiErrorMessages();
   const tApi = useTranslations("ApiErrors");
+  const tCommon = useTranslations("Common");
 
   useEffect(() => {
     if (me.isPending) return;
@@ -37,7 +38,7 @@ export function AuthGate({ children }: Props) {
   }, [me.isPending, me.isError, me.error, me.data, router, pathname]);
 
   if (me.isPending && !me.isSuccess) {
-    return <AuthGateFallback />;
+    return <AuthGateFallback label={tCommon("loading")} />;
   }
 
   if (me.isError) {
