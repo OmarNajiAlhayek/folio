@@ -1,23 +1,17 @@
-<!doctype html>
-<html>
-  <body>
-    <p>Dear {{reviewerDisplayName}},</p>
-    {{#if isOverdue}}
-      <p>
-        The review for <strong>{{submissionTitle}}</strong> was due on
-        {{dueAt}} and is now overdue. Please complete it as soon as
-        possible, or contact the editor if you can no longer review.
-      </p>
-    {{else}}
-      <p>
-        This is a friendly reminder that your review for
-        <strong>{{submissionTitle}}</strong> is due on {{dueAt}}.
-      </p>
-    {{/if}}
-    <p>
-      You can open the assignment here:
-      <a href="{{assignmentUrl}}">{{assignmentUrl}}</a>
-    </p>
-    <p>Thank you,<br />Folio editorial team</p>
-  </body>
-</html>
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{reviewerDisplayName}},</p>
+{{#if isOverdue}}
+<p style="margin:0 0 16px;">
+  The review for <strong>{{submissionTitle}}</strong> was due on
+  {{dueAt}} and is now <strong style="color:#991b1b;">overdue</strong>.
+  Please complete it as soon as possible, or contact the editor if you can no longer review.
+</p>
+{{else}}
+<p style="margin:0 0 16px;">
+  This is a friendly reminder that your review for
+  <strong>{{submissionTitle}}</strong> is due on {{dueAt}}.
+</p>
+{{/if}}
+{{> folio-email-button href=assignmentUrl label="Open review assignment" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

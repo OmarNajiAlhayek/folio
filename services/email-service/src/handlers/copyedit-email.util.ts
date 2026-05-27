@@ -93,7 +93,13 @@ export async function renderAndSendCopyeditEmail(
     return ACK;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await logRepo.update(row.id, { status: 'failed', error: message });
-    throw err;
+    deps.logger.warn(
+      `provider send failed key=${args.idempotencyKey}: ${message}`,
+    );
+    await logRepo.update(row.id, {
+      status: 'failed',
+      error: message.slice(0, 1000),
+    });
+    return { kind: 'nack-no-requeue', reason: message };
   }
 }

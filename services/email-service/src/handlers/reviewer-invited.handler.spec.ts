@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { ReviewerInvitedHandler } from './reviewer-invited.handler';
 import { ReminderPolicyService } from '../policy/reminder-policy.service';
@@ -36,6 +37,7 @@ function makeEvent(
 
 describe('ReviewerInvitedHandler', () => {
   let handler: ReviewerInvitedHandler;
+  let templates: { render: jest.Mock };
   let mockProvider: jest.Mocked<Pick<EmailProvider, 'send'>>;
   let mockDs: {
     transaction: jest.Mock;
@@ -100,7 +102,7 @@ describe('ReviewerInvitedHandler', () => {
       }),
     };
 
-    const templates = {
+    templates = {
       render: jest.fn().mockResolvedValue({
         subject: 'Review invitation: Title',
         html: '<p>Hi</p>',
@@ -114,6 +116,15 @@ describe('ReviewerInvitedHandler', () => {
         { provide: DataSource, useValue: mockDs },
         { provide: EMAIL_PROVIDER_TOKEN, useValue: mockProvider },
         { provide: TemplatesService, useValue: templates },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, def?: string) => {
+              if (key === 'APP_BASE_URL') return 'http://localhost:5240';
+              return def;
+            }),
+          },
+        },
         {
           provide: ReminderPolicyService,
           useValue: {
@@ -146,6 +157,26 @@ describe('ReviewerInvitedHandler', () => {
     expect(mockProvider.send).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'r@test.dev',
+      }),
+    );
+  });
+
+  it('renders invite page URLs even when the event carries legacy /accept paths', async () => {
+    await handler.handle(
+      makeEvent({
+        emailLocale: 'ar',
+        acceptUrl: 'http://localhost:5240/ar/assignments/asg-test/accept',
+        declineUrl: 'http://localhost:5240/ar/assignments/asg-test/decline',
+      }),
+    );
+    expect(templates.render).toHaveBeenCalledWith(
+      'reviewer-invited',
+      'ar',
+      expect.objectContaining({
+        acceptUrl:
+          'http://localhost:5240/ar/assignments/asg-test/invite',
+        declineUrl:
+          'http://localhost:5240/ar/assignments/asg-test/invite',
       }),
     );
   });

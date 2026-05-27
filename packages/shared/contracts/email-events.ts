@@ -134,6 +134,10 @@ export type ReminderDueEvent = {
 
   emailLocale?: 'en' | 'ar';
 
+  /** Snapshot from reminder row (manuscript title at invitation). */
+
+  submissionTitle: string;
+
   reviewer: ReviewerIdentity;
 
   dueAt: string;

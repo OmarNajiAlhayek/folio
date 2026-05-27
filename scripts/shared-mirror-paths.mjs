@@ -31,4 +31,11 @@ export const SHARED_MIRROR_GROUPS = [
       "services/email-service/src/shared/redactor.ts",
     ],
   },
+  {
+    canonical: "packages/shared/email/register-folio-email-partials.ts",
+    mirrors: [
+      "backend/src/common/email/register-folio-email-partials.ts",
+      "services/email-service/src/shared/register-folio-email-partials.ts",
+    ],
+  },
 ];

@@ -1,5 +1,12 @@
-<p>Dear {{copyeditorDisplayName}},</p>
-<p>You have been assigned to copyedit the manuscript <strong>{{submissionTitle}}</strong> in Folio.</p>
-<p><a href="{{workbenchUrl}}">Open your copyediting workbench</a></p>
-<p>Assigned by {{assignedByDisplayName}}.</p>
-<p>Thank you,<br/>Folio editorial team</p>
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{copyeditorDisplayName}},</p>
+<p style="margin:0 0 16px;">
+  You have been assigned to copyedit the manuscript
+  <strong>{{submissionTitle}}</strong> in Folio.
+</p>
+{{> folio-email-button href=workbenchUrl label="Open copyediting workbench" align="left"}}
+<p style="margin:0 0 16px;color:#64748b;font-size:14px;">
+  Assigned by {{assignedByDisplayName}}.
+</p>
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

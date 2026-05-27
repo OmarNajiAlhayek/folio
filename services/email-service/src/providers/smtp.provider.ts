@@ -26,6 +26,9 @@ export class SmtpEmailProvider implements EmailProvider {
     const port = parseInt(config.get<string>('SMTP_PORT', '587'), 10);
     const user = config.get<string>('SMTP_USER');
     const pass = config.get<string>('SMTP_PASS');
+    const secureEnv = config.get<string>('SMTP_SECURE', '').trim().toLowerCase();
+    const secure =
+      secureEnv === 'true' || secureEnv === '1' || port === 465;
     this.defaultFrom = config.get<string>('EMAIL_FROM', 'no-reply@folio.local');
 
     if (!host) {
@@ -38,7 +41,7 @@ export class SmtpEmailProvider implements EmailProvider {
     this.transporter = nodemailer.createTransport({
       host,
       port,
-      secure: port === 465,
+      secure,
       auth: user && pass ? { user, pass } : undefined,
     });
   }

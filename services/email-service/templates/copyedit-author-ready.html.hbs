@@ -1,4 +1,9 @@
-<p>Dear {{copyeditorDisplayName}},</p>
-<p><strong>{{authorDisplayName}}</strong> has marked round {{round}} copyedit requests as addressed for <strong>{{submissionTitle}}</strong>.</p>
-<p><a href="{{workbenchUrl}}">Review the revised files</a></p>
-<p>Thank you,<br/>Folio editorial team</p>
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{copyeditorDisplayName}},</p>
+<p style="margin:0 0 16px;">
+  <strong>{{authorDisplayName}}</strong> has marked round {{round}} copyedit requests as addressed for
+  <strong>{{submissionTitle}}</strong>.
+</p>
+{{> folio-email-button href=workbenchUrl label="Review revised files" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

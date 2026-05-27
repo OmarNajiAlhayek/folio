@@ -28,6 +28,10 @@ export class Reminder {
   @Column({ name: 'assignment_slug', type: 'varchar', length: 260 })
   assignmentSlug: string;
 
+  /** Snapshot of submission title when the invite created this reminder. */
+  @Column({ name: 'submission_title', type: 'varchar', length: 500, default: '' })
+  submissionTitle: string;
+
   @Column({ name: 'reviewer_id', type: 'varchar', length: 64 })
   reviewerId: string;
 
@@ -48,6 +52,10 @@ export class Reminder {
 
   @Column({ name: 'send_at', type: 'timestamptz' })
   sendAt: Date;
+
+  /** Set while a scheduler instance is publishing `reminder.due` for this row. */
+  @Column({ name: 'picked_at', type: 'timestamptz', nullable: true })
+  pickedAt: Date | null;
 
   @Column({ type: 'varchar', length: 16, default: 'pending' })
   status: ReminderStatus;

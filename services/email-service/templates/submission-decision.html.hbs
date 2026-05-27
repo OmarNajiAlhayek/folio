@@ -1,13 +1,35 @@
-<p>Dear {{authorDisplayName}},</p>
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{authorDisplayName}},</p>
 {{#if isAccepted}}
-<p>We are pleased to inform you that your manuscript <strong>{{submissionTitle}}</strong> has been <strong>accepted</strong>.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;">
+  <tr>
+    <td style="background-color:#ecfdf5;border:1px solid #bbf7d0;border-radius:6px;padding:14px 16px;">
+      Your manuscript <strong>{{submissionTitle}}</strong> has been <strong style="color:#166534;">accepted</strong>.
+    </td>
+  </tr>
+</table>
 {{/if}}
 {{#if isRejected}}
-<p>After editorial consideration, your manuscript <strong>{{submissionTitle}}</strong> has been <strong>declined</strong>.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;">
+  <tr>
+    <td style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:14px 16px;">
+      After editorial consideration, your manuscript <strong>{{submissionTitle}}</strong> has been <strong style="color:#991b1b;">declined</strong>.
+    </td>
+  </tr>
+</table>
 {{/if}}
 {{#if isRevisionsRequested}}
-<p>The editor has requested <strong>revisions</strong> for your manuscript <strong>{{submissionTitle}}</strong>.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;">
+  <tr>
+    <td style="background-color:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:14px 16px;">
+      The editor has requested <strong style="color:#92400e;">revisions</strong> for your manuscript <strong>{{submissionTitle}}</strong>.
+    </td>
+  </tr>
+</table>
 {{/if}}
-<p>Decision recorded by {{decidedByDisplayName}}.</p>
-<p><a href="{{submissionUrl}}">View your submission</a></p>
-<p>Thank you,<br/>Folio editorial team</p>
+<p style="margin:0 0 16px;color:#64748b;font-size:14px;">
+  Decision recorded by {{decidedByDisplayName}}.
+</p>
+{{> folio-email-button href=submissionUrl label="View your submission" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

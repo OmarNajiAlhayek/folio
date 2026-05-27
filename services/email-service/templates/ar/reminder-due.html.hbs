@@ -1,0 +1,17 @@
+{{#> folio-email-layout dir="rtl" lang="ar"}}
+<p style="margin:0 0 16px;">مرحبًا {{reviewerDisplayName}}،</p>
+{{#if isOverdue}}
+<p style="margin:0 0 16px;">
+  كانت مراجعتك لمخطوطة <strong>{{submissionTitle}}</strong> مستحقّة في
+  {{dueAt}} وهي الآن <strong style="color:#991b1b;">متأخرة</strong>.
+  يُرجى إكمالها في أقرب وقت، أو التواصل مع المحرّر إن لم يعد بإمكانك التحكيم.
+</p>
+{{else}}
+<p style="margin:0 0 16px;">
+  تذكير ودي: موعد تسليم مراجعتك لمخطوطة
+  <strong>{{submissionTitle}}</strong> هو {{dueAt}}.
+</p>
+{{/if}}
+{{> folio-email-button href=assignmentUrl label="فتح مهمة التحكيم" align="right"}}
+<p style="margin:24px 0 0;">مع الشكر،<br />فريق تحرير Folio</p>
+{{/folio-email-layout}}

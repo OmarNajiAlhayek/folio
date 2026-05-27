@@ -23,6 +23,7 @@ function baseEvent(over: Partial<ReminderDueEvent> = {}): ReminderDueEvent {
     reminderId: REMINDER_ID,
     kind: 'review_due_soon',
     assignmentSlug: 'asg-1',
+    submissionTitle: 'Sample manuscript',
     reviewer: {
       id: 'u1',
       email: 'r@test.dev',
@@ -52,6 +53,7 @@ describe('ReminderDueHandler', () => {
     mockReminderFindOne = jest.fn().mockResolvedValue({
       id: REMINDER_ID,
       assignmentSlug: 'asg-1',
+      submissionTitle: 'Sample manuscript',
       status: 'pending',
       reviewerId: 'u1',
       reviewerEmail: 'r@test.dev',
@@ -203,8 +205,25 @@ describe('ReminderDueHandler', () => {
     expect(mockProvider.send).toHaveBeenCalled();
   });
 
-  it('uses manuscript placeholder in template context path', async () => {
-    await handler.handle(baseEvent());
+  it('renders submissionTitle from event in template context', async () => {
+    await handler.handle(baseEvent({ submissionTitle: 'My paper title' }));
+    const call = mockProvider.send.mock.calls[0]?.[0];
+    expect(call?.html).toContain('My paper title');
+  });
+
+  it('falls back to [manuscript] when submissionTitle is empty', async () => {
+    mockReminderFindOne.mockResolvedValue({
+      id: REMINDER_ID,
+      assignmentSlug: 'asg-1',
+      submissionTitle: '',
+      status: 'pending',
+      reviewerId: 'u1',
+      reviewerEmail: 'r@test.dev',
+      reviewerDisplayName: 'Rev',
+      kind: 'review_due_soon',
+      sendAt: new Date(),
+    });
+    await handler.handle(baseEvent({ submissionTitle: '' }));
     const call = mockProvider.send.mock.calls[0]?.[0];
     expect(call?.html).toContain('[manuscript]');
   });

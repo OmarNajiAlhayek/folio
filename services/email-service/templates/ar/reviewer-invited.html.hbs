@@ -1,0 +1,11 @@
+{{#> folio-email-layout dir="rtl" lang="ar"}}
+<p style="margin:0 0 16px;">مرحبًا {{reviewerDisplayName}}،</p>
+<p style="margin:0 0 16px;">
+  تمت دعوتك لتحكيم المخطوطة
+  <strong>{{submissionTitle}}</strong> في مجلة Folio.
+</p>
+<p style="margin:0 0 8px;">يمكنك الرد على هذه الدعوة:</p>
+{{> folio-email-button href=acceptUrl label="قبول الدعوة" align="right"}}
+{{> folio-email-button-secondary href=declineUrl label="رفض الدعوة" align="right"}}
+<p style="margin:24px 0 0;">مع الشكر،<br />فريق تحرير Folio</p>
+{{/folio-email-layout}}

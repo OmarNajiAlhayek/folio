@@ -10,7 +10,6 @@ import {
   Repository,
   type QueryDeepPartialEntity,
 } from 'typeorm';
-import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { Notification } from '../entities/notification.entity';
 import {
   NOTIFICATION_I18N,
@@ -47,6 +46,25 @@ export type NotificationListResult = {
 };
 
 export type NotificationFilter = 'all' | 'unread' | 'read';
+
+/** `.returning('*')` on insert uses DB column names (`created_at`), not entity fields. */
+function notificationFromInsertRaw(raw: Record<string, unknown>): Notification {
+  const createdAtRaw = raw.createdAt ?? raw.created_at;
+  const readAtRaw = raw.readAt ?? raw.read_at;
+  return {
+    ...(raw as unknown as Notification),
+    createdAt:
+      createdAtRaw instanceof Date
+        ? createdAtRaw
+        : new Date(String(createdAtRaw)),
+    readAt:
+      readAtRaw == null
+        ? null
+        : readAtRaw instanceof Date
+          ? readAtRaw
+          : new Date(String(readAtRaw)),
+  };
+}
 
 @Injectable()
 export class NotificationsService {
@@ -136,7 +154,9 @@ export class NotificationsService {
       .orIgnore()
       .returning('*')
       .execute();
-    return (result.raw as Notification[]) ?? [];
+    return ((result.raw as Record<string, unknown>[]) ?? []).map(
+      notificationFromInsertRaw,
+    );
   }
 
   /** Post-commit: push live SSE events for newly created rows. */

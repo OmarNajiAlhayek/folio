@@ -24,6 +24,7 @@ import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { AdminEmailService } from './admin-email.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
 import { OutboxRepairService } from '../messaging/outbox-repair.service';
+import { DlqReplayService } from '../messaging/dlq-replay.service';
 import {
   PatchEmailTemplateDto,
   PreviewEmailTemplateDto,
@@ -39,6 +40,7 @@ export class AdminEmailController {
     private readonly adminEmail: AdminEmailService,
     private readonly pipelineObservability: EmailPipelineObservabilityService,
     private readonly outboxRepair: OutboxRepairService,
+    private readonly dlqReplay: DlqReplayService,
   ) {}
 
   @Get('pipeline-status')
@@ -60,6 +62,17 @@ export class AdminEmailController {
   @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
   requeueDeadOutbox(@Param('id', ParseUUIDPipe) id: string) {
     return this.outboxRepair.requeueDead(id);
+  }
+
+  @Post('dlq/replay')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Replay up to N messages from the RabbitMQ DLQ back onto folio.events',
+  })
+  @Permissions(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)
+  replayDlq(@Body() body?: { limit?: number }) {
+    return this.dlqReplay.replayBatch(body?.limit);
   }
 
   @Get('reminder-policy')

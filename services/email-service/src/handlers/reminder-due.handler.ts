@@ -14,6 +14,7 @@ import { redactEventPayload } from '../shared/redactor';
 import { reminderDueKey } from '../shared/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { normalizeEmailLocale } from '../common/email-locale';
+import { assignmentReviewPageUrl } from '../common/folio-frontend-urls';
 
 /**
  * Same state machine as `ReviewerInvitedHandler` but for the scheduled
@@ -101,10 +102,18 @@ export class ReminderDueHandler {
     const locale = normalizeEmailLocale(
       event.emailLocale ?? reminder.emailLocale,
     );
+    const title =
+      event.submissionTitle?.trim() ||
+      reminder.submissionTitle?.trim() ||
+      '[manuscript]';
     const rendered = await this.templates.render('reminder-due', locale, {
       reviewerDisplayName: event.reviewer.displayName,
-      submissionTitle: '[manuscript]',
-      assignmentUrl: `${baseUrl}/assignments/${event.assignmentSlug}`,
+      submissionTitle: title,
+      assignmentUrl: assignmentReviewPageUrl(
+        baseUrl,
+        event.assignmentSlug,
+        locale,
+      ),
       dueAt: event.dueAt,
       isOverdue: event.kind === 'review_overdue',
     });

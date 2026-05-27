@@ -1,5 +1,16 @@
-<p>Dear {{authorDisplayName}},</p>
-<p><strong>{{copyeditorDisplayName}}</strong> has sent copyediting requests (round {{round}}) for <strong>{{submissionTitle}}</strong>.</p>
-<blockquote>{{noteExcerpt}}</blockquote>
-<p><a href="{{submissionUrl}}">View your submission and upload revisions</a></p>
-<p>Thank you,<br/>Folio editorial team</p>
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{authorDisplayName}},</p>
+<p style="margin:0 0 16px;">
+  <strong>{{copyeditorDisplayName}}</strong> has sent copyediting requests (round {{round}}) for
+  <strong>{{submissionTitle}}</strong>.
+</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;">
+  <tr>
+    <td style="background-color:#f3f0ea;border-left:4px solid #3d5a4a;padding:14px 16px;font-size:15px;line-height:1.55;color:#334155;">
+      {{noteExcerpt}}
+    </td>
+  </tr>
+</table>
+{{> folio-email-button href=submissionUrl label="View submission and upload revisions" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

@@ -17,6 +17,7 @@ import { reviewerInvitedKey } from '../shared/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { ReminderPolicyService } from '../policy/reminder-policy.service';
 import { normalizeEmailLocale } from '../common/email-locale';
+import { assignmentInvitePageUrl } from '../common/folio-frontend-urls';
 
 /**
  * Implements the state machine documented in plan §6:
@@ -44,7 +45,28 @@ export class ReviewerInvitedHandler {
     @Inject(EMAIL_PROVIDER_TOKEN) private readonly provider: EmailProvider,
     private readonly templates: TemplatesService,
     private readonly reminderPolicy: ReminderPolicyService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Always build UI invite URLs at send time so stale outbox/Rabbit payloads
+   * (e.g. legacy `/assignments/:slug/accept` API paths) never reach the inbox.
+   */
+  private inviteUrlsForEvent(event: ReviewerInvitedEvent): {
+    acceptUrl: string;
+    declineUrl: string;
+  } {
+    const baseUrl = (
+      this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240'
+    ).replace(/\/+$/, '');
+    const locale = normalizeEmailLocale(event.emailLocale);
+    const inviteUrl = assignmentInvitePageUrl(
+      baseUrl,
+      event.assignmentSlug,
+      locale,
+    );
+    return { acceptUrl: inviteUrl, declineUrl: inviteUrl };
+  }
 
   async handle(event: ReviewerInvitedEvent): Promise<HandlerOutcome> {
     if (event.idempotencyKey !== reviewerInvitedKey(event.assignmentSlug)) {
@@ -124,6 +146,7 @@ export class ReviewerInvitedHandler {
     await reminderRepo.save([
       reminderRepo.create({
         assignmentSlug: event.assignmentSlug,
+        submissionTitle: event.submissionTitle,
         reviewerId: event.reviewer.id,
         reviewerEmail: event.reviewer.email,
         reviewerDisplayName: event.reviewer.displayName,
@@ -134,6 +157,7 @@ export class ReviewerInvitedHandler {
       }),
       reminderRepo.create({
         assignmentSlug: event.assignmentSlug,
+        submissionTitle: event.submissionTitle,
         reviewerId: event.reviewer.id,
         reviewerEmail: event.reviewer.email,
         reviewerDisplayName: event.reviewer.displayName,
@@ -157,11 +181,12 @@ export class ReviewerInvitedHandler {
   ): Promise<HandlerOutcome> {
     const logRepo = this.dataSource.getRepository(EmailLog);
     const emailLocale = normalizeEmailLocale(event.emailLocale);
+    const { acceptUrl, declineUrl } = this.inviteUrlsForEvent(event);
     const rendered = await this.templates.render('reviewer-invited', emailLocale, {
       reviewerDisplayName: event.reviewer.displayName,
       submissionTitle: event.submissionTitle,
-      acceptUrl: event.acceptUrl,
-      declineUrl: event.declineUrl,
+      acceptUrl,
+      declineUrl,
     });
     try {
       const result = await this.provider.send({

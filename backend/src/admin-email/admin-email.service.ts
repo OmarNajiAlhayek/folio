@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError } from 'typeorm';
+import { registerFolioEmailPartials } from '../common/email/register-folio-email-partials';
+import { unwrapPgQueryRows } from '../common/unwrap-pg-query-rows';
 import {
   type AdminEmailTemplateKey,
   isAdminEmailTemplateKey,
@@ -43,8 +45,8 @@ const PREVIEW_CONTEXT: Record<
   'reviewer-invited': {
     reviewerDisplayName: 'Dr. Example Reviewer',
     submissionTitle: 'Sample manuscript title (preview)',
-    acceptUrl: 'https://example.org/preview/accept',
-    declineUrl: 'https://example.org/preview/decline',
+    acceptUrl: 'https://example.org/en/assignments/preview-asg/invite',
+    declineUrl: 'https://example.org/en/assignments/preview-asg/invite',
   },
   'reminder-due': {
     reviewerDisplayName: 'Dr. Example Reviewer',
@@ -159,22 +161,6 @@ export class AdminEmailService {
   }
 
   /**
-   * PostgresQueryRunner returns `[rows, rowCount]` for UPDATE/DELETE raw queries,
-   * but a plain row array for SELECT. Normalize to a row array.
-   */
-  private unwrapPgQueryRows<T>(result: unknown): T[] {
-    if (
-      Array.isArray(result) &&
-      result.length === 2 &&
-      typeof result[1] === 'number' &&
-      Array.isArray(result[0])
-    ) {
-      return result[0] as T[];
-    }
-    return result as T[];
-  }
-
-  /**
    * Raw query rows may carry timestamptz as `Date`, ISO string, or under
    * `updatedAt` / `updated_at` depending on driver and TypeORM/pg settings.
    */
@@ -208,6 +194,16 @@ export class AdminEmailService {
       message: 'Unexpected database row shape for timestamp',
       code: 'EMAIL_ROW_TIMESTAMP',
     });
+  }
+
+  /**
+   * Compare optimistic-lock timestamps at millisecond precision. API clients
+   * only see ISO strings with ms (via {@link isoFromRowTimestamptz}), while
+   * Postgres `now()` and drivers often carry microseconds — exact equality
+   * would falsely return 409 Conflict for a solo editor.
+   */
+  private optimisticUpdatedAtWhere(bindParam: string): string {
+    return `date_trunc('milliseconds', "updated_at") = date_trunc('milliseconds', ${bindParam}::timestamptz)`;
   }
 
   assertTemplateKey(key: string): asserts key is AdminEmailTemplateKey {
@@ -245,7 +241,8 @@ export class AdminEmailService {
 
   async getReminderPolicy(): Promise<ReminderPolicyView> {
     const rows = (await this.dataSource.query(
-      `SELECT id, review_due_in_days, updated_at
+      `SELECT id, review_due_in_days,
+              date_trunc('milliseconds', updated_at) AS updated_at
          FROM "email"."email_reminder_policy"
         WHERE id = 1
         LIMIT 1`,
@@ -288,11 +285,12 @@ export class AdminEmailService {
       const raw = await this.dataSource.query(
         `UPDATE "email"."email_reminder_policy"
             SET "review_due_in_days" = $1, "updated_at" = now()
-          WHERE "id" = 1 AND "updated_at" = $2::timestamptz
-          RETURNING "id", "review_due_in_days", "updated_at"`,
+          WHERE "id" = 1 AND ${this.optimisticUpdatedAtWhere('$2')}
+          RETURNING "id", "review_due_in_days",
+                    date_trunc('milliseconds', updated_at) AS updated_at`,
         [reviewDueInDays, expected.toISOString()],
       );
-      updated = this.unwrapPgQueryRows(raw) as Array<{
+      updated = unwrapPgQueryRows(raw) as Array<{
         id: number;
         review_due_in_days: number;
         updated_at: Date;
@@ -322,7 +320,8 @@ export class AdminEmailService {
     this.assertTemplateKey(templateKey);
     const locale = this.normalizeTemplateLocale(localeRaw);
     const rows = (await this.dataSource.query(
-      `SELECT template_key, locale, subject_template, html_body, text_body, updated_at
+      `SELECT template_key, locale, subject_template, html_body, text_body,
+              date_trunc('milliseconds', updated_at) AS updated_at
          FROM "email"."email_template"
         WHERE template_key = $1 AND locale = $2
         LIMIT 1`,
@@ -390,8 +389,9 @@ export class AdminEmailService {
                 "html_body" = $2,
                 "text_body" = $3,
                 "updated_at" = now()
-          WHERE "template_key" = $4 AND "locale" = $5 AND "updated_at" = $6::timestamptz
-          RETURNING "template_key", "locale", "subject_template", "html_body", "text_body", "updated_at"`,
+          WHERE "template_key" = $4 AND "locale" = $5 AND ${this.optimisticUpdatedAtWhere('$6')}
+          RETURNING "template_key", "locale", "subject_template", "html_body", "text_body",
+                    date_trunc('milliseconds', updated_at) AS updated_at`,
         [
           subjectTemplate,
           htmlBody,
@@ -401,7 +401,7 @@ export class AdminEmailService {
           expected.toISOString(),
         ],
       );
-      updated = this.unwrapPgQueryRows(raw) as Array<{
+      updated = unwrapPgQueryRows(raw) as Array<{
         template_key: string;
         locale: string;
         subject_template: string;
@@ -474,6 +474,7 @@ export class AdminEmailService {
       base.isOverdue = isOverdue;
     }
     try {
+      registerFolioEmailPartials();
       const subject = Handlebars.compile(r.subject_template)(base);
       const html = Handlebars.compile(r.html_body)(base);
       const text = Handlebars.compile(r.text_body)(base);

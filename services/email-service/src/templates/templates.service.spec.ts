@@ -54,6 +54,7 @@ describe('TemplatesService', () => {
       isOverdue: false,
     });
     expect(r.subject).toContain('[manuscript]');
+    expect(r.html).toContain('data-folio-email="1"');
   });
 
   it('falls back to disk for copyedit-assigned when row missing', async () => {

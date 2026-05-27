@@ -56,6 +56,31 @@ describe('AdminEmailService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it('patchTemplate uses millisecond date_trunc for optimistic lock (not exact timestamptz)', async () => {
+    const iso = '2026-05-05T08:42:43.581Z';
+    ds.query.mockResolvedValueOnce([
+      {
+        template_key: 'reviewer-invited',
+        locale: 'ar',
+        subject_template: 'ok {{submissionTitle}}',
+        html_body: '<p>x</p>',
+        text_body: 't',
+        updated_at: new Date('2026-05-05T08:42:43.581456Z'),
+      },
+    ]);
+    await svc.patchTemplate(
+      'reviewer-invited',
+      'ar',
+      'ok {{submissionTitle}}',
+      '<p>x</p>',
+      't',
+      iso,
+    );
+    const [sql] = ds.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("date_trunc('milliseconds', \"updated_at\")");
+    expect(sql).toContain("date_trunc('milliseconds', $6::timestamptz)");
+  });
+
   it('patchTemplate accepts RETURNING row with ISO string updatedAt (camelCase)', async () => {
     const iso = '2026-05-05T12:00:00.000Z';
     ds.query.mockResolvedValueOnce([

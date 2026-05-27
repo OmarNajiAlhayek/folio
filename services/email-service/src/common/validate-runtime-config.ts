@@ -30,10 +30,22 @@ export function validateEmailServiceRuntimeConfig(): void {
   }
 
   const provider = (process.env.EMAIL_PROVIDER ?? 'noop').trim().toLowerCase();
-  if (provider === 'smtp' && !(process.env.SMTP_HOST ?? '').trim()) {
+  if (provider === 'noop') {
     throw new RuntimeConfigError(
-      'SMTP_HOST is required when EMAIL_PROVIDER=smtp in production.',
+      'EMAIL_PROVIDER=noop is not allowed in production. Set EMAIL_PROVIDER=smtp (or another real provider) and configure SMTP_*.',
     );
+  }
+  if (provider === 'smtp') {
+    if (!(process.env.SMTP_HOST ?? '').trim()) {
+      throw new RuntimeConfigError(
+        'SMTP_HOST is required when EMAIL_PROVIDER=smtp in production.',
+      );
+    }
+    if (!(process.env.EMAIL_FROM ?? '').trim()) {
+      throw new RuntimeConfigError(
+        'EMAIL_FROM is required when EMAIL_PROVIDER=smtp in production.',
+      );
+    }
   }
 
   const rabbitUrl = process.env.RABBITMQ_URL ?? '';

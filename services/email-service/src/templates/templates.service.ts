@@ -6,6 +6,7 @@ import { join } from 'path';
 import { Repository } from 'typeorm';
 import { normalizeEmailLocale } from '../common/email-locale';
 import { EmailTemplateEntity } from '../entities/email-template.entity';
+import { registerFolioEmailPartials } from '../shared/register-folio-email-partials';
 
 const TEMPLATES_DIR = join(__dirname, '..', '..', 'templates');
 
@@ -93,6 +94,7 @@ export class TemplatesService {
     row: EmailTemplateEntity,
     context: Record<string, unknown>,
   ): Promise<{ subject: string; html: string; text: string }> {
+    registerFolioEmailPartials();
     try {
       const subjectFn = Handlebars.compile(row.subjectTemplate);
       const htmlFn = Handlebars.compile(row.htmlBody);
@@ -126,6 +128,7 @@ export class TemplatesService {
       join(TEMPLATES_DIR, `${name}.text.hbs`),
       'utf8',
     );
+    registerFolioEmailPartials();
     const subjectFn = Handlebars.compile(meta.subject);
     const htmlFn = Handlebars.compile(html);
     const textFn = Handlebars.compile(text);

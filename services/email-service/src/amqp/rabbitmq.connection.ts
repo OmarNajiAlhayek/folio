@@ -10,6 +10,16 @@ import {
 
 const RECONNECT_DELAY_MS = 5_000;
 
+function formatAmqpError(err: unknown): string {
+  if (err instanceof Error) {
+    const code = (err as NodeJS.ErrnoException).code;
+    const parts = [err.message, code].filter((p) => p && String(p).trim());
+    if (parts.length > 0) return parts.join(' ');
+    return err.name || 'unknown error';
+  }
+  return String(err);
+}
+
 /**
  * Owns the connection + a single channel for the email-service. Mirrors
  * the backend's wrapper but on the consumer side: it supports
@@ -44,6 +54,10 @@ export class RabbitMqConnection implements OnModuleDestroy {
 
   getTopology(): TopologyNames {
     return this.topology;
+  }
+
+  isConnected(): boolean {
+    return this.channel !== null;
   }
 
   async connect(): Promise<void> {
@@ -81,7 +95,7 @@ export class RabbitMqConnection implements OnModuleDestroy {
       }
     } catch (err) {
       this.logger.error(
-        `AMQP connect failed: ${err instanceof Error ? err.message : String(err)}; retrying in ${RECONNECT_DELAY_MS}ms`,
+        `AMQP connect failed (${this.url}): ${formatAmqpError(err)}; retrying in ${RECONNECT_DELAY_MS}ms`,
       );
       if (!this.destroyed) {
         setTimeout(() => void this.connect(), RECONNECT_DELAY_MS);

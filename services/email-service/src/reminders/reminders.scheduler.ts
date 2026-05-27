@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Reminder } from './reminder.entity';
 import { RabbitMqConnection } from '../amqp/rabbitmq.connection';
 import {
@@ -10,19 +10,28 @@ import {
 } from '../contracts/email-events';
 import { reminderDueKey } from '../shared/idempotency';
 import { normalizeEmailLocale } from '../common/email-locale';
+import { unwrapPgQueryRows } from '../common/unwrap-pg-query-rows';
 
 const BATCH_SIZE = 50;
+/** Stale picks are reclaimed after this interval (crashed scheduler instance). */
+const PICK_LEASE_MS = 300_000;
+
+type ReminderRow = {
+  id: string;
+  assignment_slug: string;
+  submission_title: string;
+  reviewer_id: string;
+  reviewer_email: string;
+  reviewer_display_name: string;
+  kind: string;
+  email_locale: string;
+  send_at: Date;
+  status: string;
+};
 
 /**
- * Picks Reminder rows whose `sendAt` has passed and republishes them
- * onto the `reminder.due` routing key. Doing it via the broker (instead
- * of sending directly) means template rendering, retries, dedupe, and
- * DLQ live in exactly one place — the same handler as immediate sends.
- *
- * Stays simple: one batch per minute, no claim/lock yet (single
- * scheduler instance assumed). When we run multiple replicas, this
- * is the spot to switch to SELECT ... FOR UPDATE SKIP LOCKED or a
- * dedicated `picked_at` column.
+ * Picks due `email.reminder` rows with `FOR UPDATE SKIP LOCKED`, publishes
+ * `reminder.due` events, and clears `picked_at` on publish failure.
  */
 @Injectable()
 export class RemindersScheduler {
@@ -30,8 +39,7 @@ export class RemindersScheduler {
   private running = false;
 
   constructor(
-    @InjectRepository(Reminder)
-    private readonly remindersRepo: Repository<Reminder>,
+    @InjectDataSource() private readonly dataSource: DataSource,
     private readonly rabbit: RabbitMqConnection,
   ) {}
 
@@ -40,12 +48,7 @@ export class RemindersScheduler {
     if (this.running) return;
     this.running = true;
     try {
-      const now = new Date();
-      const due = await this.remindersRepo.find({
-        where: { status: 'pending', sendAt: LessThanOrEqual(now) },
-        take: BATCH_SIZE,
-        order: { sendAt: 'ASC' },
-      });
+      const due = await this.claimDueReminders();
       for (const reminder of due) {
         await this.publishOne(reminder);
       }
@@ -58,21 +61,47 @@ export class RemindersScheduler {
     }
   }
 
-  private async publishOne(reminder: Reminder): Promise<void> {
+  private async claimDueReminders(): Promise<ReminderRow[]> {
+    const raw = await this.dataSource.query(
+      `UPDATE "email"."reminder" AS r
+          SET "picked_at" = now()
+        WHERE r."id" IN (
+          SELECT "id"
+            FROM "email"."reminder"
+           WHERE "status" = 'pending'
+             AND "send_at" <= now()
+             AND (
+               "picked_at" IS NULL
+               OR "picked_at" < now() - ($2::int * interval '1 millisecond')
+             )
+           ORDER BY "send_at" ASC
+           LIMIT $1
+           FOR UPDATE SKIP LOCKED
+        )
+        RETURNING r."id", r."assignment_slug", r."submission_title",
+                  r."reviewer_id", r."reviewer_email", r."reviewer_display_name",
+                  r."kind", r."email_locale", r."send_at", r."status"`,
+      [BATCH_SIZE, PICK_LEASE_MS],
+    );
+    return unwrapPgQueryRows<ReminderRow>(raw);
+  }
+
+  private async publishOne(reminder: ReminderRow): Promise<void> {
     const event: ReminderDueEvent = {
       type: 'ReminderDue',
       occurredAt: new Date().toISOString(),
       idempotencyKey: reminderDueKey(reminder.id),
       reminderId: reminder.id,
-      kind: reminder.kind,
-      assignmentSlug: reminder.assignmentSlug,
-      emailLocale: normalizeEmailLocale(reminder.emailLocale),
+      kind: reminder.kind as ReminderDueEvent['kind'],
+      assignmentSlug: reminder.assignment_slug,
+      emailLocale: normalizeEmailLocale(reminder.email_locale),
+      submissionTitle: reminder.submission_title?.trim() || '[manuscript]',
       reviewer: {
-        id: reminder.reviewerId,
-        email: reminder.reviewerEmail,
-        displayName: reminder.reviewerDisplayName,
+        id: reminder.reviewer_id,
+        email: reminder.reviewer_email,
+        displayName: reminder.reviewer_display_name,
       },
-      dueAt: reminder.sendAt.toISOString(),
+      dueAt: reminder.send_at.toISOString(),
     };
     try {
       await this.rabbit.publish(
@@ -80,8 +109,13 @@ export class RemindersScheduler {
         event as unknown as Record<string, unknown>,
       );
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(
-        `failed to publish reminder.due id=${reminder.id}: ${err instanceof Error ? err.message : String(err)}`,
+        `failed to publish reminder.due id=${reminder.id}: ${message}`,
+      );
+      await this.dataSource.query(
+        `UPDATE "email"."reminder" SET "picked_at" = NULL WHERE "id" = $1 AND "status" = 'pending'`,
+        [reminder.id],
       );
     }
   }

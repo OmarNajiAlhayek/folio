@@ -1,16 +1,11 @@
-<!doctype html>
-<html>
-  <body>
-    <p>Dear {{reviewerDisplayName}},</p>
-    <p>
-      You have been invited to review the manuscript
-      <strong>{{submissionTitle}}</strong> for the Folio journal.
-    </p>
-    <p>
-      You can accept the invitation by visiting
-      <a href="{{acceptUrl}}">this link</a>, or decline it
-      <a href="{{declineUrl}}">here</a>.
-    </p>
-    <p>Thank you,<br />Folio editorial team</p>
-  </body>
-</html>
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{reviewerDisplayName}},</p>
+<p style="margin:0 0 16px;">
+  You have been invited to review the manuscript
+  <strong>{{submissionTitle}}</strong> for the Folio journal.
+</p>
+<p style="margin:0 0 8px;">You can respond to this invitation:</p>
+{{> folio-email-button href=acceptUrl label="Accept invitation" align="left"}}
+{{> folio-email-button-secondary href=declineUrl label="Decline invitation" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

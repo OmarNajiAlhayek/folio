@@ -8,6 +8,7 @@ import {
   RuntimeConfigError,
   validateEmailServiceRuntimeConfig,
 } from './common/validate-runtime-config';
+import { startHealthServer } from './health/health.server';
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('EmailService');
@@ -27,8 +28,6 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.createApplicationContext(AppModule);
 
-  // Run migrations on startup so a fresh schema is created with the
-  // expected tables before any handler queries them.
   const dataSource = app.get(DataSource);
   try {
     await dataSource.query('CREATE SCHEMA IF NOT EXISTS "email"');
@@ -37,10 +36,27 @@ async function bootstrap(): Promise<void> {
     logger.error(
       `migration run failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+    await app.close();
+    process.exit(1);
   }
 
   const rabbit = app.get(RabbitMqConnection);
   await rabbit.connect();
+
+  const healthPort = parseInt(process.env.HEALTH_PORT ?? '5244', 10);
+  startHealthServer(healthPort, async () => {
+    let dbOk = false;
+    try {
+      await dataSource.query('SELECT 1');
+      dbOk = true;
+    } catch {
+      dbOk = false;
+    }
+    const amqpOk = rabbit.isConnected();
+    const checks = { database: dbOk, amqp: amqpOk };
+    return { ok: dbOk && amqpOk, checks };
+  });
+  logger.log(`health listening on :${healthPort} (/health, /ready)`);
 
   const shutdown = async () => {
     logger.log('shutting down email-service');
