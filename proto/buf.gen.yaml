@@ -1,0 +1,20 @@
+version: v2
+managed:
+  enabled: true
+inputs:
+  - directory: .
+plugins:
+  - remote: buf.build/protocolbuffers/python:v28.3
+    out: ../services/ai-service/app/grpc/gen
+    opt:
+      - pyi_out=../services/ai-service/app/grpc/gen
+  - remote: buf.build/grpc/python:v1.68.1
+    out: ../services/ai-service/app/grpc/gen
+  - remote: buf.build/community/stephenh-ts-proto
+    out: ../backend/src/ai/grpc/gen
+    opt:
+      - outputServices=grpc-js
+      - env=node
+      - esModuleInterop=true
+      - useOptionals=messages
+      - exportCommonSymbols=false

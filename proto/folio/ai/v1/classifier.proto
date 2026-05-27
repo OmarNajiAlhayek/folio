@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package folio.ai.v1;
+
+// ClassifierService exposes the AraBERT discipline classifier to internal callers (Nest backend).
+// Future LLM streaming RPCs may extend this service; use google.rpc.Status for rich errors later.
+service ClassifierService {
+  rpc ClassifyArticle(ClassifyArticleRequest) returns (ClassifyResponse);
+  rpc ClassifyAbstract(ClassifyAbstractRequest) returns (ClassifyResponse);
+  rpc GetClassifierStatus(GetClassifierStatusRequest) returns (ClassifierStatus);
+  rpc GetClassifierLabels(GetClassifierLabelsRequest) returns (ClassifierLabels);
+}
+
+message ClassifyArticleRequest {
+  string title = 1;
+  string keywords = 2;
+  // Servicer rejects empty abstract → INVALID_ARGUMENT (matches HTTP min_length=1).
+  string abstract = 3;
+}
+
+message ClassifyAbstractRequest {
+  string abstract = 1;
+}
+
+message ClassifyResponse {
+  string top_label = 1;
+  // Confidence percentage 0–100 (same as HTTP Pydantic Field description).
+  double top_confidence = 2;
+  map<string, double> probabilities = 3;
+}
+
+message ClassifierStatus {
+  bool enabled = 1;
+  optional string model_path = 2;
+  optional string device = 3;
+  int32 labels_count = 4;
+  bool weights_loaded = 5;
+  bool model_configured = 6;
+}
+
+message ClassifierLabels {
+  repeated string labels = 1;
+}
+
+message GetClassifierStatusRequest {}
+
+message GetClassifierLabelsRequest {}
