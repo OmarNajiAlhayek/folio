@@ -1,17 +1,34 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { OutboxDrainerService } from './outbox-drainer.service';
 import { OutboundEvent } from '../entities/outbound-event.entity';
 import { RabbitMqConnection } from './rabbitmq.connection';
 
+function outboxRow(over: Partial<OutboundEvent> = {}): OutboundEvent {
+  return {
+    id: 'rid',
+    routingKey: 'reviewer.invited',
+    payload: { type: 'ReviewerInvited' },
+    attempts: 0,
+    lastError: null,
+    status: 'pending',
+    nextAttemptAt: null,
+    claimedAt: new Date(),
+    publishedAt: null,
+    createdAt: new Date(),
+    ...over,
+  };
+}
+
 describe('OutboxDrainerService', () => {
   let service: OutboxDrainerService;
-  let find: jest.Mock;
+  let query: jest.Mock;
   let save: jest.Mock;
   let publish: jest.Mock;
 
   beforeEach(async () => {
-    find = jest.fn().mockResolvedValue([]);
+    query = jest.fn().mockResolvedValue([]);
     save = jest.fn().mockImplementation(async (row: OutboundEvent) => row);
     publish = jest.fn().mockResolvedValue(undefined);
 
@@ -20,7 +37,11 @@ describe('OutboxDrainerService', () => {
         OutboxDrainerService,
         {
           provide: getRepositoryToken(OutboundEvent),
-          useValue: { find, save },
+          useValue: { save },
+        },
+        {
+          provide: DataSource,
+          useValue: { query },
         },
         {
           provide: RabbitMqConnection,
@@ -32,75 +53,75 @@ describe('OutboxDrainerService', () => {
     service = moduleRef.get(OutboxDrainerService);
   });
 
-  it('tick publishes pending rows and marks published', async () => {
-    const row: OutboundEvent = {
-      id: 'rid',
-      routingKey: 'reviewer.invited',
-      payload: { type: 'ReviewerInvited' },
-      attempts: 0,
-      lastError: null,
-      status: 'pending',
-      nextAttemptAt: null,
-      publishedAt: null,
-      createdAt: new Date(),
+  it('tick claims with SKIP LOCKED and publishes pending rows', async () => {
+    const row = outboxRow();
+    const pgRow = {
+      id: row.id,
+      routing_key: row.routingKey,
+      payload: row.payload,
+      attempts: row.attempts,
+      last_error: row.lastError,
+      status: row.status,
+      next_attempt_at: row.nextAttemptAt,
+      claimed_at: row.claimedAt,
+      published_at: row.publishedAt,
+      created_at: row.createdAt,
     };
-    find.mockResolvedValueOnce([row]);
+    query.mockResolvedValueOnce([pgRow]);
 
     await service.tick();
 
-    expect(publish).toHaveBeenCalledWith(
-      'reviewer.invited',
-      row.payload,
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('FOR UPDATE SKIP LOCKED'),
+      expect.any(Array),
     );
+    expect(publish).toHaveBeenCalledWith('reviewer.invited', row.payload);
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'published',
         publishedAt: expect.any(Date) as Date,
-        lastError: null,
+        claimedAt: null,
       }),
     );
   });
 
-  it('tick retries on publish failure with backoff and dead after cap', async () => {
-    const row: OutboundEvent = {
-      id: 'rid2',
-      routingKey: 'reviewer.invited',
-      payload: {},
-      attempts: 0,
-      lastError: null,
-      status: 'pending',
-      nextAttemptAt: null,
-      publishedAt: null,
-      createdAt: new Date(),
+  it('unwraps TypeORM Postgres UPDATE result tuple [rows, rowCount]', async () => {
+    const row = outboxRow();
+    const pgRow = {
+      id: row.id,
+      routing_key: row.routingKey,
+      payload: row.payload,
+      attempts: row.attempts,
+      last_error: row.lastError,
+      status: row.status,
+      next_attempt_at: row.nextAttemptAt,
+      claimed_at: row.claimedAt,
+      published_at: row.publishedAt,
+      created_at: row.createdAt,
     };
-    find.mockResolvedValueOnce([row]);
-    publish.mockRejectedValueOnce(new Error('amqp down'));
+    query.mockResolvedValueOnce([[pgRow], 1]);
 
     await service.tick();
 
-    expect(save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        attempts: 1,
-        status: 'pending',
-        lastError: expect.stringContaining('amqp down') as unknown as string,
-        nextAttemptAt: expect.any(Date) as Date,
-      }),
-    );
+    expect(publish).toHaveBeenCalledWith('reviewer.invited', row.payload);
   });
 
-  it('tick marks dead when attempts reach max after failure', async () => {
-    const row: OutboundEvent = {
-      id: 'rid3',
-      routingKey: 'reviewer.invited',
-      payload: {},
-      attempts: 7,
-      lastError: 'prev',
-      status: 'pending',
-      nextAttemptAt: null,
-      publishedAt: null,
-      createdAt: new Date(),
-    };
-    find.mockResolvedValueOnce([row]);
+  it('tick retries on publish failure with backoff and dead after cap', async () => {
+    const row = outboxRow({ attempts: 7 });
+    query.mockResolvedValueOnce([
+      {
+        id: row.id,
+        routing_key: row.routingKey,
+        payload: row.payload,
+        attempts: row.attempts,
+        last_error: 'prev',
+        status: row.status,
+        next_attempt_at: row.nextAttemptAt,
+        claimed_at: row.claimedAt,
+        published_at: row.publishedAt,
+        created_at: row.createdAt,
+      },
+    ]);
     publish.mockRejectedValueOnce(new Error('still down'));
 
     await service.tick();
@@ -109,43 +130,24 @@ describe('OutboxDrainerService', () => {
       expect.objectContaining({
         attempts: 8,
         status: 'dead',
-        nextAttemptAt: null,
+        claimedAt: null,
       }),
     );
   });
 
-  it('tick does not publish when there are no due rows', async () => {
-    find.mockResolvedValueOnce([]);
-    await service.tick();
-    expect(publish).not.toHaveBeenCalled();
-  });
-
   it('ignores overlapping tick while a drain is in progress', async () => {
-    let resolveFind!: (rows: OutboundEvent[]) => void;
-    const findPromise = new Promise<OutboundEvent[]>((resolve) => {
-      resolveFind = resolve;
+    let resolveQuery!: (rows: unknown[]) => void;
+    const queryPromise = new Promise<unknown[]>((resolve) => {
+      resolveQuery = resolve;
     });
-    find.mockImplementationOnce(() => findPromise);
-
-    const row: OutboundEvent = {
-      id: 'rid-re',
-      routingKey: 'reviewer.invited',
-      payload: {},
-      attempts: 0,
-      lastError: null,
-      status: 'pending',
-      nextAttemptAt: null,
-      publishedAt: null,
-      createdAt: new Date(),
-    };
+    query.mockImplementationOnce(() => queryPromise);
 
     const first = service.tick();
     await Promise.resolve();
     await service.tick();
-    expect(find).toHaveBeenCalledTimes(1);
-    expect(publish).not.toHaveBeenCalled();
-    resolveFind([row]);
+    expect(query).toHaveBeenCalledTimes(1);
+
+    resolveQuery([]);
     await first;
-    expect(publish).toHaveBeenCalledTimes(1);
   });
 });

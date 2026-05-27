@@ -12,7 +12,7 @@ import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -40,13 +40,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
-  @UseGuards(ThrottlerGuard)
-  @Throttle({
-    register: {
-      limit: parseInt(process.env.THROTTLE_REGISTER_LIMIT ?? '5', 10),
-      ttl: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),
-    },
-  })
+  @Throttle({ register: {} })
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
@@ -58,13 +52,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @UseGuards(ThrottlerGuard)
-  @Throttle({
-    login: {
-      limit: parseInt(process.env.THROTTLE_LOGIN_LIMIT ?? '10', 10),
-      ttl: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),
-    },
-  })
+  @Throttle({ login: {} })
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,

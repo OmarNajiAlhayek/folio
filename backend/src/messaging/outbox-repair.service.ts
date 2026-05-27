@@ -44,6 +44,7 @@ export class OutboxRepairService {
     row.nextAttemptAt = null;
     row.lastError = null;
     row.publishedAt = null;
+    row.claimedAt = null;
     await this.outboxRepo.save(row);
 
     return {

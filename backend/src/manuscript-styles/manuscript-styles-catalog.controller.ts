@@ -1,10 +1,12 @@
 import { Controller, Get, Header } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import type { ManuscriptStyleCatalogResponseDto } from './manuscript-style.types';
 import { ManuscriptStyleRegistryService } from './manuscript-style-registry.service';
 
 @ApiTags('public')
 @Controller('public/manuscript-styles')
+@Throttle({ public: {} })
 export class ManuscriptStylesCatalogController {
   constructor(private readonly registry: ManuscriptStyleRegistryService) {}
 

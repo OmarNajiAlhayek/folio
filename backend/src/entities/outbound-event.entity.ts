@@ -41,6 +41,10 @@ export class OutboundEvent {
   @Column({ name: 'next_attempt_at', type: 'timestamptz', nullable: true })
   nextAttemptAt: Date | null;
 
+  /** Short-lived claim so multiple API instances do not drain the same row. */
+  @Column({ name: 'claimed_at', type: 'timestamptz', nullable: true })
+  claimedAt: Date | null;
+
   @Column({ name: 'published_at', type: 'timestamptz', nullable: true })
   publishedAt: Date | null;
 

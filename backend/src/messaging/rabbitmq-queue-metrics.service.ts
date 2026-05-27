@@ -56,6 +56,9 @@ export class RabbitMqQueueMetricsService {
       this.topology.dlq,
       this.topology.reviewerInvitedQueue,
       this.topology.reminderDueQueue,
+      this.topology.copyeditAssignedQueue,
+      this.topology.copyeditQueriesSentQueue,
+      this.topology.copyeditAuthorReadyQueue,
       this.topology.submissionSubmittedQueue,
       this.topology.submissionDecisionQueue,
     ] as const;

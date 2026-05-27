@@ -15,6 +15,9 @@ import { MessagingModule } from './messaging/messaging.module';
 import { AdminEmailModule } from './admin-email/admin-email.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
+import { FolioThrottlerGuard } from './common/guards/folio-throttler.guard';
+import { buildThrottlerModuleOptions } from './common/throttle-module.factory';
+import { CommonGuardsModule } from './common/common-guards.module';
 
 @Module({
   imports: [
@@ -25,27 +28,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const ttl = parseInt(config.get<string>('THROTTLE_TTL_MS', '60000'), 10);
-        return [
-          {
-            name: 'login',
-            ttl,
-            limit: parseInt(
-              config.get<string>('THROTTLE_LOGIN_LIMIT', '10'),
-              10,
-            ),
-          },
-          {
-            name: 'register',
-            ttl,
-            limit: parseInt(
-              config.get<string>('THROTTLE_REGISTER_LIMIT', '5'),
-              10,
-            ),
-          },
-        ];
-      },
+      useFactory: (config: ConfigService) => buildThrottlerModuleOptions(config),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -62,6 +45,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
       }),
     }),
     ScheduleModule.forRoot(),
+    CommonGuardsModule,
     HealthModule,
     RbacModule,
     UsersModule,
@@ -76,6 +60,10 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     {
       provide: APP_FILTER,
       useClass: ApiExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useExisting: FolioThrottlerGuard,
     },
     {
       provide: APP_GUARD,

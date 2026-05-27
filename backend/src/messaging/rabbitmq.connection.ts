@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
-import type { Channel, ChannelModel } from 'amqplib';
+import type { Channel, ChannelModel, GetMessage } from 'amqplib';
 import { assertTopology, DEFAULT_TOPOLOGY, TopologyNames } from './shared/topology';
 
 /**
@@ -92,6 +92,22 @@ export class RabbitMqConnection implements OnModuleDestroy {
       messageCount: ok.messageCount,
       consumerCount: ok.consumerCount,
     };
+  }
+
+  /** Non-blocking pull of one message from the DLQ (for operator replay). */
+  async getFromDlq(): Promise<GetMessage | false> {
+    const ch = await this.getChannel();
+    return ch.get(this.topology.dlq, { noAck: false });
+  }
+
+  async ackGetMessage(msg: GetMessage): Promise<void> {
+    const ch = await this.getChannel();
+    ch.ack(msg);
+  }
+
+  async nackGetMessage(msg: GetMessage, requeue: boolean): Promise<void> {
+    const ch = await this.getChannel();
+    ch.nack(msg, false, requeue);
   }
 
   async publish(

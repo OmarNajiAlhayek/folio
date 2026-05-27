@@ -8,6 +8,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
+import { FolioThrottlerGuard } from '../common/guards/folio-throttler.guard';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { defer, from, interval, map, merge, Observable } from 'rxjs';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -66,6 +68,8 @@ export class NotificationsController {
   }
 
   @Sse('stream')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ sse: {} })
   stream(@CurrentUser() user: RequestUser): Observable<MessageEvent> {
     const userId = user.sub;
 
