@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
+import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -115,6 +116,7 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
             }),
           },
         },
+        aiClientServiceMock,
       ],
     }).compile();
 

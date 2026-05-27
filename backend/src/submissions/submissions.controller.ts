@@ -17,6 +17,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
+import { FolioThrottlerGuard } from '../common/guards/folio-throttler.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { submissionFileMulterOptions } from './submission-file-multer.options';
 import { createReadStream } from 'fs';
@@ -34,6 +36,7 @@ import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
 import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage.dto';
 import { GenerateDocxDto } from './dto/constructor-content.dto';
 import { SubmitSubmissionDto } from './dto/submit-submission.dto';
+import { PatchDisciplineDto } from './dto/patch-discipline.dto';
 import type { ConstructorContent } from './constructor-content.types';
 import { Readable } from 'stream';
 import { Permissions } from '../common/decorators/permissions.decorator';
@@ -71,6 +74,8 @@ export class SubmissionsController {
    * Declared before `:slug/*` routes.
    */
   @Post('import-docx-to-constructor')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ upload: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -91,6 +96,8 @@ export class SubmissionsController {
   }
 
   @Post('generate-docx-standalone')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ docx: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   async generateStandaloneDocx(
     @Body() dto: GenerateDocxDto,
@@ -103,6 +110,15 @@ export class SubmissionsController {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       disposition: 'attachment; filename="constructor.docx"',
     });
+  }
+
+  @Get('discipline-labels')
+  @Permissions(
+    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+  )
+  listDisciplineLabels() {
+    return this.submissionsService.listDisciplineLabels();
   }
 
   @Get()
@@ -158,6 +174,27 @@ export class SubmissionsController {
       user,
       dto.fileStage,
     );
+  }
+
+  @Post(':slug/suggest-discipline')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ default: {} })
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  suggestDiscipline(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
+    return this.submissionsService.suggestDiscipline(slug, user);
+  }
+
+  @Patch(':slug/discipline')
+  @Permissions(
+    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+  )
+  patchDiscipline(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: PatchDisciplineDto,
+  ) {
+    return this.submissionsService.setDisciplineForUser(slug, user, dto.discipline);
   }
 
   @Patch(':slug')
@@ -269,6 +306,8 @@ export class SubmissionsController {
   }
 
   @Post(':slug/files')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ upload: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   @ApiConsumes('multipart/form-data')
   @ApiQuery({
@@ -340,6 +379,8 @@ export class SubmissionsController {
    *   default      → stream the binary as a download.
    */
   @Post(':slug/generate-docx')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ docx: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   async generateDocx(
     @Param('slug') slug: string,

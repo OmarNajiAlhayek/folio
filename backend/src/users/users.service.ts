@@ -207,9 +207,6 @@ export class UsersService {
       });
     }
     const unique = [...new Set(roleSlugs)];
-    if (!unique.includes(ROLE_SLUGS.AUTHOR)) {
-      unique.push(ROLE_SLUGS.AUTHOR);
-    }
     const before = await this.rbacService.getEffectiveForUser(targetUserId);
     const hadEditor = before.roleSlugs.includes(ROLE_SLUGS.EDITOR);
     const willHaveEditor = unique.includes(ROLE_SLUGS.EDITOR);
@@ -410,9 +407,6 @@ export class UsersService {
     const { roleSlugs } =
       await this.rbacService.getEffectiveForUser(inviteeUserId);
     const next = [...new Set([...roleSlugs, inv.roleSlug])];
-    if (!next.includes(ROLE_SLUGS.AUTHOR)) {
-      next.push(ROLE_SLUGS.AUTHOR);
-    }
     try {
       await this.rbacService.assignRoles(inviteeUserId, next);
     } catch (e) {

@@ -121,4 +121,30 @@ describe('validateBackendRuntimeConfig', () => {
     expect(isLocalDevSandbox(config)).toBe(false);
     expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
   });
+
+  it('requires gRPC host and token when AI is enabled in production', () => {
+    const base = {
+      NODE_ENV: 'production',
+      JWT_SECRET: 'a'.repeat(32),
+      DB_PASSWORD: 'real-prod-password-not-in-blocklist',
+      RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
+      AUTH_COOKIE_SECURE: 'true',
+      AI_SERVICE_ENABLED: 'true',
+    };
+    expect(() =>
+      validateBackendRuntimeConfig(
+        configFromEnv({ ...base, AI_SERVICE_GRPC_HOST: '', AI_SERVICE_TOKEN: '' }),
+      ),
+    ).toThrow(/AI_SERVICE_GRPC_HOST/);
+
+    expect(() =>
+      validateBackendRuntimeConfig(
+        configFromEnv({
+          ...base,
+          AI_SERVICE_GRPC_HOST: 'ai-service',
+          AI_SERVICE_TOKEN: '',
+        }),
+      ),
+    ).toThrow(/AI_SERVICE_TOKEN/);
+  });
 });

@@ -173,8 +173,28 @@ export function validateBackendRuntimeConfig(config: ConfigService): void {
     );
   }
 
+  if (config.get<string>('AI_SERVICE_ENABLED', 'false').toLowerCase() === 'true') {
+    const grpcHost = config.get<string>('AI_SERVICE_GRPC_HOST', '').trim();
+    if (!grpcHost) {
+      throw new RuntimeConfigError(
+        'AI_SERVICE_GRPC_HOST must be set when AI_SERVICE_ENABLED=true in production.',
+      );
+    }
+    const aiToken = config.get<string>('AI_SERVICE_TOKEN', '').trim();
+    if (!aiToken) {
+      throw new RuntimeConfigError(
+        'AI_SERVICE_TOKEN must be set when AI_SERVICE_ENABLED=true in production.',
+      );
+    }
+  }
+
   for (const key of [
     'THROTTLE_TTL_MS',
+    'THROTTLE_DEFAULT_LIMIT',
+    'THROTTLE_PUBLIC_LIMIT',
+    'THROTTLE_UPLOAD_LIMIT',
+    'THROTTLE_DOCX_LIMIT',
+    'THROTTLE_SSE_LIMIT',
     'THROTTLE_LOGIN_LIMIT',
     'THROTTLE_REGISTER_LIMIT',
   ] as const) {

@@ -12,6 +12,8 @@ import { User } from './user.entity';
 import { SubmissionStatus } from './submission-status.enum';
 import { SubmissionArticleType } from './submission-article-type.enum';
 import { SubmissionReviewMethod } from './submission-review-method.enum';
+import { SubmissionDisciplineSource } from './submission-discipline-source.enum';
+import type { DisciplineClassificationJson } from '../ai/ai-client.types';
 import { SubmissionFile } from './submission-file.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
@@ -89,6 +91,33 @@ export class Submission {
   @Column({ name: 'ai_usage_statement', type: 'text', nullable: true })
   aiUsageStatement: string | null;
 
+  /** Confirmed academic field (Arabic label from AraBERT taxonomy). */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  discipline: string | null;
+
+  @Column({
+    name: 'discipline_source',
+    type: 'enum',
+    enum: SubmissionDisciplineSource,
+    nullable: true,
+  })
+  disciplineSource: SubmissionDisciplineSource | null;
+
+  @Column({ name: 'discipline_suggested', type: 'varchar', length: 120, nullable: true })
+  disciplineSuggested: string | null;
+
+  @Column({
+    name: 'discipline_suggested_confidence',
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  disciplineSuggestedConfidence: string | null;
+
+  @Column({ name: 'discipline_classification', type: 'jsonb', nullable: true })
+  disciplineClassification: DisciplineClassificationJson | null;
+
   /**
    * Word-Constructor structured content. Non-null implies the submission
    * is in "constructor mode" (vs upload mode). See docs/plans/word-constructor.md.
@@ -129,6 +158,28 @@ export class Submission {
 
   @Column({ name: 'published_at', type: 'timestamptz', nullable: true })
   publishedAt: Date | null;
+
+  /** Maintained by DB trigger `trg_submissions_publication_search`; not loaded by TypeORM. */
+  @Column({
+    name: 'publication_search_document',
+    type: 'text',
+    nullable: true,
+    insert: false,
+    update: false,
+    select: false,
+  })
+  publicationSearchDocument?: string | null;
+
+  /** Maintained by DB trigger; queried via raw SQL in catalog search only. */
+  @Column({
+    name: 'publication_search_vector',
+    type: 'tsvector',
+    nullable: true,
+    insert: false,
+    update: false,
+    select: false,
+  })
+  publicationSearchVector?: string | null;
 
   @OneToMany(() => SubmissionFile, (f) => f.submission)
   files: SubmissionFile[];

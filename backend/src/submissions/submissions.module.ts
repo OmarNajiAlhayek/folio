@@ -21,6 +21,7 @@ import { RbacModule } from '../rbac/rbac.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ManuscriptStylesModule } from '../manuscript-styles/manuscript-styles.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ManuscriptStylesModule } from '../manuscript-styles/manuscript-styles.m
     MessagingModule,
     NotificationsModule,
     ManuscriptStylesModule,
+    AiModule,
     TypeOrmModule.forFeature([
       Submission,
       SubmissionFile,

@@ -2,7 +2,15 @@ import 'reflect-metadata';
 import { config } from 'dotenv';
 import { randomUUID } from 'crypto';
 import { extname, join } from 'path';
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
 import * as bcrypt from 'bcrypt';
 import { NestFactory } from '@nestjs/core';
 import { DataSource, In, Like } from 'typeorm';
@@ -23,8 +31,17 @@ import { SubmissionArticleType } from './entities/submission-article-type.enum';
 import { SubmissionFileStage } from './entities/submission-file-stage.enum';
 import type { User } from './entities/user.entity';
 import type { CreateSubmissionDto } from './submissions/dto/create-submission.dto';
+import { AiClientService } from './ai/ai-client.service';
+import { SubmissionDisciplineSource } from './entities/submission-discipline-source.enum';
+import type { DisciplineClassificationJson } from './ai/ai-client.types';
+import { parseJournalAllowedDisciplines } from './ai/discipline-labels';
+import { ensurePublicationSearchSchema } from './common/ensure-publication-search-schema';
 
 config({ path: join(__dirname, '..', '.env') });
+
+/** Default AraBERT-style label for dev samples when ai-service is off or unreachable. */
+const SAMPLE_DISCIPLINE_DEFAULT = 'العلوم الاقتصادية والسياسية';
+const SAMPLE_DISCIPLINE_MEDICAL = 'العلوم الطبية';
 
 const SAMPLE_TITLE_PREFIX = '[SAMPLE]';
 
@@ -70,6 +87,46 @@ const SAMPLE_ABSTRACT_AR =
 const SAMPLE_TITLE_AR =
   'عنوان عربي نموذجي يطابق المخطوطة للعرض في بيئة التطوير';
 
+/** Arabic + keyword bundles for published-catalog samples (distinct embeddings). */
+const SAMPLE_PUB1_META = {
+  titleAr: 'سياسات النشر الرقمي والاقتصاد المعرفي في المجلات العربية',
+  abstractAr:
+    'يستعرض هذا البحث أثر سياسات الوصول المفتوح على انتشار المعرفة الاقتصادية، ويقارن نماذج تمويل النشر بين المجلات المحكّمة العربية والدولية. تُستخدم منهجية تحليل وثائقي لعينة من سياسات النشر لدى عشر مجلات خلال 2020–2024.',
+  keywords:
+    'open access, digital publishing, economics, arabic journals, policy',
+  keywordsAr: 'وصول مفتوح, نشر رقمي, اقتصاد, مجلات عربية, سياسات',
+} as const;
+
+const SAMPLE_PUB2_META = {
+  articleType: SubmissionArticleType.REVIEW_ARTICLE,
+  titleAr: 'فهرسة المجلات العلمية العربية وبيانات التعريف للقراء',
+  abstractAr:
+    'تبحث الدراسة في معايير فهرسة المقالات المنشورة وبيانات التعريف (العنوان، الملخص، الكلمات المفتاحية) لتحسين اكتشاف المحتوى في الفهارس العامة. تُقترح إطار عمل لتوحيد حقول الميتاداتا بين الناشرين العرب دون التضحية بالتنوع اللغوي.',
+  keywords: 'metadata, catalog, DOI, discovery, arabic scholarly publishing',
+  keywordsAr: 'بيانات تعريف, فهرسة, اكتشاف, نشر علمي عربي, مجلات',
+} as const;
+
+const SAMPLE_PUB3_META = {
+  articleType: SubmissionArticleType.CASE_REPORT,
+  titleAr: 'أخلاقيات البحوث السريرية ذات العينات الصغيرة',
+  abstractAr:
+    'يناقش المقال تحديات الموافقة المستنيرة والسرية في الدراسات السريرية محدودة العينة، مع التركيز على سياقات المستشفيات التعليمية. يقدّم الباحثون توصيات عملية لمراجعات الأخلاقيات المؤسسية عند ضعف القدرة الإحصائية.',
+  keywords: 'clinical research, research ethics, small samples, IRB',
+  keywordsAr: 'بحوث سريرية, أخلاقيات, عينات صغيرة, لجان أخلاقيات',
+} as const;
+
+type SamplePublicationMetaOverrides = Pick<
+  CreateSubmissionDto,
+  'titleAr' | 'abstractAr' | 'keywords' | 'keywordsAr'
+>;
+
+/** Journal form fields for a published sample; overrides generic Arabic boilerplate. */
+function samplePublicationMetadata(
+  overrides: SamplePublicationMetaOverrides,
+): Omit<CreateSubmissionDto, 'title' | 'abstract'> {
+  return { ...sampleJournalMetadata(), ...overrides };
+}
+
 /** Rich metadata matching journal-style submission forms (sample data). */
 function sampleJournalMetadata(): Omit<
   CreateSubmissionDto,
@@ -98,6 +155,77 @@ function sampleJournalMetadata(): Omit<
     aiUsageStatement:
       'Generative AI was not used to draft the manuscript or analyze data.',
   };
+}
+
+function sampleDisciplineClassification(
+  topLabel: string,
+  confidence: number,
+  scopeInJournal: boolean,
+): DisciplineClassificationJson {
+  return {
+    probabilities: {
+      [topLabel]: confidence,
+      'غير محدد': Math.max(0, 100 - confidence - 2),
+    },
+    classifiedAt: new Date().toISOString(),
+    scopeInJournal,
+    scopeWarning: scopeInJournal ? null : 'suggested_out_of_journal_scope',
+  };
+}
+
+/**
+ * Dev-only: ensure discipline suggestion exists for UI demos.
+ * Skips when submit() already stored AI output (AI_SERVICE_ENABLED + ai-service up).
+ */
+async function syncSampleDiscipline(
+  dataSource: DataSource,
+  submissionId: string,
+  options: {
+    topLabel?: string;
+    confidence?: number;
+    confirmAsAuthor?: boolean;
+    force?: boolean;
+  } = {},
+): Promise<void> {
+  const subRepo = dataSource.getRepository(Submission);
+  const row = await subRepo.findOne({ where: { id: submissionId } });
+  if (!row) {
+    return;
+  }
+  if (row.disciplineSuggested?.trim() && !options.force) {
+    return;
+  }
+
+  const topLabel = options.topLabel ?? SAMPLE_DISCIPLINE_DEFAULT;
+  const confidence = options.confidence ?? 88.5;
+  const allowed = parseJournalAllowedDisciplines(
+    process.env.JOURNAL_ALLOWED_DISCIPLINES,
+  );
+  const scopeInJournal =
+    allowed.length === 0 ? true : allowed.includes(topLabel);
+
+  row.disciplineSuggested = topLabel;
+  row.disciplineSuggestedConfidence = confidence.toFixed(2);
+  row.disciplineClassification = sampleDisciplineClassification(
+    topLabel,
+    confidence,
+    scopeInJournal,
+  );
+  if (options.confirmAsAuthor) {
+    row.discipline = topLabel;
+    row.disciplineSource = SubmissionDisciplineSource.AUTHOR;
+  }
+  await subRepo.save(row);
+}
+
+function queueSampleDisciplineLabel(): string {
+  const allowed = parseJournalAllowedDisciplines(
+    process.env.JOURNAL_ALLOWED_DISCIPLINES,
+  );
+  if (allowed.length > 0 && !allowed.includes(SAMPLE_DISCIPLINE_MEDICAL)) {
+    return SAMPLE_DISCIPLINE_MEDICAL;
+  }
+  return SAMPLE_DISCIPLINE_DEFAULT;
 }
 
 async function promoteManuscriptsToReviewPackage(
@@ -135,6 +263,94 @@ async function attachStandardFilePackage(
     sampleMulterFile(manuscriptFilename, pdfBytes),
     'manuscript',
   );
+}
+
+/** Full workflow: create → submit → accept → copyedit → publish (public catalog). */
+async function seedPublishedSample(options: {
+  dataSource: DataSource;
+  submissionsService: SubmissionsService;
+  author: User;
+  authorReq: RequestUser;
+  editorReq: RequestUser;
+  copyeditor: User;
+  copyeditorReq: RequestUser;
+  pdfBytes: Buffer;
+  title: string;
+  abstract: string;
+  publicationMeta: SamplePublicationMetaOverrides;
+  manuscriptFilename: string;
+  revisionFilename: string;
+  discipline: { topLabel: string; confidence: number };
+  logLabel: string;
+}): Promise<void> {
+  const {
+    dataSource,
+    submissionsService,
+    author,
+    authorReq,
+    editorReq,
+    copyeditor,
+    copyeditorReq,
+    pdfBytes,
+    title,
+    abstract,
+    publicationMeta,
+    manuscriptFilename,
+    revisionFilename,
+    discipline,
+    logLabel,
+  } = options;
+
+  if (await findSampleSubmission(dataSource, author.id, title)) {
+    return;
+  }
+
+  const s = await submissionsService.create(author.id, {
+    title,
+    abstract,
+    ...samplePublicationMetadata(publicationMeta),
+  });
+  await attachStandardFilePackage(
+    submissionsService,
+    s.slug!,
+    authorReq,
+    pdfBytes,
+    manuscriptFilename,
+  );
+  await submissionsService.submit(s.slug!, authorReq);
+  await syncSampleDiscipline(dataSource, s.id, {
+    topLabel: discipline.topLabel,
+    confidence: discipline.confidence,
+    confirmAsAuthor: true,
+  });
+  await submissionsService.updateStatus(
+    s.slug!,
+    editorReq,
+    SubmissionStatus.ACCEPTED,
+  );
+  const ceAssignment = await submissionsService.assignCopyeditor(
+    s.slug!,
+    copyeditor.id,
+    editorReq,
+  );
+  await submissionsService.submitCopyeditNote(
+    ceAssignment.slug!,
+    copyeditor.id,
+    'Ready for catalog.',
+    '',
+  );
+  await submissionsService.addFile(
+    s.slug!,
+    authorReq,
+    sampleMulterFile(revisionFilename, pdfBytes),
+    'manuscript',
+  );
+  await submissionsService.markCopyeditAuthorReady(
+    ceAssignment.slug!,
+    author.id,
+  );
+  await submissionsService.publishSubmission(ceAssignment.slug!, copyeditorReq);
+  console.log(`Seeded: ${title} (${logLabel})`);
 }
 
 async function toRequestUser(
@@ -189,6 +405,62 @@ async function ensureUser(
   }
   await rbacService.assignRoles(user.id, def.roleSlugs);
   return user;
+}
+
+function clearUploadFiles(): void {
+  const root = uploadRoot();
+  if (!existsSync(root)) {
+    return;
+  }
+  for (const name of readdirSync(root)) {
+    const full = join(root, name);
+    if (name === '_tmp') {
+      for (const tmpName of readdirSync(full)) {
+        try {
+          unlinkSync(join(full, tmpName));
+        } catch {
+          /* ignore */
+        }
+      }
+      continue;
+    }
+    try {
+      if (statSync(full).isDirectory()) {
+        rmSync(full, { recursive: true, force: true });
+      } else {
+        unlinkSync(full);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Dev-only: wipe all app data (users, submissions, notifications, …).
+ * RBAC catalog (roles/permissions) is kept; RbacService re-upserts on startup.
+ */
+async function resetAllDevData(dataSource: DataSource): Promise<void> {
+  clearUploadFiles();
+  await dataSource.query(`
+    TRUNCATE TABLE
+      copyedit_notes,
+      copyedit_assignments,
+      reviews,
+      review_assignments,
+      submission_files,
+      notifications,
+      outbound_event_outbox,
+      role_invitations,
+      revoked_tokens,
+      submissions,
+      user_roles,
+      users
+    RESTART IDENTITY
+  `);
+  console.log(
+    'SEED_RESET_ALL: truncated users, submissions, notifications, uploads, and related rows',
+  );
 }
 
 async function resetSampleSubmissions(dataSource: DataSource): Promise<void> {
@@ -261,25 +533,34 @@ async function findSampleSubmission(
 }
 
 async function run() {
+  const resetAll = process.env.SEED_RESET_ALL === '1';
   const resetSample =
-    process.env.SEED_RESET_SAMPLE === '1' ||
-    process.env.SEED_RESET_DEMO === '1';
+    !resetAll &&
+    (process.env.SEED_RESET_SAMPLE === '1' ||
+      process.env.SEED_RESET_DEMO === '1');
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
   const dataSource = app.get(DataSource);
+  await ensurePublicationSearchSchema(dataSource);
+  console.log('Publication catalog search schema ready (FTS + pg_trgm).');
+
   const usersService = app.get(UsersService);
   const rbacService = app.get(RbacService);
   const submissionsService = app.get(SubmissionsService);
+  const aiClient = app.get(AiClientService);
+  const aiEnabled = aiClient.isEnabled();
 
-  if (resetSample) {
+  if (resetAll) {
+    await resetAllDevData(dataSource);
+  } else if (resetSample) {
     await resetSampleSubmissions(dataSource);
   }
 
   await submissionsService.backfillSlugs();
 
   const author = await ensureUser(usersService, rbacService, {
-    email: 'author@folio.local',
+    email: 'o65834757@gmail.com',
     password: 'Author123!',
     displayName: 'A. Researcher',
     roleSlugs: [ROLE_SLUGS.AUTHOR],
@@ -293,16 +574,16 @@ async function run() {
     email: 'manager@folio.local',
     password: 'Manager123!',
     displayName: 'M. Journal Manager',
-    roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.JOURNAL_MANAGER],
+    roleSlugs: [ROLE_SLUGS.JOURNAL_MANAGER],
     profile: {
       affiliation: 'Folio Journal — Editorial office',
     },
   });
   const editor = await ensureUser(usersService, rbacService, {
-    email: 'editor@folio.local',
+    email: 'k76462338@gmail.com',
     password: 'Editor123!',
     displayName: 'C. Editor',
-    roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.EDITOR, ROLE_SLUGS.REVIEWER],
+    roleSlugs: [ROLE_SLUGS.EDITOR, ROLE_SLUGS.REVIEWER],
     profile: {
       affiliation: 'Folio Journal — Editorial office',
       reviewKeywords: 'editorial',
@@ -310,10 +591,10 @@ async function run() {
     },
   });
   const reviewer = await ensureUser(usersService, rbacService, {
-    email: 'reviewer@folio.local',
+    email: 'ysryrwthqsdthwy@gmail.com',
     password: 'Reviewer123!',
     displayName: 'R. Reviewer',
-    roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.REVIEWER],
+    roleSlugs: [ROLE_SLUGS.REVIEWER],
     profile: {
       affiliation: 'Institute for Sample Research',
       reviewKeywords: 'peer review, methodology',
@@ -351,6 +632,10 @@ async function run() {
       pdfBytes,
       'draft.pdf',
     );
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
+      confidence: 76,
+    });
     console.log(`Seeded: ${tDraft} (draft)`);
   }
 
@@ -370,6 +655,11 @@ async function run() {
       'queue.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: queueSampleDisciplineLabel(),
+      confidence: 91,
+      confirmAsAuthor: true,
+    });
     console.log(`Seeded: ${tQueue} (submitted)`);
   }
 
@@ -389,6 +679,10 @@ async function run() {
       'under-review.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
+      confidence: 84,
+    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     const reviewAssignment = await submissionsService.assignReviewer(
       s.slug!,
@@ -418,6 +712,10 @@ async function run() {
       'reviewed.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: 'العلوم القانونية',
+      confidence: 86,
+    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     const assignment = await submissionsService.assignReviewer(
       s.slug!,
@@ -454,6 +752,10 @@ async function run() {
       'revisions.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: 'العلوم التربوية والنفسية',
+      confidence: 79,
+    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     const revAssignment = await submissionsService.assignReviewer(
       s.slug!,
@@ -483,6 +785,11 @@ async function run() {
       'manuscript',
     );
     await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
+      confidence: 82,
+      force: true,
+    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     await submissionsService.assignReviewer(s.slug!, reviewer.id, editorReq);
     console.log(
@@ -506,6 +813,10 @@ async function run() {
       'copyedit.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: 'العلوم الهندسية',
+      confidence: 87,
+    });
     await submissionsService.updateStatus(
       s.slug!,
       editorReq,
@@ -525,57 +836,73 @@ async function run() {
     console.log(`Seeded: ${tCopyedit} (copyediting, note submitted)`);
   }
 
-  // 7) Published — goes through the full copyediting stage
+  // 7–9) Published catalog samples — distinct Arabic text for similarity / related articles
   const tPub = `${SAMPLE_TITLE_PREFIX} Published article`;
-  if (!(await findSampleSubmission(dataSource, author.id, tPub))) {
-    const s = await submissionsService.create(author.id, {
-      title: tPub,
-      abstract: 'Sample publication visible on the public catalog.',
-      ...sampleJournalMetadata(),
-    });
-    await attachStandardFilePackage(
-      submissionsService,
-      s.slug!,
-      authorReq,
-      pdfBytes,
-      'published.pdf',
-    );
-    await submissionsService.submit(s.slug!, authorReq);
-    await submissionsService.updateStatus(
-      s.slug!,
-      editorReq,
-      SubmissionStatus.ACCEPTED,
-    );
-    const pubCeAssignment = await submissionsService.assignCopyeditor(
-      s.slug!,
-      copyeditor.id,
-      editorReq,
-    );
-    await submissionsService.submitCopyeditNote(
-      pubCeAssignment.slug!,
-      copyeditor.id,
-      'Proofread and formatted. Please upload the final file if needed.',
-      '',
-    );
-    await submissionsService.addFile(
-      s.slug!,
-      authorReq,
-      sampleMulterFile('published-revision.pdf', pdfBytes),
-      'manuscript',
-    );
-    await submissionsService.markCopyeditAuthorReady(
-      pubCeAssignment.slug!,
-      author.id,
-    );
-    await submissionsService.publishSubmission(s.slug!, copyeditorReq);
-    console.log(`Seeded: ${tPub} (published)`);
-  }
+  const tPub2 = `${SAMPLE_TITLE_PREFIX} Related publication peer`;
+  const tPub3 = `${SAMPLE_TITLE_PREFIX} Published medical ethics`;
+
+  await seedPublishedSample({
+    dataSource,
+    submissionsService,
+    author,
+    authorReq,
+    editorReq,
+    copyeditor,
+    copyeditorReq,
+    pdfBytes,
+    title: tPub,
+    abstract:
+      'Sample publication on open-access policy and knowledge economics (public catalog).',
+    publicationMeta: SAMPLE_PUB1_META,
+    manuscriptFilename: 'published.pdf',
+    revisionFilename: 'published-revision.pdf',
+    discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 90 },
+    logLabel: 'published',
+  });
+
+  await seedPublishedSample({
+    dataSource,
+    submissionsService,
+    author,
+    authorReq,
+    editorReq,
+    copyeditor,
+    copyeditorReq,
+    pdfBytes,
+    title: tPub2,
+    abstract:
+      'Sample publication on journal metadata and catalog discovery (related-articles peer).',
+    publicationMeta: SAMPLE_PUB2_META,
+    manuscriptFilename: 'published-peer.pdf',
+    revisionFilename: 'published-peer-revision.pdf',
+    discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 88 },
+    logLabel: 'published, related-articles peer',
+  });
+
+  await seedPublishedSample({
+    dataSource,
+    submissionsService,
+    author,
+    authorReq,
+    editorReq,
+    copyeditor,
+    copyeditorReq,
+    pdfBytes,
+    title: tPub3,
+    abstract:
+      'Sample publication on clinical-research ethics with small cohorts (distant related topic).',
+    publicationMeta: SAMPLE_PUB3_META,
+    manuscriptFilename: 'published-medical.pdf',
+    revisionFilename: 'published-medical-revision.pdf',
+    discipline: { topLabel: SAMPLE_DISCIPLINE_MEDICAL, confidence: 85 },
+    logLabel: 'published, related-articles distant peer',
+  });
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
   console.log('author@folio.local      / Author123!      roles: author');
-  console.log('manager@folio.local     / Manager123!     roles: author, journal_manager');
-  console.log('editor@folio.local      / Editor123!      roles: author, editor, reviewer');
-  console.log('reviewer@folio.local    / Reviewer123!    roles: author, reviewer');
+  console.log('manager@folio.local     / Manager123!     roles: journal_manager');
+  console.log('editor@folio.local      / Editor123!      roles: editor, reviewer');
+  console.log('reviewer@folio.local    / Reviewer123!    roles: reviewer');
   console.log('copyeditor@folio.local  / Copyeditor123!  roles: copyeditor');
   console.log('\n--- Sample submissions (title prefix [SAMPLE]) ---');
   console.log(`${tDraft} — author: draft with file`);
@@ -586,9 +913,36 @@ async function run() {
     `${tRev} — round1: revisions requested; author resubmitted + revised file; round2: same reviewer, invitation pending (accept in app)`,
   );
   console.log(`${tCopyedit} — copyediting: assigned + note submitted`);
-  console.log(`${tPub} — public catalog: published`);
+  console.log(`${tPub} — public catalog: published (open-access policy)`);
+  console.log(`${tPub2} — public catalog: published (metadata / catalog peer)`);
+  console.log(`${tPub3} — public catalog: published (medical ethics, distant peer)`);
   console.log(
-    '\nRe-run safely; use SEED_RESET_SAMPLE=1 (or legacy SEED_RESET_DEMO=1) to wipe [SAMPLE] and legacy [DEMO] submissions first.',
+    'Related articles: use SEED_RESET_SAMPLE=1 (npm run seed:reset) after changing published samples so Arabic abstracts re-index in ai-service.',
+  );
+  console.log('\n--- Academic field (AraBERT) ---');
+  if (aiEnabled) {
+    console.log(
+      'AI_SERVICE_ENABLED: submit() calls ai-service; samples also get fallback labels only when classification did not persist.',
+    );
+  } else {
+    console.log(
+      'AI_SERVICE_ENABLED=false: seeded disciplineSuggested/discipline on samples for editor/author UI (no ai-service required).',
+    );
+    console.log(
+      'To use live classification: set AI_SERVICE_ENABLED=true, AI_SERVICE_GRPC_HOST=127.0.0.1, run ai-service (HTTP :5245 + gRPC :5246), then npm run seed:reset',
+    );
+  }
+  console.log(
+    'Optional JOURNAL_ALLOWED_DISCIPLINES (pipe-separated Arabic labels) marks out-of-scope suggestions in the editor queue sample.',
+  );
+  console.log(
+    '\nRe-run safely. Dev reset options:',
+  );
+  console.log(
+    '  SEED_RESET_ALL=1       — truncate all users/submissions/uploads, then re-seed (npm run seed:fresh)',
+  );
+  console.log(
+    '  SEED_RESET_SAMPLE=1    — remove only [SAMPLE] / [DEMO] submissions, then re-seed (npm run seed:reset)',
   );
 
   await app.close();

@@ -58,6 +58,7 @@ import { CopyeditNote } from '../entities/copyedit-note.entity';
 import type { AuthorReviewPublicView } from '../reviews/author-review-public.view';
 import { User } from '../entities/user.entity';
 import { resolveEmailLocale } from '../common/email-locale';
+import { assignmentInvitePageUrl } from '../common/folio-frontend-urls';
 import type { RequestUser } from '../common/types/request-user';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
@@ -66,6 +67,12 @@ import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { ContributorDto } from './dto/contributor.dto';
 import { slugifySubmissionTitle } from './slugify-submission-title';
+import {
+  applyPublicationCatalogQuery,
+  publicationCatalogHasTextOrFilters,
+  publicationCatalogNeedsAuthorJoin,
+  type PublicationCatalogFilters,
+} from './publication-catalog-search.util';
 import {
   normalizeSubmissionFileKind,
   type SubmissionFileKind,
@@ -96,6 +103,21 @@ import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { sanitizeConstructorContent } from './sanitize-constructor-html';
 import { submissionToViewerJson } from './submission-response.mapper';
 import type { SubmissionViewerRole } from './submission-viewer-role';
+import { AiClientService } from '../ai/ai-client.service';
+import { SubmissionDisciplineSource } from '../entities/submission-discipline-source.enum';
+import {
+  isValidDisciplineLabel,
+  ARABIC_DISCIPLINE_LABELS,
+} from '../ai/discipline-labels';
+import {
+  buildClassificationJson,
+  resolveClassifyText,
+  parseAllowedDisciplinesFromEnv,
+} from './submission-discipline.util';
+import {
+  isSimilarityCorpusArticleId,
+  publicationSimilarityIndexPayload,
+} from './publication-similarity.util';
 const EDITOR_TRANSITIONS: Partial<
   Record<SubmissionStatus, SubmissionStatus[]>
 > = {
@@ -151,7 +173,136 @@ export class SubmissionsService implements OnModuleInit {
     private readonly eventPublisher: EventPublisherService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
+    private readonly aiClient: AiClientService,
   ) {}
+
+  listDisciplineLabels(): { labels: readonly string[]; journalScope: string[] } {
+    return {
+      labels: ARABIC_DISCIPLINE_LABELS,
+      journalScope: this.journalAllowedDisciplines(),
+    };
+  }
+
+  private journalAllowedDisciplines(): string[] {
+    return parseAllowedDisciplinesFromEnv(
+      this.config.get<string>('JOURNAL_ALLOWED_DISCIPLINES'),
+    );
+  }
+
+  private async refreshDisciplineSuggestion(submission: Submission): Promise<boolean> {
+    const text = resolveClassifyText(submission);
+    if (!text.abstract.trim()) {
+      return false;
+    }
+    const result = await this.aiClient.classifyArticle(text);
+    if (!result) {
+      return false;
+    }
+    const allowed = this.journalAllowedDisciplines();
+    submission.disciplineSuggested = result.top_label;
+    submission.disciplineSuggestedConfidence = String(result.top_confidence);
+    submission.disciplineClassification = buildClassificationJson(result, allowed);
+    return true;
+  }
+
+  async suggestDiscipline(
+    slug: string,
+    user: RequestUser,
+  ): Promise<{
+    topLabel: string;
+    topConfidence: number;
+    probabilities: Record<string, number>;
+    scopeInJournal: boolean;
+    scopeWarning: string | null;
+    discipline: string | null;
+    disciplineSuggested: string | null;
+  }> {
+    const s = await this.getBySlugOrThrow(slug);
+    if (s.authorId !== user.sub) {
+      throw new ForbiddenException({
+        message: 'Only the author can request discipline suggestion',
+        code: 'FORBIDDEN',
+      });
+    }
+    if (
+      s.status !== SubmissionStatus.DRAFT &&
+      s.status !== SubmissionStatus.REVISIONS_REQUESTED
+    ) {
+      throw new BadRequestException({
+        message: 'Discipline suggestion is only available while editing the draft',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const text = resolveClassifyText(s);
+    if (!text.abstract.trim()) {
+      throw new BadRequestException({
+        message:
+          'Provide an Arabic or English abstract before requesting a discipline suggestion',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (!this.aiClient.isEnabled()) {
+      throw new BadRequestException({
+        message: 'AI classification service is not configured',
+        code: 'AI_SERVICE_UNAVAILABLE',
+      });
+    }
+    const ok = await this.refreshDisciplineSuggestion(s);
+    if (!ok) {
+      throw new BadRequestException({
+        message: 'Could not classify submission; try again later',
+        code: 'AI_CLASSIFICATION_FAILED',
+      });
+    }
+    await this.submissionsRepo.save(s);
+    const classification = s.disciplineClassification!;
+    return {
+      topLabel: s.disciplineSuggested!,
+      topConfidence: Number(s.disciplineSuggestedConfidence),
+      probabilities: classification.probabilities,
+      scopeInJournal: classification.scopeInJournal,
+      scopeWarning: classification.scopeWarning,
+      discipline: s.discipline,
+      disciplineSuggested: s.disciplineSuggested,
+    };
+  }
+
+  async setDisciplineForUser(
+    slug: string,
+    user: RequestUser,
+    discipline: string,
+  ): Promise<Submission> {
+    if (!isValidDisciplineLabel(discipline)) {
+      throw new BadRequestException({
+        message: 'Invalid discipline label',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const s = await this.getBySlugOrThrow(slug);
+    const isAuthor =
+      s.authorId === user.sub &&
+      (s.status === SubmissionStatus.DRAFT ||
+        s.status === SubmissionStatus.REVISIONS_REQUESTED);
+    const isEditor = this.hasPerm(
+      user,
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    );
+    if (isAuthor) {
+      s.discipline = discipline;
+      s.disciplineSource = SubmissionDisciplineSource.AUTHOR;
+      return this.submissionsRepo.save(s);
+    }
+    if (isEditor) {
+      this.assertEditorQueueSubmissionVisible(s);
+      s.discipline = discipline;
+      s.disciplineSource = SubmissionDisciplineSource.EDITOR;
+      return this.submissionsRepo.save(s);
+    }
+    throw new ForbiddenException({
+      message: 'Cannot set discipline on this submission',
+      code: 'FORBIDDEN',
+    });
+  }
 
   private emitPendingNotifications(pending: Notification[]): void {
     if (pending.length > 0) {
@@ -549,12 +700,24 @@ export class SubmissionsService implements OnModuleInit {
     return qb.getMany();
   }
 
-  async findPublishedList(): Promise<Submission[]> {
-    return this.submissionsRepo.find({
-      where: { status: SubmissionStatus.PUBLISHED },
-      order: { publishedAt: 'DESC' },
-      relations: ['author'],
-    });
+  async findPublishedList(
+    filters: PublicationCatalogFilters = {},
+  ): Promise<Submission[]> {
+    const hasFilters = publicationCatalogHasTextOrFilters(filters);
+    if (!hasFilters) {
+      return this.submissionsRepo.find({
+        where: { status: SubmissionStatus.PUBLISHED },
+        order: { publishedAt: 'DESC' },
+        relations: ['author'],
+      });
+    }
+
+    const qb = this.submissionsRepo.createQueryBuilder('s');
+    applyPublicationCatalogQuery(qb, filters);
+    if (!publicationCatalogNeedsAuthorJoin(filters)) {
+      qb.leftJoinAndSelect('s.author', 'author');
+    }
+    return qb.getMany();
   }
 
   async findPublishedOne(slug: string): Promise<Submission> {
@@ -569,6 +732,99 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
     return s;
+  }
+
+  async indexPublishedSubmissionForSimilarity(s: Submission): Promise<void> {
+    if (!this.aiClient.isSimilarityEnabled()) {
+      return;
+    }
+    const payload = publicationSimilarityIndexPayload(s);
+    if (!payload) {
+      return;
+    }
+    await this.aiClient.upsertSimilarityArticle({
+      articleId: s.id,
+      abstract: payload.abstract,
+      keywords: payload.keywords,
+      category: payload.category,
+    });
+  }
+
+  /** Index all published articles so related search works for existing corpus. */
+  async backfillPublishedSimilarityIndex(): Promise<void> {
+    if (!this.aiClient.isSimilarityEnabled()) {
+      return;
+    }
+    const published = await this.findPublishedList();
+    for (const row of published) {
+      await this.indexPublishedSubmissionForSimilarity(row);
+    }
+  }
+
+  async findRelatedPublications(
+    slug: string,
+    limit = 5,
+  ): Promise<
+    {
+      id: string;
+      slug: string;
+      title: string;
+      titleAr: string | null;
+      abstract: string;
+      abstractAr: string | null;
+      similarity: number;
+    }[]
+  > {
+    if (!this.aiClient.isSimilarityEnabled()) {
+      return [];
+    }
+    await this.backfillPublishedSimilarityIndex();
+    const s = await this.findPublishedOne(slug);
+    const hits = (
+      await this.aiClient.findSimilarArticles({
+        articleId: s.id,
+        limit,
+      })
+    ).filter(
+      (h) =>
+        isSimilarityCorpusArticleId(h.article_id) && h.article_id !== s.id,
+    );
+    if (hits.length === 0) {
+      return [];
+    }
+    const ids = hits.map((h) => h.article_id);
+    const related = await this.submissionsRepo.find({
+      where: {
+        id: In(ids),
+        status: SubmissionStatus.PUBLISHED,
+      },
+    });
+    const byId = new Map(related.map((r) => [r.id, r]));
+    const rows: {
+      id: string;
+      slug: string;
+      title: string;
+      titleAr: string | null;
+      abstract: string;
+      abstractAr: string | null;
+      similarity: number;
+    }[] = [];
+    for (const hit of hits) {
+      const row = byId.get(hit.article_id);
+      if (!row?.slug) {
+        continue;
+      }
+      rows.push({
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        titleAr: row.titleAr,
+        abstract: row.abstract,
+        abstractAr: row.abstractAr,
+        similarity: hit.similarity,
+      });
+    }
+    return rows;
   }
 
   async getBySlugOrThrow(slug: string): Promise<Submission> {
@@ -852,6 +1108,17 @@ export class SubmissionsService implements OnModuleInit {
     await this.assertReadyForSubmit(s, presentation);
     await this.applyReviewManuscriptPresentation(s.id, presentation);
     s.reviewManuscriptPresentation = presentation;
+    if (this.aiClient.isEnabled()) {
+      try {
+        await this.refreshDisciplineSuggestion(s);
+      } catch (err) {
+        this.logger.warn(
+          'Discipline classification on submit failed for %s: %s',
+          slug,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
     await this.submissionsRepo.save(s);
     const previousStatus = s.status;
     const isResubmission = previousStatus === SubmissionStatus.REVISIONS_REQUESTED;
@@ -1245,8 +1512,16 @@ export class SubmissionsService implements OnModuleInit {
         id: editorRow.id,
         displayName: editorRow.displayName,
       },
-      acceptUrl: `${baseUrl}/assignments/${assignment.slug}/accept`,
-      declineUrl: `${baseUrl}/assignments/${assignment.slug}/decline`,
+      acceptUrl: assignmentInvitePageUrl(
+        baseUrl,
+        assignment.slug,
+        emailLocale,
+      ),
+      declineUrl: assignmentInvitePageUrl(
+        baseUrl,
+        assignment.slug,
+        emailLocale,
+      ),
     };
     await this.eventPublisher.enqueue(
       ROUTING_KEY.reviewerInvited,
@@ -1282,6 +1557,7 @@ export class SubmissionsService implements OnModuleInit {
         code: 'INTERNAL_ERROR',
       });
     }
+    const slug = submission.slug;
     const author = await em.getRepository(User).findOne({
       where: { id: submission.authorId },
       select: ['id', 'email', 'displayName'],
@@ -1297,7 +1573,7 @@ export class SubmissionsService implements OnModuleInit {
     );
     if (editorIds.length === 0) {
       this.logger.warn(
-        `submission.submitted: no handling editors to notify for slug=${submission.slug}`,
+        `submission.submitted: no handling editors to notify for slug=${slug}`,
       );
       return [];
     }
@@ -1306,7 +1582,7 @@ export class SubmissionsService implements OnModuleInit {
       select: ['id', 'email', 'displayName', 'preferredLocale'],
     });
     const siteDefault = this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en');
-    const editorQueueUrl = `${this.appBaseUrl()}/submissions/${submission.slug}`;
+    const editorQueueUrl = `${this.appBaseUrl()}/submissions/${slug}`;
     const occurredAt = new Date().toISOString();
     const outboxEvents = editors.map((editor) => {
       const emailLocale = resolveEmailLocale({
@@ -1316,8 +1592,8 @@ export class SubmissionsService implements OnModuleInit {
       const payload: SubmissionSubmittedEvent = {
         type: 'SubmissionSubmitted',
         occurredAt,
-        idempotencyKey: submissionSubmittedKey(submission.slug, editor.id),
-        submissionSlug: submission.slug,
+        idempotencyKey: submissionSubmittedKey(slug, editor.id),
+        submissionSlug: slug,
         submissionTitle: submission.title,
         isResubmission,
         emailLocale,
@@ -1348,8 +1624,8 @@ export class SubmissionsService implements OnModuleInit {
           authorDisplayName: author.displayName,
           isResubmission: isResubmission ? 'true' : 'false',
         },
-        href: `/submissions/${submission.slug}`,
-        idempotencyKey: submissionSubmittedKey(submission.slug, editor.id),
+        href: `/submissions/${slug}`,
+        idempotencyKey: submissionSubmittedKey(slug, editor.id),
       })),
       em,
     );
@@ -1954,6 +2230,7 @@ export class SubmissionsService implements OnModuleInit {
       articleType: s.articleType,
       keywords: s.keywords,
       keywordsAr: s.keywordsAr,
+      discipline: s.discipline,
       publishedAt: s.publishedAt,
       author: s.author
         ? {
@@ -2616,7 +2893,14 @@ export class SubmissionsService implements OnModuleInit {
       { submissionId: s.id, kind: 'manuscript' },
       { isPublic: true },
     );
-    return this.submissionsRepo.save(s);
+    const saved = await this.submissionsRepo.save(s);
+    void this.indexPublishedSubmissionForSimilarity(saved).catch((err) => {
+      this.logger.warn(
+        'Failed to index publication for similarity: %s',
+        err instanceof Error ? err.message : String(err),
+      );
+    });
+    return saved;
   }
 
   /**

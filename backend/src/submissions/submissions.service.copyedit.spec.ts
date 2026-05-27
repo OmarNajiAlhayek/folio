@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
+import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionFile } from '../entities/submission-file.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
@@ -172,6 +173,7 @@ describe('SubmissionsService copyedit workflow', () => {
             }),
           },
         },
+        aiClientServiceMock,
       ],
     }).compile();
 

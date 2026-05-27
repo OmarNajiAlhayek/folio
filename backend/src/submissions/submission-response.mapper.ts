@@ -92,6 +92,18 @@ export function submissionToViewerJson(
 
   if (viewer === 'author' || viewer === 'editor') {
     base.reviewManuscriptPresentation = s.reviewManuscriptPresentation;
+    base.discipline = s.discipline;
+    base.disciplineSource = s.disciplineSource;
+    base.disciplineSuggested = s.disciplineSuggested;
+    base.disciplineSuggestedConfidence =
+      s.disciplineSuggestedConfidence != null
+        ? Number(s.disciplineSuggestedConfidence)
+        : null;
+    base.disciplineClassification = s.disciplineClassification;
+    base.disciplineScopeInJournal =
+      s.disciplineClassification?.scopeInJournal ?? null;
+    base.disciplineScopeWarning =
+      s.disciplineClassification?.scopeWarning ?? null;
   }
 
   if (viewer === 'editor' && s.reviewAssignments?.length) {

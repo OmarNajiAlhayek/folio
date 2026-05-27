@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { RemindersService } from './reminders.service';
 import { Submission } from '../entities/submission.entity';
@@ -81,6 +85,97 @@ describe('RemindersService', () => {
       expect.stringContaining('FROM "email"."reminder"'),
       ['asg-1'],
     );
+  });
+
+  it('patchSendAt rejects sendAt within 2 minutes', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
+    dataSource.query.mockResolvedValueOnce([{ id: 'r1', status: 'pending' }]);
+
+    const tooSoon = new Date(Date.now() + 60_000).toISOString();
+    await expect(
+      service.patchSendAt(
+        'sub-1',
+        'asg-1',
+        'r1',
+        user([
+          PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+          PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+        ]),
+        tooSoon,
+      ),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('patchSendAt updates pending reminder', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
+    const sendAt = new Date(Date.now() + 10 * 60_000);
+    const row = {
+      id: 'r1',
+      assignment_slug: 'asg-1',
+      reviewer_id: 'rev1',
+      reviewer_email: 'r@test.dev',
+      reviewer_display_name: 'R',
+      kind: 'review_due_soon',
+      send_at: sendAt,
+      status: 'pending',
+      sent_at: null,
+      created_at: new Date('2026-05-01T00:00:00.000Z'),
+    };
+    dataSource.query
+      .mockResolvedValueOnce([{ id: 'r1', status: 'pending' }])
+      .mockResolvedValueOnce([row]);
+
+    const out = await service.patchSendAt(
+      'sub-1',
+      'asg-1',
+      'r1',
+      user([
+        PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+      ]),
+      sendAt.toISOString(),
+    );
+
+    expect(out.id).toBe('r1');
+    expect(out.sendAt).toBe(sendAt.toISOString());
+    expect(dataSource.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE "email"."reminder"'),
+      [sendAt.toISOString(), 'r1', 'asg-1'],
+    );
+  });
+
+  it('cancel marks pending reminder cancelled', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
+    const row = {
+      id: 'r1',
+      assignment_slug: 'asg-1',
+      reviewer_id: 'rev1',
+      reviewer_email: 'r@test.dev',
+      reviewer_display_name: 'R',
+      kind: 'review_due_soon',
+      send_at: new Date('2026-06-01T12:00:00.000Z'),
+      status: 'cancelled',
+      sent_at: null,
+      created_at: new Date('2026-05-01T00:00:00.000Z'),
+    };
+    dataSource.query
+      .mockResolvedValueOnce([{ id: 'r1', status: 'pending' }])
+      .mockResolvedValueOnce([row]);
+
+    const out = await service.cancel(
+      'sub-1',
+      'asg-1',
+      'r1',
+      user([
+        PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+      ]),
+    );
+
+    expect(out.status).toBe('cancelled');
   });
 
   it('getOne throws when reminder missing', async () => {

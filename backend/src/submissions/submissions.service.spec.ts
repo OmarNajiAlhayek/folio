@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
+import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -144,6 +145,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
             }),
           },
         },
+        aiClientServiceMock,
       ],
     }).compile();
 
@@ -183,12 +185,10 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
       id: editorUser.sub,
       displayName: 'Editor Name',
     });
-    expect(String(payload.acceptUrl)).toContain(
-      `/assignments/${savedAssignment.slug}/accept`,
+    expect(String(payload.acceptUrl)).toBe(
+      `http://localhost:5240/en/assignments/${encodeURIComponent(savedAssignment.slug!)}/invite`,
     );
-    expect(String(payload.declineUrl)).toContain(
-      `/assignments/${savedAssignment.slug}/decline`,
-    );
+    expect(String(payload.declineUrl)).toBe(payload.acceptUrl);
     expect(payload.emailLocale).toBe('en');
     expect(manager).toBeDefined();
     expect(typeof manager.getRepository).toBe('function');
