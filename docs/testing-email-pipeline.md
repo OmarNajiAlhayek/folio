@@ -9,13 +9,14 @@ RabbitMQ is **not** required for these commands: unit tests mock RabbitMQ and DB
 | Command | What it covers |
 |--------|----------------|
 | `cd services/email-service && npm test` | Handlers, templates, idempotency, redactor, reminder scheduler (mocked RabbitMQ / DB). |
+| `curl http://127.0.0.1:5244/health` | email-service liveness (`HEALTH_PORT`, checks DB + AMQP). |
 | `cd backend && npm test` | Outbox drainer, event publisher enqueue, `SubmissionsService.assignReviewer` outbox contract (mocked DB), **`RemindersService`** (mocked `DataSource`; no `email` schema required), **pipeline observability** (mocked repositories + queue metrics). |
 | `cd backend && npm run test:e2e` | HTTP app + database: `GET /api/v1/health` and `GET /api/v1/health/outbox`; [`admin-email.e2e-spec.ts`](../backend/test/admin-email.e2e-spec.ts) (401/403/422 always; policy/template/preview/**pipeline-status**/409 when schema **`email`** and seed rows exist — otherwise DB-backed `it` blocks no-op with a console warning). Needs the same **`DB_*`** vars as `backend/.env`. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB user cannot read/update `email.*` (includes **`SELECT` on `email.email_log`** for pipeline status). |
 | `cd backend && npm run test:pipeline` | **Opt-in** real broker test: [`email-pipeline.integration.spec.ts`](../backend/test/email-pipeline.integration.spec.ts) — assign reviewer → outbox `published` → message on a test-bound `reviewer.invited` queue. Needs Postgres + RabbitMQ; sets `EMAIL_PIPELINE_INTEGRATION=1` and `AUTH_RETURN_BEARER=true`. From repo root: `npm run test:pipeline`. |
 
 ## Journal email admin API (templates & policy)
 
-Journal managers with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all five transactional templates (`reviewer-invited`, `reminder-due`, and the three `copyedit-*` keys — unknown keys return **422**):
+Journal managers with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all **seven** transactional templates (`reviewer-invited`, `reminder-due`, three `copyedit-*`, `submission-submitted`, `submission-decision` — unknown keys return **422**):
 
 | Method | Path |
 |--------|------|
@@ -29,12 +30,15 @@ Journal managers with JWT + **`email.manage_reminders`** can manage the singleto
 | `POST` | `/api/v1/admin/email/templates/:templateKey/preview` — optional `{ "isOverdue": true }` for reminder-due branch; **does not send mail** |
 | `GET` | `/api/v1/admin/email/pipeline-status` — outbox + `email_log` + `email.reminder` + cached RabbitMQ queue depths (redacted samples; requires **`SELECT` on `email.email_log`**) |
 | `POST` | `/api/v1/admin/email/outbox/:id/requeue` — reset a **`dead`** outbox row to `pending` (fix broker, then requeue; drainer republishes within ~10s). **404** if missing, **409** if not `dead`. |
+| `POST` | `/api/v1/admin/email/dlq/replay` — body optional `{ "limit": 1..25 }`; pulls from **`folio.events.dlq`**, republishes to `folio.events` with the original routing key. |
 
 **DB:** tables live in schema **`email`** (same database as backend). Run email-service migrations first. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB role cannot read/update `email.*`.
 
-**UI:** Folio frontend — **`/editor/email-settings`** (nav link when the permission is present).
+**UI:** Folio frontend — **`/journal-manager/email-settings`** (nav link when the permission is present).
 
-**UI (Playwright, opt-in):** from `frontend/`, set `E2E_EMAIL_ADMIN_UI=1` and run `npm run test:e2e` to execute [`email-admin.spec.ts`](../frontend/e2e/email-admin.spec.ts) (logs in as `editor@folio.local` / `Editor123!` unless `E2E_EDITOR_EMAIL` / `E2E_EDITOR_PASSWORD` override). Requires a seeded editor and running frontend + backend (see Playwright `webServer` config).
+**HTML styling:** Default templates use a shared Handlebars layout (`{{#> folio-email-layout …}}` with optional `{{> folio-email-button …}}`). Preview and sends register the same partials from `packages/shared/email/register-folio-email-partials.ts`. After upgrading, run email-service migrations (including `1714600000009-email-template-styled-layout`) so existing `email.email_template` rows pick up the styled bodies from disk. If you edit HTML in the admin UI, keep the layout wrapper unless you intentionally replace the full document.
+
+**UI (Playwright, opt-in):** from `frontend/`, set `E2E_EMAIL_ADMIN_UI=1` and run `npm run test:e2e` to execute [`email-admin.spec.ts`](../frontend/e2e/email-admin.spec.ts) (logs in as `manager@folio.local` / `Manager123!` unless `E2E_EDITOR_EMAIL` / `E2E_EDITOR_PASSWORD` override). Requires a seeded journal manager and running frontend + backend (see Playwright `webServer` config).
 
 ## Reminder admin API (per assignment)
 
@@ -150,7 +154,7 @@ Use this for a release or staging sign-off (copy into a PR if you prefer not to 
 
 1. Run **email-service** migrations so schema `email` exists, including policy + template tables/rows (e.g. migration `1714600000001-email-templates-and-policy.ts` in `services/email-service`).
 2. If the backend DB user is not a superuser, apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) (adjust `TO` to match `DB_USERNAME`).
-3. **App RBAC:** log in as a **journal manager** (`manager@folio.local` after seed) or any user with `email.manage_reminders`. Confirm the nav link and **`/[locale]/editor/email-settings`** load policy and templates without error.
+3. **App RBAC:** log in as a **journal manager** (`manager@folio.local` after seed) or any user with `email.manage_reminders`. Confirm the nav link and **`/[locale]/journal-manager/email-settings`** load policy and templates without error.
 4. **Optimistic lock:** open two tabs, change reminder policy in both, save the stale tab second → expect **409** (`EMAIL_POLICY_CONFLICT` / refresh message).
 5. **Preview:** use **POST** `…/preview` (or the UI preview buttons) for `reminder-due` with and without overdue; response is rendered HTML/text only (no mail).
 6. **Submission reminders:** as the same editor, open a submission with assignments; confirm the per-assignment reminder table and reschedule/cancel actions hit `/api/v1/submissions/.../reminders` as expected (network tab or backend logs).

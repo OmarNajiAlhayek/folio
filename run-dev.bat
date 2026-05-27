@@ -22,8 +22,25 @@ echo Starting RabbitMQ ^(docker compose^)...
 docker compose -f "%ROOT%docker-compose.dev.yml" up -d
 if errorlevel 1 (
   echo [WARN] docker compose failed — ensure Docker is running and RabbitMQ is available on localhost:5672 for email-service.
+  goto launch_apps
 )
 
+echo Waiting for RabbitMQ to accept AMQP connections...
+set "RABBIT_TRIES=0"
+:wait_rabbit
+docker compose -f "%ROOT%docker-compose.dev.yml" exec -T rabbitmq rabbitmq-diagnostics -q ping >nul 2>&1
+if not errorlevel 1 goto rabbit_ready
+set /a RABBIT_TRIES+=1
+if %RABBIT_TRIES% GEQ 45 (
+  echo [WARN] RabbitMQ not ready after ~90s — starting apps anyway ^(they retry AMQP every 5s^).
+  goto launch_apps
+)
+timeout /t 2 /nobreak >nul
+goto wait_rabbit
+:rabbit_ready
+echo RabbitMQ is ready.
+
+:launch_apps
 echo Starting backend...
 start "folio-backend" cmd /k "cd /d "%ROOT%backend" && npm run start:dev"
 

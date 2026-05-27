@@ -20,7 +20,16 @@ Use stable `code` values for the frontend (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NO
 
 - **Auth (browser):** httpOnly cookie `folio_access` (JWT) on `Path=/api/v1`, plus double-submit CSRF cookie `folio_csrf` and header `X-CSRF-Token` on `POST`/`PUT`/`PATCH`/`DELETE`. Frontend calls the API same-origin via Next.js rewrite (`/api/v1` → Nest).
 - **Auth (automation):** `Authorization: Bearer <token>` when `AUTH_RETURN_BEARER=true` (Playwright, scripts). Bearer requests skip CSRF.
-- **Rate limits:** `POST /auth/login` and `POST /auth/register` return `429` with `code: TOO_MANY_REQUESTS` when exceeded (`THROTTLE_*` env).
+- **Rate limits:** Exceeded limits return `429` with `code: TOO_MANY_REQUESTS` and message `Too many requests. Please try again in a minute.` Counters are per **handler** (controller + method name), not per URL pattern alone. In-memory storage (single instance); horizontal scale needs Redis-backed `ThrottlerStorage` (same limitation class as the notifications SSE hub).
+  - **Global baseline (`default`, IP):** all routes except health probes.
+  - **Public (`public`, IP):** `GET /public/submissions`, `GET /public/manuscript-styles`, and related public handlers — plus `default`.
+  - **Auth (`login` / `register`, IP):** `POST /auth/login`, `POST /auth/register` — plus `default`.
+  - **Upload (`upload`, user):** multipart submission uploads and `POST /submissions/import-docx-to-constructor` — plus global `default` @ IP.
+  - **DOCX (`docx`, user):** `POST /submissions/generate-docx-standalone`, `POST /submissions/:slug/generate-docx`.
+  - **SSE (`sse`, user):** `GET /notifications/stream` new connections — plus global `default` @ IP.
+  - **Health:** `GET /health`, `GET /health/outbox` are never throttled.
+  - **Env:** `THROTTLE_TTL_MS`, `THROTTLE_DEFAULT_LIMIT`, `THROTTLE_PUBLIC_LIMIT`, `THROTTLE_UPLOAD_LIMIT`, `THROTTLE_DOCX_LIMIT`, `THROTTLE_SSE_LIMIT`, `THROTTLE_LOGIN_LIMIT`, `THROTTLE_REGISTER_LIMIT` in `backend/.env`.
+  - **Behind a proxy:** set `NODE_ENV=production` so Express `trust proxy` is enabled and IP limits use the client address (see `backend/src/main.ts`).
 - **Uploads:** `POST /submissions/:slug/files` validates extension + magic bytes per `kind`; max 25MB; temp disk then move to `UPLOAD_DIR`.
 
 ### Submission `status` in API

@@ -23,6 +23,7 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 | `frontend/` | Next.js app (Folio UI) |
 | `backend/` | NestJS API (`/api/v1/...`) |
 | `services/email-service/` | NestJS standalone email microservice (RabbitMQ consumer, scheduled reminders) |
+| `services/ai-service/` | Python FastAPI AI microservice (scaffold; pluggable LLM providers) |
 | `packages/shared/` | Canonical event contracts + small messaging helpers (mirrored into each app) |
 | `docs/` | Specs |
 | `uploads/` | Created at runtime for manuscript files (gitignored at repo root) |
@@ -46,6 +47,7 @@ See [`packages/shared/README.md`](packages/shared/README.md).
 - Node.js LTS
 - PostgreSQL (local). Create a database, e.g. `CREATE DATABASE folio_review;`
 - Docker (only when running the email-service via the bundled compose file)
+- Python 3.12+ (only when running the ai-service)
 
 ## Configuration
 
@@ -74,6 +76,8 @@ npm run seed
 npm run start:dev
 ```
 
+`npm run seed` also applies the publication catalog search schema (FTS + `pg_trgm` on `submissions`). For a DB you seeded before that step existed, run `npm run db:publication-search` once.
+
 Health check: `http://localhost:5243/api/v1/health`. Outbox stats: `http://localhost:5243/api/v1/health/outbox`.
 
 API docs (Swagger UI): `http://localhost:5243/api-docs` — OpenAPI JSON for import/codegen: `http://localhost:5243/api-docs-json`
@@ -98,15 +102,29 @@ npm run start:dev
 
 The service connects to RabbitMQ, runs its own migrations into a dedicated `email` schema in the same Postgres database, and starts consuming `reviewer.invited` and `reminder.due` events. With `EMAIL_PROVIDER=noop` (default) it logs each would-be send instead of contacting an SMTP host. See [`docs/plans/email-service.md`](docs/plans/email-service.md) for the full design.
 
+**Terminal 4 — AI service** (optional; scaffold only — no product AI routes yet)
+
+```bash
+cd services/ai-service
+cp .env.example .env
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+pip install -e ".[dev]"
+uvicorn app.main:app --reload --port 5245
+```
+
+Health: `http://localhost:5245/health` and `http://localhost:5245/ready`. Default `AI_PROVIDER=noop` needs no API keys. See [`docs/plans/ai-service.md`](docs/plans/ai-service.md).
+
 ### Sample accounts (after `npm run seed` in `backend/`)
 
 | Email | Password | Roles |
 |--------|----------|--------|
-| `manager@folio.local` | `Manager123!` | Author, journal manager (users, email admin, queue oversight) |
-| `editor@folio.local` | `Editor123!` | Author, editor, reviewer (handling editor — decisions, assignments) |
-| `reviewer@folio.local` | `Reviewer123!` | Author, reviewer |
-| `author@folio.local` | `Author123!` | Author |
-| `copyeditor@folio.local` | `Copyeditor123!` | Author, copyeditor |
+| `author@folio.local` | `Author123!` | Author (own manuscripts, new draft) |
+| `manager@folio.local` | `Manager123!` | Journal manager (users, email admin, queue oversight) |
+| `editor@folio.local` | `Editor123!` | Editor, reviewer (handling editor — decisions, assignments) |
+| `reviewer@folio.local` | `Reviewer123!` | Reviewer |
+| `copyeditor@folio.local` | `Copyeditor123!` | Copyeditor |
 
 ### Copyediting (production queries)
 
@@ -122,7 +140,7 @@ New self-registered users are **authors** with a researcher profile (affiliation
 
 **Journal manager** handles user onboarding, email templates/reminder policy, and can browse the editor queue. **Editor** (handling editor) makes workflow decisions, assigns reviewers/copyeditors, and receives new-submission notifications. Seeded accounts get roles directly from the seed script, not via invitations.
 
-To reset only seeded sample submissions before re-seeding: `npm run seed:reset` (sets `SEED_RESET_SAMPLE=1`; legacy `SEED_RESET_DEMO=1` is still accepted).
+To wipe **everything** in the app DB and uploads, then re-seed (dev): `npm run seed:fresh` (`SEED_RESET_ALL=1`). To reset only `[SAMPLE]` / legacy `[DEMO]` submissions: `npm run seed:reset` (`SEED_RESET_SAMPLE=1`; legacy `SEED_RESET_DEMO=1` is still accepted).
 
 ## API surface
 
