@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Large model weights (keep local or use ARABERT_MODEL_PATH)
+*.safetensors
+arabert_clean_model_FINAL*/
+models/
+data/
