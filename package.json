@@ -1,10 +1,15 @@
 {
   "name": "folio",
   "private": true,
-  "description": "Folio peer-review monorepo (frontend, backend, email-service)",
+  "description": "Folio peer-review monorepo (frontend, backend, email-service, ai-service)",
   "scripts": {
     "sync:shared": "node scripts/sync-shared-mirrors.mjs",
     "check:shared": "node scripts/check-shared-mirrors.mjs",
-    "test:pipeline": "npm run test:pipeline --prefix backend"
+    "test:pipeline": "npm run test:pipeline --prefix backend",
+    "proto:gen": "buf generate proto",
+    "proto:lint": "buf lint proto"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.70.0"
   }
 }

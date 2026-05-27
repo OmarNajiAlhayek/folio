@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: "1.70.0"
+      - run: buf lint proto
+      - run: buf generate proto
+      - name: Verify generated stubs are committed
+        run: |
+          git diff --exit-code -- \
+            services/ai-service/app/grpc/gen/ \
+            backend/src/ai/grpc/gen/
+
+  shared-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm run check:shared
+
+  email-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/email-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/email-service/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  backend-email:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx jest src/messaging src/admin-email src/submissions/reminders.service.spec.ts src/ai/ai-client.service.spec.ts src/common/validate-runtime-config.spec.ts --no-cache
+
+  ai-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest
+      - run: ruff check app tests
