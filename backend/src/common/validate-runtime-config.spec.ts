@@ -147,4 +147,20 @@ describe('validateBackendRuntimeConfig', () => {
       ),
     ).toThrow(/AI_SERVICE_TOKEN/);
   });
+
+  it('requires gRPC host when AI similarity is enabled in production', () => {
+    expect(() =>
+      validateBackendRuntimeConfig(
+        configFromEnv({
+          NODE_ENV: 'production',
+          JWT_SECRET: 'a'.repeat(32),
+          DB_PASSWORD: 'real-prod-password-not-in-blocklist',
+          RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
+          AUTH_COOKIE_SECURE: 'true',
+          AI_SIMILARITY_ENABLED: 'true',
+          AI_SERVICE_GRPC_HOST: '',
+        }),
+      ),
+    ).toThrow(/AI_SERVICE_GRPC_HOST/);
+  });
 });

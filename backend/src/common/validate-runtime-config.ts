@@ -188,6 +188,17 @@ export function validateBackendRuntimeConfig(config: ConfigService): void {
     }
   }
 
+  if (
+    config.get<string>('AI_SIMILARITY_ENABLED', 'false').toLowerCase() === 'true'
+  ) {
+    const grpcHost = config.get<string>('AI_SERVICE_GRPC_HOST', '').trim();
+    if (!grpcHost) {
+      throw new RuntimeConfigError(
+        'AI_SERVICE_GRPC_HOST must be set when AI_SIMILARITY_ENABLED=true in production.',
+      );
+    }
+  }
+
   for (const key of [
     'THROTTLE_TTL_MS',
     'THROTTLE_DEFAULT_LIMIT',
