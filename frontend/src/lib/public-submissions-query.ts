@@ -1,5 +1,8 @@
+export type PublicationSearchMode = "keyword" | "semantic";
+
 export type PublicationCatalogFilters = {
   q?: string;
+  searchMode?: PublicationSearchMode;
   author?: string;
   discipline?: string;
   articleType?: string;
@@ -9,6 +12,7 @@ export type PublicationCatalogFilters = {
 
 const FILTER_KEYS: (keyof PublicationCatalogFilters)[] = [
   "q",
+  "searchMode",
   "author",
   "discipline",
   "articleType",
@@ -32,7 +36,19 @@ export function parsePublicationCatalogFilters(
 export function publicationCatalogFiltersActive(
   filters: PublicationCatalogFilters,
 ): boolean {
-  return FILTER_KEYS.some((k) => Boolean(filters[k]?.trim()));
+  return FILTER_KEYS.some((k) => {
+    const value = filters[k];
+    if (k === "searchMode") {
+      return value === "semantic";
+    }
+    return Boolean(typeof value === "string" && value.trim());
+  });
+}
+
+export function publicationCatalogUsesSemanticSearch(
+  filters: PublicationCatalogFilters,
+): boolean {
+  return filters.searchMode === "semantic" && Boolean(filters.q?.trim());
 }
 
 export function buildPublicSubmissionsQuery(
