@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package folio.ai.v1;
+
+// SimilarityService exposes article index, related articles, and catalog semantic search.
+// Corpus chunk-level checks use PlagiarismService instead.
+service SimilarityService {
+  rpc UpsertArticle(UpsertArticleRequest) returns (UpsertArticleResponse);
+  rpc RemoveArticle(RemoveArticleRequest) returns (RemoveArticleResponse);
+  rpc FindSimilarArticles(FindSimilarArticlesRequest) returns (FindSimilarArticlesResponse);
+  rpc SemanticSearch(SemanticSearchRequest) returns (SemanticSearchResponse);
+  rpc GetSimilarityStatus(GetSimilarityStatusRequest) returns (SimilarityStatus);
+}
+
+message UpsertArticleRequest {
+  string article_id = 1;
+  string abstract = 2;
+  string keywords = 3;
+  string category = 4;
+  string full_text = 5;
+}
+
+message UpsertArticleResponse {
+  string status = 1;
+}
+
+message RemoveArticleRequest {
+  string article_id = 1;
+}
+
+message RemoveArticleResponse {
+  string status = 1;
+}
+
+message FindSimilarArticlesRequest {
+  string article_id = 1;
+  optional int32 limit = 2;
+  optional double similarity_threshold = 3;
+  optional bool same_category_only = 4;
+}
+
+message SimilarArticleHit {
+  string article_id = 1;
+  string abstract = 2;
+  string keywords = 3;
+  string category = 4;
+  double similarity = 5;
+}
+
+message FindSimilarArticlesResponse {
+  repeated SimilarArticleHit hits = 1;
+}
+
+message SemanticSearchRequest {
+  string query = 1;
+  optional int32 limit = 2;
+}
+
+message SemanticSearchHit {
+  string article_id = 1;
+  string snippet = 2;
+  double score = 3;
+}
+
+message SemanticSearchResponse {
+  repeated SemanticSearchHit hits = 1;
+}
+
+message SimilarityStatus {
+  bool enabled = 1;
+  string chroma_path = 2;
+  string model_name = 3;
+  double default_threshold = 4;
+  bool same_category_only = 5;
+}
+
+message GetSimilarityStatusRequest {}

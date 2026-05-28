@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package folio.ai.v1;
+
+// KeywordService exposes LLM keyword suggestions to internal callers (Nest backend).
+service KeywordService {
+  rpc SuggestKeywords(SuggestKeywordsRequest) returns (SuggestKeywordsResponse);
+  rpc GetKeywordStatus(GetKeywordStatusRequest) returns (KeywordStatus);
+}
+
+message SuggestKeywordsRequest {
+  string title = 1;
+  string abstract = 2;
+  string title_ar = 3;
+  string abstract_ar = 4;
+}
+
+message SuggestKeywordsResponse {
+  repeated string keywords_en = 1;
+  repeated string keywords_ar = 2;
+}
+
+message KeywordStatus {
+  bool enabled = 1;
+}
+
+message GetKeywordStatusRequest {}

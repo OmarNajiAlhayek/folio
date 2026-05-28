@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package folio.ai.v1;
+
+// PlagiarismService exposes corpus similarity (chunk-level) to internal callers (Nest backend).
+service PlagiarismService {
+  rpc DetectCorpusSimilarity(DetectCorpusSimilarityRequest) returns (DetectCorpusSimilarityResponse);
+  rpc GetPlagiarismStatus(GetPlagiarismStatusRequest) returns (PlagiarismStatus);
+}
+
+message DetectCorpusSimilarityRequest {
+  string submission_text = 1;
+  optional double threshold = 2;
+  optional string category = 3;
+}
+
+message CorpusSimilarityMatch {
+  int32 submission_chunk_index = 1;
+  string submission_snippet = 2;
+  string source_article_id = 3;
+  int32 source_chunk_index = 4;
+  string matched_snippet = 5;
+  double similarity = 6;
+}
+
+message DetectCorpusSimilarityResponse {
+  repeated CorpusSimilarityMatch matches = 1;
+}
+
+message PlagiarismStatus {
+  bool enabled = 1;
+}
+
+message GetPlagiarismStatusRequest {}

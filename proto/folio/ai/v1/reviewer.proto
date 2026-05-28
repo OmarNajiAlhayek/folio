@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package folio.ai.v1;
+
+// ReviewerMatchingService indexes reviewer profiles/history and suggests reviewers for a query.
+service ReviewerMatchingService {
+  rpc SuggestReviewers(SuggestReviewersRequest) returns (SuggestReviewersResponse);
+}
+
+message ReviewerProfile {
+  string reviewer_id = 1;
+  string affiliation = 2;
+  string review_keywords = 3;
+  string display_name = 4;
+}
+
+message ReviewHistoryRow {
+  string reviewer_id = 1;
+  string submission_id = 2;
+  string abstract = 3;
+  string keywords = 4;
+}
+
+message SuggestReviewersRequest {
+  string query_text = 1;
+  optional int32 limit = 2;
+  repeated string candidate_ids = 3;
+  repeated string exclude_reviewer_ids = 4;
+  repeated ReviewerProfile index_profiles = 5;
+  repeated ReviewHistoryRow index_history = 6;
+  optional bool use_cross_encoder = 7;
+}
+
+message ReviewerSuggestionHit {
+  string reviewer_id = 1;
+  double final_score = 2;
+  double bio_score = 3;
+  double history_score = 4;
+  optional double ce_bio_score = 5;
+  optional double ce_history_score = 6;
+  bool used_cross_encoder = 7;
+}
+
+message SuggestReviewersResponse {
+  repeated ReviewerSuggestionHit hits = 1;
+}
