@@ -1,6 +1,6 @@
 # Folio AI service
 
-Python **FastAPI** microservice for future AI-assisted peer-review features. Phase 1 includes health probes, environment validation, a pluggable LLM provider layer (`noop` by default), and an optional **AraBERT Arabic discipline classifier** for local verification.
+Python **FastAPI** microservice for Folio AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, article similarity, and keyword suggestions.
 
 Design record: [`docs/plans/ai-service.md`](../../docs/plans/ai-service.md).
 
@@ -33,14 +33,14 @@ Place fine-tuned weights under `arabert_clean_model_FINAL-20260525T161953Z-3-001
 uvicorn app.main:app --reload --port 5245
 ```
 
-HTTP listens on **5245**; gRPC (Nest classify path) listens on **5246** (`GRPC_PORT`).
+- **HTTP (5245):** liveness, readiness, aggregated `GET /v1/status` only.
+- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`). See [`proto/README.md`](../../proto/README.md).
 
 When `ARABERT_ENABLED=true`, startup **preloads tokenizer + weights** by default (`ARABERT_WARMUP_ON_STARTUP=true`) so the first UI classify is fast. Expect ~1 minute extra startup time on CPU; set `ARABERT_WARMUP_ON_STARTUP=false` to skip.
 
 - Liveness: `http://localhost:5245/health`
 - Readiness: `http://localhost:5245/ready`
 - API status: `http://localhost:5245/v1/status`
-- gRPC: `ClassifierService` on `localhost:5246` (see [`proto/README.md`](../../proto/README.md))
 
 With `AI_PROVIDER=noop` (default), no API keys are required.
 
@@ -51,6 +51,7 @@ With reflection enabled in development:
 ```bash
 grpcurl -plaintext localhost:5246 list
 grpcurl -plaintext localhost:5246 folio.ai.v1.ClassifierService/GetClassifierStatus
+grpcurl -plaintext localhost:5246 folio.ai.v1.SimilarityService/GetSimilarityStatus
 ```
 
 With a service token configured:
@@ -59,7 +60,7 @@ With a service token configured:
 grpcurl -plaintext -H "x-folio-service-token: YOUR_TOKEN" localhost:5246 folio.ai.v1.ClassifierService/GetClassifierStatus
 ```
 
-Without reflection, pass `-import-path proto -proto folio/ai/v1/classifier.proto` from the repo root.
+Without reflection, pass `-import-path proto -proto folio/ai/v1/<service>.proto` from the repo root.
 
 Regenerate stubs after editing `.proto`: `npm run proto:gen` (requires [Buf CLI](https://buf.build/docs/installation) or `npx buf` from repo root).
 
@@ -69,14 +70,33 @@ Set `ARABERT_ENABLED=true` in `.env`, then:
 
 ```bash
 python scripts/verify_classifier.py
-uvicorn app.main:app --reload --port 5245
-curl -s http://localhost:5245/v1/classify/status
-curl -s -X POST http://localhost:5245/v1/classify/abstract \
-  -H "Content-Type: application/json" \
-  -d "{\"abstract\": \"تهدف هذه الدراسة إلى تحليل الأثر الاقتصادي للسياسات النقدية.\"}"
+grpcurl -plaintext -d '{"abstract":"تهدف هذه الدراسة إلى تحليل الأثر الاقتصادي."}' \
+  localhost:5246 folio.ai.v1.ClassifierService/ClassifyAbstract
 ```
 
 Jupyter: open `classify.ipynb` (imports `AdvancedArabicClassifier` from `app.ml`).
+
+### Author keyword suggestions (dev)
+
+Requires OpenAI (or compatible gateway):
+
+```bash
+# services/ai-service/.env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+KEYWORDS_SUGGESTION_ENABLED=true
+AI_SERVICE_TOKEN=your-shared-secret
+```
+
+```bash
+# backend/.env
+AI_SERVICE_ENABLED=true
+AI_KEYWORDS_ENABLED=true
+AI_SERVICE_GRPC_HOST=127.0.0.1
+AI_SERVICE_TOKEN=your-shared-secret
+```
+
+Nest route: `POST /submissions/:slug/suggest-keywords` (author draft only) → gRPC `KeywordService.SuggestKeywords` on port **5246**.
 
 ## Tests
 

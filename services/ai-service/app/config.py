@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     similarity_device: str = Field(default="cpu", validation_alias="SIMILARITY_DEVICE")
     similarity_batch_size: int = Field(default=32, validation_alias="SIMILARITY_BATCH_SIZE")
     similarity_default_limit: int = Field(default=5, validation_alias="SIMILARITY_DEFAULT_LIMIT")
+    similarity_search_default_limit: int = Field(
+        default=20,
+        validation_alias="SIMILARITY_SEARCH_DEFAULT_LIMIT",
+    )
     similarity_default_threshold: float = Field(
         default=0.35,
         validation_alias="SIMILARITY_DEFAULT_THRESHOLD",
@@ -93,6 +97,34 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="SIMILARITY_SAME_CATEGORY_ONLY",
     )
+
+    keywords_suggestion_enabled: bool = Field(
+        default=False,
+        validation_alias="KEYWORDS_SUGGESTION_ENABLED",
+    )
+
+    reviewer_matching_enabled: bool = Field(
+        default=False,
+        validation_alias="REVIEWER_MATCHING_ENABLED",
+    )
+
+    @field_validator("keywords_suggestion_enabled", mode="before")
+    @classmethod
+    def parse_keywords_suggestion_enabled(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @field_validator("reviewer_matching_enabled", mode="before")
+    @classmethod
+    def parse_reviewer_matching_enabled(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     @field_validator("similarity_enabled", mode="before")
     @classmethod

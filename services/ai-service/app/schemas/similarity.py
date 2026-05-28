@@ -14,6 +14,7 @@ class UpsertArticleRequest(BaseModel):
     abstract: str = Field(min_length=1)
     keywords: str = ""
     category: str = ""
+    full_text: str = ""
 
 
 class FindSimilarRequest(BaseModel):

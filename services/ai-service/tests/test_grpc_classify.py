@@ -11,6 +11,19 @@ from app.grpc.interceptors import ServiceTokenInterceptor
 from app.grpc.server import start_grpc_server, stop_grpc_server
 from app.grpc.servicer import ClassifierGrpcServicer
 from app.services.classifier_service import ClassifierDisabledError, ClassifierService
+from app.services.keyword_suggestion_service import KeywordSuggestionService
+from app.services.similarity_service import SimilarityService
+
+
+@pytest.fixture
+def mock_keyword_service() -> KeywordSuggestionService:
+    settings = Settings(keywords_suggestion_enabled=False)
+    return KeywordSuggestionService(settings)
+
+
+@pytest.fixture
+def mock_similarity_service() -> SimilarityService:
+    return SimilarityService(Settings(similarity_enabled=False))
 
 
 @pytest.fixture
@@ -49,9 +62,20 @@ def mock_classifier_service() -> ClassifierService:
 
 
 @pytest.fixture
-async def grpc_channel(mock_classifier_service: ClassifierService):
+async def grpc_channel(
+    mock_classifier_service: ClassifierService,
+    mock_keyword_service: KeywordSuggestionService,
+    mock_similarity_service: SimilarityService,
+    reviewer_matching_grpc_service,
+):
     settings = Settings(grpc_port=0, ai_service_token="")
-    server, port = await start_grpc_server(mock_classifier_service, settings)
+    server, port = await start_grpc_server(
+        mock_classifier_service,
+        mock_keyword_service,
+        mock_similarity_service,
+        reviewer_matching_grpc_service,
+        settings,
+    )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")
     try:
         yield channel
@@ -87,12 +111,21 @@ async def test_classify_article_invalid_argument(grpc_channel: grpc.aio.Channel)
 @pytest.mark.asyncio
 async def test_classify_article_failed_precondition(
     mock_classifier_service: ClassifierService,
+    mock_keyword_service: KeywordSuggestionService,
+    mock_similarity_service: SimilarityService,
+    reviewer_matching_grpc_service,
 ) -> None:
     mock_classifier_service.classify_article = AsyncMock(  # type: ignore[method-assign]
         side_effect=ClassifierDisabledError("disabled"),
     )
     settings = Settings(grpc_port=0, ai_service_token="")
-    server, port = await start_grpc_server(mock_classifier_service, settings)
+    server, port = await start_grpc_server(
+        mock_classifier_service,
+        mock_keyword_service,
+        mock_similarity_service,
+        reviewer_matching_grpc_service,
+        settings,
+    )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")
     stub = classifier_pb2_grpc.ClassifierServiceStub(channel)
     try:

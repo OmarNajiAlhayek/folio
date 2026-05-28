@@ -4,18 +4,39 @@ import logging
 import sys
 
 import grpc
-from folio.ai.v1 import classifier_pb2, classifier_pb2_grpc
+from folio.ai.v1 import (
+    classifier_pb2,
+    classifier_pb2_grpc,
+    keywords_pb2,
+    keywords_pb2_grpc,
+    plagiarism_pb2,
+    plagiarism_pb2_grpc,
+    reviewer_pb2,
+    reviewer_pb2_grpc,
+    similarity_pb2,
+    similarity_pb2_grpc,
+)
 
 from app.config import Settings
 from app.grpc.interceptors import ServiceTokenInterceptor
+from app.grpc.keyword_servicer import KeywordGrpcServicer
+from app.grpc.plagiarism_servicer import PlagiarismGrpcServicer
 from app.grpc.servicer import ClassifierGrpcServicer
+from app.grpc.reviewer_servicer import ReviewerMatchingGrpcServicer
+from app.grpc.similarity_servicer import SimilarityGrpcServicer
 from app.services.classifier_service import ClassifierService
+from app.services.keyword_suggestion_service import KeywordSuggestionService
+from app.services.reviewer_matching_grpc_service import ReviewerMatchingGrpcService
+from app.services.similarity_service import SimilarityService
 
 logger = logging.getLogger(__name__)
 
 
 async def start_grpc_server(
     classifier_service: ClassifierService,
+    keyword_service: KeywordSuggestionService,
+    similarity_service: SimilarityService,
+    reviewer_service: ReviewerMatchingGrpcService,
     settings: Settings,
 ) -> tuple[grpc.aio.Server, int]:
     interceptors: list[grpc.aio.ServerInterceptor] = []
@@ -27,6 +48,22 @@ async def start_grpc_server(
         ClassifierGrpcServicer(classifier_service),
         server,
     )
+    keywords_pb2_grpc.add_KeywordServiceServicer_to_server(
+        KeywordGrpcServicer(keyword_service),
+        server,
+    )
+    plagiarism_pb2_grpc.add_PlagiarismServiceServicer_to_server(
+        PlagiarismGrpcServicer(similarity_service),
+        server,
+    )
+    similarity_pb2_grpc.add_SimilarityServiceServicer_to_server(
+        SimilarityGrpcServicer(similarity_service),
+        server,
+    )
+    reviewer_pb2_grpc.add_ReviewerMatchingServiceServicer_to_server(
+        ReviewerMatchingGrpcServicer(reviewer_service),
+        server,
+    )
 
     if settings.app_env == "development":
         try:
@@ -34,6 +71,10 @@ async def start_grpc_server(
 
             service_names = (
                 classifier_pb2.DESCRIPTOR.services_by_name["ClassifierService"].full_name,
+                keywords_pb2.DESCRIPTOR.services_by_name["KeywordService"].full_name,
+                plagiarism_pb2.DESCRIPTOR.services_by_name["PlagiarismService"].full_name,
+                similarity_pb2.DESCRIPTOR.services_by_name["SimilarityService"].full_name,
+                reviewer_pb2.DESCRIPTOR.services_by_name["ReviewerMatchingService"].full_name,
                 reflection.SERVICE_NAME,
             )
             reflection.enable_server_reflection(service_names, server)
