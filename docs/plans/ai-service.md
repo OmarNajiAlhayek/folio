@@ -41,8 +41,8 @@ No `packages/shared` mirror yet — event contracts are unnecessary until async 
 
 | Endpoint | Port | Role |
 |----------|------|------|
-| HTTP API | `5245` (`PORT`) | Uvicorn — health, readiness, dev `/v1/classify/*` |
-| gRPC | `5246` (`GRPC_PORT`) | Nest `AiClientService` — `ClassifyArticle`, status, labels |
+| HTTP API | `5245` (`PORT`) | Uvicorn — health, readiness, `GET /v1/status` |
+| gRPC | `5246` (`GRPC_PORT`) | Nest `AiClientService` — all product RPCs (classify, keywords, plagiarism, similarity) |
 | `GET /health` | 5245 | Liveness |
 | `GET /ready` | 5245 | Readiness (`checks.provider`) |
 
@@ -59,10 +59,10 @@ See [`services/ai-service/.env.example`](../../services/ai-service/.env.example)
 | `OPENAI_API_KEY` | Required for `openai` in production or `RUNTIME_CONFIG_STRICT=true` |
 | `OPENAI_BASE_URL` | Optional OpenAI-compatible gateway |
 | `RUNTIME_CONFIG_STRICT` | Force production validation locally |
-| `ARABERT_ENABLED` | `false` by default; enable `/v1/classify/*` locally |
+| `ARABERT_ENABLED` | `false` by default; enable gRPC `ClassifierService` locally |
 | `ARABERT_MODEL_PATH` | Override weights directory |
 | `GRPC_PORT` | gRPC listen port (default `5246`) |
-| `AI_SERVICE_TOKEN` | When set, required on gRPC metadata and HTTP `/v1/classify/*` |
+| `AI_SERVICE_TOKEN` | When set, required on gRPC metadata (`x-folio-service-token`) |
 
 Production rules (mirror email-service strictness):
 
@@ -77,7 +77,7 @@ Fine-tuned `BertForSequenceClassification` over 10 Arabic discipline labels (see
 |------|----------|
 | Inference module | [`app/ml/arabic_classifier.py`](../../services/ai-service/app/ml/arabic_classifier.py) |
 | Path resolution | [`app/ml/paths.py`](../../services/ai-service/app/ml/paths.py) |
-| HTTP (dev) | `GET/POST /v1/classify/*` when `ARABERT_ENABLED=true` |
+| gRPC (dev) | `ClassifierService` when `ARABERT_ENABLED=true` |
 | Notebook | [`classify.ipynb`](../../services/ai-service/classify.ipynb) |
 | ML extra | `pip install -e ".[ml]"` (torch, transformers, arabert) |
 
@@ -99,14 +99,20 @@ Implemented in the Nest backend (author + editor, first PR):
 | Route | Who | Purpose |
 |-------|-----|---------|
 | `POST /submissions/:slug/suggest-discipline` | Author (draft) | Call ai-service, store `disciplineSuggested*` |
-| `PATCH /submissions/:slug/discipline` | Author or editor | Confirm / override `discipline` |
+| `POST /submissions/:slug/suggest-keywords` | Author (draft) | Call ai-service `KeywordService.SuggestKeywords` (gRPC); return lists only (no persist) |
+| `POST /submissions/suggest-keywords-preview` | Author (new wizard) | Same gRPC call with title/abstract in request body (no slug) |
+| `PATCH /submissions/:slug/discipline` | Author only | Confirm / override `discipline` |
 | `GET /submissions/discipline-labels` | Author / editor | Label list + optional journal scope |
+
+Author keyword suggestions use **gRPC** (`AI_KEYWORDS_ENABLED` + `AI_SERVICE_GRPC_HOST` on Nest; `KEYWORDS_SUGGESTION_ENABLED` + `AI_PROVIDER=openai` on ai-service). Partial results (1–2 terms) are returned; submit still requires 3–6 keywords per language.
+
+Reader related articles and catalog semantic search use **gRPC** `SimilarityService` when `AI_SIMILARITY_ENABLED=true` on Nest and `SIMILARITY_ENABLED=true` on ai-service.
 
 On **submit**, Nest classifies via **gRPC** when `AI_SERVICE_ENABLED=true` and `AI_SERVICE_GRPC_HOST` is set (Arabic-first metadata). See [`backend/.env.example`](../../backend/.env.example) and [`proto/README.md`](../../proto/README.md).
 
 ## Phase 2 — further integration (planned)
 
-1. ~~Optional `X-Folio-Service-Token` validation on ai-service.~~ **Done** — gRPC interceptor + HTTP classify dependency when `AI_SERVICE_TOKEN` is set.
+1. ~~Optional `X-Folio-Service-Token` validation on ai-service.~~ **Done** — gRPC interceptor when `AI_SERVICE_TOKEN` is set.
 2. Redact manuscript text in Nest logs (see email-service redactor patterns).
 3. Reviewer read-only discipline context.
 4. gRPC server streaming for LLM tokens (separate proto RPC).

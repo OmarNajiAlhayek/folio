@@ -6,8 +6,8 @@
     "sync:shared": "node scripts/sync-shared-mirrors.mjs",
     "check:shared": "node scripts/check-shared-mirrors.mjs",
     "test:pipeline": "npm run test:pipeline --prefix backend",
-    "proto:gen": "buf generate proto",
-    "proto:lint": "buf lint proto"
+    "proto:gen": "cd proto && buf generate",
+    "proto:lint": "cd proto && buf lint"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.70.0"
