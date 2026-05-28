@@ -16,6 +16,7 @@ import {
 } from "@/lib/use-constructor-style-guidance";
 import { SectionList } from "./SectionList";
 import { LivePreview } from "./LivePreview";
+import { SimpleSelect } from "@/components/ui/select";
 import { validateConstructorContentLive } from "@/lib/constructor-validation";
 import type {
   ConstructorContent,
@@ -67,10 +68,27 @@ export function ConstructorWorkspace({
 
   const styleSelectDisabled = !!readOnly || catalogFailed || !catalog;
 
-  const selectValue =
-    content.manuscriptStyleId?.trim() ||
-    catalog?.defaultStyleId ||
-    "";
+  const styleOptions = useMemo(() => {
+    if (!catalog) return [];
+    return catalog.styles
+      .filter((s) => s.id.trim() !== "")
+      .map((s) => ({
+        value: s.id,
+        label: (tStyles as (key: string) => string)(`${s.id}.displayName`),
+      }));
+  }, [catalog, tStyles]);
+
+  const selectValue = useMemo(() => {
+    if (styleOptions.length === 0) return "";
+    const preferred =
+      content.manuscriptStyleId?.trim() ||
+      catalog?.defaultStyleId?.trim() ||
+      "";
+    if (preferred && styleOptions.some((o) => o.value === preferred)) {
+      return preferred;
+    }
+    return styleOptions[0]!.value;
+  }, [content.manuscriptStyleId, catalog?.defaultStyleId, styleOptions]);
 
   const [debouncedContent, setDebouncedContent] = useState(content);
   useEffect(() => {
@@ -136,21 +154,19 @@ export function ConstructorWorkspace({
                 </span>
               ) : null}
             </label>
-            <select
-              id="folio-manuscript-style"
-              className="rounded-md border border-ink/20 bg-paper px-2 py-1.5 text-ink disabled:opacity-50"
-              disabled={styleSelectDisabled}
-              value={selectValue}
-              onChange={(e) => handleStyleChange(e.target.value)}
-            >
-              {catalog?.styles.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {(tStyles as (key: string) => string)(`${s.id}.displayName`)}
-                </option>
-              )) ?? (
-                <option value={selectValue}>{selectValue}</option>
-              )}
-            </select>
+            {catalogFailed ? (
+              <span className="text-xs text-ink/55">{t("styleCatalogError")}</span>
+            ) : catalog && styleOptions.length > 0 ? (
+              <SimpleSelect
+                disabled={styleSelectDisabled}
+                value={selectValue}
+                onValueChange={handleStyleChange}
+                className="w-48 h-9 px-2.5 text-xs font-semibold"
+                options={styleOptions}
+              />
+            ) : (
+              <span className="text-xs text-ink/55">{t("styleLoading")}</span>
+            )}
           </div>
           <SectionList
             content={content}

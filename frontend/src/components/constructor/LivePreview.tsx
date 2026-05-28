@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { resolveSectionDir } from "@/lib/constructor-direction";
+import { referenceEntrySortKey, resolveReferenceEntryHtml } from "@/lib/constructor-rich-text";
 import {
   sanitizeConstructorTipTapHtml,
   sanitizeKatexPreviewHtml,
@@ -82,37 +83,60 @@ export function LivePreview({
 
   return (
     <aside
-      className="rounded-lg border border-ink/10 bg-surface shadow-sm"
+      className="rounded-2xl border border-ink/10 bg-surface/50 p-4 shadow-sm backdrop-blur-[2px] transition hover:border-ink/15 hover:shadow-md flex flex-col justify-stretch min-h-[600px]"
       aria-label={t("ariaLabel")}
     >
-      <header className="border-b border-ink/10 px-4 py-2 text-xs font-medium uppercase tracking-wide text-ink/60">
-        <div>{t("header")}</div>
-        <p className="mt-1 normal-case font-normal text-ink/50">{t("approximateNotice")}</p>
+      <header className="border-b border-ink/10 pb-3 mb-4 text-xs font-medium uppercase tracking-wide text-ink/60">
+        <div className="flex items-center gap-1.5 text-ink font-extrabold text-sm">
+          <svg className="size-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          {t("header")}
+        </div>
+        <p className="mt-1 normal-case font-normal text-ink/50 text-[10px] tracking-normal leading-relaxed">{t("approximateNotice")}</p>
       </header>
-      <div
-        className="prose prose-sm max-w-none p-6"
-        style={{
-          fontFamily: rootFont,
-        }}
-        dir={defaultDir}
-      >
+
+      {/* Simulated physical publication paper layout canvas */}
+      <div className="bg-neutral-100/50 dark:bg-neutral-950/40 rounded-xl p-4 md:p-6 border border-ink/5 flex-1 flex flex-col justify-stretch">
         {content.sections.length === 0 ? (
-          <p className="text-sm italic text-ink/55">{t("empty")}</p>
-        ) : (
-          content.sections.map((section) => (
-            <div
-              key={section.id}
-              data-testid={`constructor-preview-section-${section.id}`}
-            >
-              <PreviewSection
-                section={section}
-                defaultDir={defaultDir}
-                slug={slug}
-                figureOrTableNumber={numbering.get(section.id)}
-                previewTheme={previewTheme}
-              />
+          <div className="flex-1 flex items-center justify-center py-16 px-4 text-center select-none animate-pulse">
+            <div className="flex flex-col items-center">
+              <div className="rounded-2xl bg-accent/5 dark:bg-accent/10 p-4 text-accent mb-4 border border-accent/10 shadow-xs">
+                <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-extrabold text-ink/80 mb-1">No sections committed yet</h3>
+              <p className="text-xs text-ink/45 max-w-xs leading-relaxed">{t("empty")}</p>
             </div>
-          ))
+          </div>
+        ) : (
+          <div
+            className="flex-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 md:p-8 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.03),0_10px_15px_-3px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_6px_-1px_rgba(0,0,0,0.25),0_10px_15px_-3px_rgba(0,0,0,0.3)] transition-all duration-300 select-text"
+            style={{
+              fontFamily: rootFont,
+            }}
+            dir={defaultDir}
+          >
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              {content.sections.map((section) => (
+                <div
+                  key={section.id}
+                  data-testid={`constructor-preview-section-${section.id}`}
+                  className="transition-all duration-300 animate-fade-in mb-4 last:mb-0"
+                >
+                  <PreviewSection
+                    section={section}
+                    defaultDir={defaultDir}
+                    slug={slug}
+                    figureOrTableNumber={numbering.get(section.id)}
+                    previewTheme={previewTheme}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </aside>
@@ -653,11 +677,15 @@ function PreviewReferences({
     const ar = section.items
       .filter((i) => i.lang === "ar")
       .slice()
-      .sort((a, b) => a.text.localeCompare(b.text, "ar"));
+      .sort((a, b) =>
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), "ar"),
+      );
     const en = section.items
       .filter((i) => i.lang === "en")
       .slice()
-      .sort((a, b) => a.text.localeCompare(b.text, "en"));
+      .sort((a, b) =>
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), "en"),
+      );
     return previewTheme.referencesArabicFirst ? [...ar, ...en] : [...en, ...ar];
   }, [section.items, previewTheme.referencesArabicFirst]);
 
@@ -689,7 +717,13 @@ function PreviewReferences({
                 margin: "0.25rem 0",
               }}
             >
-              {item.text}
+              <span
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeConstructorTipTapHtml(
+                    resolveReferenceEntryHtml(item),
+                  ),
+                }}
+              />
               {item.doi ? ` https://doi.org/${item.doi}` : ""}
             </li>
           );

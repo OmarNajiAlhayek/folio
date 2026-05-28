@@ -12,7 +12,11 @@ import type {
   ConstructorContent,
   ConstructorGuidance,
 } from "@/lib/constructor-content.types";
-import { isImportWarningCode } from "@/lib/constructor-import-warning-codes";
+import {
+  CONSTRUCTOR_IMPORT_NO_CONTENT,
+  isImportWarningCode,
+} from "@/lib/constructor-import-warning-codes";
+import { ApiError } from "@/lib/api-response";
 import { importConstructorDocx } from "@/lib/import-constructor-docx";
 import {
   clearStoredImportWarnings,
@@ -99,7 +103,11 @@ export function useConstructorDocxImport({
         writeStoredImportWarnings(scopeKey, warnings);
         toast.success(t("importWordSuccess"), { id: "constructor-import-docx" });
       } catch (e) {
-        showApiError(e, t("importWordFailed"), { id: "constructor-import-docx" });
+        const fallback =
+          e instanceof ApiError && e.code === CONSTRUCTOR_IMPORT_NO_CONTENT
+            ? t("importWordNoContent")
+            : t("importWordFailed");
+        showApiError(e, fallback, { id: "constructor-import-docx" });
       } finally {
         setImportingDocx(false);
         resetImportInput();

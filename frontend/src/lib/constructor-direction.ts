@@ -98,7 +98,11 @@ export function estimateWeightedWordCount(content: ConstructorContent): {
         }
         break;
       case "references":
-        for (const r of section.items) words += countWordsInPlain(r.text);
+        for (const r of section.items) {
+          words += countWordsInPlain(
+            (r.html ?? r.text ?? "").replace(/<[^>]+>/g, " "),
+          );
+        }
         break;
     }
   }

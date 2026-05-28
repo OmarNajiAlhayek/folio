@@ -5,6 +5,7 @@ import type {
   RichTextBlockKind,
   TitleSection,
 } from "./constructor-content.types";
+import { referenceEntryHasContent } from "@/lib/sanitize-constructor-html";
 
 const RICH_TEXT_DUPLICATE_CODES: Record<RichTextBlockKind, string> = {
   acknowledgments: "CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE",
@@ -121,7 +122,7 @@ export function validateConstructorContentLive(
   if (refs.length === 0) push("CONSTRUCTOR_REFERENCES_MISSING");
   else if (
     refs.reduce(
-      (n, r) => n + r.items.filter((i) => i.text?.trim()).length,
+      (n, r) => n + r.items.filter((i) => referenceEntryHasContent(i)).length,
       0,
     ) === 0
   )

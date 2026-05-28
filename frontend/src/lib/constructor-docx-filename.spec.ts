@@ -9,8 +9,8 @@ describe("resolveConstructorDocxFileName", () => {
     const name = resolveConstructorDocxFileName({
       defaultDir: "ltr",
       sections: [
-        { kind: "title", lang: "en", text: "English title" },
-        { kind: "title", lang: "ar", text: "عنوان عربي" },
+        { id: "t1", kind: "title", lang: "en", text: "English title" },
+        { id: "t2", kind: "title", lang: "ar", text: "عنوان عربي" },
       ],
     });
     expect(name).toBe("عنوان عربي.docx");
@@ -19,7 +19,7 @@ describe("resolveConstructorDocxFileName", () => {
   it("falls back when no Arabic title", () => {
     const name = resolveConstructorDocxFileName({
       defaultDir: "ltr",
-      sections: [{ kind: "title", lang: "en", text: "Only EN" }],
+      sections: [{ id: "t1", kind: "title", lang: "en", text: "Only EN" }],
     });
     expect(name).toMatch(/\.docx$/);
   });
@@ -37,7 +37,7 @@ describe("constructorDraftHasSections", () => {
     expect(
       constructorDraftHasSections({
         defaultDir: "ltr",
-        sections: [{ kind: "title", lang: "en", text: "T" }],
+        sections: [{ id: "t1", kind: "title", lang: "en", text: "T" }],
       }),
     ).toBe(true);
   });

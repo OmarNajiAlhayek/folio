@@ -1,7 +1,6 @@
 "use client";
 
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import {
   useEffect,
   useId,
@@ -21,6 +20,9 @@ import {
 import { parseKeywordsFromStorage, serializeKeywords } from "@/lib/keywords";
 import { KeywordTagsInput } from "@/components/ui/keyword-tags-input";
 import { Spinner } from "@/components/ui/spinner";
+import { ConstructorRichTextToolbar } from "@/components/constructor/ConstructorRichTextToolbar";
+import { createConstructorTipTapExtensions } from "@/lib/constructor-tiptap-extensions";
+import { resolveReferenceEntryHtml } from "@/lib/constructor-rich-text";
 import {
   sanitizeConstructorTipTapHtml,
   sanitizeKatexPreviewHtml,
@@ -416,20 +418,42 @@ function AbstractEditor({
       label={t(section.lang === "ar" ? "abstractAr" : "abstractEn")}
       hint={t("abstractHint")}
       headerExtra={
-        <select
-          disabled={readOnly}
-          value={section.lang}
-          onChange={(e) =>
-            onChange({
-              ...section,
-              lang: e.target.value as "en" | "ar",
-            })
-          }
-          className="rounded border border-ink/15 bg-paper px-2 py-1 text-xs text-ink/70"
-        >
-          <option value="en">{t("abstractLangEn")}</option>
-          <option value="ar">{t("abstractLangAr")}</option>
-        </select>
+        <div className="inline-flex rounded-md border border-ink/12 bg-paper/50 p-0.5" role="group">
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() =>
+              onChange({
+                ...section,
+                lang: "en",
+              })
+            }
+            className={`rounded-sm px-2.5 py-1 text-[11px] font-semibold transition-all ${
+              section.lang === "en"
+                ? "bg-ink text-paper shadow-sm"
+                : "text-ink/60 hover:text-ink disabled:opacity-50"
+            }`}
+          >
+            {t("abstractLangEn")}
+          </button>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() =>
+              onChange({
+                ...section,
+                lang: "ar",
+              })
+            }
+            className={`rounded-sm px-2.5 py-1 text-[11px] font-semibold transition-all ${
+              section.lang === "ar"
+                ? "bg-ink text-paper shadow-sm"
+                : "text-ink/60 hover:text-ink disabled:opacity-50"
+            }`}
+          >
+            {t("abstractLangAr")}
+          </button>
+        </div>
       }
     >
       <textarea
@@ -496,17 +520,7 @@ function ParagraphEditor({
       // Allowlist enforced by disabling the rest of StarterKit.
       // Image extension is INTENTIONALLY left out so paragraphs cannot
       // contain inline base64 images (use the dedicated Image section).
-      extensions: [
-        StarterKit.configure({
-          blockquote: false,
-          code: false,
-          codeBlock: false,
-          heading: false,
-          horizontalRule: false,
-          link: false,
-          strike: false,
-        }),
-      ],
+      extensions: createConstructorTipTapExtensions("full"),
       content: sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
       editable: !readOnly,
       immediatelyRender: false, // required for SSR (Next.js)
@@ -567,87 +581,13 @@ function ParagraphEditor({
         />
       }
     >
-      {editor ? <Toolbar editor={editor} disabled={readOnly} /> : null}
+      {editor ? (
+        <ConstructorRichTextToolbar editor={editor} disabled={readOnly} variant="full" />
+      ) : null}
       <div dir={dir}>
         <EditorContent editor={editor} />
       </div>
     </SectionFrame>
-  );
-}
-
-function Toolbar({ editor, disabled }: { editor: Editor; disabled?: boolean }) {
-  const t = useTranslations("ConstructorEditor");
-  const btn =
-    "rounded border border-ink/15 bg-paper px-2 py-1 text-xs font-medium text-ink hover:border-accent/40 disabled:opacity-50";
-  const active = "border-accent/60 bg-accent/10";
-  return (
-    <div className="mb-2 flex flex-wrap items-center gap-1">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={`${btn} ${editor.isActive("bold") ? active : ""}`}
-        title={t("toolbarBold")}
-      >
-        <strong>B</strong>
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`${btn} ${editor.isActive("italic") ? active : ""}`}
-        title={t("toolbarItalic")}
-      >
-        <em>I</em>
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-        className={`${btn} ${editor.isActive("underline") ? active : ""}`}
-        title={t("toolbarUnderline")}
-      >
-        <span className="underline">U</span>
-      </button>
-      <span className="mx-1 text-ink/20">|</span>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={`${btn} ${editor.isActive("bulletList") ? active : ""}`}
-        title={t("toolbarBulletList")}
-      >
-        •
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        className={`${btn} ${editor.isActive("orderedList") ? active : ""}`}
-        title={t("toolbarOrderedList")}
-      >
-        1.
-      </button>
-      <span className="mx-1 text-ink/20">|</span>
-      <button
-        type="button"
-        disabled={disabled || !editor.can().undo()}
-        onClick={() => editor.chain().focus().undo().run()}
-        className={btn}
-        title={t("toolbarUndo")}
-      >
-        ↶
-      </button>
-      <button
-        type="button"
-        disabled={disabled || !editor.can().redo()}
-        onClick={() => editor.chain().focus().redo().run()}
-        className={btn}
-        title={t("toolbarRedo")}
-      >
-        ↷
-      </button>
-    </div>
   );
 }
 
@@ -986,17 +926,7 @@ function RichTextBlockEditor({
 
   const editor = useEditor(
     {
-      extensions: [
-        StarterKit.configure({
-          blockquote: false,
-          code: false,
-          codeBlock: false,
-          heading: false,
-          horizontalRule: false,
-          link: false,
-          strike: false,
-        }),
-      ],
+      extensions: createConstructorTipTapExtensions("full"),
       content: sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
       editable: !readOnly,
       immediatelyRender: false,
@@ -1051,7 +981,9 @@ function RichTextBlockEditor({
         />
       }
     >
-      {editor ? <Toolbar editor={editor} disabled={readOnly} /> : null}
+      {editor ? (
+        <ConstructorRichTextToolbar editor={editor} disabled={readOnly} variant="full" />
+      ) : null}
       <div dir={dir} data-testid={`constructor-rich-text-${kind}`}>
         <EditorContent editor={editor} />
       </div>
@@ -1162,6 +1094,58 @@ function EquationEditor({
 // References
 // -----------------------------------------------------------------------------
 
+function ReferenceEntryEditor({
+  html,
+  dir,
+  readOnly,
+  onChange,
+}: {
+  html: string;
+  dir: ConstructorDir;
+  readOnly?: boolean;
+  onChange: (html: string) => void;
+}) {
+  const editor = useEditor(
+    {
+      extensions: createConstructorTipTapExtensions("reference"),
+      content: sanitizeConstructorTipTapHtml(html || "<p></p>"),
+      editable: !readOnly,
+      immediatelyRender: false,
+      onUpdate: ({ editor: ed }) => {
+        onChange(sanitizeConstructorTipTapHtml(ed.getHTML()));
+      },
+      editorProps: {
+        attributes: {
+          class:
+            "prose prose-sm max-w-none min-h-[2.5rem] focus:outline-none rounded-md border border-ink/20 bg-paper px-2 py-1 text-sm shadow-sm",
+        },
+        transformPastedHTML: sanitizeConstructorTipTapHtml,
+      },
+    },
+    [readOnly],
+  );
+
+  useEffect(() => {
+    const next = sanitizeConstructorTipTapHtml(html || "<p></p>");
+    if (editor && next !== editor.getHTML() && !editor.isFocused) {
+      editor.commands.setContent(next, { emitUpdate: false });
+    }
+  }, [editor, html]);
+
+  return (
+    <div className="mt-2" dir={dir} data-testid="constructor-reference-entry">
+      {editor ? (
+        <ConstructorRichTextToolbar
+          editor={editor}
+          disabled={readOnly}
+          variant="reference"
+        />
+      ) : null}
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
 function ReferencesEditor({
   section,
   onChange,
@@ -1180,7 +1164,7 @@ function ReferencesEditor({
   function addItem() {
     onChange({
       ...section,
-      items: [...section.items, { lang: "en", text: "" }],
+      items: [...section.items, { lang: "en", html: "<p></p>" }],
     });
   }
   function removeItem(idx: number) {
@@ -1201,19 +1185,40 @@ function ReferencesEditor({
               className="rounded-md border border-ink/10 bg-paper/40 p-2"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  disabled={readOnly}
-                  value={item.lang}
-                  onChange={(e) =>
-                    updateItem(idx, {
-                      lang: e.target.value as "en" | "ar",
-                    })
-                  }
-                  className="rounded border border-ink/15 bg-paper px-2 py-1 text-xs"
-                >
-                  <option value="en">{t("referencesLangEn")}</option>
-                  <option value="ar">{t("referencesLangAr")}</option>
-                </select>
+                <div className="inline-flex rounded-md border border-ink/12 bg-paper/50 p-0.5" role="group">
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    onClick={() =>
+                      updateItem(idx, {
+                        lang: "en",
+                      })
+                    }
+                    className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold transition-all ${
+                      item.lang === "en"
+                        ? "bg-ink text-paper shadow-sm"
+                        : "text-ink/60 hover:text-ink disabled:opacity-50"
+                    }`}
+                  >
+                    {t("referencesLangEn")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    onClick={() =>
+                      updateItem(idx, {
+                        lang: "ar",
+                      })
+                    }
+                    className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold transition-all ${
+                      item.lang === "ar"
+                        ? "bg-ink text-paper shadow-sm"
+                        : "text-ink/60 hover:text-ink disabled:opacity-50"
+                    }`}
+                  >
+                    {t("referencesLangAr")}
+                  </button>
+                </div>
                 <input
                   disabled={readOnly}
                   value={item.doi ?? ""}
@@ -1232,14 +1237,11 @@ function ReferencesEditor({
                   {t("referencesRemove")}
                 </button>
               </div>
-              <textarea
+              <ReferenceEntryEditor
+                html={resolveReferenceEntryHtml(item)}
                 dir={dir}
                 readOnly={readOnly}
-                value={item.text}
-                onChange={(e) => updateItem(idx, { text: e.target.value })}
-                rows={2}
-                placeholder={t("referencesEntryPlaceholder")}
-                className="mt-2 w-full resize-y rounded border border-ink/20 bg-paper px-2 py-1 text-sm"
+                onChange={(html) => updateItem(idx, { html, text: undefined })}
               />
             </li>
           );

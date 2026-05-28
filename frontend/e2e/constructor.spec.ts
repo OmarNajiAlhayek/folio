@@ -81,7 +81,7 @@ test("pre-slug to post-slug transition clears local draft and persists", async (
   await page.getByTestId("constructor-continue-submission").click();
   await expect(page).toHaveURL(/\/en\/submissions\/new$/);
 
-  await expect(page.getByDisplayValue(titleEn)).toBeVisible();
+  await expect((page as any).getByDisplayValue(titleEn)).toBeVisible();
   await expect(page.getByText(/Selected:/i)).toBeVisible();
   await expect(page.getByText(/\.docx/i).first()).toBeVisible();
   await expect(page.getByText(/Word Constructor/i)).toBeVisible();
@@ -332,7 +332,7 @@ test("docx generate flow (real smoke + rtl preview assertion)", async ({
       {
         id: "sec-ref",
         kind: "references",
-        items: [{ lang: "en", text: "Smith, 2024" }],
+        items: [{ lang: "en", html: "<p>Smith, 2024</p>" }],
       },
       {
         id: "sec-rtl",
@@ -416,7 +416,7 @@ test("generate-docx POST body includes unsaved paragraph text (before autosave)"
       {
         id: "sec-ref",
         kind: "references",
-        items: [{ lang: "en", text: "Ref" }],
+        items: [{ lang: "en", html: "<p>Ref</p>" }],
       },
     ],
   });
@@ -465,7 +465,7 @@ test("expanded section kinds: IMRaD preset, table note, acknowledgments, numbere
 
   await openConstructorAddPicker(page);
   await page.getByTestId("constructor-add-preset-introduction").click();
-  await expect(page.getByDisplayValue("Introduction")).toBeVisible();
+  await expect((page as any).getByDisplayValue("Introduction")).toBeVisible();
 
   await openConstructorAddPicker(page);
   await page.getByTestId("constructor-add-kind-table").click();

@@ -117,7 +117,8 @@ export interface ConstructorAuthorEntry {
 
 export interface ConstructorReferenceEntry {
   lang: "ar" | "en";
-  text: string;
+  html: string;
+  text?: string;
   doi?: string;
 }
 
