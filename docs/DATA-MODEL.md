@@ -19,6 +19,7 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 - Belongs to one **author** (`User` as `author_id`).
 - Optional `journal_id` if you use the `Journal` table.
 - Metadata: **title**, **abstract**, **article type** (enum), **keywords** (comma/semicolon-separated; 3–6 on submit), **contributors** (JSON array: full name, optional email, affiliation, sort order, corresponding flag), **funding statement**, **declarations** (conflict of interest, ethics/IRB reference, originality confirmation, AI-use statement), **suggested / opposed reviewers** (JSON arrays, max 5 each).
+- **Discipline (Arabic journal scope):** optional **`discipline`** (confirmed label, varchar), **`discipline_source`** (`ai` \| `author` \| `editor`), **`discipline_suggested`** + **`discipline_suggested_confidence`** (from AraBERT on suggest/submit), **`discipline_classification`** (JSONB snapshot of top labels/scores). Authors confirm via API; editors may override. Catalog filter and corpus similarity can scope by `discipline`.
 - **`review_method`** (OJS-aligned enum, default `double_anonymous`): `open` | `anonymous` | `double_anonymous`. In UI/docs, label **`anonymous`** as **single-blind** (reviewer identity hidden from author; author identity still visible to reviewer unless `double_anonymous`).
 - `status`: see [Submission lifecycle](#submission-lifecycle) (store as enum or constrained text).
 - Timestamps: `created_at`, `updated_at`; optional `published_at` when `status = published`.

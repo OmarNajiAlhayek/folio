@@ -1,14 +1,16 @@
 # Folio — Feature Report by Role
 
 > [!NOTE]
-> Folio is a scholarly **manuscript submission and peer-review** workspace (OJS-inspired). Single-journal MVP. Stack: **Next.js 16** + **NestJS 11** + **PostgreSQL** + **RabbitMQ** email microservice.
+> Folio is a scholarly **manuscript submission and peer-review** workspace (OJS-inspired). Single-journal MVP. Stack: **Next.js 16** + **NestJS 11** + **PostgreSQL** + **RabbitMQ** email microservice + optional **Python ai-service** (gRPC).
 
 ## Architecture at a Glance
 
 - **Frontend:** Next.js 16 (App Router), React 19, Tailwind 4, TipTap, Radix UI, `next-intl` (EN / AR + RTL)
-- **Backend:** NestJS 11, TypeORM, PostgreSQL, Passport JWT, RBAC guards, Swagger (`/api-docs`)
+- **Backend:** NestJS 11, TypeORM, PostgreSQL, Passport JWT, RBAC guards, Swagger (`/api-docs`); BFF for AI over gRPC
 - **Email Service:** Standalone NestJS app — RabbitMQ consumer, Handlebars templates, SMTP / noop, cron scheduler
+- **AI Service:** Python FastAPI + gRPC — classifier, keywords, similarity, plagiarism, reviewer matching (see [`plans/ai-service.md`](./plans/ai-service.md))
 - **Shared:** `packages/shared/` — typed event contracts + RabbitMQ topology helpers
+- **Proto:** `proto/` — Buf contracts between Nest and ai-service
 - **Infra:** RabbitMQ topic exchange `folio.events`, transactional outbox pattern, Docker Compose (local dev)
 
 ---
@@ -22,6 +24,7 @@
 - Upload files by kind (`cover_letter`, `title_page`, `manuscript`, `figure`, …); download or delete own files
 - **Submit** draft to the editorial queue
 - Resubmit after *revisions requested* decisions
+- **AI-assisted (optional):** suggest Arabic discipline; LLM keyword suggestions (EN/AR); auto-classify discipline on submit when enabled
 
 ### 2. Editor
 - View the full **submission queue** with status filters
@@ -35,6 +38,13 @@
 - View / edit **reminder policy** (due-soon / overdue thresholds)
 - Monitor **email pipeline status** (outbox depth, email log, reminder queue, RabbitMQ queue depths)
 - Preview rendered email templates before saving
+- **AI-assisted (optional):** corpus similarity report; suggested reviewers from vector matching
+
+### 2b. Journal manager
+
+- **User onboarding:** assign `reviewer` and `copyeditor` via `PATCH /users/:id/roles`; invite `editor` / `journal_manager` via role invitations
+- **Email platform:** manage templates, reminder policy, pipeline status (same admin surfaces as editors with `email.manage_reminders`)
+- **Queue oversight:** browse editor queue and submission detail (without replacing handling-editor decisions unless also an editor)
 
 ### 3. Reviewer
 - View **pending assignments** (`invited` status)
@@ -42,6 +52,7 @@
 - Download submission files (manuscript stage)
 - Submit a **review**: author-facing comments, confidential editor feedback, and a final recommendation (`accept` / `reject` / `revisions`)
 - Receive **email reminders** automatically (due-soon + overdue) scheduled at invite time
+- **AI-assisted (optional):** view corpus similarity on assigned submissions (when enabled)
 
 ### 4. Copyeditor
 - Assigned by editor after **accepted** (`POST /submissions/:slug/copyedit-assignments`); multiple copyeditors per submission supported
@@ -55,6 +66,9 @@
 - View published submission detail
 - Download **public manuscript files**
 - Browse available **manuscript style profiles** (`GET /public/manuscript-styles`)
+- **Catalog search:** keyword (FTS) or semantic (`searchMode=semantic` when AI similarity is enabled)
+- **Author filter typeahead** (`GET /public/submissions/author-suggestions`)
+- **Related articles** on publication detail when similarity index is populated
 
 ### 6. System / Background (no human role)
 - **Outbox drainer** — polls `OutboundEvent` rows and publishes to RabbitMQ `folio.events` exchange
@@ -89,8 +103,9 @@ Editors move a submission to `under_review` with `PATCH /submissions/:slug/statu
 
 | Feature | Details |
 |---|---|
-| **RBAC** | Roles: `author`, `editor`, `reviewer`. Permission slugs gate every sensitive endpoint. |
+| **RBAC** | Roles: `author`, `editor`, `journal_manager`, `reviewer`, `copyeditor`. Permission slugs gate every sensitive endpoint. |
 | **i18n** | EN + AR (RTL). Per-user `preferredLocale`. Email locale via `X-Folio-Locale` header. |
 | **DOCX export** | Constructor content → `.docx` via manuscript style profile (typography, margins, headings). |
 | **Email microservice** | Decoupled via RabbitMQ; DB-backed templates editable at runtime; SMTP or noop provider. |
-| **Tests** | Jest (backend unit + e2e), Vitest (frontend lib), Playwright (frontend e2e + auth cross-tab). |
+| **AI microservice** | Optional gRPC features: discipline, keywords, similarity, plagiarism/corpus, reviewer matching — toggled per env (see [`plans/ai-service.md`](./plans/ai-service.md)). |
+| **Tests** | Jest (backend unit + e2e), Vitest (frontend lib), Playwright (frontend e2e + auth cross-tab), pytest (ai-service). |

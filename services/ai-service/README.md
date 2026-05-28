@@ -1,6 +1,6 @@
 # Folio AI service
 
-Python **FastAPI** microservice for Folio AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, article similarity, and keyword suggestions.
+Python **FastAPI** microservice for Folio AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, **keyword suggestions**, **article similarity**, **corpus plagiarism detection**, and **reviewer matching** — all product traffic over **gRPC** (Nest BFF only).
 
 Design record: [`docs/plans/ai-service.md`](../../docs/plans/ai-service.md).
 
@@ -34,7 +34,7 @@ uvicorn app.main:app --reload --port 5245
 ```
 
 - **HTTP (5245):** liveness, readiness, aggregated `GET /v1/status` only.
-- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`). See [`proto/README.md`](../../proto/README.md).
+- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`). See [`proto/README.md`](../../proto/README.md).
 
 When `ARABERT_ENABLED=true`, startup **preloads tokenizer + weights** by default (`ARABERT_WARMUP_ON_STARTUP=true`) so the first UI classify is fast. Expect ~1 minute extra startup time on CPU; set `ARABERT_WARMUP_ON_STARTUP=false` to skip.
 
@@ -74,7 +74,7 @@ grpcurl -plaintext -d '{"abstract":"تهدف هذه الدراسة إلى تحل
   localhost:5246 folio.ai.v1.ClassifierService/ClassifyAbstract
 ```
 
-Jupyter: open `classify.ipynb` (imports `AdvancedArabicClassifier` from `app.ml`).
+Jupyter: open `archive/classify.ipynb` (imports `AdvancedArabicClassifier` from `app.ml`).
 
 ### Author keyword suggestions (dev)
 
@@ -97,6 +97,28 @@ AI_SERVICE_TOKEN=your-shared-secret
 ```
 
 Nest route: `POST /submissions/:slug/suggest-keywords` (author draft only) → gRPC `KeywordService.SuggestKeywords` on port **5246**.
+
+### Similarity and reviewer matching (dev)
+
+```bash
+# services/ai-service/.env
+pip install -e ".[dev,similarity]"
+SIMILARITY_ENABLED=true
+REVIEWER_MATCHING_ENABLED=true
+
+# backend/.env
+AI_SERVICE_ENABLED=true
+AI_SIMILARITY_ENABLED=true
+AI_REVIEWER_MATCHING_ENABLED=true
+AI_SERVICE_GRPC_HOST=127.0.0.1
+```
+
+Nest routes: `GET /submissions/:slug/corpus-similarity` (gRPC `PlagiarismService`), `GET /submissions/:slug/suggested-reviewers` (`ReviewerMatchingService`), public catalog `searchMode=semantic` (`SimilarityService`).
+
+```bash
+grpcurl -plaintext localhost:5246 folio.ai.v1.PlagiarismService/GetPlagiarismStatus
+grpcurl -plaintext localhost:5246 folio.ai.v1.ReviewerMatchingService/GetReviewerMatchingStatus
+```
 
 ## Tests
 

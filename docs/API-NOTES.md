@@ -93,6 +93,26 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | PATCH | `/submissions/:slug/review-method` | Editor | Body: `{ "reviewMethod": "open" \| "anonymous" \| "double_anonymous" }`. Requires `submission.change_status` **or** `submission.assign_reviewer`. |
 | POST | `/submissions/:slug/submit` | Author | `draft` → `submitted` (or resubmit from `revisions_requested`). Validates journal-style checklist; new author uploads default `file_stage = submission`. |
 | PATCH | `/submissions/:slug/status` | Editor | Transitions with validation; `under_review` requires a review-package manuscript (see policy). |
+| GET | `/submissions/discipline-labels` | Author / Editor | Arabic discipline label list; optional journal scope via `JOURNAL_ALLOWED_DISCIPLINES`. |
+| POST | `/submissions/:slug/suggest-discipline` | Author (draft) | Calls ai-service `ClassifierService`; stores `disciplineSuggested*` on submission. Requires `AI_SERVICE_ENABLED` + classifier enabled on ai-service. |
+| POST | `/submissions/:slug/suggest-keywords` | Author (draft) | Returns suggested EN/AR keyword lists (not persisted). Requires `AI_KEYWORDS_ENABLED`. |
+| POST | `/submissions/suggest-keywords-preview` | Author | Body: optional `title`, `abstract`, `titleAr`, `abstractAr` — same keyword RPC before a slug exists. |
+| PATCH | `/submissions/:slug/discipline` | Author | Body: `{ "discipline": "<label>" }` — confirm or override; sets `discipline_source` to `author`. |
+| GET | `/submissions/:slug/corpus-similarity` | Editor / assigned reviewer (accepted or completed) | Corpus overlap report via `PlagiarismService`. **Not** available to authors or copyeditors-only. Requires `AI_SIMILARITY_ENABLED`. Returns `{ status: "unavailable" \| "no_text" \| "ok", ... }` when disabled or insufficient text. |
+| GET | `/submissions/:slug/suggested-reviewers` | Editor | Ranked reviewer candidates via `ReviewerMatchingService`. Requires `AI_REVIEWER_MATCHING_ENABLED`. |
+
+### AI feature flags and errors
+
+Nest talks to ai-service over **gRPC** (`AI_SERVICE_GRPC_HOST`, default port `5246`). See [`plans/ai-service.md`](./plans/ai-service.md) and [`backend/.env.example`](../backend/.env.example).
+
+| Flag | Enables |
+|------|---------|
+| `AI_SERVICE_ENABLED` | gRPC client; discipline classify on submit when classifier is enabled |
+| `AI_KEYWORDS_ENABLED` | Keyword suggestion routes |
+| `AI_SIMILARITY_ENABLED` | Related articles, semantic catalog, corpus similarity |
+| `AI_REVIEWER_MATCHING_ENABLED` | Suggested reviewers for editors |
+
+Common error codes when AI is misconfigured or unreachable: `AI_SERVICE_UNAVAILABLE`, `AI_CLASSIFICATION_FAILED`, `AI_KEYWORDS_SUGGESTION_FAILED`. Routes may return soft-empty payloads instead of 5xx where noted (e.g. corpus similarity `status: unavailable`).
 
 ### Files
 
@@ -128,8 +148,13 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
-| GET | `/publications` or `/public/submissions` | Public | List `published` only; pagination. |
-| GET | `/public/submissions/:id` | Public | Published metadata + link to downloadable file. |
+| GET | `/public/submissions` | Public | List `published` submissions. Query filters: `q` (quick search), `author`, `discipline` (Arabic label enum), `articleType`, `publishedFrom`, `publishedTo`. |
+| GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`. `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20). |
+| GET | `/public/submissions/author-suggestions` | Public | Typeahead for catalog author filter. Query: `q` (min 2 chars), optional `limit` (1–20, default 10). |
+| GET | `/public/submissions/:slug` | Public | Published metadata + downloadable files. |
+| GET | `/public/manuscript-styles` | Public | Constructor / DOCX style profiles. |
+
+Legacy alias `GET /publications` may redirect or mirror catalog list depending on deployment; prefer `/public/submissions`.
 
 ---
 

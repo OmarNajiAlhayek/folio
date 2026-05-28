@@ -10,6 +10,7 @@ Cross-language API definitions between the Nest backend and Python microservices
 | `folio/ai/v1/keywords.proto` | LLM keyword suggestions (`KeywordService`) |
 | `folio/ai/v1/plagiarism.proto` | Corpus chunk similarity (`PlagiarismService`) |
 | `folio/ai/v1/similarity.proto` | Article index, related articles, catalog search (`SimilarityService`) |
+| `folio/ai/v1/reviewer.proto` | Editor reviewer suggestions (`ReviewerMatchingService`) |
 | `buf.yaml` | Lint and breaking-change config |
 | `buf.gen.yaml` | Codegen plugins (Python + TypeScript) |
 

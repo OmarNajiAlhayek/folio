@@ -1,10 +1,10 @@
 # Project context
 
-Folio is a **manuscript submission and peer-review** workspace: editors manage a queue, assign reviewers, and move submissions through a defined lifecycle; authors and reviewers act through role-based permissions. The stack is **Next.js** (UI), **NestJS** (HTTP API), **PostgreSQL**, optional **RabbitMQ** + **`services/email-service`** for outbound mail without blocking the API.
+Folio is a **manuscript submission and peer-review** workspace: editors manage a queue, assign reviewers, and move submissions through a defined lifecycle; authors and reviewers act through role-based permissions. The stack is **Next.js** (UI), **NestJS** (HTTP API), **PostgreSQL**, optional **RabbitMQ** + **`services/email-service`** for outbound mail without blocking the API, and optional **`services/ai-service`** (Python gRPC) for AI-assisted discipline, keywords, similarity, and reviewer matching — always called from Nest, never from the browser.
 
 ## Scope (MVP)
 
-- Roles: author, editor, reviewer (users may hold multiple roles).
+- Roles: author, editor, journal manager, reviewer, copyeditor (users may hold multiple roles).
 - Submissions with structured metadata, files, status transitions, assignments, and reviews.
 - Role-based features and workflows: [`feature-report.md`](./feature-report.md).
 
@@ -16,6 +16,10 @@ Folio is a **manuscript submission and peer-review** workspace: editors manage a
 ## Email pipeline
 
 The core API records facts and publishes events; the standalone email service consumes messages and sends mail (see repo [`README.md`](../README.md) and [`testing-email-pipeline.md`](./testing-email-pipeline.md)).
+
+## AI service (optional)
+
+Nest exposes REST routes that proxy to ai-service over gRPC (port **5246**). Feature flags on both apps must be enabled per capability. Design: [`plans/ai-service.md`](./plans/ai-service.md). Runbook: [`services/ai-service/README.md`](../services/ai-service/README.md).
 
 ## Optional reference
 

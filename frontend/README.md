@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Folio frontend (Next.js)
 
-## Getting Started
+App Router UI for the Folio peer-review workspace. Default dev URL: **`http://localhost:5240`**.
 
-First, run the development server:
+## Quick start
 
 ```bash
+npm install
+cp .env.local.example .env.local   # leave NEXT_PUBLIC_API_URL empty for cookie auth
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:5240](http://localhost:5240) with your browser to see the result.
+The browser calls same-origin `/api/v1`; Next.js rewrites to the Nest API (`API_PROXY_TARGET`, default `http://127.0.0.1:5243`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Documentation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Monorepo overview and run order: [`../README.md`](../README.md).
 
-## Learn More
+| Topic | Doc |
+|-------|-----|
+| Features by role | [`../docs/feature-report.md`](../docs/feature-report.md) |
+| Word Constructor | [`../docs/plans/word-constructor.md`](../docs/plans/word-constructor.md) |
+| Playwright E2E | [`../docs/plans/playwright-constructor-e2e.md`](../docs/plans/playwright-constructor-e2e.md) |
 
-To learn more about Next.js, take a look at the following resources:
+## Tests
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run e2e:install   # once
+npm run test:e2e
+```

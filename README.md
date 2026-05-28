@@ -23,7 +23,8 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 | `frontend/` | Next.js app (Folio UI) |
 | `backend/` | NestJS API (`/api/v1/...`) |
 | `services/email-service/` | NestJS standalone email microservice (RabbitMQ consumer, scheduled reminders) |
-| `services/ai-service/` | Python FastAPI AI microservice (scaffold; pluggable LLM providers) |
+| `services/ai-service/` | Python FastAPI + gRPC AI microservice (classifier, keywords, similarity, plagiarism, reviewer matching) |
+| `proto/` | Buf protobuf contracts between Nest and ai-service |
 | `packages/shared/` | Canonical event contracts + small messaging helpers (mirrored into each app) |
 | `docs/` | Specs |
 | `uploads/` | Created at runtime for manuscript files (gitignored at repo root) |
@@ -54,6 +55,7 @@ See [`packages/shared/README.md`](packages/shared/README.md).
 1. **Backend:** copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and set `DB_*`, `JWT_SECRET`, optional `FRONTEND_ORIGIN` (default `http://localhost:5240`), plus the RabbitMQ + `APP_BASE_URL` block (used to publish reviewer-invite events to the email-service). Do **not** put `SMTP_*` or `EMAIL_PROVIDER` here — mail is configured only in the email-service. OpenAPI is on by default in non-production; set `SWAGGER_ENABLED=true` to expose it when `NODE_ENV=production`.
 2. **Frontend:** copy [`frontend/.env.local.example`](frontend/.env.local.example) to `frontend/.env.local`. Leave `NEXT_PUBLIC_API_URL` empty so the browser calls same-origin `/api/v1` (Next.js rewrites to the API on `API_PROXY_TARGET`, default `http://127.0.0.1:5243`). A direct `NEXT_PUBLIC_API_URL=http://localhost:5243` breaks httpOnly cookie auth and is blocked by CSP (`connect-src 'self'`).
 3. **Email service:** copy [`services/email-service/.env.example`](services/email-service/.env.example) to `services/email-service/.env`. Default `EMAIL_PROVIDER=noop` logs would-be sends and requires no SMTP server.
+4. **AI service** (optional): copy [`services/ai-service/.env.example`](services/ai-service/.env.example) to `services/ai-service/.env`. Enable features per flag (see Terminal 4). Mirror toggles in [`backend/.env.example`](backend/.env.example): `AI_SERVICE_ENABLED`, `AI_SIMILARITY_ENABLED`, `AI_KEYWORDS_ENABLED`, `AI_REVIEWER_MATCHING_ENABLED`.
 
 **Production:** both apps refuse example `DB_PASSWORD` / weak `JWT_SECRET` (backend) and `guest:guest` RabbitMQ when `NODE_ENV=production`. Generate secrets before deploy; see [`docs/PREP-STEPS.md`](docs/PREP-STEPS.md).
 
@@ -102,7 +104,7 @@ npm run start:dev
 
 The service connects to RabbitMQ, runs its own migrations into a dedicated `email` schema in the same Postgres database, and starts consuming `reviewer.invited` and `reminder.due` events. With `EMAIL_PROVIDER=noop` (default) it logs each would-be send instead of contacting an SMTP host. See [`docs/plans/email-service.md`](docs/plans/email-service.md) for the full design.
 
-**Terminal 4 — AI service** (optional; scaffold only — no product AI routes yet)
+**Terminal 4 — AI service** (optional; required for AI-assisted UI features)
 
 ```bash
 cd services/ai-service
@@ -111,10 +113,23 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
+# Optional extras: pip install -e ".[dev,ml]" (AraBERT), pip install -e ".[dev,similarity]" (Chroma)
 uvicorn app.main:app --reload --port 5245
 ```
 
-Health: `http://localhost:5245/health` and `http://localhost:5245/ready`. Default `AI_PROVIDER=noop` needs no API keys. See [`docs/plans/ai-service.md`](docs/plans/ai-service.md).
+- **HTTP (5245):** liveness/readiness only — `http://localhost:5245/health`, `http://localhost:5245/ready`
+- **gRPC (5246):** product RPCs consumed by Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`). See [`proto/README.md`](proto/README.md).
+
+In **`backend/.env`**, set `AI_SERVICE_ENABLED=true` and `AI_SERVICE_GRPC_HOST=127.0.0.1`, then enable feature flags as needed:
+
+| Backend flag | ai-service flags | Feature |
+|--------------|------------------|---------|
+| `AI_SERVICE_ENABLED` | `ARABERT_ENABLED=true` (+ `.[ml]` weights) | Arabic discipline classify on submit / suggest |
+| `AI_KEYWORDS_ENABLED` | `KEYWORDS_SUGGESTION_ENABLED=true`, `AI_PROVIDER=openai` | Author keyword suggestions |
+| `AI_SIMILARITY_ENABLED` | `SIMILARITY_ENABLED=true` (+ `.[similarity]`) | Related articles, semantic catalog search, corpus similarity |
+| `AI_REVIEWER_MATCHING_ENABLED` | `REVIEWER_MATCHING_ENABLED=true`, `SIMILARITY_ENABLED=true` | Editor suggested reviewers |
+
+Default `AI_PROVIDER=noop` needs no API keys for health/gRPC startup. Full runbook: [`services/ai-service/README.md`](services/ai-service/README.md), design: [`docs/plans/ai-service.md`](docs/plans/ai-service.md).
 
 ### Sample accounts (after `npm run seed` in `backend/`)
 
