@@ -13,6 +13,7 @@ export function publicationSimilarityIndexPayload(s: Submission): {
   abstract: string;
   keywords: string;
   category: string;
+  fullText: string;
 } | null {
   const abstract = (s.abstractAr?.trim() || s.abstract?.trim() || '').trim();
   if (!abstract) {
@@ -23,5 +24,7 @@ export function publicationSimilarityIndexPayload(s: Submission): {
     .filter((k): k is string => !!k)
     .join(', ');
   const category = s.discipline?.trim() ?? '';
-  return { abstract, keywords, category };
+  const title = (s.titleAr?.trim() || s.title?.trim() || '').trim();
+  const fullText = [title, abstract, keywords].filter(Boolean).join('\n\n');
+  return { abstract, keywords, category, fullText };
 }

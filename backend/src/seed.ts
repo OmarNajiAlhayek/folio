@@ -349,7 +349,7 @@ async function seedPublishedSample(options: {
     ceAssignment.slug!,
     author.id,
   );
-  await submissionsService.publishSubmission(ceAssignment.slug!, copyeditorReq);
+  await submissionsService.publishSubmission(s.slug!, copyeditorReq);
   console.log(`Seeded: ${title} (${logLabel})`);
 }
 
@@ -899,11 +899,11 @@ async function run() {
   });
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
-  console.log('author@folio.local      / Author123!      roles: author');
-  console.log('manager@folio.local     / Manager123!     roles: journal_manager');
-  console.log('editor@folio.local      / Editor123!      roles: editor, reviewer');
-  console.log('reviewer@folio.local    / Reviewer123!    roles: reviewer');
-  console.log('copyeditor@folio.local  / Copyeditor123!  roles: copyeditor');
+  console.log('o65834757@gmail.com         / Author123!      roles: author');
+  console.log('manager@folio.local         / Manager123!     roles: journal_manager');
+  console.log('k76462338@gmail.com         / Editor123!      roles: editor, reviewer');
+  console.log('ysryrwthqsdthwy@gmail.com   / Reviewer123!    roles: reviewer');
+  console.log('copyeditor@folio.local      / Copyeditor123!  roles: copyeditor');
   console.log('\n--- Sample submissions (title prefix [SAMPLE]) ---');
   console.log(`${tDraft} — author: draft with file`);
   console.log(`${tQueue} — editor queue: submitted`);
@@ -929,7 +929,7 @@ async function run() {
       'AI_SERVICE_ENABLED=false: seeded disciplineSuggested/discipline on samples for editor/author UI (no ai-service required).',
     );
     console.log(
-      'To use live classification: set AI_SERVICE_ENABLED=true, AI_SERVICE_GRPC_HOST=127.0.0.1, run ai-service (HTTP :5245 + gRPC :5246), then npm run seed:reset',
+      'To use live classification: set AI_SERVICE_ENABLED=true, AI_SERVICE_GRPC_HOST=127.0.0.1, run ai-service (HTTP :5245 probes + gRPC :5246), then npm run seed:reset',
     );
   }
   console.log(

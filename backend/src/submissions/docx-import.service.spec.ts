@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import mammoth from 'mammoth';
 import { DocxImportService } from './docx-import.service';
+import { CONSTRUCTOR_IMPORT_NO_CONTENT } from './docx-import-warning-codes';
 
 jest.mock('mammoth', () => ({
   __esModule: true,
@@ -63,5 +64,77 @@ describe('DocxImportService', () => {
     const refs = result.content.sections.find((s) => s.kind === 'references');
     expect(refs).toBeDefined();
     expect((refs as { items: unknown[] }).items.length).toBe(1);
+  });
+
+  it('maps author lines between title and abstract into authors section', async () => {
+    convertToHtml.mockResolvedValue({
+      value: `<h1>Sample Article</h1>
+        <p><strong>Ada Lovelace* — Dr.</strong></p>
+        <p>Analytical Engine University — ada@test.dev</p>
+        <h2>Abstract</h2>
+        <p>English abstract body.</p>`,
+      messages: [],
+    });
+    const result = await service.importFromBuffer(validZipHeader);
+    const authors = result.content.sections.find((s) => s.kind === 'authors');
+    expect(authors).toBeDefined();
+    expect((authors as { authors: { fullName: string; email: string }[] }).authors[0]
+      ?.fullName).toContain('Ada');
+    expect(
+      (authors as { authors: { email: string }[] }).authors[0]?.email,
+    ).toContain('ada@test.dev');
+  });
+
+  it('treats Arabic abstract heading as abstract slot', async () => {
+    convertToHtml.mockResolvedValue({
+      value: `<h1>Title</h1>
+        <h2>الملخص</h2>
+        <p>نص الملخص العربي.</p>`,
+      messages: [],
+    });
+    const result = await service.importFromBuffer(validZipHeader);
+    const arAbstract = result.content.sections.find(
+      (s) => s.kind === 'abstract' && (s as { lang?: string }).lang === 'ar',
+    );
+    expect(arAbstract).toBeDefined();
+    expect((arAbstract as { text: string }).text).toContain('نص الملخص');
+    expect(
+      result.content.sections.some(
+        (s) => s.kind === 'heading2' && (s as { text: string }).text === 'الملخص',
+      ),
+    ).toBe(false);
+  });
+
+  it('skips table caption lines in references', async () => {
+    convertToHtml.mockResolvedValue({
+      value: `<h1>References</h1><p>Author A (2020). Paper.</p><p>Table 1: ddd</p>`,
+      messages: [],
+    });
+    const result = await service.importFromBuffer(validZipHeader);
+    const refs = result.content.sections.find((s) => s.kind === 'references');
+    expect((refs as { items: { html: string }[] }).items).toHaveLength(1);
+    expect((refs as { items: { html: string }[] }).items[0]?.html).toContain(
+      'Author A',
+    );
+  });
+
+  it('throws CONSTRUCTOR_IMPORT_NO_CONTENT when parse yields no sections', async () => {
+    convertToHtml.mockResolvedValue({
+      value: `<h2>Abstract</h2><h1>References</h1><p><img src="data:image/png;base64,abc" /></p>`,
+      messages: [],
+    });
+    await expect(service.importFromBuffer(validZipHeader)).rejects.toMatchObject({
+      response: { code: CONSTRUCTOR_IMPORT_NO_CONTENT },
+    });
+  });
+
+  it('adds mammoth warning code when Word reports non-suppressed notes', async () => {
+    convertToHtml.mockResolvedValue({
+      value: `<h1>Title</h1><p>Body paragraph.</p>`,
+      messages: [{ type: 'warning', message: 'Unexpected style: CustomBody' }],
+    });
+    const result = await service.importFromBuffer(validZipHeader);
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.warningCodes).toContain('CONSTRUCTOR_IMPORT_MAMMOTH_NOTES');
   });
 });

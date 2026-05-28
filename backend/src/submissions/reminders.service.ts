@@ -1,11 +1,12 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { Submission } from '../entities/submission.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
 import type { RequestUser } from '../common/types/request-user';
@@ -28,6 +29,8 @@ export type ReminderAdminDto = {
 
 @Injectable()
 export class RemindersService {
+  private readonly logger = new Logger(RemindersService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(Submission)
@@ -35,6 +38,54 @@ export class RemindersService {
     @InjectRepository(ReviewAssignment)
     private readonly assignmentsRepo: Repository<ReviewAssignment>,
   ) {}
+
+  private async query<T extends Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ): Promise<T[]> {
+    try {
+      const raw = await this.dataSource.query(sql, params);
+      return this.normalizeQueryResult<T>(raw);
+    } catch (err) {
+      this.rethrowUnlessPermissionDenied(err);
+    }
+  }
+
+  /**
+   * TypeORM `query()` returns `[rows, rowCount]` for UPDATE/DELETE … RETURNING,
+   * and a plain row array for SELECT.
+   */
+  private normalizeQueryResult<T extends Record<string, unknown>>(
+    raw: unknown,
+  ): T[] {
+    if (!Array.isArray(raw)) return [];
+    if (
+      raw.length === 2 &&
+      Array.isArray(raw[0]) &&
+      typeof raw[1] === 'number'
+    ) {
+      return this.normalizeRows(raw[0] as unknown[]);
+    }
+    return this.normalizeRows(raw);
+  }
+
+  private normalizeRows<T extends Record<string, unknown>>(raw: unknown[]): T[] {
+    return raw.map((entry) => this.unwrapRow(entry) as T);
+  }
+
+  private unwrapRow(entry: unknown): Record<string, unknown> {
+    let current: unknown = entry;
+    while (Array.isArray(current)) {
+      if (current.length === 0) {
+        throw new Error('Expected query row object');
+      }
+      current = current[0];
+    }
+    if (!current || typeof current !== 'object') {
+      throw new Error('Expected query row object');
+    }
+    return current as Record<string, unknown>;
+  }
 
   private hasPerm(user: RequestUser, slug: string): boolean {
     return user.permissionSlugs.includes(slug);
@@ -77,19 +128,93 @@ export class RemindersService {
     }
   }
 
+  private pick(row: Record<string, unknown>, snake: string): unknown {
+    if (row[snake] !== undefined) return row[snake];
+    const camel = snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+    return row[camel];
+  }
+
+  private toIso(value: unknown): string {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string') {
+      const d = new Date(value);
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+    throw new Error(`Invalid timestamptz value: ${String(value)}`);
+  }
+
   private mapRow(row: Record<string, unknown>): ReminderAdminDto {
+    const sentAtRaw = this.pick(row, 'sent_at');
     return {
-      id: String(row.id),
-      assignmentSlug: String(row.assignment_slug),
-      reviewerId: String(row.reviewer_id),
-      reviewerEmail: String(row.reviewer_email),
-      reviewerDisplayName: String(row.reviewer_display_name),
-      kind: String(row.kind),
-      sendAt: (row.send_at as Date).toISOString(),
-      status: String(row.status),
-      sentAt: row.sent_at ? (row.sent_at as Date).toISOString() : null,
-      createdAt: (row.created_at as Date).toISOString(),
+      id: String(this.pick(row, 'id')),
+      assignmentSlug: String(this.pick(row, 'assignment_slug')),
+      reviewerId: String(this.pick(row, 'reviewer_id')),
+      reviewerEmail: String(this.pick(row, 'reviewer_email')),
+      reviewerDisplayName: String(this.pick(row, 'reviewer_display_name')),
+      kind: String(this.pick(row, 'kind')),
+      sendAt: this.toIso(this.pick(row, 'send_at')),
+      status: String(this.pick(row, 'status')),
+      sentAt:
+        sentAtRaw != null && sentAtRaw !== ''
+          ? this.toIso(sentAtRaw)
+          : null,
+      createdAt: this.toIso(this.pick(row, 'created_at')),
     };
+  }
+
+  private rethrowUnlessPermissionDenied(err: unknown): never {
+    const driverErr = this.getPgDriverError(err);
+    const message =
+      driverErr?.message ?? (err instanceof Error ? err.message : '') ?? '';
+    const code =
+      driverErr?.code ??
+      (typeof err === 'object' &&
+      err !== null &&
+      'code' in err &&
+      typeof (err as { code?: string }).code === 'string'
+        ? (err as { code: string }).code
+        : undefined);
+    const looksLikeQueryFailed =
+      err instanceof QueryFailedError ||
+      (typeof err === 'object' &&
+        err !== null &&
+        (err as { name?: string }).name === 'QueryFailedError') ||
+      driverErr !== undefined;
+
+    if (
+      looksLikeQueryFailed &&
+      (code === '42501' || /permission denied/i.test(message))
+    ) {
+      this.logger.error(
+        `Reminder admin DB permission denied: ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      throw new ForbiddenException({
+        message:
+          'Database permission denied for email reminders. Apply grants for the app DB role (see backend/scripts/grant-email-reminder-admin.sql).',
+        code: 'EMAIL_DB_FORBIDDEN',
+      });
+    }
+    throw err;
+  }
+
+  private getPgDriverError(
+    err: unknown,
+  ): { code?: string; message?: string } | undefined {
+    if (err instanceof QueryFailedError) {
+      return err.driverError as { code?: string; message?: string };
+    }
+    if (
+      typeof err === 'object' &&
+      err !== null &&
+      'driverError' in err &&
+      typeof (err as { driverError?: unknown }).driverError === 'object' &&
+      (err as { driverError?: unknown }).driverError !== null
+    ) {
+      return (err as { driverError: { code?: string; message?: string } })
+        .driverError;
+    }
+    return undefined;
   }
 
   async listForAssignment(
@@ -98,14 +223,14 @@ export class RemindersService {
     user: RequestUser,
   ): Promise<ReminderAdminDto[]> {
     await this.assertAssignmentScope(submissionSlug, assignmentSlug, user);
-    const rows = (await this.dataSource.query(
+    const rows = await this.query<Record<string, unknown>>(
       `SELECT id, assignment_slug, reviewer_id, reviewer_email, reviewer_display_name,
               kind, send_at, status, sent_at, created_at
          FROM "email"."reminder"
         WHERE assignment_slug = $1
         ORDER BY send_at ASC`,
       [assignmentSlug],
-    )) as Record<string, unknown>[];
+    );
     return rows.map((r) => this.mapRow(r));
   }
 
@@ -116,13 +241,13 @@ export class RemindersService {
     user: RequestUser,
   ): Promise<ReminderAdminDto> {
     await this.assertAssignmentScope(submissionSlug, assignmentSlug, user);
-    const rows = (await this.dataSource.query(
+    const rows = await this.query<Record<string, unknown>>(
       `SELECT id, assignment_slug, reviewer_id, reviewer_email, reviewer_display_name,
               kind, send_at, status, sent_at, created_at
          FROM "email"."reminder"
         WHERE id = $1 AND assignment_slug = $2`,
       [reminderId, assignmentSlug],
-    )) as Record<string, unknown>[];
+    );
     if (rows.length === 0) {
       throw new NotFoundException({
         message: 'Reminder not found',
@@ -155,10 +280,10 @@ export class RemindersService {
       });
     }
 
-    const existing = (await this.dataSource.query(
+    const existing = await this.query<{ id: string; status: string }>(
       `SELECT id, status FROM "email"."reminder" WHERE id = $1 AND assignment_slug = $2`,
       [reminderId, assignmentSlug],
-    )) as Array<{ id: string; status: string }>;
+    );
     if (existing.length === 0) {
       throw new NotFoundException({
         message: 'Reminder not found',
@@ -172,14 +297,14 @@ export class RemindersService {
       });
     }
 
-    const updated = (await this.dataSource.query(
+    const updated = await this.query<Record<string, unknown>>(
       `UPDATE "email"."reminder"
           SET send_at = $1::timestamptz
         WHERE id = $2 AND assignment_slug = $3 AND status = 'pending'
         RETURNING id, assignment_slug, reviewer_id, reviewer_email, reviewer_display_name,
                   kind, send_at, status, sent_at, created_at`,
       [sendAt.toISOString(), reminderId, assignmentSlug],
-    )) as Record<string, unknown>[];
+    );
     if (updated.length === 0) {
       throw new UnprocessableEntityException({
         message: 'Reminder could not be updated (no longer pending)',
@@ -196,10 +321,10 @@ export class RemindersService {
     user: RequestUser,
   ): Promise<ReminderAdminDto> {
     await this.assertAssignmentScope(submissionSlug, assignmentSlug, user);
-    const existing = (await this.dataSource.query(
+    const existing = await this.query<{ id: string; status: string }>(
       `SELECT id, status FROM "email"."reminder" WHERE id = $1 AND assignment_slug = $2`,
       [reminderId, assignmentSlug],
-    )) as Array<{ id: string; status: string }>;
+    );
     if (existing.length === 0) {
       throw new NotFoundException({
         message: 'Reminder not found',
@@ -213,14 +338,14 @@ export class RemindersService {
       });
     }
 
-    const updated = (await this.dataSource.query(
+    const updated = await this.query<Record<string, unknown>>(
       `UPDATE "email"."reminder"
           SET status = 'cancelled'
         WHERE id = $1 AND assignment_slug = $2 AND status = 'pending'
         RETURNING id, assignment_slug, reviewer_id, reviewer_email, reviewer_display_name,
                   kind, send_at, status, sent_at, created_at`,
       [reminderId, assignmentSlug],
-    )) as Record<string, unknown>[];
+    );
     if (updated.length === 0) {
       throw new UnprocessableEntityException({
         message: 'Reminder could not be cancelled (no longer pending)',

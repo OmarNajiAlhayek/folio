@@ -37,7 +37,7 @@ describe('DocxGeneratorService', () => {
         {
           id: 'p',
           kind: 'paragraph',
-          html: '<p>This is <strong>bold</strong> and <em>italic</em>.</p>',
+          html: '<p>This is <strong>bold</strong> and <em>italic</em> with <a href="https://example.com">a link</a>.</p>',
         },
         {
           id: 'tbl',
@@ -53,8 +53,12 @@ describe('DocxGeneratorService', () => {
           id: 'r',
           kind: 'references',
           items: [
-            { lang: 'en', text: 'Doe, J. (2020). Example.', doi: '10.1/abc' },
-            { lang: 'ar', text: 'الدوسري، س. (2020). نموذج.' },
+            {
+              lang: 'en',
+              html: '<p>Doe, J. (2020). <em>Example</em>.</p>',
+              doi: '10.1/abc',
+            },
+            { lang: 'ar', html: '<p>الدوسري، س. (2020). نموذج.</p>' },
           ],
         },
       ],
@@ -98,7 +102,7 @@ describe('DocxGeneratorService', () => {
         {
           id: 'r',
           kind: 'references',
-          items: [{ lang: 'en', text: 'A reference.' }],
+          items: [{ lang: 'en', html: '<p>A reference.</p>' }],
         },
       ],
     };
@@ -128,7 +132,7 @@ describe('DocxGeneratorService', () => {
         {
           id: 'r',
           kind: 'references',
-          items: [{ lang: 'en', text: 'Ref.' }],
+          items: [{ lang: 'en', html: '<p>Ref.</p>' }],
         },
       ],
     };

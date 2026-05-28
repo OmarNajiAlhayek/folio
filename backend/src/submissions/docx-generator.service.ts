@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   AlignmentType,
   Document,
+  ExternalHyperlink,
   HeadingLevel,
   ImageRun,
   LevelFormat,
@@ -18,6 +19,12 @@ import {
   type ParagraphChild,
 } from 'docx';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
+import {
+  referenceEntryHasContent,
+  referenceEntrySortKey,
+  resolveReferenceEntryHtml,
+  sanitizeConstructorLinkHref,
+} from './constructor-rich-text';
 import { sanitizeConstructorTipTapHtml } from './sanitize-constructor-html';
 import type { ManuscriptAlignment } from '../manuscript-styles/manuscript-style.types';
 import type { ManuscriptStyleProfile } from '../manuscript-styles/manuscript-style.types';
@@ -50,6 +57,8 @@ type InlineMarks = {
   bold?: boolean;
   italics?: boolean;
   underline?: boolean;
+  superScript?: boolean;
+  subScript?: boolean;
 };
 
 function toAlignmentType(a: ManuscriptAlignment) {
@@ -647,13 +656,17 @@ export class DocxGeneratorService {
     section: ReferencesSection,
     profile: ManuscriptStyleProfile,
   ): Paragraph[] {
-    const items = [...section.items].filter((i) => i.text?.trim());
+    const items = [...section.items].filter((i) => referenceEntryHasContent(i));
     const arabic = items
       .filter((i) => i.lang === 'ar')
-      .sort((a, b) => a.text.localeCompare(b.text, 'ar'));
+      .sort((a, b) =>
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'ar'),
+      );
     const english = items
       .filter((i) => i.lang === 'en')
-      .sort((a, b) => a.text.localeCompare(b.text, 'en'));
+      .sort((a, b) =>
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'en'),
+      );
     const ordered = profile.references.arabicFirst
       ? [...arabic, ...english]
       : [...english, ...arabic];
@@ -667,10 +680,11 @@ export class DocxGeneratorService {
     ];
     const sp = profile.references.entrySpacing;
     const renderEntry = (
-      entry: { text: string; doi?: string },
+      entry: ReferencesSection['items'][number],
       dir: ConstructorDir,
     ) => {
-      const children: ParagraphChild[] = [this.run(entry.text, dir, profile)];
+      const html = resolveReferenceEntryHtml(entry);
+      const children = this.collectInlineFromSanitizedHtml(html, dir, profile);
       if (entry.doi?.trim()) {
         children.push(
           this.run(` https://doi.org/${entry.doi.trim()}`, 'ltr', profile),
@@ -686,6 +700,37 @@ export class DocxGeneratorService {
     };
     for (const item of ordered) {
       out.push(renderEntry(item, item.lang === 'ar' ? 'rtl' : 'ltr'));
+    }
+    return out;
+  }
+
+  /** Flatten sanitized reference HTML into a single paragraph's inline runs. */
+  private collectInlineFromSanitizedHtml(
+    html: string,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+  ): ParagraphChild[] {
+    const sanitized = sanitizeConstructorTipTapHtml(html);
+    const wrapped = `<root>${sanitized}</root>`;
+    const root = parse(wrapped, {
+      sourceCodeLocationInfo: false,
+    }) as DefaultTreeAdapterMap['document'];
+    const out: ParagraphChild[] = [];
+    const walk = (node: Node): void => {
+      if (!('childNodes' in node) || !node.childNodes) return;
+      for (const child of node.childNodes) {
+        if (!('tagName' in child)) continue;
+        const tag = child.tagName.toLowerCase();
+        if (tag === 'p' || tag === 'li') {
+          out.push(...this.collectInline(child, dir, profile, {}));
+        } else if (tag === 'root' || tag === 'body' || tag === 'html') {
+          walk(child);
+        }
+      }
+    };
+    walk(root as unknown as Node);
+    if (out.length === 0) {
+      out.push(this.run('', dir, profile));
     }
     return out;
   }
@@ -802,16 +847,44 @@ export class DocxGeneratorService {
         );
         continue;
       }
+      if (tag === 'a') {
+        const href = sanitizeConstructorLinkHref(
+          this.elementAttr(child as Element, 'href'),
+        );
+        const linkChildren = this.collectInline(
+          child,
+          dir,
+          profile,
+          marks,
+        ).filter((c): c is TextRun => c instanceof TextRun);
+        if (href && linkChildren.length > 0) {
+          out.push(
+            new ExternalHyperlink({
+              link: href,
+              children: linkChildren,
+            }),
+          );
+        } else {
+          this.walkInline(child, dir, profile, marks, out);
+        }
+        continue;
+      }
       const nextMarks: InlineMarks = { ...marks };
       if (tag === 'strong' || tag === 'b') nextMarks.bold = true;
       else if (tag === 'em' || tag === 'i') nextMarks.italics = true;
       else if (tag === 'u') nextMarks.underline = true;
+      else if (tag === 'sup') nextMarks.superScript = true;
+      else if (tag === 'sub') nextMarks.subScript = true;
       this.walkInline(child, dir, profile, nextMarks, out);
     }
   }
 
   private isTextNode(node: Node): node is TextNode {
     return (node as TextNode).nodeName === '#text';
+  }
+
+  private elementAttr(el: Element, name: string): string | undefined {
+    return el.attrs?.find((a) => a.name === name)?.value;
   }
 
   private run(
@@ -835,6 +908,8 @@ export class DocxGeneratorService {
       bold: marks.bold,
       italics: marks.italics,
       underline: marks.underline ? {} : undefined,
+      superScript: marks.superScript,
+      subScript: marks.subScript,
       rightToLeft: isRtl,
       font: isRtl
         ? { ascii: f.latin, hAnsi: f.latin, cs: f.arabic }

@@ -31,10 +31,11 @@ describe('publicationSimilarityIndexPayload', () => {
     const payload = publicationSimilarityIndexPayload(
       stubSubmission({ abstractAr: 'ملخص عربي' }),
     );
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       abstract: 'ملخص عربي',
       keywords: 'kw',
       category: 'العلوم الطبية',
+      fullText: expect.stringContaining('ملخص عربي'),
     });
   });
 

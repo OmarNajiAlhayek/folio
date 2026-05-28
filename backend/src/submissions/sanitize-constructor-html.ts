@@ -1,14 +1,20 @@
-import sanitizeHtml from 'sanitize-html';
+import sanitizeHtml, { type Attributes } from 'sanitize-html';
 import type {
   ConstructorContent,
+  ConstructorReferenceEntry,
   ConstructorSection,
   RichTextBlockKind,
 } from './constructor-content.types';
+import {
+  referenceEntryHasContent,
+  resolveReferenceEntryHtml,
+  sanitizeConstructorLinkHref,
+} from './constructor-rich-text';
 
 /**
  * TipTap paragraph / rich-text HTML allowlist.
  * Keep in sync with `frontend/src/lib/sanitize-constructor-html.ts` and
- * `docx-generator.service.ts` `buildParagraph`.
+ * `docx-generator.service.ts` inline HTML walker.
  */
 export const CONSTRUCTOR_TIPTAP_ALLOWED_TAGS = [
   'p',
@@ -17,6 +23,9 @@ export const CONSTRUCTOR_TIPTAP_ALLOWED_TAGS = [
   'em',
   'i',
   'u',
+  'sup',
+  'sub',
+  'a',
   'ul',
   'ol',
   'li',
@@ -43,10 +52,33 @@ function sectionHasHtmlField(
   );
 }
 
+function normalizeReferenceEntry(
+  entry: ConstructorReferenceEntry,
+): ConstructorReferenceEntry {
+  const html = resolveReferenceEntryHtml(entry);
+  const next: ConstructorReferenceEntry = {
+    lang: entry.lang,
+    html,
+    ...(entry.doi?.trim() ? { doi: entry.doi.trim() } : {}),
+  };
+  return next;
+}
+
 export function sanitizeConstructorTipTapHtml(html: string): string {
   const sanitized = sanitizeHtml(html ?? '', {
     allowedTags: [...CONSTRUCTOR_TIPTAP_ALLOWED_TAGS],
-    allowedAttributes: {},
+    allowedAttributes: {
+      a: ['href'],
+    },
+    transformTags: {
+      a: (tagName, attribs) => {
+        const safe = sanitizeConstructorLinkHref(attribs.href);
+        if (!safe) {
+          return { tagName: 'span', attribs: {} as Attributes };
+        }
+        return { tagName, attribs: { href: safe } };
+      },
+    },
   });
   if (!sanitized || stripHtml(sanitized).length === 0) {
     return '<p></p>';
@@ -61,6 +93,12 @@ export function sanitizeConstructorContent(
   return {
     ...content,
     sections: content.sections.map((section) => {
+      if (section.kind === 'references') {
+        return {
+          ...section,
+          items: section.items.map((item) => normalizeReferenceEntry(item)),
+        };
+      }
       if (!sectionHasHtmlField(section)) return section;
       return {
         ...section,
@@ -69,3 +107,5 @@ export function sanitizeConstructorContent(
     }),
   };
 }
+
+export { referenceEntryHasContent };

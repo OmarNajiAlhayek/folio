@@ -10,10 +10,12 @@ import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { createReadStream } from 'fs';
 import { SubmissionsService } from '../submissions/submissions.service';
+import { AuthorSuggestionsQueryDto } from './dto/author-suggestions.query.dto';
 import {
   ListPublicSubmissionsQueryDto,
   toPublicationCatalogFilters,
 } from './dto/list-public-submissions.query.dto';
+import { PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT } from '../submissions/publication-catalog-search.util';
 import { SubmissionArticleType } from '../entities/submission-article-type.enum';
 import { ARABIC_DISCIPLINE_LABELS } from '../ai/discipline-labels';
 
@@ -42,10 +44,47 @@ export class PublicSubmissionsController {
   })
   @ApiQuery({ name: 'publishedFrom', required: false, example: '2024-01-15' })
   @ApiQuery({ name: 'publishedTo', required: false, example: '2024-12-31' })
+  @ApiQuery({
+    name: 'searchMode',
+    required: false,
+    enum: ['keyword', 'semantic'],
+    description: 'keyword (default) or semantic (requires q)',
+  })
+  @ApiQuery({
+    name: 'semanticLimit',
+    required: false,
+    description: 'Max semantic hits (1–30, default 20)',
+  })
   async list(@Query() query: ListPublicSubmissionsQueryDto) {
     const filters = toPublicationCatalogFilters(query);
+    if (query.searchMode === 'semantic' && filters.q) {
+      const limit =
+        query.semanticLimit != null
+          ? Math.min(30, Math.max(1, query.semanticLimit))
+          : 20;
+      return this.submissionsService.findPublishedSemanticList(filters, limit);
+    }
     const items = await this.submissionsService.findPublishedList(filters);
     return items.map((s) => this.submissionsService.toPublicationListItem(s));
+  }
+
+  @Get('author-suggestions')
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    description: 'Partial author display name (min 2 characters)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Max suggestions (1–20, default 10)',
+  })
+  async authorSuggestions(@Query() query: AuthorSuggestionsQueryDto) {
+    const limit = query.limit ?? PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT;
+    return this.submissionsService.findPublishedAuthorSuggestions(
+      query.q,
+      limit,
+    );
   }
 
   @Get(':slug/related')
@@ -73,6 +112,8 @@ export class PublicSubmissionsController {
       abstractAr: s.abstractAr,
       keywords: s.keywords,
       keywordsAr: s.keywordsAr,
+      discipline: s.discipline,
+      articleType: s.articleType,
       publishedAt: s.publishedAt,
       author: s.author
         ? {

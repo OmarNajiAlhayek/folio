@@ -62,16 +62,23 @@ import { assignmentInvitePageUrl } from '../common/folio-frontend-urls';
 import type { RequestUser } from '../common/types/request-user';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
-import { Readable } from 'stream';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { ContributorDto } from './dto/contributor.dto';
 import { slugifySubmissionTitle } from './slugify-submission-title';
 import {
   applyPublicationCatalogQuery,
+  PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
+  PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT,
+  PUBLICATION_AUTHOR_SUGGESTION_MAX_LIMIT,
+  PUBLICATION_AUTHOR_SUGGESTION_MIN_QUERY_LENGTH,
+  PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
+  PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
   publicationCatalogHasTextOrFilters,
   publicationCatalogNeedsAuthorJoin,
+  trimCatalogFilter,
   type PublicationCatalogFilters,
+  type PublishedAuthorSuggestionRow,
 } from './publication-catalog-search.util';
 import {
   normalizeSubmissionFileKind,
@@ -97,7 +104,7 @@ import {
 } from './constructor-content-utils';
 import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
-import { readFile } from 'fs/promises';
+import { open, readFile, rename, unlink, writeFile } from 'fs/promises';
 import { SubmissionReviewMethod } from '../entities/submission-review-method.enum';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { sanitizeConstructorContent } from './sanitize-constructor-html';
@@ -115,9 +122,30 @@ import {
   parseAllowedDisciplinesFromEnv,
 } from './submission-discipline.util';
 import {
+  hasKeywordLanguagePair,
+  normalizeKeywordSuggestions,
+} from './keyword-list.util';
+import {
   isSimilarityCorpusArticleId,
   publicationSimilarityIndexPayload,
 } from './publication-similarity.util';
+import {
+  aggregateCorpusSimilarityMatches,
+  attachPublicationMetadata,
+  type CorpusSimilarityReport,
+} from './corpus-similarity-report.util';
+import {
+  buildSubmissionCorpusPlainText,
+  isCorpusPlainTextSufficient,
+} from './submission-corpus-text.util';
+import {
+  buildReviewerMatchQueryText,
+  isReviewerMatchQuerySufficient,
+} from './submission-reviewer-match.util';
+import {
+  enrichReviewerSuggestions,
+  type SuggestedReviewersReport,
+} from './suggested-reviewers-report.util';
 const EDITOR_TRANSITIONS: Partial<
   Record<SubmissionStatus, SubmissionStatus[]>
 > = {
@@ -267,6 +295,104 @@ export class SubmissionsService implements OnModuleInit {
     };
   }
 
+  async suggestKeywordsPreview(
+    _user: RequestUser,
+    input: {
+      title?: string;
+      abstract?: string;
+      titleAr?: string;
+      abstractAr?: string;
+    },
+  ): Promise<{ keywordsEn: string[]; keywordsAr: string[] }> {
+    return this.suggestKeywordsFromMetadata(input);
+  }
+
+  async suggestKeywords(
+    slug: string,
+    user: RequestUser,
+  ): Promise<{ keywordsEn: string[]; keywordsAr: string[] }> {
+    const s = await this.getBySlugOrThrow(slug);
+    if (s.authorId !== user.sub) {
+      throw new ForbiddenException({
+        message: 'Only the author can request keyword suggestions',
+        code: 'FORBIDDEN',
+      });
+    }
+    if (
+      s.status !== SubmissionStatus.DRAFT &&
+      s.status !== SubmissionStatus.REVISIONS_REQUESTED
+    ) {
+      throw new BadRequestException({
+        message: 'Keyword suggestions are only available while editing the draft',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const hasEn = hasKeywordLanguagePair(s.title, s.abstract);
+    const hasAr = hasKeywordLanguagePair(s.titleAr, s.abstractAr);
+    return this.suggestKeywordsFromMetadata({
+      title: hasEn ? (s.title ?? undefined) : undefined,
+      abstract: hasEn ? (s.abstract ?? undefined) : undefined,
+      titleAr: hasAr ? (s.titleAr ?? undefined) : undefined,
+      abstractAr: hasAr ? (s.abstractAr ?? undefined) : undefined,
+    });
+  }
+
+  private async suggestKeywordsFromMetadata(input: {
+    title?: string;
+    abstract?: string;
+    titleAr?: string;
+    abstractAr?: string;
+  }): Promise<{ keywordsEn: string[]; keywordsAr: string[] }> {
+    const hasEn = hasKeywordLanguagePair(input.title, input.abstract);
+    const hasAr = hasKeywordLanguagePair(input.titleAr, input.abstractAr);
+    if (!hasEn && !hasAr) {
+      throw new BadRequestException({
+        message:
+          'Provide English or Arabic title and abstract before requesting keyword suggestions',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (!this.aiClient.isKeywordsEnabled()) {
+      throw new BadRequestException({
+        message: 'AI keyword suggestion service is not configured',
+        code: 'AI_SERVICE_UNAVAILABLE',
+      });
+    }
+    const outcome = await this.aiClient.suggestKeywords({
+      title: hasEn ? input.title : undefined,
+      abstract: hasEn ? input.abstract : undefined,
+      titleAr: hasAr ? input.titleAr : undefined,
+      abstractAr: hasAr ? input.abstractAr : undefined,
+    });
+    if (outcome.status === 'unavailable') {
+      throw new BadRequestException({
+        message: 'AI keyword suggestion service is not configured',
+        code: 'AI_SERVICE_UNAVAILABLE',
+      });
+    }
+    if (outcome.status !== 'ok') {
+      throw new BadRequestException({
+        message: 'Could not suggest keywords; try again later',
+        code: 'AI_KEYWORDS_SUGGESTION_FAILED',
+      });
+    }
+    const keywordsEn = normalizeKeywordSuggestions(
+      outcome.data.keywords_en ?? [],
+      'en',
+    );
+    const keywordsAr = normalizeKeywordSuggestions(
+      outcome.data.keywords_ar ?? [],
+      'ar',
+    );
+    if (keywordsEn.length === 0 && keywordsAr.length === 0) {
+      throw new BadRequestException({
+        message: 'Could not suggest keywords from the provided text',
+        code: 'AI_KEYWORDS_SUGGESTION_FAILED',
+      });
+    }
+    return { keywordsEn, keywordsAr };
+  }
+
   async setDisciplineForUser(
     slug: string,
     user: RequestUser,
@@ -283,23 +409,13 @@ export class SubmissionsService implements OnModuleInit {
       s.authorId === user.sub &&
       (s.status === SubmissionStatus.DRAFT ||
         s.status === SubmissionStatus.REVISIONS_REQUESTED);
-    const isEditor = this.hasPerm(
-      user,
-      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-    );
     if (isAuthor) {
       s.discipline = discipline;
       s.disciplineSource = SubmissionDisciplineSource.AUTHOR;
       return this.submissionsRepo.save(s);
     }
-    if (isEditor) {
-      this.assertEditorQueueSubmissionVisible(s);
-      s.discipline = discipline;
-      s.disciplineSource = SubmissionDisciplineSource.EDITOR;
-      return this.submissionsRepo.save(s);
-    }
     throw new ForbiddenException({
-      message: 'Cannot set discipline on this submission',
+      message: 'Only the author can set discipline on this submission',
       code: 'FORBIDDEN',
     });
   }
@@ -603,12 +719,123 @@ export class SubmissionsService implements OnModuleInit {
 
   private async unlinkUploadTemp(file: Express.Multer.File): Promise<void> {
     if (!file.path) return;
-    const fs = await import('fs/promises');
     try {
-      await fs.unlink(file.path);
+      await unlink(file.path);
     } catch {
       /* ignore missing temp */
     }
+  }
+
+  private assertAuthorMayAddFile(
+    submission: Submission,
+    user: RequestUser,
+    kind: SubmissionFileKind,
+  ): void {
+    if (submission.authorId !== user.sub) {
+      throw new ForbiddenException({
+        message: 'Only the author can upload files',
+        code: 'FORBIDDEN',
+      });
+    }
+    const canUpload =
+      submission.status === SubmissionStatus.DRAFT ||
+      submission.status === SubmissionStatus.REVISIONS_REQUESTED ||
+      submission.status === SubmissionStatus.COPYEDITING;
+    if (!canUpload) {
+      throw new BadRequestException({
+        message: 'Cannot upload in current status',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (
+      submission.status === SubmissionStatus.COPYEDITING &&
+      kind !== 'manuscript'
+    ) {
+      throw new BadRequestException({
+        message: 'During copyediting only manuscript revisions may be uploaded',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+  }
+
+  private async replaceSubmissionFilesOfKind(
+    submissionId: string,
+    kind: SubmissionFileKind,
+  ): Promise<void> {
+    const existing = await this.filesRepo.find({
+      where: { submissionId, kind },
+    });
+    for (const row of existing) {
+      try {
+        unlinkSync(join(this.uploadRoot(), row.storageKey));
+      } catch {
+        /* ignore */
+      }
+    }
+    if (existing.length > 0) {
+      await this.filesRepo.remove(existing);
+    }
+  }
+
+  private async readFileSniffBuffer(
+    source:
+      | { type: 'path'; path: string }
+      | { type: 'buffer'; buffer: Buffer },
+  ): Promise<Buffer> {
+    if (source.type === 'buffer') {
+      return source.buffer.subarray(0, Math.min(4096, source.buffer.length));
+    }
+    const handle = await open(source.path, 'r');
+    const sniffBuf = Buffer.alloc(4096);
+    await handle.read(sniffBuf, 0, 4096, 0);
+    await handle.close();
+    return sniffBuf;
+  }
+
+  /**
+   * Store a submission file on disk and insert its row. Accepts either a
+   * Multer temp path (user upload) or an in-memory buffer (generated docx).
+   */
+  private async persistSubmissionFile(params: {
+    submissionId: string;
+    source:
+      | { type: 'path'; path: string }
+      | { type: 'buffer'; buffer: Buffer };
+    originalName: string;
+    kind: SubmissionFileKind;
+    sizeBytes: number;
+  }): Promise<SubmissionFile> {
+    const ext = extname(params.originalName).toLowerCase();
+    const sniffBuf = await this.readFileSniffBuffer(params.source);
+    const sniff = sniffUploadMime(sniffBuf, ext, params.kind);
+    if (!sniff.ok) {
+      throw new BadRequestException({
+        message: sniff.reason,
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    const dir = this.ensureUploadDir();
+    const storageKey = `${randomUUID()}${ext}`;
+    const destPath = join(dir, storageKey);
+
+    if (params.source.type === 'path') {
+      await rename(params.source.path, destPath);
+    } else {
+      await writeFile(destPath, params.source.buffer);
+    }
+
+    const row = this.filesRepo.create({
+      submissionId: params.submissionId,
+      storageKey,
+      originalName: params.originalName,
+      mimeType: sniff.mimeType,
+      sizeBytes: String(params.sizeBytes),
+      kind: params.kind,
+      fileStage: SubmissionFileStage.SUBMISSION,
+      isPublic: false,
+    });
+    return this.filesRepo.save(row);
   }
 
   private async assertSubmissionSlugAvailable(
@@ -720,6 +947,103 @@ export class SubmissionsService implements OnModuleInit {
     return qb.getMany();
   }
 
+  async findPublishedAuthorSuggestions(
+    q: string,
+    limit = PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT,
+  ): Promise<PublishedAuthorSuggestionRow[]> {
+    const trimmed = trimCatalogFilter(q);
+    if (
+      !trimmed ||
+      trimmed.length < PUBLICATION_AUTHOR_SUGGESTION_MIN_QUERY_LENGTH
+    ) {
+      return [];
+    }
+    const lim = Math.min(
+      PUBLICATION_AUTHOR_SUGGESTION_MAX_LIMIT,
+      Math.max(1, limit),
+    );
+    const matchParams = {
+      pubAuthor: trimmed,
+      pubAuthorSimMin: PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
+    };
+
+    const rows = await this.submissionsRepo
+      .createQueryBuilder('s')
+      .innerJoin('s.author', 'author')
+      .select('author.displayName', 'displayName')
+      .addSelect('COUNT(s.id)', 'publicationCount')
+      .where('s.status = :pubStatus', { pubStatus: SubmissionStatus.PUBLISHED })
+      .andWhere("COALESCE(author.display_name, '') <> ''")
+      .andWhere(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL, matchParams)
+      .groupBy('author.displayName')
+      .orderBy(PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL, 'DESC')
+      .addOrderBy('COUNT(s.id)', 'DESC')
+      .setParameters(matchParams)
+      .limit(lim)
+      .getRawMany<{ displayName: string; publicationCount: string }>();
+
+    return rows.map((row) => ({
+      displayName: row.displayName,
+      publicationCount: Number(row.publicationCount) || 0,
+    }));
+  }
+
+  async findPublishedSemanticList(
+    filters: PublicationCatalogFilters,
+    limit = 20,
+  ): Promise<
+    (ReturnType<SubmissionsService['toPublicationListItem']> & {
+      searchSnippet: string;
+      searchScore: number;
+    })[]
+  > {
+    const q = filters.q?.trim();
+    if (!q || !this.aiClient.isSimilarityEnabled()) {
+      return [];
+    }
+    await this.backfillPublishedSimilarityIndex();
+    const lim = Math.min(30, Math.max(1, limit));
+    const hits = (
+      await this.aiClient.semanticSearchPublications({ query: q, limit: lim })
+    ).filter((h) => isSimilarityCorpusArticleId(h.article_id));
+    if (hits.length === 0) {
+      return [];
+    }
+
+    const ids = hits.map((h) => h.article_id);
+    const { q: _omit, ...rest } = filters;
+    const filtersWithoutQ: PublicationCatalogFilters = rest;
+    const qb = this.submissionsRepo.createQueryBuilder('s');
+    applyPublicationCatalogQuery(qb, filtersWithoutQ, {
+      skipQuickSearch: true,
+    });
+    qb.andWhere('s.id IN (:...semanticIds)', { semanticIds: ids });
+    if (!publicationCatalogNeedsAuthorJoin(filtersWithoutQ)) {
+      qb.leftJoinAndSelect('s.author', 'author');
+    }
+    const rows = await qb.getMany();
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const hitById = new Map(hits.map((h) => [h.article_id, h]));
+
+    const ordered: (ReturnType<SubmissionsService['toPublicationListItem']> & {
+      searchSnippet: string;
+      searchScore: number;
+    })[] = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      const hit = hitById.get(id);
+      if (!row || !hit) {
+        continue;
+      }
+      ordered.push({
+        ...this.toPublicationListItem(row),
+        searchSnippet: hit.snippet,
+        searchScore: hit.score,
+      });
+    }
+    return ordered;
+  }
+
   async findPublishedOne(slug: string): Promise<Submission> {
     const s = await this.submissionsRepo.findOne({
       where: { slug, status: SubmissionStatus.PUBLISHED },
@@ -747,6 +1071,7 @@ export class SubmissionsService implements OnModuleInit {
       abstract: payload.abstract,
       keywords: payload.keywords,
       category: payload.category,
+      fullText: payload.fullText,
     });
   }
 
@@ -898,6 +1223,272 @@ export class SubmissionsService implements OnModuleInit {
     await this.assertCanRead(s, user);
     const role = this.viewerRole(s, user);
     return submissionToViewerJson(s, role);
+  }
+
+  private static readonly CORPUS_SIMILARITY_THRESHOLD = 0.85;
+
+  async getCorpusSimilarityReport(
+    slug: string,
+    user: RequestUser,
+  ): Promise<CorpusSimilarityReport> {
+    const s = await this.submissionsRepo.findOne({ where: { slug } });
+    if (!s) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    await this.assertCanRead(s, user);
+
+    if (s.authorId === user.sub) {
+      throw new ForbiddenException({
+        message: 'Corpus similarity is not available to authors',
+        code: 'FORBIDDEN',
+      });
+    }
+
+    const isEditor = this.hasPerm(
+      user,
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    );
+    const isCopyeditorOnly =
+      this.hasPerm(user, PERMISSION_SLUGS.COPYEDIT_SUBMIT_NOTE) && !isEditor;
+    if (isCopyeditorOnly) {
+      throw new ForbiddenException({
+        message: 'Corpus similarity is not available to copyeditors',
+        code: 'FORBIDDEN',
+      });
+    }
+
+    const assignedReviewer = await this.assignmentsRepo.exists({
+      where: {
+        submissionId: s.id,
+        reviewerId: user.sub,
+        status: In([AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED]),
+      },
+    });
+    if (!isEditor && !assignedReviewer) {
+      throw new ForbiddenException({
+        message: 'Corpus similarity requires editor or assigned reviewer access',
+        code: 'FORBIDDEN',
+      });
+    }
+
+    if (!this.aiClient.isCorpusSimilarityEnabled()) {
+      return { status: 'unavailable' };
+    }
+
+    const plainText = buildSubmissionCorpusPlainText(s);
+    if (!isCorpusPlainTextSufficient(plainText)) {
+      return { status: 'no_text' };
+    }
+
+    const threshold = SubmissionsService.CORPUS_SIMILARITY_THRESHOLD;
+    const matches = await this.aiClient.detectCorpusSimilarity({
+      submissionText: plainText,
+      threshold,
+      category: s.discipline?.trim() || undefined,
+    });
+    if (matches === null) {
+      return { status: 'unavailable' };
+    }
+
+    const aggregated = aggregateCorpusSimilarityMatches(s, matches);
+    const articleIds = aggregated.sources.map((src) => src.articleId);
+    const publishedById = new Map<
+      string,
+      { slug: string; title: string; titleAr: string | null }
+    >();
+    if (articleIds.length > 0) {
+      const rows = await this.submissionsRepo.find({
+        where: {
+          id: In(articleIds),
+          status: SubmissionStatus.PUBLISHED,
+        },
+        select: ['id', 'slug', 'title', 'titleAr'],
+      });
+      for (const row of rows) {
+        if (!row.slug) {
+          continue;
+        }
+        publishedById.set(row.id, {
+          slug: row.slug,
+          title: row.title ?? '',
+          titleAr: row.titleAr,
+        });
+      }
+    }
+
+    return {
+      status: 'ok',
+      threshold,
+      matchCount: aggregated.matchCount,
+      sources: attachPublicationMetadata(aggregated.sources, publishedById),
+    };
+  }
+
+  async getSuggestedReviewers(
+    slug: string,
+    user: RequestUser,
+  ): Promise<SuggestedReviewersReport> {
+    const s = await this.submissionsRepo.findOne({ where: { slug } });
+    if (!s) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    await this.assertCanRead(s, user);
+
+    if (
+      !this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER) ||
+      !this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
+    ) {
+      throw new ForbiddenException({
+        message: 'Reviewer suggestions require editor assign permission',
+        code: 'FORBIDDEN',
+      });
+    }
+
+    if (!this.aiClient.isReviewerMatchingEnabled()) {
+      return { status: 'unavailable' };
+    }
+
+    const queryText = buildReviewerMatchQueryText(s);
+    if (!isReviewerMatchQuerySufficient(queryText)) {
+      return { status: 'no_text' };
+    }
+
+    const profiles = await this.listReviewerProfilesForMatching();
+    if (profiles.length === 0) {
+      return { status: 'no_candidates' };
+    }
+
+    const busyAssignments = await this.assignmentsRepo.find({
+      where: {
+        submissionId: s.id,
+        status: In([AssignmentStatus.INVITED, AssignmentStatus.ACCEPTED]),
+      },
+      select: ['reviewerId'],
+    });
+    const excludeReviewerIds = busyAssignments.map((a) => a.reviewerId);
+    const candidateIds = profiles.map((p) => p.id);
+    const indexHistory = await this.loadReviewHistoryForMatching(
+      candidateIds,
+      s.id,
+    );
+
+    const outcome = await this.aiClient.suggestReviewers({
+      queryText,
+      candidateIds,
+      excludeReviewerIds,
+      indexProfiles: profiles.map((p) => ({
+        reviewerId: p.id,
+        affiliation: p.affiliation ?? '',
+        reviewKeywords: p.reviewKeywords ?? '',
+        displayName: p.displayName,
+      })),
+      indexHistory,
+    });
+
+    if (outcome.status === 'unavailable') {
+      return { status: 'unavailable' };
+    }
+    if (outcome.status === 'failed') {
+      return { status: 'unavailable' };
+    }
+
+    const profilesById = new Map(
+      profiles.map((p) => [
+        p.id,
+        { displayName: p.displayName, email: p.email },
+      ]),
+    );
+    return {
+      status: 'ok',
+      suggestions: enrichReviewerSuggestions(outcome.hits, profilesById),
+    };
+  }
+
+  private async listReviewerProfilesForMatching(): Promise<
+    Array<{
+      id: string;
+      displayName: string;
+      email: string;
+      affiliation: string | null;
+      reviewKeywords: string | null;
+    }>
+  > {
+    const ids = await this.rbacService.listUserIdsWithPermission(
+      PERMISSION_SLUGS.REVIEW_SUBMIT,
+    );
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.usersRepo.find({
+      where: { id: In(ids), willingToReview: true },
+      select: [
+        'id',
+        'displayName',
+        'email',
+        'affiliation',
+        'reviewKeywords',
+      ],
+      order: { displayName: 'ASC', email: 'ASC' },
+    });
+  }
+
+  private async loadReviewHistoryForMatching(
+    reviewerIds: string[],
+    excludeSubmissionId: string,
+  ): Promise<
+    Array<{
+      reviewerId: string;
+      submissionId: string;
+      abstract: string;
+      keywords: string;
+    }>
+  > {
+    if (reviewerIds.length === 0) {
+      return [];
+    }
+    const assignments = await this.assignmentsRepo.find({
+      where: {
+        reviewerId: In(reviewerIds),
+        status: AssignmentStatus.COMPLETED,
+      },
+      relations: ['submission'],
+    });
+    const rows: Array<{
+      reviewerId: string;
+      submissionId: string;
+      abstract: string;
+      keywords: string;
+    }> = [];
+    for (const assignment of assignments) {
+      if (assignment.submissionId === excludeSubmissionId) {
+        continue;
+      }
+      const sub = assignment.submission;
+      if (!sub) {
+        continue;
+      }
+      const abstract = (sub.abstractAr?.trim() || sub.abstract?.trim() || '').trim();
+      const keywords = [sub.keywordsAr, sub.keywords]
+        .map((k) => k?.trim())
+        .filter((k): k is string => !!k)
+        .join(', ');
+      if (!abstract && !keywords) {
+        continue;
+      }
+      rows.push({
+        reviewerId: assignment.reviewerId,
+        submissionId: assignment.submissionId,
+        abstract: sub.abstract ?? '',
+        keywords: sub.keywords ?? '',
+      });
+    }
+    return rows;
   }
 
   async update(
@@ -1207,34 +1798,16 @@ export class SubmissionsService implements OnModuleInit {
       options.attachKind === 'manuscript_constructor'
         ? 'manuscript_constructor'
         : 'manuscript';
-    const existing = await this.filesRepo.find({
-      where: { submissionId: s.id, kind: attachKind },
-    });
-    for (const row of existing) {
-      try {
-        unlinkSync(join(this.uploadRoot(), row.storageKey));
-      } catch {
-        /* ignore */
-      }
-    }
-    if (existing.length > 0) {
-      await this.filesRepo.remove(existing);
-    }
+    this.assertAuthorMayAddFile(s, user, attachKind);
+    await this.replaceSubmissionFilesOfKind(s.id, attachKind);
     const fileName = `${s.slug ?? 'manuscript'}-constructor.docx`;
-    const fakeFile: Express.Multer.File = {
-      fieldname: 'file',
-      originalname: fileName,
-      encoding: '7bit',
-      mimetype:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      buffer,
-      size: buffer.length,
-      destination: '',
-      filename: fileName,
-      path: '',
-      stream: Readable.from(buffer),
-    };
-    const file = await this.addFile(submissionSlug, user, fakeFile, attachKind);
+    const file = await this.persistSubmissionFile({
+      submissionId: s.id,
+      source: { type: 'buffer', buffer },
+      originalName: fileName,
+      kind: attachKind,
+      sizeBytes: buffer.length,
+    });
     return { kind: 'attached', file };
   }
 
@@ -2023,33 +2596,9 @@ export class SubmissionsService implements OnModuleInit {
     kindRaw?: string,
   ): Promise<SubmissionFile> {
     const s = await this.getBySlugOrThrow(submissionSlug);
-    const submissionId = s.id;
-    if (s.authorId !== user.sub) {
-      throw new ForbiddenException({
-        message: 'Only the author can upload files',
-        code: 'FORBIDDEN',
-      });
-    }
-    const canUpload =
-      s.status === SubmissionStatus.DRAFT ||
-      s.status === SubmissionStatus.REVISIONS_REQUESTED ||
-      s.status === SubmissionStatus.COPYEDITING;
-    if (!canUpload) {
-      throw new BadRequestException({
-        message: 'Cannot upload in current status',
-        code: 'VALIDATION_ERROR',
-      });
-    }
-    if (s.status === SubmissionStatus.COPYEDITING) {
-      const kind = normalizeSubmissionFileKind(kindRaw);
-      if (kind !== 'manuscript') {
-        throw new BadRequestException({
-          message: 'During copyediting only manuscript revisions may be uploaded',
-          code: 'VALIDATION_ERROR',
-        });
-      }
-    }
     const kind = normalizeSubmissionFileKind(kindRaw);
+    this.assertAuthorMayAddFile(s, user, kind);
+
     if (!isExtensionAllowedForKind(file.originalname, kind)) {
       await this.unlinkUploadTemp(file);
       throw new BadRequestException({
@@ -2058,7 +2607,6 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
 
-    const ext = extname(file.originalname).toLowerCase();
     const tempPath = file.path;
     if (!tempPath) {
       throw new BadRequestException({
@@ -2067,36 +2615,18 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
 
-    const fs = await import('fs/promises');
-    const handle = await fs.open(tempPath, 'r');
-    const sniffBuf = Buffer.alloc(4096);
-    await handle.read(sniffBuf, 0, 4096, 0);
-    await handle.close();
-
-    const sniff = sniffUploadMime(sniffBuf, ext, kind);
-    if (!sniff.ok) {
-      await this.unlinkUploadTemp(file);
-      throw new BadRequestException({
-        message: sniff.reason,
-        code: 'VALIDATION_ERROR',
+    try {
+      return await this.persistSubmissionFile({
+        submissionId: s.id,
+        source: { type: 'path', path: tempPath },
+        originalName: file.originalname,
+        kind,
+        sizeBytes: file.size,
       });
+    } catch (e) {
+      await this.unlinkUploadTemp(file);
+      throw e;
     }
-
-    const dir = this.ensureUploadDir();
-    const storageKey = `${randomUUID()}${ext}`;
-    await fs.rename(tempPath, join(dir, storageKey));
-
-    const row = this.filesRepo.create({
-      submissionId,
-      storageKey,
-      originalName: file.originalname,
-      mimeType: sniff.mimeType,
-      sizeBytes: String(file.size),
-      kind,
-      fileStage: SubmissionFileStage.SUBMISSION,
-      isPublic: false,
-    });
-    return this.filesRepo.save(row);
   }
 
   async getFileForUser(

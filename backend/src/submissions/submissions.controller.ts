@@ -37,6 +37,7 @@ import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage
 import { GenerateDocxDto } from './dto/constructor-content.dto';
 import { SubmitSubmissionDto } from './dto/submit-submission.dto';
 import { PatchDisciplineDto } from './dto/patch-discipline.dto';
+import { SuggestKeywordsPreviewDto } from './dto/suggest-keywords-preview.dto';
 import type { ConstructorContent } from './constructor-content.types';
 import { Readable } from 'stream';
 import { Permissions } from '../common/decorators/permissions.decorator';
@@ -112,6 +113,20 @@ export class SubmissionsController {
     });
   }
 
+  /**
+   * Suggest keywords from in-form metadata before a submission slug exists (new-submission wizard).
+   */
+  @Post('suggest-keywords-preview')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ default: {} })
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  suggestKeywordsPreview(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SuggestKeywordsPreviewDto,
+  ) {
+    return this.submissionsService.suggestKeywordsPreview(user, dto);
+  }
+
   @Get('discipline-labels')
   @Permissions(
     PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
@@ -132,6 +147,24 @@ export class SubmissionsController {
       s = status as SubmissionStatus;
     }
     return this.submissionsService.findAllForUser(user, s);
+  }
+
+  @Get(':slug/corpus-similarity')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
+  getCorpusSimilarity(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.getCorpusSimilarityReport(slug, user);
+  }
+
+  @Get(':slug/suggested-reviewers')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER)
+  getSuggestedReviewers(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.getSuggestedReviewers(slug, user);
   }
 
   @Get(':slug')
@@ -184,11 +217,16 @@ export class SubmissionsController {
     return this.submissionsService.suggestDiscipline(slug, user);
   }
 
+  @Post(':slug/suggest-keywords')
+  @UseGuards(FolioThrottlerGuard)
+  @Throttle({ default: {} })
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  suggestKeywords(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
+    return this.submissionsService.suggestKeywords(slug, user);
+  }
+
   @Patch(':slug/discipline')
-  @Permissions(
-    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
-    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-  )
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   patchDiscipline(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,

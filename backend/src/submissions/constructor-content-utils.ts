@@ -6,9 +6,15 @@ import type {
   RichTextBlockKind,
   TitleSection,
 } from './constructor-content.types';
+import { referenceEntryHasContent } from './sanitize-constructor-html';
+
+/** Strip HTML tags from constructor rich-text blocks (shared with corpus plain-text export). */
+export function stripConstructorHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, '').trim();
+}
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, '').trim();
+  return stripConstructorHtml(html);
 }
 
 function sectionHasContent(section: ConstructorSection): boolean {
@@ -31,7 +37,7 @@ function sectionHasContent(section: ConstructorSection): boolean {
     case 'authors':
       return section.authors.some((a) => a.fullName.trim().length > 0);
     case 'references':
-      return section.items.some((r) => r.text.trim().length > 0);
+      return section.items.some((r) => referenceEntryHasContent(r));
     case 'image':
       return Boolean(section.fileId) || section.caption.trim().length > 0;
     case 'table':
@@ -199,7 +205,7 @@ export function validateConstructorContentForSubmit(
     });
   } else {
     const total = refs.reduce(
-      (n, r) => n + r.items.filter((i) => i.text?.trim()).length,
+      (n, r) => n + r.items.filter((i) => referenceEntryHasContent(i)).length,
       0,
     );
     if (total === 0) {

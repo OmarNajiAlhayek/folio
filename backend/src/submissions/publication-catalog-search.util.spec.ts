@@ -4,6 +4,7 @@ import {
   publicationCatalogBoundParamNames,
   publicationCatalogNeedsAuthorJoin,
   PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
+  PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
   PUBLICATION_QUICK_SEARCH_MATCH_SQL,
   PUBLICATION_QUICK_SEARCH_RANK_SQL,
   trimCatalogFilter,
@@ -38,14 +39,23 @@ describe('publication-catalog-search.util', () => {
       PUBLICATION_QUICK_SEARCH_MATCH_SQL,
       PUBLICATION_QUICK_SEARCH_RANK_SQL,
       PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
+      PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
     ];
     for (const sql of frags) {
       expect(sql).not.toMatch(/\$\{|\$\d|'\s*\+|concat\(/i);
       expect(sql).toMatch(/:[a-zA-Z][a-zA-Z0-9_]*/);
     }
     expect(publicationCatalogBoundParamNames()).toEqual(
-      expect.arrayContaining(['pubQ', 'pubAuthor', 'pubDocSimMin', 'pubAuthorSimMin']),
+      expect.arrayContaining([
+        'pubQ',
+        'pubAuthor',
+        'pubDocSimMin',
+        'pubAuthorSimMin',
+      ]),
     );
+    expect(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL).toMatch(/plainto_tsquery/);
+    expect(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL).toMatch(/similarity\(/);
+    expect(PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL).toMatch(/ts_rank_cd/);
   });
 
   it('applyPublicationCatalogQuery wires status and optional filters', () => {

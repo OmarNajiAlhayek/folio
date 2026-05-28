@@ -63,7 +63,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
       {
         id: 'r1',
         kind: 'references',
-        items: [{ id: 'ref1', text: 'Author. Title. 2024.' }],
+        items: [{ lang: 'en', html: '<p>Author. Title. 2024.</p>' }],
         dir: 'ltr',
         dirSource: 'manual',
       },

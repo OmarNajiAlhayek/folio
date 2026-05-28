@@ -77,6 +77,25 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
       }
     });
 
+    it('returns author suggestions for partial names', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/public/submissions/author-suggestions')
+        .query({ q: 'Resear' })
+        .expect(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThanOrEqual(1);
+      for (const row of res.body as { displayName: string }[]) {
+        expect(row.displayName).toMatch(/Resear/i);
+      }
+    });
+
+    it('rejects author suggestions shorter than 2 characters', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/public/submissions/author-suggestions')
+        .query({ q: 'R' })
+        .expect(400);
+    });
+
     it('filters by articleType', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/public/submissions')

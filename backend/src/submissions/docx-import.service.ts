@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import sanitizeHtml from 'sanitize-html';
 import type {
+  ConstructorAuthorEntry,
   ConstructorContent,
   ConstructorDir,
   ConstructorSection,
@@ -16,6 +17,9 @@ import { sniffUploadMime } from './submission-file-upload.policy';
 import { filterDocxImportWarnings } from './docx-import-warnings';
 import {
   CONSTRUCTOR_IMPORT_BACK_MATTER_UNCERTAIN,
+  CONSTRUCTOR_IMPORT_EQUATION_LOST,
+  CONSTRUCTOR_IMPORT_MAMMOTH_NOTES,
+  CONSTRUCTOR_IMPORT_NO_CONTENT,
   CONSTRUCTOR_IMPORT_TABLE_NOTE_UNCERTAIN,
 } from './docx-import-warning-codes';
 
@@ -39,20 +43,29 @@ const INLINE_ALLOWED = new Set([
   'em',
   'i',
   'u',
+  'sup',
+  'sub',
+  'a',
   'br',
   'li',
 ]);
 
-const ABSTRACT_HEADING = /^\s*abstract\s*$/i;
+const ABSTRACT_HEADING_EN = /^\s*abstract\s*$/i;
+const ABSTRACT_HEADING_AR = /^\s*الملخص\s*$/;
 const REFERENCES_HEADING =
   /^\s*(references|bibliography|works\s+cited|literature\s+cited)\s*$/i;
+const REFERENCES_HEADING_AR = /^\s*(المراجع|المصادر|قائمة\s+المراجع)\s*$/;
 const ACKNOWLEDGMENTS_HEADING = /^\s*acknowledg(e)?ments?\s*$/i;
 const FUNDING_HEADING = /^\s*funding(\s+statement)?\s*$/i;
 const CONFLICT_HEADING = /^\s*conflict\s+of\s+interest\s*$/i;
 const DATA_AVAIL_HEADING = /^\s*data\s+availability\s*$/i;
-const KEYWORDS_LABEL = /^\s*keywords?\s*[:：]?\s*/i;
+const KEYWORDS_LABEL_EN = /^\s*keywords?\s*[:：]?\s*/i;
+const KEYWORDS_LABEL_AR = /^\s*الكلمات\s+المفتاحية\s*[:：]?\s*/i;
 const SMALL_FONT_HINT = /font-size:\s*(?:9|10|11)pt/i;
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/i;
+const TABLE_FIGURE_CAPTION_LINE = /^(?:Table|Figure)\s+\d+\s*:/i;
+const MAMMOTH_EQUATION_HINT = /equation|omml|office\s+math/i;
 
 export interface DocxImportResult {
   content: ConstructorContent;
@@ -78,21 +91,34 @@ export class DocxImportService {
     }
 
     const mammothResult = await mammoth.convertToHtml({ buffer });
-    const warnings = filterDocxImportWarnings(
-      mammothResult.messages
-        .filter((m) => m.type === 'warning')
-        .map((m) => m.message),
-    );
+    const rawMammothWarnings = mammothResult.messages
+      .filter((m) => m.type === 'warning')
+      .map((m) => m.message);
+    const warnings = filterDocxImportWarnings(rawMammothWarnings);
 
-    const { sections, warningCodes } = this.htmlToConstructorSections(
-      mammothResult.value,
-    );
+    const { sections: rawSections, warningCodes } =
+      this.htmlToConstructorSections(mammothResult.value);
+    const sections = pruneImportedSections(rawSections);
+
     if (sections.length === 0) {
       throw new BadRequestException({
         message:
           'No recognizable content was found in this Word file. Try a simpler document or build sections manually.',
-        code: 'VALIDATION_ERROR',
+        code: CONSTRUCTOR_IMPORT_NO_CONTENT,
       });
+    }
+
+    if (
+      warnings.length > 0 &&
+      !warningCodes.includes(CONSTRUCTOR_IMPORT_MAMMOTH_NOTES)
+    ) {
+      warningCodes.push(CONSTRUCTOR_IMPORT_MAMMOTH_NOTES);
+    }
+    if (
+      rawMammothWarnings.some((m) => MAMMOTH_EQUATION_HINT.test(m)) &&
+      !warningCodes.includes(CONSTRUCTOR_IMPORT_EQUATION_LOST)
+    ) {
+      warningCodes.push(CONSTRUCTOR_IMPORT_EQUATION_LOST);
     }
 
     const defaultDir = detectDefaultDir(sections);
@@ -149,9 +175,54 @@ export class DocxImportService {
     let abstractArFilled = false;
     let referencesStarted = false;
     let pendingAbstract = false;
+    let pendingAbstractLang: 'en' | 'ar' | null = null;
     let pendingBackMatter: RichTextBlockKind | null = null;
     let lastTableIdx = -1;
+    let inAuthorZone = false;
+    let authorZoneClosed = false;
+    const authorEntries: ConstructorAuthorEntry[] = [];
+    let lastHeadingKey = '';
+    let lastParagraphFingerprint = '';
     const referenceItems: ReferencesSection['items'] = [];
+
+    const flushAuthorsSection = () => {
+      if (authorEntries.length === 0) return;
+      sections.push({
+        id: newId(),
+        kind: 'authors',
+        authors: authorEntries.map((a) => ({ ...a })),
+        dir: 'ltr',
+        dirSource: 'auto',
+      });
+      authorEntries.length = 0;
+    };
+
+    const closeAuthorZone = () => {
+      inAuthorZone = false;
+      authorZoneClosed = true;
+      flushAuthorsSection();
+    };
+
+    const openAuthorZone = () => {
+      if (!authorZoneClosed) inAuthorZone = true;
+    };
+
+    const startAbstractPending = (headingText: string) => {
+      closeAuthorZone();
+      pendingAbstract = true;
+      pendingAbstractLang = ABSTRACT_HEADING_AR.test(headingText.trim())
+        ? 'ar'
+        : 'en';
+      pendingBackMatter = null;
+    };
+
+    const startReferences = () => {
+      closeAuthorZone();
+      referencesStarted = true;
+      pendingAbstract = false;
+      pendingAbstractLang = null;
+      pendingBackMatter = null;
+    };
 
     const detectBackMatterHeading = (text: string): RichTextBlockKind | null => {
       if (ACKNOWLEDGMENTS_HEADING.test(text)) return 'acknowledgments';
@@ -206,6 +277,7 @@ export class DocxImportService {
     const assignTitle = (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      if (sectionTextExists(sections, 'title', trimmed)) return;
       const lang = textLang(trimmed);
       if (lang === 'ar' && !titleArFilled) {
         titleArFilled = true;
@@ -219,25 +291,110 @@ export class DocxImportService {
       } else {
         pushHeading(1, trimmed, lang === 'ar' ? 'rtl' : 'ltr');
       }
+      openAuthorZone();
     };
 
-    const assignAbstract = (text: string, keywordsLine?: string) => {
+    const assignAbstract = (
+      text: string,
+      preferLang?: 'en' | 'ar',
+      keywordsLine?: string,
+    ) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      const lang = textLang(trimmed);
-      const keywords = keywordsLine?.replace(KEYWORDS_LABEL, '').trim() ?? '';
+      const lang = preferLang ?? textLang(trimmed);
+      const keywords = keywordsLine
+        ? stripKeywordsPrefix(keywordsLine)
+        : '';
       if (lang === 'ar' && !abstractArFilled) {
         abstractArFilled = true;
         sections.push(abstractSection('ar', trimmed, keywords));
-      } else if (!abstractEnFilled) {
+      } else if (!abstractEnFilled && lang === 'en') {
         abstractEnFilled = true;
         sections.push(abstractSection('en', trimmed, keywords));
       } else if (!abstractArFilled && lang === 'ar') {
         abstractArFilled = true;
         sections.push(abstractSection('ar', trimmed, keywords));
+      } else if (!abstractEnFilled) {
+        abstractEnFilled = true;
+        sections.push(abstractSection('en', trimmed, keywords));
       } else {
-        pushParagraph(wrapParagraphHtml(escapeHtml(trimmed)), lang === 'ar' ? 'rtl' : 'ltr');
+        pushParagraph(
+          wrapParagraphHtml(escapeHtml(trimmed)),
+          lang === 'ar' ? 'rtl' : 'ltr',
+        );
       }
+    };
+
+    const consumeAuthorLine = (text: string): boolean => {
+      if (!looksLikeAuthorMetadata(text)) return false;
+      const email = text.match(EMAIL_RE)?.[0] ?? '';
+      const parts = text
+        .split(/\s*[—–-]\s*/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      if (email && authorEntries.length > 0) {
+        const last = authorEntries[authorEntries.length - 1]!;
+        if (!last.email) {
+          const affPart = parts.find((p) => !EMAIL_RE.test(p)) ?? '';
+          if (affPart) last.affiliation = affPart;
+          last.email = email;
+          return true;
+        }
+      }
+
+      if (parts.length >= 2) {
+        const first = parts[0]!;
+        const second = parts[1]!;
+        if (EMAIL_RE.test(second)) {
+          const emailAddr = second.match(EMAIL_RE)?.[0] ?? second;
+          if (authorEntries.length > 0) {
+            const last = authorEntries[authorEntries.length - 1]!;
+            if (!last.affiliation) {
+              last.affiliation = first.replace(/\*/g, '').trim();
+            }
+            if (!last.email) last.email = emailAddr;
+          } else {
+            authorEntries.push({
+              fullName: '',
+              title: '',
+              affiliation: first.replace(/\*/g, '').trim(),
+              email: emailAddr,
+              isCorresponding: false,
+            });
+          }
+          return true;
+        }
+        authorEntries.push({
+          fullName: first.replace(/\*/g, '').trim(),
+          title: second,
+          affiliation: '',
+          email: '',
+          isCorresponding: first.includes('*'),
+        });
+        return true;
+      }
+
+      if (parts.length === 1) {
+        authorEntries.push({
+          fullName: parts[0]!.replace(/\*/g, '').trim(),
+          title: '',
+          affiliation: '',
+          email: email,
+          isCorresponding: parts[0]!.includes('*'),
+        });
+        return true;
+      }
+
+      return false;
+    };
+
+    const pushParagraphDeduped = (innerHtml: string, dir: ConstructorDir) => {
+      const fingerprint = stripTags(innerHtml).trim();
+      if (!fingerprint) return;
+      if (fingerprint === lastParagraphFingerprint) return;
+      lastParagraphFingerprint = fingerprint;
+      pushParagraph(innerHtml, dir);
     };
 
     for (const node of bodyEl.childNodes) {
@@ -261,78 +418,104 @@ export class DocxImportService {
       if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
         const backKind = detectBackMatterHeading(text);
         if (backKind) {
+          closeAuthorZone();
           pendingBackMatter = backKind;
           pendingAbstract = false;
+          pendingAbstractLang = null;
+          continue;
+        }
+
+        const level = tag === 'h1' ? 1 : tag === 'h2' ? 2 : 3;
+        const headingKey = `${level}:${text}`;
+        if (headingKey === lastHeadingKey) continue;
+        lastHeadingKey = headingKey;
+        lastParagraphFingerprint = '';
+
+        if (isAbstractHeading(text)) {
+          startAbstractPending(text);
+          continue;
+        }
+        if (isReferencesHeading(text)) {
+          startReferences();
           continue;
         }
       }
 
       if (tag === 'h1') {
-        if (ABSTRACT_HEADING.test(text)) {
-          pendingAbstract = true;
-          pendingBackMatter = null;
-          continue;
-        }
-        if (REFERENCES_HEADING.test(text)) {
-          referencesStarted = true;
-          pendingBackMatter = null;
-          continue;
-        }
+        if (sectionTextExists(sections, 'title', text)) continue;
         if (!titleEnFilled && !titleArFilled && sections.length === 0) {
           assignTitle(text);
-        } else {
+        } else if (
+          !titleArFilled &&
+          textLang(text) === 'ar' &&
+          sections.some((s) => s.kind === 'title')
+        ) {
+          assignTitle(text);
+        } else if (!sectionTextExists(sections, 'heading1', text)) {
           pushHeading(1, text, dir);
         }
         continue;
       }
 
       if (tag === 'h2' || tag === 'h3') {
-        if (ABSTRACT_HEADING.test(text)) {
-          pendingAbstract = true;
-          pendingBackMatter = null;
-          continue;
+        const level = tag === 'h2' ? 2 : 3;
+        const kind = level === 2 ? 'heading2' : 'heading3';
+        if (!sectionTextExists(sections, kind, text)) {
+          pushHeading(level, text, dir);
         }
-        if (REFERENCES_HEADING.test(text)) {
-          referencesStarted = true;
-          pendingBackMatter = null;
-          continue;
-        }
-        pushHeading(tag === 'h2' ? 2 : 3, text, dir);
         continue;
       }
 
       if (referencesStarted) {
-        if (text) {
+        if (tag === 'p') {
+          const inner = serializeInnerHtml(node);
+          const plain = stripTags(inner);
+          if (plain && !shouldSkipReferenceLine(plain)) {
+            referenceItems.push({
+              lang: textLang(plain) === 'ar' ? 'ar' : 'en',
+              html: wrapParagraphHtml(inner),
+            });
+          }
+          continue;
+        }
+        if (text && !shouldSkipReferenceLine(text)) {
           referenceItems.push({
             lang: textLang(text) === 'ar' ? 'ar' : 'en',
-            text,
+            html: wrapParagraphHtml(escapeHtml(text)),
           });
         }
         continue;
       }
 
       if (tag === 'p') {
-        if (ABSTRACT_HEADING.test(text)) {
-          pendingAbstract = true;
+        if (isAbstractHeading(text)) {
+          startAbstractPending(text);
           continue;
         }
-        if (REFERENCES_HEADING.test(text)) {
-          referencesStarted = true;
-          pendingAbstract = false;
+        if (isReferencesHeading(text)) {
+          startReferences();
           continue;
         }
-        const kwMatch = text.match(KEYWORDS_LABEL);
-        if (kwMatch && sections.length > 0) {
+        if (isKeywordsLine(text) && sections.length > 0) {
           const last = sections[sections.length - 1];
           if (last.kind === 'abstract') {
-            last.keywords = text.replace(KEYWORDS_LABEL, '').trim();
+            last.keywords = stripKeywordsPrefix(text);
           }
           pendingAbstract = false;
+          pendingAbstractLang = null;
           continue;
         }
         if (pendingAbstract) {
-          assignAbstract(text);
+          assignAbstract(text, pendingAbstractLang ?? undefined);
           pendingAbstract = false;
+          pendingAbstractLang = null;
+          continue;
+        }
+        if (inAuthorZone && consumeAuthorLine(text)) {
+          continue;
+        }
+        if (inAuthorZone && looksLikeAuthorMetadata(text)) {
+          consumeAuthorLine(text);
           continue;
         }
         if (pendingBackMatter) {
@@ -360,15 +543,20 @@ export class DocxImportService {
             warningCodes.push(CONSTRUCTOR_IMPORT_TABLE_NOTE_UNCERTAIN);
           }
         }
-        pushParagraph(inner, dir);
+        if (/^Table\s+\d+\s*:?\s*$/i.test(text)) {
+          continue;
+        }
+        pushParagraphDeduped(inner, dir);
         continue;
       }
 
       if (tag === 'ul' || tag === 'ol') {
         const inner = serializeElement(node);
-        pushParagraph(inner, dir);
+        pushParagraphDeduped(inner, dir);
       }
     }
+
+    closeAuthorZone();
 
     if (referenceItems.length > 0) {
       sections.push({
@@ -506,6 +694,13 @@ function serializeElement(el: Element): string {
   if (tag === 'br') return '<br>';
   const inner = serializeInnerHtml(el);
   if (tag === 'p') return wrapParagraphHtml(inner);
+  if (tag === 'a') {
+    const href = el.attrs?.find((a) => a.name === 'href')?.value;
+    if (href) {
+      return `<a href="${escapeHtml(href)}">${inner}</a>`;
+    }
+    return inner;
+  }
   if (INLINE_ALLOWED.has(tag) || tag === 'ul' || tag === 'ol') {
     return `<${tag}>${inner}</${tag}>`;
   }
@@ -532,4 +727,102 @@ function detectDefaultDir(sections: ConstructorSection[]): ConstructorDir {
     if (s.kind === 'paragraph' && s.dir === 'rtl') return 'rtl';
   }
   return 'ltr';
+}
+
+function isAbstractHeading(text: string): boolean {
+  const t = text.trim();
+  return ABSTRACT_HEADING_EN.test(t) || ABSTRACT_HEADING_AR.test(t);
+}
+
+function isReferencesHeading(text: string): boolean {
+  const t = text.trim();
+  return REFERENCES_HEADING.test(t) || REFERENCES_HEADING_AR.test(t);
+}
+
+function isKeywordsLine(text: string): boolean {
+  return KEYWORDS_LABEL_EN.test(text) || KEYWORDS_LABEL_AR.test(text);
+}
+
+function stripKeywordsPrefix(text: string): string {
+  return text
+    .replace(KEYWORDS_LABEL_EN, '')
+    .replace(KEYWORDS_LABEL_AR, '')
+    .trim();
+}
+
+function shouldSkipReferenceLine(text: string): boolean {
+  return TABLE_FIGURE_CAPTION_LINE.test(text.trim());
+}
+
+function looksLikeAuthorMetadata(text: string): boolean {
+  return (
+    EMAIL_RE.test(text) ||
+    /[—–]/.test(text) ||
+    /\*/.test(text) ||
+    /^\s*(Dr|Prof|Mr|Mrs|Ms|د\.)/i.test(text)
+  );
+}
+
+function sectionTextExists(
+  sections: ConstructorSection[],
+  kind: ConstructorSection['kind'],
+  text: string,
+): boolean {
+  const t = text.trim();
+  return sections.some((s) => {
+    if (s.kind !== kind) return false;
+    if ('text' in s && typeof (s as { text?: string }).text === 'string') {
+      return (s as { text: string }).text.trim() === t;
+    }
+    return false;
+  });
+}
+
+function sectionHasImportContent(s: ConstructorSection): boolean {
+  switch (s.kind) {
+    case 'title':
+    case 'heading1':
+    case 'heading2':
+    case 'heading3':
+      return s.text.trim().length > 0;
+    case 'abstract':
+      return s.text.trim().length > 0 || s.keywords.trim().length > 0;
+    case 'paragraph':
+    case 'acknowledgments':
+    case 'funding':
+    case 'conflictOfInterest':
+    case 'dataAvailability':
+      return stripTags(s.html).trim().length > 0;
+    case 'authors':
+      return s.authors.some(
+        (a) =>
+          a.fullName.trim().length > 0 ||
+          a.email.trim().length > 0 ||
+          a.affiliation.trim().length > 0,
+      );
+    case 'references':
+      return s.items.some(
+        (i) =>
+          (i.html && stripTags(i.html).trim().length > 0) ||
+          (i.text?.trim().length ?? 0) > 0,
+      );
+    case 'table':
+      return (
+        s.rows.some((row) => row.some((c) => c.trim().length > 0)) ||
+        (s.notes?.trim().length ?? 0) > 0 ||
+        s.caption.trim().length > 0
+      );
+    case 'image':
+      return Boolean(s.fileId) || s.caption.trim().length > 0;
+    case 'equation':
+      return s.latex.trim().length > 0;
+    default:
+      return true;
+  }
+}
+
+function pruneImportedSections(
+  sections: ConstructorSection[],
+): ConstructorSection[] {
+  return sections.filter(sectionHasImportContent);
 }

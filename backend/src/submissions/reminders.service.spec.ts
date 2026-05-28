@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { RemindersService } from './reminders.service';
 import { Submission } from '../entities/submission.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
@@ -107,6 +107,41 @@ describe('RemindersService', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
+  it('patchSendAt unwraps TypeORM UPDATE RETURNING [rows, rowCount]', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
+    const sendAt = new Date(Date.now() + 10 * 60_000);
+    const row = {
+      id: 'r1',
+      assignment_slug: 'asg-1',
+      reviewer_id: 'rev1',
+      reviewer_email: 'r@test.dev',
+      reviewer_display_name: 'R',
+      kind: 'review_due_soon',
+      send_at: sendAt,
+      status: 'pending',
+      sent_at: null,
+      created_at: new Date('2026-05-01T00:00:00.000Z'),
+    };
+    dataSource.query
+      .mockResolvedValueOnce([{ id: 'r1', status: 'pending' }])
+      .mockResolvedValueOnce([[row], 1]);
+
+    const out = await service.patchSendAt(
+      'sub-1',
+      'asg-1',
+      'r1',
+      user([
+        PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+      ]),
+      sendAt.toISOString(),
+    );
+
+    expect(out.id).toBe('r1');
+    expect(out.sendAt).toBe(sendAt.toISOString());
+  });
+
   it('patchSendAt updates pending reminder', async () => {
     submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
     assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
@@ -176,6 +211,30 @@ describe('RemindersService', () => {
     );
 
     expect(out.status).toBe('cancelled');
+  });
+
+  it('listForAssignment maps permission denied to EMAIL_DB_FORBIDDEN', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
+    const driverError = Object.assign(new Error('permission denied'), {
+      code: '42501',
+    });
+    dataSource.query.mockRejectedValue(
+      new QueryFailedError('SELECT', [], driverError),
+    );
+
+    await expect(
+      service.listForAssignment(
+        'sub-1',
+        'asg-1',
+        user([
+          PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+          PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+        ]),
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'EMAIL_DB_FORBIDDEN' },
+    });
   });
 
   it('getOne throws when reminder missing', async () => {

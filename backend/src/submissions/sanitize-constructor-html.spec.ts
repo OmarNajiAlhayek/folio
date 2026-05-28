@@ -12,6 +12,9 @@ const BACKEND_BUILD_PARAGRAPH_TAGS = [
   'em',
   'i',
   'u',
+  'sup',
+  'sub',
+  'a',
   'ul',
   'ol',
   'li',
@@ -50,6 +53,14 @@ describe('sanitizeConstructorTipTapHtml', () => {
     expect(
       sanitizeConstructorTipTapHtml('<a href="javascript:alert(1)">x</a>'),
     ).toBe('x');
+    expect(
+      sanitizeConstructorTipTapHtml(
+        '<a href="https://example.org">link</a>',
+      ),
+    ).toContain('href="https://example.org/"');
+    expect(sanitizeConstructorTipTapHtml('<p>H<sub>2</sub>O</p>')).toContain(
+      'sub',
+    );
     expect(sanitizeConstructorTipTapHtml('<svg onload=alert(1)>')).toBe(
       '<p></p>',
     );

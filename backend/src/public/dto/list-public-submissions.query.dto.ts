@@ -3,10 +3,13 @@ import { Transform } from 'class-transformer';
 import {
   IsEnum,
   IsIn,
+  IsInt,
   IsISO8601,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   Validate,
   ValidatorConstraint,
   ValidatorConstraintInterface,
@@ -106,6 +109,33 @@ export class ListPublicSubmissionsQueryDto {
   @IsISO8601({ strict: true })
   @Validate(PublishedDateRangeConstraint)
   publishedTo?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Catalog search mode. Use semantic with q for vector search; keyword is default Postgres FTS.',
+    enum: ['keyword', 'semantic'],
+  })
+  @IsOptional()
+  @IsIn(['keyword', 'semantic'])
+  searchMode?: 'keyword' | 'semantic';
+
+  @ApiPropertyOptional({
+    description: 'Max results for semantic search (1–30).',
+    minimum: 1,
+    maximum: 30,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const n = parseInt(String(value), 10);
+    return Number.isFinite(n) ? n : undefined;
+  })
+  semanticLimit?: number;
 }
 
 export function toPublicationCatalogFilters(

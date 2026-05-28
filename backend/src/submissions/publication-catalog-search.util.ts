@@ -73,21 +73,53 @@ export const PUBLICATION_QUICK_SEARCH_RANK_SQL = `GREATEST(
   word_similarity(:pubQ, COALESCE(author.display_name, ''))
 )`;
 
+/** Author filter / suggestions: pg_trgm + FTS on display_name (same family as catalog quick search). */
 export const PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL = `(
   word_similarity(:pubAuthor, COALESCE(author.display_name, '')) > :pubAuthorSimMin
+  OR similarity(COALESCE(author.display_name, ''), :pubAuthor) > :pubAuthorSimMin
   OR COALESCE(author.display_name, '') ILIKE '%' || :pubAuthor || '%'
+  OR to_tsvector('simple', COALESCE(author.display_name, ''))
+    @@ plainto_tsquery('simple', :pubAuthor)
 )`;
+
+/** Rank published-author suggestions (higher = closer match). */
+export const PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL = `GREATEST(
+  word_similarity(:pubAuthor, COALESCE(author.display_name, '')),
+  similarity(COALESCE(author.display_name, ''), :pubAuthor),
+  ts_rank_cd(
+    to_tsvector('simple', COALESCE(author.display_name, '')),
+    plainto_tsquery('simple', :pubAuthor),
+    32
+  ),
+  CASE
+    WHEN COALESCE(author.display_name, '') ILIKE '%' || :pubAuthor || '%' THEN 1
+    ELSE 0
+  END
+)`;
+
+export const PUBLICATION_AUTHOR_SUGGESTION_MIN_QUERY_LENGTH = 2;
+export const PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT = 10;
+export const PUBLICATION_AUTHOR_SUGGESTION_MAX_LIMIT = 20;
+
+export type PublishedAuthorSuggestionRow = {
+  displayName: string;
+  publicationCount: number;
+};
 
 export function applyPublicationCatalogQuery(
   qb: SelectQueryBuilder<Submission>,
   filters: PublicationCatalogFilters,
+  options?: { skipQuickSearch?: boolean },
 ): void {
   qb.where('s.status = :pubStatus', { pubStatus: SubmissionStatus.PUBLISHED });
 
-  const q = trimCatalogFilter(filters.q);
+  const q = options?.skipQuickSearch ? undefined : trimCatalogFilter(filters.q);
   const author = trimCatalogFilter(filters.author);
 
-  if (publicationCatalogNeedsAuthorJoin(filters)) {
+  const needsAuthor =
+    Boolean(author) ||
+    (!options?.skipQuickSearch && publicationCatalogNeedsAuthorJoin(filters));
+  if (needsAuthor) {
     qb.innerJoinAndSelect('s.author', 'author');
   }
 

@@ -138,7 +138,13 @@ export interface ConstructorAuthorEntry {
 
 export interface ConstructorReferenceEntry {
   lang: 'ar' | 'en';
-  text: string;
+  /** Sanitized TipTap HTML for the bibliography line. */
+  html: string;
+  /**
+   * Legacy plain-text line from older drafts; migrated to `html` on save when set
+   * without `html`.
+   */
+  text?: string;
   doi?: string;
 }
 
