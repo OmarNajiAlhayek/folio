@@ -14,47 +14,47 @@ export type AssignmentsListTranslator = ReturnType<
 
 /** Shared card styling for submission and assignment queue rows */
 export const queueRowCardLinkCls =
-  "group flex flex-col gap-2.5 rounded-xl border border-ink/10 border-s-4 border-s-accent/25 bg-surface p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ink/15 hover:border-s-accent/45 hover:shadow-md";
+  "group flex flex-col gap-2.5 rounded-xl border border-ink/10 dark:border-white/10 border-s-4 border-s-accent/25 bg-surface p-4 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-ink/15 hover:border-s-accent hover:shadow-md";
 
 export function statusPillClass(status: string): string {
   const base =
-    "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums";
+    "inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border tabular-nums";
   switch (status) {
     case "draft":
-      return `${base} bg-ink/10 text-ink/75`;
+      return `${base} bg-slate-500/8 border-slate-500/15 text-slate-600 dark:text-slate-400`;
     case "submitted":
-      return `${base} bg-accent/15 text-accent`;
+      return `${base} bg-indigo-500/8 border-indigo-500/15 text-indigo-600 dark:text-indigo-400`;
     case "under_review":
-      return `${base} bg-amber-100/90 text-amber-950`;
+      return `${base} bg-amber-500/8 border-amber-500/15 text-amber-600 dark:text-amber-400`;
     case "revisions_requested":
-      return `${base} bg-orange-100/90 text-orange-950`;
+      return `${base} bg-orange-500/8 border-orange-500/15 text-orange-600 dark:text-orange-400`;
     case "accepted":
-      return `${base} bg-emerald-100/90 text-emerald-950`;
+      return `${base} bg-emerald-500/8 border-emerald-500/15 text-emerald-600 dark:text-emerald-400`;
     case "copyediting":
-      return `${base} bg-violet-100/90 text-violet-950`;
+      return `${base} bg-purple-500/8 border-purple-500/15 text-purple-600 dark:text-purple-400`;
     case "rejected":
-      return `${base} bg-rose-100/90 text-rose-950`;
+      return `${base} bg-rose-500/8 border-rose-500/15 text-rose-600 dark:text-rose-400`;
     case "published":
-      return `${base} bg-ink/15 text-ink`;
+      return `${base} bg-teal-500/8 border-teal-500/15 text-teal-600 dark:text-teal-400`;
     default:
-      return `${base} bg-ink/10 text-ink/70`;
+      return `${base} bg-ink/5 border-ink/10 text-ink/70 dark:bg-white/5 dark:border-white/10 dark:text-white/60`;
   }
 }
 
 export function assignmentStatusPillClass(status: string): string {
   const base =
-    "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums";
+    "inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border tabular-nums";
   switch (status) {
     case "invited":
-      return `${base} bg-sky-100/90 text-sky-950`;
+      return `${base} bg-sky-500/8 border-sky-500/15 text-sky-600 dark:text-sky-400`;
     case "accepted":
-      return `${base} bg-amber-100/90 text-amber-950`;
+      return `${base} bg-amber-500/8 border-amber-500/15 text-amber-600 dark:text-amber-400`;
     case "completed":
-      return `${base} bg-emerald-100/90 text-emerald-950`;
+      return `${base} bg-emerald-500/8 border-emerald-500/15 text-emerald-600 dark:text-emerald-400`;
     case "declined":
-      return `${base} bg-ink/12 text-ink/70`;
+      return `${base} bg-rose-500/8 border-rose-500/15 text-rose-600 dark:text-rose-400`;
     default:
-      return `${base} bg-ink/10 text-ink/70`;
+      return `${base} bg-ink/5 border-ink/10 text-ink/70 dark:bg-white/5 dark:border-white/10 dark:text-white/60`;
   }
 }
 
@@ -135,12 +135,15 @@ export function SubmissionListSkeleton() {
       {[1, 2, 3, 4].map((i) => (
         <li
           key={i}
-          className="animate-pulse rounded-xl border border-ink/10 bg-surface p-4 shadow-sm"
+          className="animate-pulse rounded-xl border border-ink/10 dark:border-white/10 bg-surface p-4 shadow-xs"
         >
-          <div className="h-5 w-3/5 max-w-md rounded bg-ink/10" />
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="h-4 w-28 rounded bg-ink/10" />
-            <div className="h-5 w-24 rounded-full bg-ink/10" />
+          <div className="flex justify-between items-center">
+            <div className="h-5 w-3/5 max-w-md rounded bg-ink/10 dark:bg-white/10" />
+            <div className="h-5 w-16 rounded-full bg-ink/10 dark:bg-white/10" />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="h-4 w-32 rounded bg-ink/10 dark:bg-white/10" />
+            <div className="h-4 w-12 rounded bg-ink/10 dark:bg-white/10" />
           </div>
         </li>
       ))}
@@ -174,28 +177,39 @@ export function SubmissionQueueRow({
       <Link href={href} className={queueRowCardLinkCls}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <span
-            className="min-w-0 flex-1 text-base font-medium text-ink group-hover:text-accent"
+            className="min-w-0 flex-1 text-base font-serif font-bold text-ink group-hover:text-accent transition-colors duration-200"
             dir="auto"
           >
             {title}
           </span>
           <span className={statusPillClass(status)}>{label}</span>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink/55">
-          <span className="flex min-w-0 flex-col gap-0.5">
-            {dateStr ? <span>{t("updatedLabel", { date: dateStr })}</span> : null}
+        
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink/55 dark:text-white/55">
+          <div className="flex flex-col gap-1 min-w-0">
+            {dateStr ? (
+              <span className="flex items-center gap-1">
+                <svg className="size-3.5 text-accent opacity-75" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008z" />
+                </svg>
+                {t("updatedLabel", { date: dateStr })}
+              </span>
+            ) : null}
+            
             {disciplineSuggested ? (
-              <span className="truncate text-xs text-ink/65" dir="auto" title={disciplineSuggested}>
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/8 dark:bg-emerald-500/18 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 truncate max-w-xs" dir="auto" title={disciplineSuggested}>
+                <span className="size-1 rounded-full bg-emerald-500 animate-pulse" />
                 {disciplineSuggested}
               </span>
             ) : null}
-          </span>
-          <span className="inline-flex items-center gap-1 font-medium text-accent opacity-80 transition group-hover:opacity-100">
-            <span className="text-xs font-semibold tracking-wide">
+          </div>
+
+          <span className="inline-flex items-center gap-1 font-semibold text-accent opacity-80 transition group-hover:opacity-100 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 select-none">
+            <span className="text-xs tracking-wide">
               {t("view")}
             </span>
             <svg
-              className="size-4 rtl:rotate-180"
+              className="size-3.5 rtl:rotate-180"
               viewBox="0 0 20 20"
               fill="currentColor"
               aria-hidden
@@ -253,7 +267,7 @@ function AssignmentQueueRowInner({
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <span
-          className="min-w-0 flex-1 text-base font-medium text-ink group-hover:text-accent"
+          className="min-w-0 flex-1 text-base font-serif font-bold text-ink group-hover:text-accent transition-colors duration-200"
           dir="auto"
         >
           {title}
@@ -269,19 +283,24 @@ function AssignmentQueueRowInner({
           ) : null}
         </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink/55">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink/55 dark:text-white/55">
         {dateStr ? (
-          <span>{tAssign("assignedLabel", { date: dateStr })}</span>
+          <span className="flex items-center gap-1">
+            <svg className="size-3.5 text-accent opacity-75" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008z" />
+            </svg>
+            {tAssign("assignedLabel", { date: dateStr })}
+          </span>
         ) : (
           <span />
         )}
         {showRowCta ? (
-          <span className="inline-flex items-center gap-1 font-medium text-accent opacity-80 transition group-hover:opacity-100">
-            <span className="text-xs font-semibold tracking-wide">
+          <span className="inline-flex items-center gap-1 font-semibold text-accent opacity-80 transition group-hover:opacity-100 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 select-none">
+            <span className="text-xs tracking-wide">
               {ctaText}
             </span>
             <svg
-              className="size-4 rtl:rotate-180"
+              className="size-3.5 rtl:rotate-180"
               viewBox="0 0 20 20"
               fill="currentColor"
               aria-hidden
@@ -349,7 +368,7 @@ export function AssignmentQueueRow({
   return (
     <li>
       <div
-        className="flex flex-col gap-3 rounded-xl border border-ink/10 border-s-4 border-s-accent/25 bg-surface p-5 shadow-sm"
+        className="flex flex-col gap-3 rounded-xl border border-ink/10 dark:border-white/10 border-s-4 border-s-accent/25 bg-surface p-4 shadow-xs"
         aria-disabled
       >
         {inner}

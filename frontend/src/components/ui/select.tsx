@@ -125,6 +125,17 @@ SelectItem.displayName = SelectPrimitive.Item.displayName;
 
 export type SelectOption = { value: string; label: string };
 
+/** Radix Select reserves `""` for clearing; map empty option values to this sentinel. */
+const EMPTY_OPTION_SENTINEL = "__folio_select_empty__";
+
+function toRadixSelectValue(value: string): string {
+  return value === "" ? EMPTY_OPTION_SENTINEL : value;
+}
+
+function fromRadixSelectValue(value: string): string {
+  return value === EMPTY_OPTION_SENTINEL ? "" : value;
+}
+
 export function SimpleSelect({
   value,
   onValueChange,
@@ -144,8 +155,18 @@ export function SimpleSelect({
   "aria-label"?: string;
   "aria-labelledby"?: string;
 }) {
+  const radixOptions = options.map((o) =>
+    o.value === ""
+      ? { ...o, value: EMPTY_OPTION_SENTINEL }
+      : o,
+  );
+
   return (
-    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+    <Select
+      value={toRadixSelectValue(value)}
+      onValueChange={(v) => onValueChange(fromRadixSelectValue(v))}
+      disabled={disabled}
+    >
       <SelectTrigger
         className={className}
         aria-label={ariaLabel}
@@ -154,7 +175,7 @@ export function SimpleSelect({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent position="popper">
-        {options.map((o) => (
+        {radixOptions.map((o) => (
           <SelectItem key={o.value} value={o.value}>
             {o.label}
           </SelectItem>
