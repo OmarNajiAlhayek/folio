@@ -51,6 +51,13 @@ const CSRF_MESSAGE_RE = /invalid or missing csrf token/i;
 const STATUS_TRANSITION_MESSAGE_RE =
   /^cannot transition from \S+ to \S+$/i;
 
+/** Nest English copy for AI features — always map via `code` + localized fallback. */
+const AI_FEATURE_MESSAGE_RE =
+  /^AI .+ service is not configured\.?$/i;
+
+const AI_SUGGESTION_FAILURE_RE =
+  /^Could not (suggest keywords|classify submission)/i;
+
 /** Whether the API message is safe to show users (not a Nest/internal string). */
 export function isUserFacingApiMessage(message: string): boolean {
   const trimmed = message.trim();
@@ -59,10 +66,19 @@ export function isUserFacingApiMessage(message: string): boolean {
   if (GENERIC_UNAUTHORIZED_MESSAGE_RE.test(trimmed)) return false;
   if (CSRF_MESSAGE_RE.test(trimmed)) return false;
   if (STATUS_TRANSITION_MESSAGE_RE.test(trimmed)) return false;
+  if (AI_FEATURE_MESSAGE_RE.test(trimmed)) return false;
+  if (AI_SUGGESTION_FAILURE_RE.test(trimmed)) return false;
   if (/^internal server error$/i.test(trimmed)) return false;
   if (/^ThrottlerException:/i.test(trimmed)) return false;
   return true;
 }
+
+/** API `code` values that should use the caller's localized `fallback`, not `message`. */
+const FALLBACK_BY_CODE = new Set([
+  "AI_SERVICE_UNAVAILABLE",
+  "AI_KEYWORDS_SUGGESTION_FAILED",
+  "AI_CLASSIFICATION_FAILED",
+]);
 
 export function isCsrfApiError(err: unknown): boolean {
   return (
@@ -127,6 +143,14 @@ export function resolveApiErrorMessage(
   }
 
   if (isCsrfApiError(err)) {
+    return fallback;
+  }
+
+  if (err.code === "CONSTRUCTOR_IMPORT_NO_CONTENT") {
+    return fallback;
+  }
+
+  if (err.code && FALLBACK_BY_CODE.has(err.code)) {
     return fallback;
   }
 

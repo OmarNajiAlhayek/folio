@@ -1,10 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiJson, apiUpload } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { SimpleSelect } from "@/components/ui/select";
 import {
   KeywordTagsDisplay,
   KeywordTagsInput,
@@ -14,6 +15,14 @@ import {
   parseKeywordsFromStorage,
   serializeKeywords,
 } from "@/lib/keywords";
+import {
+  addAllSuggestedKeywords,
+  addSuggestedKeyword,
+  KeywordSuggestionChips,
+  notifyKeywordAddFailure,
+  SubmissionKeywordSuggest,
+  type KeywordSuggestionResult,
+} from "@/components/submission-keyword-suggest";
 import {
   ABSTRACT_MAX_WORDS,
   countWords,
@@ -137,6 +146,8 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     parseKeywordsFromStorage(initial.keywordsAr),
   );
   const [keywordDraftAr, setKeywordDraftAr] = useState("");
+  const [suggestedKeywordsEn, setSuggestedKeywordsEn] = useState<string[]>([]);
+  const [suggestedKeywordsAr, setSuggestedKeywordsAr] = useState<string[]>([]);
   const [contributors, setContributors] = useState<ContributorRow[]>(() =>
     initial.contributors?.length
       ? initial.contributors.map((c, i) => ({
@@ -168,6 +179,8 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
   useEffect(() => {
     onSavingChange?.(saving);
   }, [saving, onSavingChange]);
+
+  const initialContributorsKey = JSON.stringify(initial.contributors ?? []);
 
   useEffect(() => {
     setTitle(initial.title);
@@ -203,7 +216,21 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     setEthics(initial.ethicalApprovalReference ?? "");
     setOriginality(initial.originalityConfirmed);
     setAiUsage(initial.aiUsageStatement ?? "");
-  }, [initial]);
+  }, [
+    initial.title,
+    initial.titleAr,
+    initial.abstract,
+    initial.abstractAr,
+    initial.articleType,
+    initial.keywords,
+    initial.keywordsAr,
+    initial.fundingStatement,
+    initial.conflictOfInterestStatement,
+    initial.ethicalApprovalReference,
+    initial.originalityConfirmed,
+    initial.aiUsageStatement,
+    initialContributorsKey,
+  ]);
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -269,6 +296,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             }
           }
         }
+        toast.success(t("draftCreated"), { id: "submission-metadata-draft-created" });
         if (uploadErr) onError(uploadErr);
         clearStagedFiles?.();
         onCreatedNext?.(createdSlug);
@@ -341,6 +369,67 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     });
   }
 
+  const canSuggestKeywords =
+    Boolean(title.trim() && abstract.trim()) ||
+    Boolean(titleAr.trim() && abstractAr.trim());
+
+  const onKeywordSuggestions = useCallback((result: KeywordSuggestionResult) => {
+    setSuggestedKeywordsEn(result.keywordsEn);
+    setSuggestedKeywordsAr(result.keywordsAr);
+  }, []);
+
+  const keywordAddMessages = useMemo(
+    () => ({
+      max: t("keywordSuggestMax"),
+      duplicate: t("keywordSuggestDuplicate"),
+      tooLong: t("keywordSuggestTooLong"),
+      addAllNone: t("keywordSuggestAddAllNone"),
+    }),
+    [t],
+  );
+
+  const addEnKeyword = useCallback(
+    (kw: string) => {
+      setKeywordTags((tags) => {
+        const result = addSuggestedKeyword(tags, kw, "en");
+        if (result.addedCount > 0) return result.tags;
+        notifyKeywordAddFailure(result.failure, keywordAddMessages);
+        return tags;
+      });
+    },
+    [keywordAddMessages],
+  );
+
+  const addAllEnKeywords = useCallback(() => {
+    setKeywordTags((tags) => {
+      const result = addAllSuggestedKeywords(tags, suggestedKeywordsEn, "en");
+      if (result.addedCount > 0) return result.tags;
+      notifyKeywordAddFailure(result.failure, keywordAddMessages);
+      return tags;
+    });
+  }, [suggestedKeywordsEn, keywordAddMessages]);
+
+  const addArKeyword = useCallback(
+    (kw: string) => {
+      setKeywordTagsAr((tags) => {
+        const result = addSuggestedKeyword(tags, kw, "ar");
+        if (result.addedCount > 0) return result.tags;
+        notifyKeywordAddFailure(result.failure, keywordAddMessages);
+        return tags;
+      });
+    },
+    [keywordAddMessages],
+  );
+
+  const addAllArKeywords = useCallback(() => {
+    setKeywordTagsAr((tags) => {
+      const result = addAllSuggestedKeywords(tags, suggestedKeywordsAr, "ar");
+      if (result.addedCount > 0) return result.tags;
+      notifyKeywordAddFailure(result.failure, keywordAddMessages);
+      return tags;
+    });
+  }, [suggestedKeywordsAr, keywordAddMessages]);
+
   if (!canEdit) {
     return <SubmissionMetadataDisplay initial={initial} />;
   }
@@ -355,18 +444,15 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
         <div className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium text-ink">{t("articleType")}</span>
-            <select
+            <SimpleSelect
               value={articleType}
-              onChange={(e) => setArticleType(e.target.value)}
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
-            >
-              <option value="">{t("articleTypePlaceholder")}</option>
-              {SUBMISSION_ARTICLE_TYPES.map((v) => (
-                <option key={v} value={v}>
-                  {t(`articleType_${v}`)}
-                </option>
-              ))}
-            </select>
+              onValueChange={setArticleType}
+              placeholder={t("articleTypePlaceholder")}
+              options={SUBMISSION_ARTICLE_TYPES.map((v) => ({
+                value: v,
+                label: t(`articleType_${v}`),
+              }))}
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium text-ink">{t("titleLabelEn")}</span>
@@ -418,6 +504,15 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
               })}
             </span>
           </label>
+          {!isCreate && slug ? (
+            <SubmissionKeywordSuggest
+              slug={slug}
+              canSuggest={canSuggestKeywords}
+              suggestedEn={suggestedKeywordsEn}
+              suggestedAr={suggestedKeywordsAr}
+              onSuggestions={onKeywordSuggestions}
+            />
+          ) : null}
           <div className="flex flex-col gap-1 text-sm">
             <span
               id="submission-keywords-en-label"
@@ -443,6 +538,15 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             >
               {t("keywordsCount", { count: keywordTags.length })}
             </span>
+            <KeywordSuggestionChips
+              suggestions={suggestedKeywordsEn}
+              onAdd={addEnKeyword}
+              onAddAll={addAllEnKeywords}
+              addLabel={t("keywordSuggestAdd")}
+              addAllLabel={t("keywordSuggestAddAll")}
+              dir="ltr"
+              lang="en"
+            />
           </div>
           <div className="flex flex-col gap-1 text-sm">
             <span
@@ -469,6 +573,15 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             >
               {t("keywordsCount", { count: keywordTagsAr.length })}
             </span>
+            <KeywordSuggestionChips
+              suggestions={suggestedKeywordsAr}
+              onAdd={addArKeyword}
+              onAddAll={addAllArKeywords}
+              addLabel={t("keywordSuggestAdd")}
+              addAllLabel={t("keywordSuggestAddAll")}
+              dir="rtl"
+              lang="ar"
+            />
           </div>
         </div>
       </div>

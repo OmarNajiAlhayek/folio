@@ -8,10 +8,7 @@ import {
 import { apiJson } from "@/lib/api";
 import { ApiError } from "@/lib/api-response";
 import { queryKeys } from "@/lib/query-keys";
-import {
-  canManageAssignmentReminders,
-  PERMISSION_SLUGS,
-} from "@/lib/permissions";
+import { PERMISSION_SLUGS } from "@/lib/permissions";
 import type { MeProfile } from "@/lib/permissions";
 
 export type SubmissionListItem = {
@@ -70,6 +67,8 @@ export type SubmissionDetailPayload = {
       status: string;
     }>
   >;
+  /** True when GET …/reminders failed for that assignment slug (not “empty list”). */
+  reminderLoadFailedByAssignment: Record<string, boolean>;
 };
 
 export async function fetchSubmissionDetail(
@@ -143,9 +142,11 @@ export async function fetchSubmissionDetail(
   }
 
   let reminderMap: SubmissionDetailPayload["assignmentReminders"] = {};
+  let reminderLoadFailedByAssignment: SubmissionDetailPayload["reminderLoadFailedByAssignment"] =
+    {};
   if (
     isEditorView &&
-    canManageAssignmentReminders(permissions) &&
+    permissions.includes(PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS) &&
     assignmentRows.length > 0
   ) {
     const entries = await Promise.all(
@@ -159,13 +160,20 @@ export async function fetchSubmissionDetail(
             >(
               `/submissions/${enc}/assignments/${encodeURIComponent(asg)}/reminders`,
             );
-            return [asg, rows] as const;
+            return { asg, rows, failed: false };
           } catch {
-            return [asg, []] as const;
+            return {
+              asg,
+              rows: [] as Array<{ id: string; kind: string; sendAt: string; status: string }>,
+              failed: true,
+            };
           }
         }),
     );
-    reminderMap = Object.fromEntries(entries);
+    reminderMap = Object.fromEntries(entries.map((e) => [e.asg, e.rows]));
+    reminderLoadFailedByAssignment = Object.fromEntries(
+      entries.filter((e) => e.failed).map((e) => [e.asg, true]),
+    );
   }
 
   return {
@@ -180,6 +188,7 @@ export async function fetchSubmissionDetail(
     reviewsLoadFailed,
     editorAssignmentRows: assignmentRows,
     assignmentReminders: reminderMap,
+    reminderLoadFailedByAssignment,
   };
 }
 

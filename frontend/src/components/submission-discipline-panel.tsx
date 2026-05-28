@@ -1,12 +1,15 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useState } from "react";
 import { apiJson } from "@/lib/api";
+import { ApiError } from "@/lib/api-response";
 import { ARABIC_DISCIPLINE_LABELS } from "@/lib/discipline-labels";
 import type { DisciplineSuggestion, SubmissionDisciplineFields } from "@/lib/discipline-labels";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { toast } from "@/lib/toast";
 import { Spinner } from "@/components/ui/spinner";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type Props = {
   slug: string;
@@ -24,6 +27,8 @@ export function SubmissionDisciplinePanel({
   onUpdated,
 }: Props) {
   const t = useTranslations("SubmissionWorkflow");
+  const locale = useLocale();
+  const isAr = locale === "ar";
   const { resolve: resolveApiError } = useApiErrorMessages();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -42,9 +47,16 @@ export function SubmissionDisciplinePanel({
         `/submissions/${enc}/suggest-discipline`,
         { method: "POST" },
       );
+      toast.success(t("disciplineSuggestSuccess"), {
+        id: "submission-discipline-suggest",
+      });
       onUpdated();
     } catch (e) {
-      setError(resolveApiError(e, t("disciplineSuggestFailed")));
+      const fallback =
+        e instanceof ApiError && e.code === "AI_SERVICE_UNAVAILABLE"
+          ? t("disciplineSuggestNotConfigured")
+          : t("disciplineSuggestFailed");
+      setError(resolveApiError(e, fallback));
     } finally {
       setBusy(false);
     }
@@ -60,6 +72,9 @@ export function SubmissionDisciplinePanel({
           body: JSON.stringify({ discipline }),
         });
         setPick(discipline);
+        toast.success(t("disciplineSaved"), {
+          id: "submission-discipline-save",
+        });
         onUpdated();
       } catch (e) {
         setError(resolveApiError(e, t("disciplineSaveFailed")));
@@ -113,6 +128,12 @@ export function SubmissionDisciplinePanel({
         </p>
       )}
 
+      {mode === "editor" &&
+        !fields.disciplineSuggested &&
+        !fields.discipline && (
+          <p className="mt-3 text-sm text-ink/60">{t("disciplineEditorEmpty")}</p>
+        )}
+
       {canEdit && (
         <div className="mt-4 flex flex-col gap-3">
           {mode === "author" && (
@@ -143,22 +164,21 @@ export function SubmissionDisciplinePanel({
               </button>
             )}
 
-          <label className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-col gap-1 text-sm">
             <span className="font-medium text-ink">{t("disciplineSelectLabel")}</span>
-            <select
+            <SearchableSelect
+              options={[
+                { value: "", label: t("disciplineSelectPlaceholder") },
+                ...ARABIC_DISCIPLINE_LABELS.map((label) => ({ value: label, label })),
+              ]}
               value={pick}
-              onChange={(e) => setPick(e.target.value)}
-              dir="auto"
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
-            >
-              <option value="">{t("disciplineSelectPlaceholder")}</option>
-              {ARABIC_DISCIPLINE_LABELS.map((label) => (
-                <option key={label} value={label}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+              onValueChange={setPick}
+              placeholder={t("disciplineSelectPlaceholder")}
+              searchPlaceholder={isAr ? "ابحث عن التخصص..." : "Search disciplines..."}
+              emptyText={isAr ? "لم يتم العثور على تخصصات" : "No disciplines found"}
+              className="w-full text-start"
+            />
+          </div>
           <button
             type="button"
             disabled={busy || !pick}

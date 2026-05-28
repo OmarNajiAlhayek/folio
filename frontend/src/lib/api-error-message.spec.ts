@@ -70,6 +70,32 @@ describe("resolveApiErrorMessage", () => {
     );
   });
 
+  it("uses fallback for CONSTRUCTOR_IMPORT_NO_CONTENT instead of English API text", () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError(
+        "No recognizable content was found in this Word file.",
+        "CONSTRUCTOR_IMPORT_NO_CONTENT",
+        400,
+      ),
+      "محتوى غير معروف",
+      MESSAGES,
+    );
+    expect(msg).toBe("محتوى غير معروف");
+  });
+
+  it("uses fallback for AI_SERVICE_UNAVAILABLE instead of English API text", () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError(
+        "AI keyword suggestion service is not configured",
+        "AI_SERVICE_UNAVAILABLE",
+        400,
+      ),
+      "الذكاء الاصطناعي غير مفعّل",
+      MESSAGES,
+    );
+    expect(msg).toBe("الذكاء الاصطناعي غير مفعّل");
+  });
+
   it("uses fallback for CSRF errors instead of raw message", () => {
     const msg = resolveApiErrorMessage(
       new ApiError("Invalid or missing CSRF token", "CSRF_TOKEN_INVALID", 403),
@@ -93,6 +119,12 @@ describe("isUserFacingApiMessage", () => {
 
   it("rejects CSRF strings", () => {
     expect(isUserFacingApiMessage("Invalid or missing CSRF token")).toBe(false);
+  });
+
+  it("rejects English AI not-configured strings", () => {
+    expect(
+      isUserFacingApiMessage("AI keyword suggestion service is not configured"),
+    ).toBe(false);
   });
 });
 

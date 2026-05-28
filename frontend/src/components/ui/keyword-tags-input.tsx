@@ -2,7 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useRef } from "react";
-import { serializeKeywords } from "@/lib/keywords";
+import {
+  addSuggestedKeyword,
+  type KeywordAddFailure,
+} from "@/lib/keywords";
 
 const DEFAULT_MAX_TAGS = 6;
 const DEFAULT_MAX_SERIALIZED = 800;
@@ -17,6 +20,8 @@ export function KeywordTagsInput({
   disabled,
   maxTags = DEFAULT_MAX_TAGS,
   maxSerializedLength = DEFAULT_MAX_SERIALIZED,
+  locale = "en",
+  onCommitFailure,
   inputValue,
   onInputChange,
 }: {
@@ -29,6 +34,8 @@ export function KeywordTagsInput({
   disabled?: boolean;
   maxTags?: number;
   maxSerializedLength?: number;
+  locale?: "en" | "ar";
+  onCommitFailure?: (failure: KeywordAddFailure) => void;
   inputValue: string;
   onInputChange: (v: string) => void;
 }) {
@@ -39,18 +46,30 @@ export function KeywordTagsInput({
     (draft: string) => {
       const trimmed = draft.trim();
       if (!trimmed) return;
-      const lower = trimmed.toLowerCase();
-      if (tags.some((x) => x.toLowerCase() === lower)) {
+      const result = addSuggestedKeyword(
+        tags,
+        trimmed,
+        locale,
+        maxTags,
+        maxSerializedLength,
+      );
+      if (result.addedCount > 0) {
+        onChange(result.tags);
         onInputChange("");
         return;
       }
-      if (tags.length >= maxTags) return;
-      const next = [...tags, trimmed];
-      if (serializeKeywords(next).length > maxSerializedLength) return;
-      onChange(next);
       onInputChange("");
+      if (result.failure) onCommitFailure?.(result.failure);
     },
-    [tags, maxTags, maxSerializedLength, onChange, onInputChange],
+    [
+      tags,
+      locale,
+      maxTags,
+      maxSerializedLength,
+      onChange,
+      onInputChange,
+      onCommitFailure,
+    ],
   );
 
   function removeAt(index: number) {
