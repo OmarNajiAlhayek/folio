@@ -116,7 +116,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
         {
           provide: RbacService,
           useValue: {
-            listUserIdsWithPermission: listEditorIds,
+            listWorkflowNotificationRecipientIds: listEditorIds,
             userHasPermission: jest.fn().mockResolvedValue(true),
           },
         },

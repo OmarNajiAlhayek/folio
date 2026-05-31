@@ -81,7 +81,7 @@ async def start_grpc_server(
         except ImportError:
             logger.debug("grpcio-reflection not installed; grpcurl needs -proto flags")
 
-    listen_addr = f"0.0.0.0:{settings.grpc_port}"
+    listen_addr = f"{settings.grpc_bind_host}:{settings.grpc_port}"
     bound_port = server.add_insecure_port(listen_addr)
     if bound_port == 0:
         logger.error("gRPC failed to bind on %s", listen_addr)
@@ -89,7 +89,7 @@ async def start_grpc_server(
         raise RuntimeError(f"gRPC failed to bind on {listen_addr}")
 
     await server.start()
-    logger.info("gRPC listening on 0.0.0.0:%s", bound_port)
+    logger.info("gRPC listening on %s:%s", settings.grpc_bind_host, bound_port)
     return server, bound_port
 
 

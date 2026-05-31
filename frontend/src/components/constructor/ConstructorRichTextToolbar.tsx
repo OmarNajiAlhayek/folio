@@ -1,8 +1,14 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
+import { useEditorState } from "@tiptap/react";
 import { useTranslations } from "next-intl";
+import type { MouseEvent } from "react";
 import type { ConstructorTipTapVariant } from "@/lib/constructor-tiptap-extensions";
+
+function keepEditorSelection(e: MouseEvent) {
+  e.preventDefault();
+}
 
 export function ConstructorRichTextToolbar({
   editor,
@@ -17,6 +23,22 @@ export function ConstructorRichTextToolbar({
   const btn =
     "rounded-lg border border-ink/10 bg-paper p-1.5 text-xs text-ink/70 hover:bg-ink/5 hover:border-accent/40 hover:text-accent disabled:opacity-30 disabled:pointer-events-none transition-all duration-200 cursor-pointer shadow-3xs hover:shadow-2xs";
   const active = "border-accent/40 bg-accent/10 text-accent font-bold shadow-2xs";
+
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => ({
+      bold: ed.isActive("bold"),
+      italic: ed.isActive("italic"),
+      underline: ed.isActive("underline"),
+      superscript: ed.isActive("superscript"),
+      subscript: ed.isActive("subscript"),
+      link: ed.isActive("link"),
+      bulletList: ed.isActive("bulletList"),
+      orderedList: ed.isActive("orderedList"),
+      canUndo: ed.can().undo(),
+      canRedo: ed.can().redo(),
+    }),
+  });
 
   function toggleLink() {
     const prev = editor.getAttributes("link").href as string | undefined;
@@ -35,8 +57,10 @@ export function ConstructorRichTextToolbar({
         <button
           type="button"
           disabled={disabled}
+          data-testid="constructor-toolbar-bold"
+          onMouseDown={keepEditorSelection}
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`${btn} ${editor.isActive("bold") ? active : ""}`}
+          className={`${btn} ${state.bold ? active : ""}`}
           title={t("toolbarBold")}
         >
           <BoldIcon />
@@ -45,8 +69,9 @@ export function ConstructorRichTextToolbar({
       <button
         type="button"
         disabled={disabled}
+        onMouseDown={keepEditorSelection}
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`${btn} ${editor.isActive("italic") ? active : ""}`}
+        className={`${btn} ${state.italic ? active : ""}`}
         title={t("toolbarItalic")}
       >
         <ItalicIcon />
@@ -55,8 +80,9 @@ export function ConstructorRichTextToolbar({
         <button
           type="button"
           disabled={disabled}
+          onMouseDown={keepEditorSelection}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          className={`${btn} ${editor.isActive("underline") ? active : ""}`}
+          className={`${btn} ${state.underline ? active : ""}`}
           title={t("toolbarUnderline")}
         >
           <UnderlineIcon />
@@ -65,8 +91,9 @@ export function ConstructorRichTextToolbar({
       <button
         type="button"
         disabled={disabled}
+        onMouseDown={keepEditorSelection}
         onClick={() => editor.chain().focus().toggleSuperscript().run()}
-        className={`${btn} ${editor.isActive("superscript") ? active : ""}`}
+        className={`${btn} ${state.superscript ? active : ""}`}
         title={t("toolbarSuperscript")}
       >
         <SuperscriptIcon />
@@ -74,8 +101,9 @@ export function ConstructorRichTextToolbar({
       <button
         type="button"
         disabled={disabled}
+        onMouseDown={keepEditorSelection}
         onClick={() => editor.chain().focus().toggleSubscript().run()}
-        className={`${btn} ${editor.isActive("subscript") ? active : ""}`}
+        className={`${btn} ${state.subscript ? active : ""}`}
         title={t("toolbarSubscript")}
       >
         <SubscriptIcon />
@@ -83,8 +111,9 @@ export function ConstructorRichTextToolbar({
       <button
         type="button"
         disabled={disabled}
+        onMouseDown={keepEditorSelection}
         onClick={toggleLink}
-        className={`${btn} ${editor.isActive("link") ? active : ""}`}
+        className={`${btn} ${state.link ? active : ""}`}
         title={t("toolbarLink")}
       >
         <LinkIcon />
@@ -95,8 +124,9 @@ export function ConstructorRichTextToolbar({
           <button
             type="button"
             disabled={disabled}
+            onMouseDown={keepEditorSelection}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`${btn} ${editor.isActive("bulletList") ? active : ""}`}
+            className={`${btn} ${state.bulletList ? active : ""}`}
             title={t("toolbarBulletList")}
           >
             <BulletListIcon />
@@ -104,8 +134,9 @@ export function ConstructorRichTextToolbar({
           <button
             type="button"
             disabled={disabled}
+            onMouseDown={keepEditorSelection}
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`${btn} ${editor.isActive("orderedList") ? active : ""}`}
+            className={`${btn} ${state.orderedList ? active : ""}`}
             title={t("toolbarOrderedList")}
           >
             <OrderedListIcon />
@@ -115,7 +146,8 @@ export function ConstructorRichTextToolbar({
       <span className="mx-1.5 h-4 w-px bg-ink/10" />
       <button
         type="button"
-        disabled={disabled || !editor.can().undo()}
+        disabled={disabled || !state.canUndo}
+        onMouseDown={keepEditorSelection}
         onClick={() => editor.chain().focus().undo().run()}
         className={btn}
         title={t("toolbarUndo")}
@@ -124,7 +156,8 @@ export function ConstructorRichTextToolbar({
       </button>
       <button
         type="button"
-        disabled={disabled || !editor.can().redo()}
+        disabled={disabled || !state.canRedo}
+        onMouseDown={keepEditorSelection}
         onClick={() => editor.chain().focus().redo().run()}
         className={btn}
         title={t("toolbarRedo")}

@@ -225,6 +225,7 @@ export default function DashboardPage() {
             ? "تقديم مسودات جديدة، وتتبع التنقيحات، وإدارة مخطوطاتك النشطة."
             : "Submit new drafts, track revisions, and manage your active manuscripts.",
           colorClass: "from-indigo-500/10 to-indigo-500/5 dark:from-indigo-500/15 dark:to-indigo-500/5 text-indigo-600 dark:text-indigo-400 group-hover:border-indigo-500/35",
+          glowClass: "hover-glow-indigo",
           iconBg: "bg-indigo-500/12 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400",
           icon: (
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -238,6 +239,7 @@ export default function DashboardPage() {
             ? "تقييم المخطوطات الواردة، وتعيين المحكمين الأقران، وتسجيل القرارات التحريرية."
             : "Evaluate incoming submissions, assign peer reviewers, and record editorial decisions.",
           colorClass: "from-accent/10 to-accent/5 dark:from-accent/15 dark:to-accent/5 text-accent group-hover:border-accent/35",
+          glowClass: "hover-glow-accent",
           iconBg: "bg-accent/12 text-accent dark:bg-accent/20 dark:text-accent",
           icon: (
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -251,6 +253,7 @@ export default function DashboardPage() {
             ? "الوصول إلى المخطوطات المعينة، وتنزيل حزم التحكيم، وتقديم تقارير التقييم."
             : "Access assigned manuscripts, download review packages, and submit your evaluation reports.",
           colorClass: "from-emerald-500/10 to-emerald-500/5 dark:from-emerald-500/15 dark:to-emerald-500/5 text-emerald-600 dark:text-emerald-400 group-hover:border-emerald-500/35",
+          glowClass: "hover-glow-emerald",
           iconBg: "bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400",
           icon: (
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -264,6 +267,7 @@ export default function DashboardPage() {
             ? "تصفح المقالات المحكمة، وابحث في العناوين والملخصات، واقرأ الأعمال المنشورة."
             : "Browse peer-reviewed articles, search titles and abstracts, and read published work.",
           colorClass: "from-amber-500/10 to-amber-500/5 dark:from-amber-500/15 dark:to-amber-500/5 text-amber-600 dark:text-amber-400 group-hover:border-amber-500/35",
+          glowClass: "hover-glow-amber",
           iconBg: "bg-amber-500/12 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400",
           icon: (
             <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -439,7 +443,7 @@ export default function DashboardPage() {
                     <li key={href}>
                       <Link
                         href={href}
-                        className={`group relative flex flex-col h-full rounded-2xl border border-ink/10 dark:border-white/10 bg-gradient-to-br ${details.colorClass} p-5 text-start shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)]`}
+                        className={`group relative flex flex-col h-full rounded-2xl border border-ink/10 dark:border-white/10 bg-gradient-to-br ${details.colorClass} ${details.glowClass} p-5 text-start shadow-xs transition-all duration-300 hover:-translate-y-1`}
                       >
                         <div className="flex items-center justify-between gap-4 mb-2.5">
                           <div className={`flex size-9 items-center justify-center rounded-xl transition-all duration-300 ${details.iconBg} group-hover:scale-110`}>

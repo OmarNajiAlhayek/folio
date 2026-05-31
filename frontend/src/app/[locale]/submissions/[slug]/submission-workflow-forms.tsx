@@ -35,6 +35,7 @@ import {
 } from "@/lib/validation";
 import { SubmissionDisciplinePanel } from "@/components/submission-discipline-panel";
 import type { SubmissionDisciplineFields } from "@/lib/discipline-labels";
+import { useDisciplineLabel } from "@/lib/use-discipline-label";
 
 export type ContributorRow = {
   fullName: string;
@@ -800,6 +801,7 @@ export function SubmissionMetadataDisplay({
 
 function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
   const t = useTranslations("SubmissionWorkflow");
+  const { format: formatDiscipline } = useDisciplineLabel();
   const tKey = t as unknown as (k: string) => string;
   const typeLabel =
     initial.articleType &&
@@ -824,7 +826,7 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
           {disciplineFields.disciplineSuggested && (
             <p className="text-ink/85">
               <span className="font-medium text-ink">{t("disciplineAiSuggestion")}: </span>
-              {disciplineFields.disciplineSuggested}
+              {formatDiscipline(disciplineFields.disciplineSuggested)}
               {disciplineFields.disciplineSuggestedConfidence != null && (
                 <span className="ms-1 text-ink/55">
                   ({disciplineFields.disciplineSuggestedConfidence.toFixed(1)}%)
@@ -835,7 +837,7 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
           {disciplineFields.discipline && (
             <p className="mt-1 text-ink/85">
               <span className="font-medium text-ink">{t("disciplineConfirmed")}: </span>
-              {disciplineFields.discipline}
+              {formatDiscipline(disciplineFields.discipline)}
             </p>
           )}
           {disciplineFields.disciplineScopeWarning === "suggested_out_of_journal_scope" && (

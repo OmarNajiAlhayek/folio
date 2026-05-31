@@ -15,6 +15,18 @@ PLACEHOLDER_OPENAI_KEYS = frozenset(
     }
 )
 
+LOOPBACK_BIND_HOSTS = frozenset(
+    {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    }
+)
+
+
+def is_loopback_bind_host(host: str) -> bool:
+    return host.strip().lower() in LOOPBACK_BIND_HOSTS
+
 
 class AiProviderKind(StrEnum):
     NOOP = "noop"
@@ -35,7 +47,9 @@ class Settings(BaseSettings):
 
     app_env: str = Field(default="development", validation_alias="APP_ENV")
     port: int = Field(default=5245, validation_alias="PORT")
+    http_bind_host: str = Field(default="127.0.0.1", validation_alias="HTTP_BIND_HOST")
     grpc_port: int = Field(default=5246, validation_alias="GRPC_PORT")
+    grpc_bind_host: str = Field(default="127.0.0.1", validation_alias="GRPC_BIND_HOST")
     log_level: str = Field(default="info", validation_alias="LOG_LEVEL")
     ai_service_token: str = Field(default="", validation_alias="AI_SERVICE_TOKEN")
     ai_provider: AiProviderKind = Field(
@@ -188,6 +202,12 @@ class Settings(BaseSettings):
 
     def validate_runtime(self) -> None:
         """Fail fast when production or strict mode requires real provider credentials."""
+        if not is_loopback_bind_host(self.grpc_bind_host) and not self.ai_service_token.strip():
+            raise RuntimeConfigError(
+                "AI_SERVICE_TOKEN must be set when GRPC_BIND_HOST is not loopback "
+                f"({self.grpc_bind_host!r}). Use 127.0.0.1 for same-machine dev.",
+            )
+
         enforce = self.is_production or self.runtime_config_strict
         if not enforce:
             return

@@ -1,0 +1,42 @@
+@startuml folio-sequence-submit-to-journal
+' Folio — Author submits manuscript (UC-01)
+' Matches: POST /api/v1/submissions/:slug/submit, transactional outbox, submission.submitted
+' Render: https://www.plantuml.com/plantuml
+
+title Submit to journal (UC-01)
+
+actor Author
+participant "Folio UI\n(Next.js)" as UI
+participant "Backend API\n(NestJS)" as API
+database "PostgreSQL" as DB
+queue "RabbitMQ" as MQ
+participant "Email service" as Email
+participant "SMTP" as SMTP
+
+Author -> UI : Open submission,\nconfirm metadata/files
+Author -> UI : Tap **Submit**
+UI -> API : POST /submissions/:slug/submit\n(JWT)
+
+API -> API : Validate author,\nstatus = draft/revisions,\nfiles & constructor rules
+
+alt Validation fails
+  API --> UI : 400 validation error
+  UI --> Author : Show error;\nstays draft
+else Success
+  API -> DB : BEGIN transaction
+  API -> DB : UPDATE submission\nstatus = **submitted**
+  API -> DB : INSERT outbox rows\n(submission.submitted per editor/JM)
+  API -> DB : INSERT in-app notifications
+  API -> DB : COMMIT
+
+  API -> MQ : Publish outbox events\n(after commit)
+  API --> UI : 200 submission (submitted)
+  UI --> Author : Success
+
+  MQ -> Email : Consume submission.submitted
+  Email -> Email : Render template\n(idempotent)
+  Email -> SMTP : Send mail to each\neditor / journal manager
+  SMTP --> Email : OK
+end
+
+@enduml

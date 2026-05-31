@@ -1,8 +1,11 @@
 import {
   applyPublicationCatalogQuery,
+  clampPublicationCatalogPagination,
   normalizePublicationPublishedAt,
   publicationCatalogBoundParamNames,
   publicationCatalogNeedsAuthorJoin,
+  PUBLICATION_CATALOG_DEFAULT_LIMIT,
+  PUBLICATION_CATALOG_MAX_LIMIT,
   PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
   PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
   PUBLICATION_QUICK_SEARCH_MATCH_SQL,
@@ -14,6 +17,17 @@ import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionArticleType } from '../entities/submission-article-type.enum';
 
 describe('publication-catalog-search.util', () => {
+  it('clampPublicationCatalogPagination applies defaults and bounds', () => {
+    expect(clampPublicationCatalogPagination()).toEqual({
+      limit: PUBLICATION_CATALOG_DEFAULT_LIMIT,
+      offset: 0,
+    });
+    expect(clampPublicationCatalogPagination(500, -3)).toEqual({
+      limit: PUBLICATION_CATALOG_MAX_LIMIT,
+      offset: 0,
+    });
+  });
+
   it('trimCatalogFilter returns undefined for blank strings', () => {
     expect(trimCatalogFilter('  ')).toBeUndefined();
     expect(trimCatalogFilter(' hello ')).toBe('hello');

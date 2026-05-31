@@ -92,6 +92,35 @@ const PREVIEW_CONTEXT: Record<
     isRejected: false,
     isRevisionsRequested: false,
   },
+  'review-submitted': {
+    editorDisplayName: 'Editor Example',
+    reviewerDisplayName: 'Dr. Example Reviewer',
+    submissionTitle: 'Sample manuscript title (preview)',
+    submissionUrl: 'https://example.org/preview/submissions/sample',
+  },
+  'review-invitation-accepted': {
+    editorDisplayName: 'Editor Example',
+    reviewerDisplayName: 'Dr. Example Reviewer',
+    submissionTitle: 'Sample manuscript title (preview)',
+    submissionUrl: 'https://example.org/preview/submissions/sample',
+  },
+  'review-invitation-declined': {
+    editorDisplayName: 'Editor Example',
+    reviewerDisplayName: 'Dr. Example Reviewer',
+    submissionTitle: 'Sample manuscript title (preview)',
+    submissionUrl: 'https://example.org/preview/submissions/sample',
+  },
+  'submission-published': {
+    authorDisplayName: 'Author Example',
+    submissionTitle: 'Sample manuscript title (preview)',
+    publicationUrl: 'https://example.org/preview/publications/sample',
+  },
+  'role-invitation': {
+    inviteeDisplayName: 'Editor Example',
+    invitedByDisplayName: 'Journal Manager',
+    roleLabel: 'editor',
+    dashboardUrl: 'https://example.org/preview/dashboard',
+  },
 };
 
 @Injectable()

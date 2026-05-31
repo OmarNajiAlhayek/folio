@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Brackets, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import {
   RoleInvitation,
@@ -15,6 +17,11 @@ import { RbacService } from '../rbac/rbac.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_TYPE } from '../notifications/notification-types';
 import { roleInvitationCreatedKey } from '../notifications/notification-idempotency';
+import { EventPublisherService } from '../messaging/event-publisher.service';
+import { ROUTING_KEY } from '../messaging/contracts/email-events';
+import type { RoleInvitationCreatedEvent } from '../messaging/contracts/email-events';
+import { roleInvitationEmailKey } from '../messaging/shared/idempotency';
+import { resolveEmailLocale } from '../common/email-locale';
 
 export type ReviewerCandidate = {
   id: string;
@@ -49,6 +56,26 @@ export type PendingRoleInvitationView = {
   invitedBy: { displayName: string; email: string };
 };
 
+export type AdminUserPendingInvitation = {
+  id: string;
+  roleSlug: string;
+};
+
+export type AdminUserRow = {
+  id: string;
+  email: string;
+  displayName: string;
+  affiliation: string | null;
+  willingToReview: boolean;
+  roleSlugs: string[];
+  pendingRoleInvitations: AdminUserPendingInvitation[];
+};
+
+export type AdminUserListResult = {
+  items: AdminUserRow[];
+  total: number;
+};
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -58,7 +85,16 @@ export class UsersService {
     private readonly roleInvRepo: Repository<RoleInvitation>,
     private readonly rbacService: RbacService,
     private readonly notifications: NotificationsService,
+    private readonly eventPublisher: EventPublisherService,
+    private readonly config: ConfigService,
   ) {}
+
+  private appBaseUrl(): string {
+    return (this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240').replace(
+      /\/+$/,
+      '',
+    );
+  }
 
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepo.findOne({ where: { email: email.toLowerCase() } });
@@ -136,6 +172,80 @@ export class UsersService {
       });
     }
     return profile;
+  }
+
+  /** Escape `%` and `_` for safe ILIKE patterns. */
+  private escapeIlikePattern(raw: string): string {
+    return raw.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+  }
+
+  async listForRoleAdmin(query: {
+    q?: string;
+    limit: number;
+    offset: number;
+  }): Promise<AdminUserListResult> {
+    const qb = this.usersRepo
+      .createQueryBuilder('u')
+      .select([
+        'u.id',
+        'u.email',
+        'u.displayName',
+        'u.affiliation',
+        'u.willingToReview',
+      ])
+      .orderBy('u.display_name', 'ASC')
+      .addOrderBy('u.email', 'ASC')
+      .skip(query.offset)
+      .take(query.limit);
+
+    if (query.q) {
+      const pattern = `%${this.escapeIlikePattern(query.q)}%`;
+      qb.andWhere(
+        new Brackets((sub) => {
+          sub
+            .where('u.email ILIKE :pattern', { pattern })
+            .orWhere('u.display_name ILIKE :pattern', { pattern });
+        }),
+      );
+    }
+
+    const [users, total] = await qb.getManyAndCount();
+    if (users.length === 0) {
+      return { items: [], total };
+    }
+
+    const userIds = users.map((u) => u.id);
+    const privilegedSlugs = [ROLE_SLUGS.EDITOR, ROLE_SLUGS.JOURNAL_MANAGER];
+    const pendingInvites = await this.roleInvRepo.find({
+      where: {
+        inviteeUserId: In(userIds),
+        status: RoleInvitationStatus.INVITED,
+        roleSlug: In(privilegedSlugs),
+      },
+      select: ['id', 'inviteeUserId', 'roleSlug'],
+    });
+    const invitesByUser = new Map<string, AdminUserPendingInvitation[]>();
+    for (const inv of pendingInvites) {
+      const list = invitesByUser.get(inv.inviteeUserId) ?? [];
+      list.push({ id: inv.id, roleSlug: inv.roleSlug });
+      invitesByUser.set(inv.inviteeUserId, list);
+    }
+
+    const roleResults = await Promise.all(
+      userIds.map((id) => this.rbacService.getEffectiveForUser(id)),
+    );
+
+    const items: AdminUserRow[] = users.map((u, i) => ({
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      affiliation: u.affiliation,
+      willingToReview: u.willingToReview,
+      roleSlugs: roleResults[i]?.roleSlugs ?? [],
+      pendingRoleInvitations: invitesByUser.get(u.id) ?? [],
+    }));
+
+    return { items, total };
   }
 
   async listReviewerCandidates(): Promise<ReviewerCandidate[]> {
@@ -338,28 +448,91 @@ export class UsersService {
       });
     }
     const invitedBy = await this.findById(actorUserId);
-    const row = this.roleInvRepo.create({
-      inviteeUserId: targetUserId,
-      invitedByUserId: actorUserId,
-      roleSlug,
-      status: RoleInvitationStatus.INVITED,
-      resolvedAt: null,
-    });
-    const saved = await this.roleInvRepo.save(row);
-    const n = await this.notifications.createIfAbsent({
-      userId: targetUserId,
-      type: NOTIFICATION_TYPE.ROLE_INVITATION_CREATED,
-      params: {
-        invitedByDisplayName: invitedBy?.displayName ?? 'Journal manager',
+    let pendingNotification: Awaited<
+      ReturnType<NotificationsService['createIfAbsent']>
+    > = null;
+    const saved = await this.roleInvRepo.manager.transaction(async (em) => {
+      const roleInvRepo = em.getRepository(RoleInvitation);
+      const row = roleInvRepo.create({
+        inviteeUserId: targetUserId,
+        invitedByUserId: actorUserId,
         roleSlug,
-      },
-      href: '/dashboard',
-      idempotencyKey: roleInvitationCreatedKey(saved.id),
+        status: RoleInvitationStatus.INVITED,
+        resolvedAt: null,
+      });
+      const invitation = await roleInvRepo.save(row);
+      pendingNotification = await this.enqueueRoleInvitationEmail(
+        {
+          invitation,
+          invitee: target,
+          invitedByDisplayName: invitedBy?.displayName ?? 'Journal manager',
+        },
+        em,
+      );
+      return invitation;
     });
-    if (n) {
-      this.notifications.emitCreated([n]);
+    if (pendingNotification) {
+      this.notifications.emitCreated([pendingNotification]);
     }
     return saved;
+  }
+
+  private async enqueueRoleInvitationEmail(
+    args: {
+      invitation: RoleInvitation;
+      invitee: User;
+      invitedByDisplayName: string;
+    },
+    em: EntityManager,
+  ): Promise<Awaited<ReturnType<NotificationsService['createIfAbsent']>>> {
+    const { invitation, invitee, invitedByDisplayName } = args;
+    if (!invitee.email) {
+      throw new InternalServerErrorException({
+        message: 'Invitee email not found',
+        code: 'INTERNAL_ERROR',
+      });
+    }
+    const siteDefault = this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en');
+    const emailLocale = resolveEmailLocale({
+      recipientPreferred: invitee.preferredLocale,
+      siteDefault,
+    });
+    const payload: RoleInvitationCreatedEvent = {
+      type: 'RoleInvitationCreated',
+      occurredAt: new Date().toISOString(),
+      idempotencyKey: roleInvitationEmailKey(invitation.id),
+      invitationId: invitation.id,
+      roleSlug: invitation.roleSlug,
+      emailLocale,
+      invitee: {
+        id: invitee.id,
+        email: invitee.email,
+        displayName: invitee.displayName,
+      },
+      invitedBy: {
+        id: invitation.invitedByUserId,
+        displayName: invitedByDisplayName,
+      },
+      dashboardUrl: `${this.appBaseUrl()}/dashboard`,
+    };
+    await this.eventPublisher.enqueue(
+      ROUTING_KEY.roleInvitation,
+      payload as unknown as Record<string, unknown>,
+      em,
+    );
+    return this.notifications.createIfAbsent(
+      {
+        userId: invitee.id,
+        type: NOTIFICATION_TYPE.ROLE_INVITATION_CREATED,
+        params: {
+          invitedByDisplayName,
+          roleSlug: invitation.roleSlug,
+        },
+        href: '/dashboard',
+        idempotencyKey: roleInvitationCreatedKey(invitation.id),
+      },
+      em,
+    );
   }
 
   async listMyPendingRoleInvitations(

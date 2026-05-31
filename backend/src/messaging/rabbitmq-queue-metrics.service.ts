@@ -61,6 +61,11 @@ export class RabbitMqQueueMetricsService {
       this.topology.copyeditAuthorReadyQueue,
       this.topology.submissionSubmittedQueue,
       this.topology.submissionDecisionQueue,
+      this.topology.submissionPublishedQueue,
+      this.topology.reviewSubmittedQueue,
+      this.topology.reviewInvitationAcceptedQueue,
+      this.topology.reviewInvitationDeclinedQueue,
+      this.topology.roleInvitationQueue,
     ] as const;
 
     const queues: Record<string, QueueDepthEntry> = {};

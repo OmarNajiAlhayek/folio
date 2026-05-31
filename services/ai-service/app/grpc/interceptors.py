@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from collections.abc import Callable
 
 import grpc
@@ -22,7 +23,7 @@ class ServiceTokenInterceptor(ServerInterceptor):
 
         metadata = dict(handler_call_details.invocation_metadata or [])
         token = metadata.get("x-folio-service-token", "")
-        if token != self._expected_token:
+        if not hmac.compare_digest(token, self._expected_token):
             async def _unauthenticated(_request: object, context: grpc.aio.ServicerContext) -> None:
                 await context.abort(
                     grpc.StatusCode.UNAUTHENTICATED,

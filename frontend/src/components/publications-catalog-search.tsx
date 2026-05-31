@@ -2,27 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ARABIC_DISCIPLINE_LABELS } from "@/lib/discipline-labels";
-import type { SubmissionArticleType } from "@/lib/queries/submissions";
+import { useDisciplineLabel } from "@/lib/use-discipline-label";
 import type {
   PublicationCatalogFilters,
   PublicationSearchMode,
 } from "@/lib/public-submissions-query";
+import { SUBMISSION_ARTICLE_TYPES } from "@/lib/validation/constants";
 import { PublicationAuthorTypeahead } from "@/components/publication-author-typeahead";
 import { SimpleSelect } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-
-const ARTICLE_TYPES: SubmissionArticleType[] = [
-  "original_research",
-  "review_article",
-  "case_report",
-  "short_communication",
-  "other",
-];
-
-const DISCIPLINE_OPTIONS = ARABIC_DISCIPLINE_LABELS.filter(
-  (l) => l !== "غير محدد",
-);
 
 type Props = {
   filters: PublicationCatalogFilters;
@@ -31,6 +19,7 @@ type Props = {
   onApplyAdvanced: (draft: PublicationCatalogFilters) => void;
   onClear: () => void;
   resultCount: number | null;
+  semanticResultsCap: number | null;
   loading: boolean;
 };
 
@@ -41,10 +30,12 @@ export function PublicationsCatalogSearch({
   onApplyAdvanced,
   onClear,
   resultCount,
+  semanticResultsCap,
   loading,
 }: Props) {
   const t = useTranslations("Publications");
   const tWf = useTranslations("SubmissionWorkflow");
+  const { selectableOptions } = useDisciplineLabel();
   const locale = useLocale();
   const [quickQ, setQuickQ] = useState(filters.q ?? "");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -106,12 +97,12 @@ export function PublicationsCatalogSearch({
 
   const disciplineOptions = [
     { value: "", label: t("disciplineAny") },
-    ...DISCIPLINE_OPTIONS.map((label) => ({ value: label, label })),
+    ...selectableOptions,
   ];
 
   const articleTypeOptions = [
     { value: "", label: tWf("articleTypePlaceholder") },
-    ...ARTICLE_TYPES.map((type) => ({
+    ...SUBMISSION_ARTICLE_TYPES.map((type) => ({
       value: type,
       label: tWf(`articleType_${type}`),
     })),
@@ -335,12 +326,19 @@ export function PublicationsCatalogSearch({
 
       {/* Query count indicator */}
       {!loading && resultCount !== null ? (
-        <div className="flex items-center gap-2 text-xs font-semibold text-ink/55 bg-ink/[0.03] dark:bg-white/[0.03] border border-ink/[0.05] max-w-fit px-3.5 py-1 rounded-full">
-          <span className="relative flex size-1.5 shrink-0">
-            <span className="absolute inset-0 rounded-full bg-accent opacity-75 animate-ping" />
-            <span className="relative rounded-full size-1.5 bg-accent" />
-          </span>
-          {t("resultCount", { count: resultCount })}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-ink/55 bg-ink/[0.03] dark:bg-white/[0.03] border border-ink/[0.05] max-w-fit px-3.5 py-1 rounded-full">
+            <span className="relative flex size-1.5 shrink-0">
+              <span className="absolute inset-0 rounded-full bg-accent opacity-75 animate-ping" />
+              <span className="relative rounded-full size-1.5 bg-accent" />
+            </span>
+            {t("resultCount", { count: resultCount })}
+          </div>
+          {semanticResultsCap != null ? (
+            <p className="text-[11px] text-ink/50 max-w-md leading-snug">
+              {t("semanticResultsCap", { limit: semanticResultsCap })}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -1,0 +1,42 @@
+@startuml folio-author-use-cases
+' Folio — Author essentials (submission.manage_own only)
+' AI: suggest discipline, keyword suggestions (docs/plans/ai-service.md)
+' Excludes staff roles (editor, journal manager, reviewer, copyeditor diagrams)
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle stickman
+
+actor "Author" as AU
+
+rectangle "Folio — author scope" {
+
+  usecase "Manage own submission" as UC_Own
+  usecase "Browse my submissions" as UC_List
+  usecase "Create draft submission" as UC_Create
+  usecase "Edit metadata and upload files" as UC_Edit
+  usecase "Compose manuscript in Word Constructor" as UC_Constructor
+  usecase "Submit to journal" as UC_Submit
+  usecase "Revise and resubmit" as UC_Revise
+  usecase "View reviewer feedback" as UC_Feedback
+
+  usecase "Suggest discipline (AI)" as UC_AiDiscipline
+  usecase "Keywords suggestion (AI)" as UC_AiKeywords
+}
+
+AU --> UC_Own
+
+UC_Own .> UC_List : <<include>>
+UC_Own .> UC_Create : <<include>>
+UC_Own .> UC_Edit : <<include>>
+UC_Own .> UC_Submit : <<include>>
+UC_Constructor .> UC_Edit : <<extend>>
+UC_Revise .> UC_Own : <<extend>>
+UC_Feedback .> UC_List : <<extend>>
+
+UC_AiDiscipline .> UC_Edit : <<extend>>
+UC_AiKeywords .> UC_Edit : <<extend>>
+UC_AiKeywords .> UC_Create : <<extend>>
+
+@enduml

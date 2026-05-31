@@ -121,13 +121,104 @@ dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
   }
 }
 
+/* Premium Notification Bell Micro-Interactions */
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(10deg); }
+  30% { transform: rotate(-10deg); }
+  45% { transform: rotate(6deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+  90% { transform: rotate(-3deg); }
+}
+
+.animate-bell-hover:hover svg {
+  animation: bell-ring 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  transform-origin: top center;
+}
+
+.notification-panel {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition:
+    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@starting-style {
+  .notification-panel {
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   dialog.folio-logout-dialog,
   dialog.folio-logout-dialog::backdrop,
-  dialog.folio-logout-dialog .folio-logout-dialog__panel {
-    transition-duration: 0ms;
+  dialog.folio-logout-dialog .folio-logout-dialog__panel,
+  .notification-panel {
+    transition-duration: 0ms !important;
+  }
+  .animate-bell-hover:hover svg {
+    animation: none !important;
   }
 }
+
+/* Rotational Theme Toggle */
+.theme-icon-container svg {
+  transition: transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-icon-container:hover svg {
+  transform: rotate(20deg) scale(1.1);
+}
+
+.theme-icon-container:active svg {
+  transform: rotate(-45deg) scale(0.9);
+}
+
+/* Premium Dashboard Card Glow Transitions */
+.hover-glow-indigo {
+  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+}
+.hover-glow-indigo:hover {
+  box-shadow: 0 12px 30px -8px rgba(99, 102, 241, 0.18) !important;
+}
+
+.hover-glow-accent {
+  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+}
+.hover-glow-accent:hover {
+  box-shadow: 0 12px 30px -8px rgba(196, 92, 62, 0.18) !important;
+}
+
+.hover-glow-emerald {
+  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+}
+.hover-glow-emerald:hover {
+  box-shadow: 0 12px 30px -8px rgba(16, 185, 129, 0.18) !important;
+}
+
+.hover-glow-amber {
+  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+}
+.hover-glow-amber:hover {
+  box-shadow: 0 12px 30px -8px rgba(245, 158, 11, 0.18) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-icon-container svg,
+  .hover-glow-indigo,
+  .hover-glow-accent,
+  .hover-glow-emerald,
+  .hover-glow-amber {
+    transition: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+
 
 /* Layered page backdrop: cool mid-tone, warm floor, soft radial accents */
 html[dir="ltr"] body,

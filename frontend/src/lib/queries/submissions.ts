@@ -19,12 +19,8 @@ export type SubmissionListItem = {
   updatedAt: string;
 };
 
-export type SubmissionArticleType =
-  | "original_research"
-  | "review_article"
-  | "case_report"
-  | "short_communication"
-  | "other";
+import type { SubmissionArticleType } from "@/lib/validation/constants";
+export type { SubmissionArticleType };
 
 export type SubmissionSummary = {
   id: string;

@@ -35,7 +35,16 @@ const REVIEW_TEMPLATE_KEYS = [
 const WORKFLOW_TEMPLATE_KEYS = [
   "submission-submitted",
   "submission-decision",
+  "submission-published",
 ] as const;
+
+const REVIEW_EDITOR_TEMPLATE_KEYS = [
+  "review-submitted",
+  "review-invitation-accepted",
+  "review-invitation-declined",
+] as const;
+
+const ROLE_TEMPLATE_KEYS = ["role-invitation"] as const;
 
 const COPYEDIT_TEMPLATE_KEYS = [
   "copyedit-assigned",
@@ -46,6 +55,8 @@ const COPYEDIT_TEMPLATE_KEYS = [
 type EmailTemplateKey =
   | (typeof REVIEW_TEMPLATE_KEYS)[number]
   | (typeof WORKFLOW_TEMPLATE_KEYS)[number]
+  | (typeof REVIEW_EDITOR_TEMPLATE_KEYS)[number]
+  | (typeof ROLE_TEMPLATE_KEYS)[number]
   | (typeof COPYEDIT_TEMPLATE_KEYS)[number];
 
 const TEMPLATE_I18N: Record<
@@ -68,6 +79,26 @@ const TEMPLATE_I18N: Record<
   "submission-decision": {
     title: "templateSubmissionDecision",
     variables: "variablesSubmissionDecision",
+  },
+  "submission-published": {
+    title: "templateSubmissionPublished",
+    variables: "variablesSubmissionPublished",
+  },
+  "review-submitted": {
+    title: "templateReviewSubmitted",
+    variables: "variablesReviewEditor",
+  },
+  "review-invitation-accepted": {
+    title: "templateReviewAccepted",
+    variables: "variablesReviewEditor",
+  },
+  "review-invitation-declined": {
+    title: "templateReviewDeclined",
+    variables: "variablesReviewEditor",
+  },
+  "role-invitation": {
+    title: "templateRoleInvitation",
+    variables: "variablesRoleInvitation",
   },
   "copyedit-assigned": {
     title: "templateCopyeditAssigned",
@@ -175,6 +206,8 @@ export default function EmailSettingsPage() {
     const allKeys: EmailTemplateKey[] = [
       ...REVIEW_TEMPLATE_KEYS,
       ...WORKFLOW_TEMPLATE_KEYS,
+      ...REVIEW_EDITOR_TEMPLATE_KEYS,
+      ...ROLE_TEMPLATE_KEYS,
       ...COPYEDIT_TEMPLATE_KEYS,
     ];
     const loaded = await Promise.all(
@@ -1052,6 +1085,62 @@ export default function EmailSettingsPage() {
                       >
                         <span className="truncate">{t(meta.title)}</span>
                         <span className="size-1.5 rounded-full bg-accent-2/40" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-[10px] font-bold text-accent-2 uppercase tracking-widest px-2">
+                  {t("templatesReviewEditorSection")}
+                </h3>
+                <div className="space-y-1">
+                  {REVIEW_EDITOR_TEMPLATE_KEYS.map((key) => {
+                    const meta = TEMPLATE_I18N[key];
+                    const isSelected = selectedTemplateKey === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={templatesLoading}
+                        onClick={() => setSelectedTemplateKey(key)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? "bg-surface border-accent-2 shadow-sm text-accent-2"
+                            : "bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink"
+                        }`}
+                      >
+                        <span className="truncate">{t(meta.title)}</span>
+                        <span className="size-1.5 rounded-full bg-accent-2/40" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-[10px] font-bold text-accent uppercase tracking-widest px-2">
+                  {t("templatesRoleSection")}
+                </h3>
+                <div className="space-y-1">
+                  {ROLE_TEMPLATE_KEYS.map((key) => {
+                    const meta = TEMPLATE_I18N[key];
+                    const isSelected = selectedTemplateKey === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={templatesLoading}
+                        onClick={() => setSelectedTemplateKey(key)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? "bg-surface border-accent shadow-sm text-accent"
+                            : "bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink"
+                        }`}
+                      >
+                        <span className="truncate">{t(meta.title)}</span>
+                        <span className="size-1.5 rounded-full bg-accent/40" />
                       </button>
                     );
                   })}

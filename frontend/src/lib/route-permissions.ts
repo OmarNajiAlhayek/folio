@@ -35,6 +35,10 @@ export const ROUTE_ACCESS_RULES: Array<{
     permissions: PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
   },
   {
+    pattern: /^\/journal-manager\/users(\/|$)/,
+    permissions: PERMISSION_SLUGS.USERS_MANAGE_ROLES,
+  },
+  {
     pattern: /^\/editor(\/|$)/,
     permissions: PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   },

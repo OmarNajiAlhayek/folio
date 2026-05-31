@@ -2,6 +2,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
+import Underline from "@tiptap/extension-underline";
 import type { Extensions } from "@tiptap/react";
 
 export type ConstructorTipTapVariant = "full" | "reference";
@@ -34,5 +35,6 @@ export function createConstructorTipTapExtensions(
     }),
     Superscript,
     Subscript,
+    ...(variant === "full" ? [Underline] : []),
   ];
 }

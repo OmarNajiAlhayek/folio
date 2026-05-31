@@ -4,8 +4,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useState } from "react";
 import { apiJson } from "@/lib/api";
 import { ApiError } from "@/lib/api-response";
-import { ARABIC_DISCIPLINE_LABELS } from "@/lib/discipline-labels";
 import type { DisciplineSuggestion, SubmissionDisciplineFields } from "@/lib/discipline-labels";
+import { useDisciplineLabel } from "@/lib/use-discipline-label";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 import { toast } from "@/lib/toast";
 import { Spinner } from "@/components/ui/spinner";
@@ -29,6 +29,7 @@ export function SubmissionDisciplinePanel({
   const t = useTranslations("SubmissionWorkflow");
   const locale = useLocale();
   const isAr = locale === "ar";
+  const { format: formatDiscipline, selectableOptions } = useDisciplineLabel();
   const { resolve: resolveApiError } = useApiErrorMessages();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -101,7 +102,7 @@ export function SubmissionDisciplinePanel({
         <div className="mt-3 rounded-md border border-ink/10 bg-surface px-3 py-2 text-sm" dir="auto">
           <p className="font-medium text-ink">{t("disciplineAiSuggestion")}</p>
           <p className="mt-1 text-ink/85">
-            {fields.disciplineSuggested}
+            {formatDiscipline(fields.disciplineSuggested)}
             {fields.disciplineSuggestedConfidence != null && (
               <span className="ms-2 text-ink/55">
                 ({fields.disciplineSuggestedConfidence.toFixed(1)}%)
@@ -119,7 +120,7 @@ export function SubmissionDisciplinePanel({
       {fields.discipline && (
         <p className="mt-3 text-sm text-ink/80" dir="auto">
           <span className="font-medium text-ink">{t("disciplineConfirmed")}: </span>
-          {fields.discipline}
+          {formatDiscipline(fields.discipline)}
           {fields.disciplineSource && (
             <span className="ms-2 text-xs text-ink/50">
               ({t(`disciplineSource_${fields.disciplineSource}`)})
@@ -169,7 +170,7 @@ export function SubmissionDisciplinePanel({
             <SearchableSelect
               options={[
                 { value: "", label: t("disciplineSelectPlaceholder") },
-                ...ARABIC_DISCIPLINE_LABELS.map((label) => ({ value: label, label })),
+                ...selectableOptions,
               ]}
               value={pick}
               onValueChange={setPick}

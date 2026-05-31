@@ -1,0 +1,40 @@
+@startuml folio-activity-submit-to-journal
+' Folio — Author submits manuscript (UC-01)
+' Render: https://www.plantuml.com/plantuml
+
+title Submit to journal — activity (UC-01)
+
+|Author|
+start
+:Open own submission;
+:Confirm metadata,\nfiles, and manuscript;
+:Choose **Submit**;
+
+|System|
+:Authenticate author;
+if (Status is draft\nor revisions requested?) then (yes)
+  :Validate required metadata,\nfiles, and constructor rules;
+  if (Validation OK?) then (yes)
+    if (Constructor selected?) then (yes)
+      :Generate and attach\nconstructor .docx;
+    else (no)
+    endif
+    :Set status = **submitted**;
+    :Save submission;
+    :Enqueue in-app notifications\nand email outbox;
+    :Publish events to message broker;
+    |Author|
+    :Show success;
+    stop
+  else (no)
+    |Author|
+    :Show validation errors;\nremain in draft / revisions;
+    stop
+  endif
+else (no)
+  |Author|
+  :Submit not allowed\nfor current status;
+  stop
+endif
+
+@enduml

@@ -9,6 +9,11 @@ const EVENT_TYPE_TO_ROUTING: Record<string, string> = {
   CopyeditAuthorReady: ROUTING_KEY.copyeditAuthorReady,
   SubmissionSubmitted: ROUTING_KEY.submissionSubmitted,
   SubmissionDecision: ROUTING_KEY.submissionDecision,
+  SubmissionPublished: ROUTING_KEY.submissionPublished,
+  ReviewSubmitted: ROUTING_KEY.reviewSubmitted,
+  ReviewInvitationAccepted: ROUTING_KEY.reviewInvitationAccepted,
+  ReviewInvitationDeclined: ROUTING_KEY.reviewInvitationDeclined,
+  RoleInvitationCreated: ROUTING_KEY.roleInvitation,
 };
 
 type XDeathEntry = {

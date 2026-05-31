@@ -158,7 +158,7 @@ When ai-service is down or flags are off, routes return structured errors (`AI_S
 ## Phase 2 — remaining work
 
 1. ~~Optional `X-Folio-Service-Token` validation on ai-service.~~ **Done** — gRPC interceptor when `AI_SERVICE_TOKEN` is set.
-2. Redact manuscript text in Nest logs (see email-service redactor patterns).
+2. ~~Redact manuscript text in Nest logs (see email-service redactor patterns).~~ **Done** — `backend/src/common/ai-log-redaction.ts` used by `AiClientService.logGrpcFailure`.
 3. Reviewer read-only discipline context in UI.
 4. gRPC server streaming for LLM tokens (separate proto RPC).
 
@@ -181,3 +181,5 @@ When ai-service is down or flags are off, routes return structured errors (`AI_S
 - Do not log full prompts or manuscript bodies without redaction.
 - Rate-limit at the Nest layer using existing throttler profiles on product routes.
 - Do not publish gRPC port **5246** to the public internet; bind on internal network only.
+- **Same-machine default:** `HTTP_BIND_HOST` and `GRPC_BIND_HOST` default to `127.0.0.1`. Nest uses `AI_SERVICE_GRPC_HOST=127.0.0.1`. Set a shared `AI_SERVICE_TOKEN` in both `backend/.env` and `services/ai-service/.env` when AI is enabled.
+- Binding gRPC on `0.0.0.0` (or any non-loopback host) requires `AI_SERVICE_TOKEN`; use only when another container/host must connect.

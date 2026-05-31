@@ -8,6 +8,7 @@ import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
 import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
 import { SubmissionSubmittedHandler } from './submission-submitted.handler';
 import { SubmissionDecisionHandler } from './submission-decision.handler';
+import { Phase3WorkflowHandlers } from './phase3-workflow.handlers';
 import { ConsumersService } from './consumers.service';
 
 @Module({
@@ -20,6 +21,7 @@ import { ConsumersService } from './consumers.service';
     CopyeditAuthorReadyHandler,
     SubmissionSubmittedHandler,
     SubmissionDecisionHandler,
+    Phase3WorkflowHandlers,
     ConsumersService,
   ],
   exports: [

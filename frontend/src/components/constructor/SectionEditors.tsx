@@ -560,11 +560,10 @@ function ParagraphEditor({
   // External content updates (e.g., on initial load) — only apply when the
   // editor is empty or the HTML differs significantly to avoid cursor jumps.
   useEffect(() => {
-    if (editor && section.html !== editor.getHTML() && !editor.isFocused) {
-      editor.commands.setContent(
-        sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
-        { emitUpdate: false },
-      );
+    const next = sanitizeConstructorTipTapHtml(section.html || "<p></p>");
+    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? "");
+    if (editor && next !== current && !editor.isFocused) {
+      editor.commands.setContent(next, { emitUpdate: false });
     }
   }, [editor, section.html]);
 
@@ -960,11 +959,10 @@ function RichTextBlockEditor({
   );
 
   useEffect(() => {
-    if (editor && section.html !== editor.getHTML() && !editor.isFocused) {
-      editor.commands.setContent(
-        sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
-        { emitUpdate: false },
-      );
+    const next = sanitizeConstructorTipTapHtml(section.html || "<p></p>");
+    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? "");
+    if (editor && next !== current && !editor.isFocused) {
+      editor.commands.setContent(next, { emitUpdate: false });
     }
   }, [editor, section.html]);
 
@@ -1127,7 +1125,8 @@ function ReferenceEntryEditor({
 
   useEffect(() => {
     const next = sanitizeConstructorTipTapHtml(html || "<p></p>");
-    if (editor && next !== editor.getHTML() && !editor.isFocused) {
+    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? "");
+    if (editor && next !== current && !editor.isFocused) {
       editor.commands.setContent(next, { emitUpdate: false });
     }
   }, [editor, html]);

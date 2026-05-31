@@ -135,6 +135,9 @@ describe('SubmissionsService.submit (constructor files)', () => {
           provide: RbacService,
           useValue: {
             listUserIdsWithPermission: jest.fn().mockResolvedValue([]),
+            listWorkflowNotificationRecipientIds: jest
+              .fn()
+              .mockResolvedValue([]),
             userHasPermission: jest.fn(),
           },
         },

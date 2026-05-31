@@ -18,10 +18,12 @@ COPY app ./app
 
 ENV APP_ENV=production
 ENV PORT=5245
+ENV HTTP_BIND_HOST=127.0.0.1
 ENV GRPC_PORT=5246
+ENV GRPC_BIND_HOST=127.0.0.1
 EXPOSE 5245 5246
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5245/health')" || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5245"]
+CMD ["python", "-m", "app.main"]

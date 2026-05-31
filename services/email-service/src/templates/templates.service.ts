@@ -33,6 +33,21 @@ const FILE_FALLBACK: Record<string, { subject: string }> = {
   'submission-decision': {
     subject: 'Editorial decision: {{submissionTitle}}',
   },
+  'review-submitted': {
+    subject: 'Review submitted: {{submissionTitle}}',
+  },
+  'review-invitation-accepted': {
+    subject: 'Reviewer accepted: {{submissionTitle}}',
+  },
+  'review-invitation-declined': {
+    subject: 'Reviewer declined: {{submissionTitle}}',
+  },
+  'submission-published': {
+    subject: 'Published: {{submissionTitle}}',
+  },
+  'role-invitation': {
+    subject: 'Invitation to join Folio as {{roleLabel}}',
+  },
 };
 
 /** Must match `email.email_template` CHECK + transactional handlers. */
@@ -44,6 +59,11 @@ const ALLOWED = new Set([
   'copyedit-author-ready',
   'submission-submitted',
   'submission-decision',
+  'review-submitted',
+  'review-invitation-accepted',
+  'review-invitation-declined',
+  'submission-published',
+  'role-invitation',
 ]);
 
 /**

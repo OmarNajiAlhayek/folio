@@ -92,7 +92,7 @@ def main() -> None:
     settings = get_settings()
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host=settings.http_bind_host,
         port=settings.port,
         log_level=settings.log_level.lower(),
     )

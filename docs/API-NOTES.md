@@ -73,6 +73,7 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
+| GET | `/users` | Journal manager (`users.manage_roles`) | Query: `q` (email/display name), `limit` (1–50, default 20), `offset`. Returns `{ items, total }` with `roleSlugs`, `willingToReview`, `pendingRoleInvitations`. UI: `/journal-manager/users`. |
 | GET | `/users/me` | Authenticated | Profile; may duplicate `/auth/me`—pick one pattern. |
 | GET | `/users/me/role-invitations` | Authenticated | Pending editor (etc.) invitations for the current user. |
 | POST | `/users/:id/role-invitations` | Journal manager (`users.manage_roles`) | Body: `{ "roleSlug": "editor" }` or `"journal_manager"`. Creates invitation; does not grant role until accept. |
@@ -148,8 +149,8 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
-| GET | `/public/submissions` | Public | List `published` submissions. Query filters: `q` (quick search), `author`, `discipline` (Arabic label enum), `articleType`, `publishedFrom`, `publishedTo`. |
-| GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`. `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20). |
+| GET | `/public/submissions` | Public | Paginated list of `published` submissions. Response: `{ items, total, limit, offset }`. Query filters: `q`, `author`, `discipline`, `articleType`, `publishedFrom`, `publishedTo`. Keyword mode: optional `limit` (1–100, default 20), `offset` (default 0). |
+| GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`. `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20); returns same paginated envelope with `offset` 0. |
 | GET | `/public/submissions/author-suggestions` | Public | Typeahead for catalog author filter. Query: `q` (min 2 chars), optional `limit` (1–20, default 10). |
 | GET | `/public/submissions/:slug` | Public | Published metadata + downloadable files. |
 | GET | `/public/manuscript-styles` | Public | Constructor / DOCX style profiles. |
@@ -163,8 +164,9 @@ Legacy alias `GET /publications` may redirect or mirror catalog list depending o
 - **Shipped:** submission-received emails to all editors (`submission.submitted`)
   and editor-decision emails to the author (`submission.decision`) via the
   same [`email-service`](./plans/email-service.md) pipeline as reviewer/copyedit mail.
-- **Still deferred:** review-submitted → editor, published → author, role-invitation
-  email, auth/welcome mail.
+- **Shipped (phase 3):** review-submitted, reviewer accept/decline → editors;
+  submission-published → author; role-invitation → invitee.
+- **Still deferred:** auth/welcome mail, password reset.
 - **Shipped:** in-app notifications (REST inbox, SSE live updates, header bell). See `GET /notifications`, `GET /notifications/stream`.
 - Refresh tokens, OAuth, ORCID.
 
@@ -182,8 +184,13 @@ in [`docs/plans/email-service.md`](./plans/email-service.md).
 | `copyedit.assigned` | Backend (`assignCopyeditor`) | email-service | Notifies copyeditor of assignment |
 | `copyedit.queries_sent` | Backend (`submitCopyeditNote`) | email-service | Notifies author of copyedit queries |
 | `copyedit.author_ready` | Backend (`markCopyeditAuthorReady`) | email-service | Notifies copyeditor author is ready |
-| `submission.submitted` | Backend (`submit`) | email-service | Notifies each editor (one outbox row per editor) |
+| `submission.submitted` | Backend (`submit`) | email-service | Notifies each editor and journal manager (one outbox row per recipient) |
 | `submission.decision` | Backend (`updateStatus` → accepted/rejected/revisions_requested) | email-service | Notifies author of editorial decision |
+| `submission.published` | Backend (`publishSubmission`) | email-service | Notifies author when copyeditor publishes |
+| `review.submitted` | Backend (`submitReview`) | email-service | Notifies each editor and journal manager |
+| `review.invitation_accepted` | Backend (`acceptReviewInvitation`) | email-service | Notifies each editor and journal manager |
+| `review.invitation_declined` | Backend (`declineReviewInvitation`) | email-service | Notifies each editor and journal manager |
+| `role.invitation` | Backend (`POST …/role-invitations`) | email-service | Notifies invitee of privileged role invite |
 
 Operational view (counts only, no PII):
 `GET /health/outbox` returns the backend outbox state (`pending`,

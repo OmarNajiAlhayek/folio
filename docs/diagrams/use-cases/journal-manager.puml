@@ -1,0 +1,37 @@
+@startuml folio-journal-manager-use-cases
+' Folio — Journal Manager essentials only (excludes capabilities shared with editor; see editor.puml)
+' Permissions unique to this role: users.manage_roles, email.manage_reminders
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle stickman
+
+actor "Journal Manager" as JM
+
+rectangle "Folio — journal manager scope" {
+
+  usecase "Manage staff roles" as UC_StaffRoles
+  usecase "Search users" as UC_Search
+  usecase "Assign reviewer or copyeditor" as UC_AssignStaff
+  usecase "Invite editor" as UC_InviteEditor
+  usecase "Invite journal manager" as UC_InviteJM
+
+  usecase "Configure journal email platform" as UC_Email
+  usecase "Set global review reminder policy" as UC_ReminderPolicy
+  usecase "Edit transactional email templates" as UC_Templates
+}
+
+JM --> UC_StaffRoles
+JM --> UC_Email
+
+UC_StaffRoles .> UC_Search : <<include>>
+UC_StaffRoles .> UC_AssignStaff : <<include>>
+UC_InviteEditor .> UC_StaffRoles : <<extend>>
+UC_InviteJM .> UC_StaffRoles : <<extend>>
+
+UC_Email .> UC_ReminderPolicy : <<include>>
+UC_Email .> UC_Templates : <<include>>
+
+
+@enduml

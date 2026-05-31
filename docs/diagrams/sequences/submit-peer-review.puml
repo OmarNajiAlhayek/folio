@@ -1,0 +1,35 @@
+@startuml folio-sequence-submit-peer-review
+' Folio — Reviewer submits review (UC-04)
+' Render: https://www.plantuml.com/plantuml
+
+title Submit peer review (UC-04)
+
+actor Reviewer
+participant "Folio UI" as UI
+participant "Backend API\n(NestJS)" as API
+database "PostgreSQL" as DB
+queue "RabbitMQ" as MQ
+participant "Email service" as Email
+
+Reviewer -> UI : Read manuscript;\nenter comments & recommendation
+Reviewer -> UI : Tap **Submit review**
+UI -> API : POST .../assignments/:slug/review
+
+alt Not accepted / empty comments / already submitted
+  API --> UI : 400 error
+  UI --> Reviewer : Show message
+else Success
+  API -> DB : BEGIN transaction
+  API -> DB : INSERT review
+  API -> DB : UPDATE assignment\nstatus = **completed**
+  API -> DB : In-app notifications +\noutbox (review.submitted)
+  API -> DB : COMMIT
+
+  API -> MQ : Publish events
+  API --> UI : Review saved
+  UI --> Reviewer : Confirmation
+
+  MQ -> Email : Notify editors /\njournal managers
+end
+
+@enduml

@@ -1,0 +1,38 @@
+@startuml folio-activity-accept-review-invitation
+' Folio — Reviewer accepts or declines (UC-03)
+' Render: https://www.plantuml.com/plantuml
+
+title Accept review invitation — activity (UC-03)
+
+|Reviewer|
+start
+:Open assignment\n(list or email link);
+
+if (Decision?) then (accept)
+  :Choose **Accept**;
+  |System|
+  if (Assignment is invited?) then (yes)
+    :Set assignment = **accepted**;
+    if (Submission was submitted?) then (yes)
+      :Set submission = **under_review**;
+    else (no)
+    endif
+    :Notify editors / journal managers;
+    |Reviewer|
+    :Gain access to manuscript;
+    stop
+  else (no)
+    |Reviewer|
+    :Show error;
+    stop
+  endif
+else (decline)
+  :Choose **Decline**;
+  |System|
+  :Close assignment;
+  :Notify editors / journal managers;
+  |Reviewer|
+  stop
+endif
+
+@enduml

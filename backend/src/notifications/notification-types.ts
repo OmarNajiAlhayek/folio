@@ -9,6 +9,7 @@ export const NOTIFICATION_TYPE = {
   REVIEW_INVITATION_DECLINED: 'review_invitation_declined',
   REVIEW_SUBMITTED: 'review_submitted',
   ROLE_INVITATION_CREATED: 'role_invitation_created',
+  SUBMISSION_PUBLISHED: 'submission_published',
 } as const;
 
 export type NotificationType =
@@ -57,5 +58,9 @@ export const NOTIFICATION_I18N: Record<
   [NOTIFICATION_TYPE.ROLE_INVITATION_CREATED]: {
     titleKey: 'Notifications.roleInvitation.title',
     bodyKey: 'Notifications.roleInvitation.body',
+  },
+  [NOTIFICATION_TYPE.SUBMISSION_PUBLISHED]: {
+    titleKey: 'Notifications.submissionPublished.title',
+    bodyKey: 'Notifications.submissionPublished.body',
   },
 };

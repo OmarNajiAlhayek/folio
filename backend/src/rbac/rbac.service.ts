@@ -249,6 +249,20 @@ export class RbacService implements OnModuleInit {
     return rows.map((r) => r.userId);
   }
 
+  /**
+   * Editors and journal managers who receive workflow emails and in-app
+   * notifications (new submissions, review activity).
+   */
+  async listWorkflowNotificationRecipientIds(): Promise<string[]> {
+    const [editorIds, journalManagerIds] = await Promise.all([
+      this.listUserIdsWithPermission(
+        PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
+      ),
+      this.listUserIdsWithPermission(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS),
+    ]);
+    return [...new Set([...editorIds, ...journalManagerIds])];
+  }
+
   async countUsersWithRoleSlug(slug: string): Promise<number> {
     const role = await this.roleRepo.findOne({ where: { slug } });
     if (!role) return 0;

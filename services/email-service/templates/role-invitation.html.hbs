@@ -1,0 +1,12 @@
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{inviteeDisplayName}},</p>
+<p style="margin:0 0 16px;">
+  <strong>{{invitedByDisplayName}}</strong> invited you to join Folio as
+  <strong>{{roleLabel}}</strong>.
+</p>
+<p style="margin:0 0 16px;color:#64748b;font-size:14px;">
+  Sign in to your dashboard to accept or decline this invitation.
+</p>
+{{> folio-email-button href=dashboardUrl label="Open dashboard" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

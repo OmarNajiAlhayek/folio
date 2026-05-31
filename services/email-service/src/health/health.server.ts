@@ -11,6 +11,7 @@ export type HealthProbe = () => Promise<{
 export function startHealthServer(
   port: number,
   probe: HealthProbe,
+  host = '127.0.0.1',
 ): http.Server {
   const server = http.createServer((req, res) => {
     const path = req.url?.split('?')[0];
@@ -36,6 +37,6 @@ export function startHealthServer(
         res.end(JSON.stringify({ status: 'error' }));
       });
   });
-  server.listen(port);
+  server.listen(port, host);
   return server;
 }

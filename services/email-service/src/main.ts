@@ -43,6 +43,7 @@ async function bootstrap(): Promise<void> {
   const rabbit = app.get(RabbitMqConnection);
   await rabbit.connect();
 
+  const healthHost = (process.env.HEALTH_BIND_HOST ?? '127.0.0.1').trim();
   const healthPort = parseInt(process.env.HEALTH_PORT ?? '5244', 10);
   startHealthServer(healthPort, async () => {
     let dbOk = false;
@@ -55,8 +56,10 @@ async function bootstrap(): Promise<void> {
     const amqpOk = rabbit.isConnected();
     const checks = { database: dbOk, amqp: amqpOk };
     return { ok: dbOk && amqpOk, checks };
-  });
-  logger.log(`health listening on :${healthPort} (/health, /ready)`);
+  }, healthHost);
+  logger.log(
+    `health listening on ${healthHost}:${healthPort} (/health, /ready)`,
+  );
 
   const shutdown = async () => {
     logger.log('shutting down email-service');

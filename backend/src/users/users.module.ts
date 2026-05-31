@@ -5,6 +5,7 @@ import { RoleInvitation } from '../entities/role-invitation.entity';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RbacModule } from '../rbac/rbac.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MessagingModule } from '../messaging/messaging.module';
 import { UsersController } from './users.controller';
 import { RoleInvitationsController } from './role-invitations.controller';
 import { UsersService } from './users.service';
@@ -14,6 +15,7 @@ import { UsersService } from './users.service';
     TypeOrmModule.forFeature([User, RoleInvitation]),
     RbacModule,
     NotificationsModule,
+    MessagingModule,
   ],
   controllers: [UsersController, RoleInvitationsController],
   providers: [UsersService, PermissionsGuard],

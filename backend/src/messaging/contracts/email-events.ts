@@ -23,6 +23,11 @@
  *   copyedit.author_ready  -> CopyeditAuthorReadyEvent
  *   submission.submitted   -> SubmissionSubmittedEvent
  *   submission.decision    -> SubmissionDecisionEvent
+ *   submission.published   -> SubmissionPublishedEvent
+ *   review.submitted       -> ReviewSubmittedEvent
+ *   review.invitation_accepted -> ReviewInvitationAcceptedEvent
+ *   review.invitation_declined -> ReviewInvitationDeclinedEvent
+ *   role.invitation        -> RoleInvitationCreatedEvent
 
  *
 
@@ -300,6 +305,154 @@ export type SubmissionDecisionEvent = {
 
 
 
+export type ReviewSubmittedEvent = {
+
+  type: 'ReviewSubmitted';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  assignmentSlug: string;
+
+  submissionSlug: string;
+
+  submissionTitle: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  reviewer: { id: string; displayName: string };
+
+  editor: {
+
+    id: string;
+
+    email: string;
+
+    displayName: string;
+
+  };
+
+  submissionUrl: string;
+
+};
+
+
+
+export type ReviewInvitationAcceptedEvent = {
+
+  type: 'ReviewInvitationAccepted';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  assignmentSlug: string;
+
+  submissionSlug: string;
+
+  submissionTitle: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  reviewer: { id: string; displayName: string };
+
+  editor: {
+
+    id: string;
+
+    email: string;
+
+    displayName: string;
+
+  };
+
+  submissionUrl: string;
+
+};
+
+
+
+export type ReviewInvitationDeclinedEvent = {
+
+  type: 'ReviewInvitationDeclined';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  assignmentSlug: string;
+
+  submissionSlug: string;
+
+  submissionTitle: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  reviewer: { id: string; displayName: string };
+
+  editor: {
+
+    id: string;
+
+    email: string;
+
+    displayName: string;
+
+  };
+
+  submissionUrl: string;
+
+};
+
+
+
+export type SubmissionPublishedEvent = {
+
+  type: 'SubmissionPublished';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  submissionSlug: string;
+
+  submissionTitle: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  author: AuthorIdentity;
+
+  publicationUrl: string;
+
+};
+
+
+
+export type RoleInvitationCreatedEvent = {
+
+  type: 'RoleInvitationCreated';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  invitationId: string;
+
+  roleSlug: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  invitee: AuthorIdentity;
+
+  invitedBy: EditorIdentity;
+
+  dashboardUrl: string;
+
+};
+
+
+
 export type FolioEvent =
 
   | ReviewerInvitedEvent
@@ -314,7 +467,17 @@ export type FolioEvent =
 
   | SubmissionSubmittedEvent
 
-  | SubmissionDecisionEvent;
+  | SubmissionDecisionEvent
+
+  | ReviewSubmittedEvent
+
+  | ReviewInvitationAcceptedEvent
+
+  | ReviewInvitationDeclinedEvent
+
+  | SubmissionPublishedEvent
+
+  | RoleInvitationCreatedEvent;
 
 
 
@@ -333,6 +496,16 @@ export const ROUTING_KEY = {
   submissionSubmitted: 'submission.submitted',
 
   submissionDecision: 'submission.decision',
+
+  submissionPublished: 'submission.published',
+
+  reviewSubmitted: 'review.submitted',
+
+  reviewInvitationAccepted: 'review.invitation_accepted',
+
+  reviewInvitationDeclined: 'review.invitation_declined',
+
+  roleInvitation: 'role.invitation',
 
 } as const;
 

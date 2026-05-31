@@ -11,6 +11,11 @@
  *   - CopyeditAuthorReady -> "copyedit_author_ready:" + assignmentSlug + ":" + round
  *   - SubmissionSubmitted -> "submission_submitted:" + submissionSlug + ":" + editorUserId
  *   - SubmissionDecision   -> "submission_decision:" + submissionSlug + ":" + decision
+ *   - ReviewSubmitted      -> "review_submitted:" + assignmentSlug + ":" + editorUserId
+ *   - ReviewInvitationAccepted -> "review_invitation_accepted:" + assignmentSlug + ":" + editorUserId
+ *   - ReviewInvitationDeclined -> "review_invitation_declined:" + assignmentSlug + ":" + editorUserId
+ *   - SubmissionPublished  -> "submission_published:" + submissionSlug
+ *   - RoleInvitationCreated -> "role_invitation:" + invitationId
  */
 
 export function reviewerInvitedKey(assignmentSlug: string): string {
@@ -78,4 +83,65 @@ export function submissionDecisionKey(
     throw new Error('submissionDecisionKey: decision is required');
   }
   return `submission_decision:${submissionSlug}:${decision}`;
+}
+
+export function reviewSubmittedEmailKey(
+  assignmentSlug: string,
+  editorUserId: string,
+): string {
+  if (!assignmentSlug) {
+    throw new Error('reviewSubmittedEmailKey: assignmentSlug is required');
+  }
+  if (!editorUserId) {
+    throw new Error('reviewSubmittedEmailKey: editorUserId is required');
+  }
+  return `review_submitted:${assignmentSlug}:${editorUserId}`;
+}
+
+export function reviewInvitationAcceptedEmailKey(
+  assignmentSlug: string,
+  editorUserId: string,
+): string {
+  if (!assignmentSlug) {
+    throw new Error(
+      'reviewInvitationAcceptedEmailKey: assignmentSlug is required',
+    );
+  }
+  if (!editorUserId) {
+    throw new Error(
+      'reviewInvitationAcceptedEmailKey: editorUserId is required',
+    );
+  }
+  return `review_invitation_accepted:${assignmentSlug}:${editorUserId}`;
+}
+
+export function reviewInvitationDeclinedEmailKey(
+  assignmentSlug: string,
+  editorUserId: string,
+): string {
+  if (!assignmentSlug) {
+    throw new Error(
+      'reviewInvitationDeclinedEmailKey: assignmentSlug is required',
+    );
+  }
+  if (!editorUserId) {
+    throw new Error(
+      'reviewInvitationDeclinedEmailKey: editorUserId is required',
+    );
+  }
+  return `review_invitation_declined:${assignmentSlug}:${editorUserId}`;
+}
+
+export function submissionPublishedKey(submissionSlug: string): string {
+  if (!submissionSlug) {
+    throw new Error('submissionPublishedKey: submissionSlug is required');
+  }
+  return `submission_published:${submissionSlug}`;
+}
+
+export function roleInvitationEmailKey(invitationId: string): string {
+  if (!invitationId) {
+    throw new Error('roleInvitationEmailKey: invitationId is required');
+  }
+  return `role_invitation:${invitationId}`;
 }

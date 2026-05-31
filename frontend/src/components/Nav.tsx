@@ -155,6 +155,11 @@ export function Nav() {
                     {t("editor")}
                   </NavTextLink>
                 )}
+                {perms.has(PERMISSION_SLUGS.USERS_MANAGE_ROLES) && (
+                  <NavTextLink href="/journal-manager/users" match="prefix">
+                    {t("users")}
+                  </NavTextLink>
+                )}
                 {perms.has(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS) && (
                   <NavTextLink href="/journal-manager/email-settings" match="prefix">
                     {t("emailSettings")}

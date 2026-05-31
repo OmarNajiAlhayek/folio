@@ -153,7 +153,7 @@ New self-registered users are **authors** with a researcher profile (affiliation
 - Invitee sees the pending invite on the **Dashboard** and calls `POST /api/v1/role-invitations/:invitationId/accept` or `.../decline`.
 - `PATCH .../roles` **rejects** payloads that newly add `editor` or `journal_manager` without going through this flow.
 
-**Journal manager** handles user onboarding, email templates/reminder policy, and can browse the editor queue. **Editor** (handling editor) makes workflow decisions, assigns reviewers/copyeditors, and receives new-submission notifications. Seeded accounts get roles directly from the seed script, not via invitations.
+**Journal manager** handles user onboarding (UI: `/journal-manager/users` — search users, grant reviewer/copyeditor, invite editor/journal manager), email templates/reminder policy (`/journal-manager/email-settings`), and can browse the editor queue. **Editor** (handling editor) makes workflow decisions, assigns reviewers/copyeditors, and receives new-submission notifications. Seeded accounts get roles directly from the seed script, not via invitations.
 
 To wipe **everything** in the app DB and uploads, then re-seed (dev): `npm run seed:fresh` (`SEED_RESET_ALL=1`). To reset only `[SAMPLE]` / legacy `[DEMO]` submissions: `npm run seed:reset` (`SEED_RESET_SAMPLE=1`; legacy `SEED_RESET_DEMO=1` is still accepted).
 

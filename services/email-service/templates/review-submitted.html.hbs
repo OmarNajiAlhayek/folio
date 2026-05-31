@@ -1,0 +1,9 @@
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{editorDisplayName}},</p>
+<p style="margin:0 0 16px;">
+  <strong>{{reviewerDisplayName}}</strong> has submitted a peer review for
+  <strong>{{submissionTitle}}</strong>.
+</p>
+{{> folio-email-button href=submissionUrl label="Open submission" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

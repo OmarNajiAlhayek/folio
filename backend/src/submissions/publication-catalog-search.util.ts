@@ -101,6 +101,30 @@ export const PUBLICATION_AUTHOR_SUGGESTION_MIN_QUERY_LENGTH = 2;
 export const PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT = 10;
 export const PUBLICATION_AUTHOR_SUGGESTION_MAX_LIMIT = 20;
 
+export const PUBLICATION_CATALOG_DEFAULT_LIMIT = 20;
+export const PUBLICATION_CATALOG_MAX_LIMIT = 100;
+
+export type PublicationCatalogPagination = {
+  limit: number;
+  offset: number;
+};
+
+export function clampPublicationCatalogPagination(
+  limit?: number,
+  offset?: number,
+): PublicationCatalogPagination {
+  const lim =
+    limit != null
+      ? Math.min(
+          PUBLICATION_CATALOG_MAX_LIMIT,
+          Math.max(1, Math.trunc(limit)),
+        )
+      : PUBLICATION_CATALOG_DEFAULT_LIMIT;
+  const off =
+    offset != null ? Math.max(0, Math.trunc(offset)) : 0;
+  return { limit: lim, offset: off };
+};
+
 export type PublishedAuthorSuggestionRow = {
   displayName: string;
   publicationCount: number;

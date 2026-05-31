@@ -1,0 +1,26 @@
+@startuml folio-activity-assign-reviewer
+' Folio — Editor assigns reviewer (UC-02)
+' Render: https://www.plantuml.com/plantuml
+
+title Assign reviewer — activity (UC-02)
+
+|Editor|
+start
+:Open submission;
+:Select reviewer;
+:Choose **Assign**;
+
+|System|
+if (Editor permitted and\nreviewer eligible?) then (yes)
+  :Create assignment\nstatus = **invited**;
+  :Enqueue invitation email;
+  |Editor|
+  :Show success;
+  stop
+else (no)
+  |Editor|
+  :Show error;
+  stop
+endif
+
+@enduml

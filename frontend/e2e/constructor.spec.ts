@@ -450,6 +450,69 @@ test("generate-docx POST body includes unsaved paragraph text (before autosave)"
   expect(para?.html).toContain(marker);
 });
 
+test("paragraph toolbar applies bold to selection", async ({ page, authToken }) => {
+  const created = await createSubmission(page.request, authToken, {
+    title: uniqueSubmissionTitle("Toolbar bold e2e"),
+    abstract: "Toolbar bold e2e abstract",
+  });
+  await patchConstructorContent(page.request, authToken, created.slug, {
+    defaultDir: "ltr",
+    sections: [
+      {
+        id: "sec-title",
+        kind: "title",
+        text: "Toolbar bold title",
+        dir: "ltr",
+        dirSource: "manual",
+      },
+      {
+        id: "sec-abs",
+        kind: "abstract",
+        lang: "en",
+        text: "English abstract.",
+        keywords: "e2e",
+      },
+      {
+        id: "sec-abs-ar",
+        kind: "abstract",
+        lang: "ar",
+        text: "ملخص",
+        keywords: "اختبار",
+      },
+      {
+        id: "sec-para",
+        kind: "paragraph",
+        html: "<p>hello world</p>",
+        dir: "ltr",
+        dirSource: "manual",
+      },
+      {
+        id: "sec-ref",
+        kind: "references",
+        items: [{ lang: "en", html: "<p>Ref</p>" }],
+      },
+    ],
+  });
+
+  await page.goto(`/en/submissions/${created.slug}/compose`);
+  await hideNextJsDevPortals(page);
+
+  const section = page.locator("#constructor-section-sec-para");
+  const paragraphEditor = section.locator('[contenteditable="true"]');
+  await paragraphEditor.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await section.getByTestId("constructor-toolbar-bold").click();
+
+  await expect(paragraphEditor).toContainText("hello world");
+  await expect(paragraphEditor.locator("strong, b")).toHaveText("hello world");
+
+  await expect(
+    page.locator(
+      '[data-testid="constructor-preview-section-sec-para"] strong, [data-testid="constructor-preview-section-sec-para"] b',
+    ),
+  ).toHaveText("hello world");
+});
+
 async function openConstructorAddPicker(page: Page) {
   await page.getByTestId("constructor-add-section-open").click();
 }

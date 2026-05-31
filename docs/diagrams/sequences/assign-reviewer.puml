@@ -1,0 +1,37 @@
+@startuml folio-sequence-assign-reviewer
+' Folio — Editor assigns reviewer (UC-02)
+' Render: https://www.plantuml.com/plantuml
+
+title Assign reviewer (UC-02)
+
+actor Editor
+actor Reviewer
+participant "Folio UI" as UI
+participant "Backend API\n(NestJS)" as API
+database "PostgreSQL" as DB
+queue "RabbitMQ" as MQ
+participant "Email service" as Email
+
+Editor -> UI : Assign reviewer\non submission
+UI -> API : POST .../review-assignments\n(reviewerId)
+
+API -> API : Check editor permission;\nno duplicate assignment
+
+alt Invalid (not reviewer / already assigned)
+  API --> UI : 400 error
+  UI --> Editor : Show message
+else Success
+  API -> DB : BEGIN transaction
+  API -> DB : INSERT review_assignment\nstatus = **invited**
+  API -> DB : INSERT outbox\n(reviewer.invited)
+  API -> DB : COMMIT
+
+  API -> MQ : Publish events
+  API --> UI : Assignment created
+  UI --> Editor : Success
+
+  MQ -> Email : Consume event;\nrender template
+  Email --> Reviewer : Review invitation email
+end
+
+@enduml

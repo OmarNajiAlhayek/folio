@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -17,6 +18,7 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import type { RequestUser } from '../common/types/request-user';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { CreateRoleInvitationDto } from './dto/create-role-invitation.dto';
+import { ListUsersQueryDto } from './dto/list-users.query.dto';
 import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
 import { UsersService } from './users.service';
 
@@ -26,6 +28,16 @@ import { UsersService } from './users.service';
 @ApiBearerAuth('JWT')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  listForRoleAdmin(@Query() query: ListUsersQueryDto) {
+    return this.usersService.listForRoleAdmin({
+      q: query.q,
+      limit: query.limit ?? 20,
+      offset: query.offset ?? 0,
+    });
+  }
 
   @Get('me/role-invitations')
   @AllowAuthenticated()

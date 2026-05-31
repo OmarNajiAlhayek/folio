@@ -51,8 +51,31 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
       const res = await request(app.getHttpServer())
         .get('/api/v1/public/submissions')
         .expect(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThanOrEqual(1);
+      expect(res.body).toMatchObject({
+        items: expect.any(Array),
+        total: expect.any(Number),
+        limit: expect.any(Number),
+        offset: 0,
+      });
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+      expect(res.body.total).toBeGreaterThanOrEqual(res.body.items.length);
+    });
+
+    it('paginates keyword catalog with limit and offset', async () => {
+      const first = await request(app.getHttpServer())
+        .get('/api/v1/public/submissions')
+        .query({ limit: 1, offset: 0 })
+        .expect(200);
+      expect(first.body.items).toHaveLength(1);
+      expect(first.body.limit).toBe(1);
+      if (first.body.total > 1) {
+        const second = await request(app.getHttpServer())
+          .get('/api/v1/public/submissions')
+          .query({ limit: 1, offset: 1 })
+          .expect(200);
+        expect(second.body.items).toHaveLength(1);
+        expect(second.body.items[0].id).not.toBe(first.body.items[0].id);
+      }
     });
 
     it('finds sample by quick search q', async () => {
@@ -60,8 +83,8 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
         .get('/api/v1/public/submissions')
         .query({ q: '[SAMPLE]' })
         .expect(200);
-      expect(res.body.length).toBeGreaterThanOrEqual(1);
-      for (const row of res.body as { title: string }[]) {
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+      for (const row of res.body.items as { title: string }[]) {
         expect(row.title).toContain('[SAMPLE]');
       }
     });
@@ -71,8 +94,10 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
         .get('/api/v1/public/submissions')
         .query({ author: 'Researcher' })
         .expect(200);
-      expect(res.body.length).toBeGreaterThanOrEqual(1);
-      for (const row of res.body as { author?: { displayName: string } }[]) {
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+      for (const row of res.body.items as {
+        author?: { displayName: string };
+      }[]) {
         expect(row.author?.displayName).toMatch(/Researcher/i);
       }
     });
@@ -101,8 +126,8 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
         .get('/api/v1/public/submissions')
         .query({ articleType: 'original_research' })
         .expect(200);
-      expect(res.body.length).toBeGreaterThanOrEqual(1);
-      for (const row of res.body as { articleType?: string }[]) {
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+      for (const row of res.body.items as { articleType?: string }[]) {
         expect(row.articleType).toBe('original_research');
       }
     });

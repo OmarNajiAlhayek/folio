@@ -1,0 +1,47 @@
+@startuml folio-copyeditor-use-cases
+' Folio — Copyeditor essentials (copyedit.view_queue, copyedit.submit_note, copyedit.publish)
+' Excludes editor assign-copyeditor and author "mark ready" flows
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle stickman
+
+actor "Copyeditor" as CE
+
+rectangle "Folio — copyeditor scope" {
+
+  usecase "Handle copyedit assignment" as UC_Handle
+  usecase "Browse copyedit queue" as UC_List
+  usecase "Send copyedit queries to author" as UC_Queries
+  usecase "Publish submission to catalog" as UC_Publish
+}
+
+CE --> UC_Handle
+
+UC_Handle .> UC_List : <<include>>
+UC_Handle .> UC_Queries : <<include>>
+UC_Publish .> UC_Handle : <<extend>>
+
+note bottom of UC_Queries
+  Notes for author (and optional
+  confidential note to editor).
+  Author uploads a revised manuscript
+  and marks ready before publish.
+end note
+
+note bottom of UC_Publish
+  When assignment is ready_for_review
+  and submission is in copyediting;
+  all copyedit assignments on the
+  submission must be ready.
+end note
+
+note right of UC_Handle
+  Editors **assign** copyeditors;
+  journal managers grant the role.
+  Author **mark ready** is on the
+  author workflow.
+end note
+
+@enduml

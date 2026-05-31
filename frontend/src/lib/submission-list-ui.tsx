@@ -3,6 +3,7 @@
 import type { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { PAGE_SHELL, EMPTY_STATE_CLS } from "@/lib/page-shell";
+import { useDisciplineLabel } from "@/lib/use-discipline-label";
 
 export type SubmissionsListTranslator = ReturnType<
   typeof useTranslations<"Submissions">
@@ -170,8 +171,12 @@ export function SubmissionQueueRow({
   t,
   disciplineSuggested,
 }: SubmissionQueueRowProps) {
+  const { format: formatDiscipline } = useDisciplineLabel();
   const label = submissionStatusLabel(status, t);
   const dateStr = formatSubmissionUpdatedAt(updatedAt, locale);
+  const disciplineLabel = disciplineSuggested
+    ? formatDiscipline(disciplineSuggested)
+    : null;
   return (
     <li>
       <Link href={href} className={queueRowCardLinkCls}>
@@ -196,10 +201,10 @@ export function SubmissionQueueRow({
               </span>
             ) : null}
             
-            {disciplineSuggested ? (
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/8 dark:bg-emerald-500/18 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 truncate max-w-xs" dir="auto" title={disciplineSuggested}>
+            {disciplineLabel ? (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/8 dark:bg-emerald-500/18 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 truncate max-w-xs" dir="auto" title={disciplineLabel}>
                 <span className="size-1 rounded-full bg-emerald-500 animate-pulse" />
-                {disciplineSuggested}
+                {disciplineLabel}
               </span>
             ) : null}
           </div>

@@ -20,6 +20,7 @@ import { LoadingCenter, Spinner } from "@/components/ui/spinner";
 import { toast } from "@/lib/toast";
 import { getApiErrorKind } from "@/lib/api-error-message";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
+import { useDisciplineLabel } from "@/lib/use-discipline-label";
 import { useToastApiError } from "@/lib/use-toast-api-error";
 import {
   canManageAssignmentReminders,
@@ -335,6 +336,7 @@ export default function SubmissionDetailPage() {
   const invalidateDetail = useInvalidateSubmissionDetail();
   const patchSubmission = usePatchSubmission(slug);
   const { resolve: resolveApiError } = useApiErrorMessages();
+  const { format: formatDiscipline } = useDisciplineLabel();
   const tApi = useTranslations("ApiErrors");
   const showApiError = useToastApiError();
   const detailQuery = useSubmissionDetail(slug, true);
@@ -1596,7 +1598,9 @@ export default function SubmissionDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-ink">{isAr ? "التخصص والمسار العلمي" : "Discipline & Fields"}</p>
                     <p className="text-[10px] text-ink/50">
-                      {hasDiscipline ? sub.discipline : (isAr ? "حدد التخصص العلمي للمقال" : "Required for editor routing")}
+                      {hasDiscipline
+                        ? formatDiscipline(sub.discipline)
+                        : (isAr ? "حدد التخصص العلمي للمقال" : "Required for editor routing")}
                     </p>
                   </div>
                 </li>

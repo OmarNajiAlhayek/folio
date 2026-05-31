@@ -136,6 +136,40 @@ export class ListPublicSubmissionsQueryDto {
     return Number.isFinite(n) ? n : undefined;
   })
   semanticLimit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Page size for keyword catalog search (1–100, default 20).',
+    minimum: 1,
+    maximum: 100,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const n = parseInt(String(value), 10);
+    return Number.isFinite(n) ? n : undefined;
+  })
+  limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Skip rows for keyword catalog search (default 0).',
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const n = parseInt(String(value), 10);
+    return Number.isFinite(n) ? n : undefined;
+  })
+  offset?: number;
 }
 
 export function toPublicationCatalogFilters(

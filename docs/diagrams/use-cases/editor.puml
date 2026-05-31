@@ -1,0 +1,58 @@
+@startuml folio-editor-use-cases
+' Folio — Editor essentials (workflow + peer review; excludes journal-manager-only scope)
+' AI: plagiarism detection, discipline comparison, suggested reviewers (docs/plans/ai-service.md)
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle stickman
+
+actor "Editor" as ED
+
+rectangle "Folio — editor scope" {
+
+  usecase "Handle editorial workflow" as UC_Workflow
+  usecase "Browse editor submission queue" as UC_Queue
+  usecase "Open submission (editor view)" as UC_Open
+  usecase "Set submission status" as UC_Status
+  usecase "Configure peer review" as UC_PeerReview
+  usecase "Assign reviewer" as UC_AssignReviewer
+  usecase "Assign copyeditor" as UC_AssignCopyeditor
+  usecase "Manage per-assignment reminders" as UC_Reminders
+
+  usecase "Plagiarism Detection (AI)" as UC_AiPlagiarism
+  usecase "Compare AI discipline suggestion (AI)" as UC_AiDiscipline
+  usecase "Get suggested reviewers (AI)" as UC_AiReviewers
+}
+
+ED --> UC_Workflow
+
+UC_Workflow .> UC_Queue : <<include>>
+UC_Workflow .> UC_Open : <<include>>
+UC_Workflow .> UC_Status : <<include>>
+UC_Workflow .> UC_PeerReview : <<include>>
+UC_PeerReview .> UC_AssignReviewer : <<include>>
+UC_AssignCopyeditor .> UC_Workflow : <<extend>>
+UC_Reminders .> UC_Open : <<extend>>
+
+UC_AiPlagiarism .> UC_Open : <<extend>>
+UC_AiDiscipline .> UC_Open : <<extend>>
+UC_AiReviewers .> UC_AssignReviewer : <<extend>>
+
+note bottom of UC_AiDiscipline
+  Read-only: AI suggestion (classifier on
+  author submit/suggest) vs author-confirmed
+  discipline; scope warning when out of journal.
+end note
+
+note bottom of UC_AiPlagiarism
+  Overlap with indexed published corpus
+  (GET .../corpus-similarity; PlagiarismService).
+end note
+
+note bottom of UC_AiReviewers
+  Embedding-based reviewer matching when
+  similarity + reviewer flags are enabled.
+end note
+
+@enduml

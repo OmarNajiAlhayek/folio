@@ -1,0 +1,28 @@
+@startuml folio-activity-submit-peer-review
+' Folio — Reviewer submits review (UC-04)
+' Render: https://www.plantuml.com/plantuml
+
+title Submit peer review — activity (UC-04)
+
+|Reviewer|
+start
+:Open accepted assignment;
+:Read manuscript files;
+:Enter author comments,\neditor-only notes, recommendation;
+:Choose **Submit review**;
+
+|System|
+if (Assignment accepted and\ncomments valid?) then (yes)
+  :Save review;
+  :Set assignment = **completed**;
+  :Notify editors / journal managers;
+  |Reviewer|
+  :Show confirmation;
+  stop
+else (no)
+  |Reviewer|
+  :Show validation error;
+  stop
+endif
+
+@enduml

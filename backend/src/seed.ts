@@ -39,9 +39,12 @@ import { ensurePublicationSearchSchema } from './common/ensure-publication-searc
 
 config({ path: join(__dirname, '..', '.env') });
 
-/** Default AraBERT-style label for dev samples when ai-service is off or unreachable. */
+/** AraBERT-style labels for dev samples when ai-service is off or unreachable. */
 const SAMPLE_DISCIPLINE_DEFAULT = 'العلوم الاقتصادية والسياسية';
 const SAMPLE_DISCIPLINE_MEDICAL = 'العلوم الطبية';
+const SAMPLE_DISCIPLINE_EDUCATION = 'العلوم التربوية والنفسية';
+const SAMPLE_DISCIPLINE_LEGAL = 'العلوم القانونية';
+const SAMPLE_DISCIPLINE_ENGINEERING = 'العلوم الهندسية';
 
 const SAMPLE_TITLE_PREFIX = '[SAMPLE]';
 
@@ -81,11 +84,54 @@ function sampleMulterFile(
   } as Express.Multer.File;
 }
 
-const SAMPLE_ABSTRACT_AR =
-  'ملخص عربي نموذجي للمجلة. يوضح هدف البحث والأساليب والنتائج الرئيسية لأغراض العرض في بيئة التطوير.';
+/** Arabic + keyword bundles for workflow samples (distinct disciplines / corpus themes). */
+const SAMPLE_DRAFT_META = {
+  titleAr: 'قياس كفايات التعلم الرقمي لدى طلاب المرحلة الجامعية',
+  abstractAr:
+    'تهدف الدراسة إلى بناء مقياس لكفايات التعلم الرقمي واختبار أثر التغذية الراجعة الفورية على التحصيل في مقررات التعليم العالي. تُطبَّق أدوات استبانة وتحليل عاملي على عينة من 240 طالباً وطالبة في جامعتين خلال الفصل الدراسي 2024–2025.',
+  keywords:
+    'digital learning, higher education, assessment, psychology, motivation',
+  keywordsAr: 'تعلم رقمي, تعليم عال, قياس, تحفيز, علم نفس',
+} as const;
 
-const SAMPLE_TITLE_AR =
-  'عنوان عربي نموذجي يطابق المخطوطة للعرض في بيئة التطوير';
+/** Overlaps published open-access sample for corpus-similarity demos. */
+const SAMPLE_QUEUE_META = {
+  titleAr: 'سياسات الوصول المفتوح في المجلات المحكّمة العربية: دراسة مقارنة',
+  abstractAr:
+    'يحلل البحث أثر سياسات الوصول المفتوح والنشر الرقمي على انتشار المعرفة الاقتصادية في المجلات العربية، ويقارن نماذج التمويل والرسوم بين عشر مجلات محكّمة خلال 2020–2024. تُستخلص توصيات لتوسيع الوصول دون الإضرار باستدامة النشر الأكاديمي.',
+  keywords:
+    'open access, digital publishing, economics, arabic journals, policy',
+  keywordsAr: 'وصول مفتوح, نشر رقمي, اقتصاد, مجلات عربية, سياسات',
+} as const;
+
+const SAMPLE_REVIEW_META = SAMPLE_QUEUE_META;
+
+const SAMPLE_COMPLETED_META = {
+  titleAr: 'حماية البيانات الشخصية في التشريعات العربية المعاصرة',
+  abstractAr:
+    'تستعرض الدراسة أحكام حماية البيانات الشخصية في تشريعات مختارة من العالم العربي وتقارنها بمبادئ اللائحة العامة لحماية البيانات. يركز التحليل على موافقة صاحب البيانات، نقل البيانات عبر الحدود، ومسؤولية المراقب، مع توصيات لتقريب الأطر الوطنية.',
+  keywords:
+    'privacy law, data protection, legislation, compliance, arab region',
+  keywordsAr: 'خصوصية, حماية بيانات, تشريع, امتثال, قانون',
+} as const;
+
+const SAMPLE_REVISIONS_META = {
+  titleAr: 'تأثير التغذية الراجعة الفورية على أداء الطلاب في الفصول الكبيرة',
+  abstractAr:
+    'تختبر الدراسة تجريبياً برنامج تغذية راجعة فورية عبر منصة تعلم إلكتروني في مقرر مقدمة الإحصاء. تُقارن نتائج الاختبارات القصيرة والمشروع النهائي بين مجموعتين، مع تحليل وصفية لانطباعات الطلاب حول وضوح التعليمات وقسم المنهجيات.',
+  keywords:
+    'formative assessment, feedback, large classes, pedagogy, learning outcomes',
+  keywordsAr: 'تقويم, تغذية راجعة, تعليم, نتائج تعلم, منهجيات',
+} as const;
+
+const SAMPLE_COPYEDIT_META = {
+  titleAr: 'تحسين كفاءة شبكات الاستشعار اللاسلكية في البيئات الصناعية',
+  abstractAr:
+    'يقترح البحث بروتوكول توجيه موفر للطاقة لشبكات الاستشعار اللاسلكية في مصانع تعتمد إنترنت الأشياء. تُقارن المحاكاة زمن الاستجابة واستهلاك الطاقة مع بروتوكولات مرجعية على ثلاثة سيناريوهات حمل، مع مناقشة قابلية النشر في بيئات الضوضاء العالية.',
+  keywords:
+    'wireless sensor networks, industrial IoT, energy efficiency, routing, reliability',
+  keywordsAr: 'شبكات لاسلكية, استشعار, كفاءة طاقة, صناعة, موثوقية',
+} as const;
 
 /** Arabic + keyword bundles for published-catalog samples (distinct embeddings). */
 const SAMPLE_PUB1_META = {
@@ -115,29 +161,25 @@ const SAMPLE_PUB3_META = {
   keywordsAr: 'بحوث سريرية, أخلاقيات, عينات صغيرة, لجان أخلاقيات',
 } as const;
 
-type SamplePublicationMetaOverrides = Pick<
+type SampleMetaOverrides = Pick<
   CreateSubmissionDto,
-  'titleAr' | 'abstractAr' | 'keywords' | 'keywordsAr'
+  'titleAr' | 'abstractAr' | 'keywords' | 'keywordsAr' | 'articleType'
 >;
 
 /** Journal form fields for a published sample; overrides generic Arabic boilerplate. */
 function samplePublicationMetadata(
-  overrides: SamplePublicationMetaOverrides,
+  overrides: SampleMetaOverrides,
 ): Omit<CreateSubmissionDto, 'title' | 'abstract'> {
   return { ...sampleJournalMetadata(), ...overrides };
 }
 
-/** Rich metadata matching journal-style submission forms (sample data). */
+/** Shared journal form fields; pair with a SAMPLE_*_META bundle for Arabic text. */
 function sampleJournalMetadata(): Omit<
   CreateSubmissionDto,
-  'title' | 'abstract'
+  'title' | 'abstract' | 'titleAr' | 'abstractAr' | 'keywords' | 'keywordsAr'
 > {
   return {
-    titleAr: SAMPLE_TITLE_AR,
-    abstractAr: SAMPLE_ABSTRACT_AR,
     articleType: SubmissionArticleType.ORIGINAL_RESEARCH,
-    keywords: 'sample, methods, research, workflow, science',
-    keywordsAr: 'عينة, منهجيات, بحث, سير العمل, علوم',
     contributors: [
       {
         fullName: 'A. Researcher',
@@ -175,7 +217,8 @@ function sampleDisciplineClassification(
 
 /**
  * Dev-only: ensure discipline suggestion exists for UI demos.
- * Skips when submit() already stored AI output (AI_SERVICE_ENABLED + ai-service up).
+ * When submit() already stored AI output, still applies `confirmAsAuthor` so
+ * `discipline` is set for catalog filters and public API responses.
  */
 async function syncSampleDiscipline(
   dataSource: DataSource,
@@ -192,12 +235,22 @@ async function syncSampleDiscipline(
   if (!row) {
     return;
   }
-  if (row.disciplineSuggested?.trim() && !options.force) {
-    return;
-  }
 
   const topLabel = options.topLabel ?? SAMPLE_DISCIPLINE_DEFAULT;
   const confidence = options.confidence ?? 88.5;
+
+  if (row.discipline?.trim() && !options.force) {
+    return;
+  }
+
+  if (row.disciplineSuggested?.trim() && !options.force) {
+    if (options.confirmAsAuthor) {
+      row.discipline = topLabel;
+      row.disciplineSource = SubmissionDisciplineSource.AUTHOR;
+      await subRepo.save(row);
+    }
+    return;
+  }
   const allowed = parseJournalAllowedDisciplines(
     process.env.JOURNAL_ALLOWED_DISCIPLINES,
   );
@@ -277,7 +330,7 @@ async function seedPublishedSample(options: {
   pdfBytes: Buffer;
   title: string;
   abstract: string;
-  publicationMeta: SamplePublicationMetaOverrides;
+  publicationMeta: SampleMetaOverrides;
   manuscriptFilename: string;
   revisionFilename: string;
   discipline: { topLabel: string; confidence: number };
@@ -301,7 +354,13 @@ async function seedPublishedSample(options: {
     logLabel,
   } = options;
 
-  if (await findSampleSubmission(dataSource, author.id, title)) {
+  const existing = await findSampleSubmission(dataSource, author.id, title);
+  if (existing) {
+    await syncSampleDiscipline(dataSource, existing.id, {
+      topLabel: discipline.topLabel,
+      confidence: discipline.confidence,
+      confirmAsAuthor: true,
+    });
     return;
   }
 
@@ -586,7 +645,7 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.EDITOR, ROLE_SLUGS.REVIEWER],
     profile: {
       affiliation: 'Folio Journal — Editorial office',
-      reviewKeywords: 'editorial',
+      reviewKeywords: 'editorial policy, scholarly publishing',
       willingToReview: true,
     },
   });
@@ -597,7 +656,8 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.REVIEWER],
     profile: {
       affiliation: 'Institute for Sample Research',
-      reviewKeywords: 'peer review, methodology',
+      reviewKeywords:
+        'open access, digital publishing, economics, arabic journals, peer review',
       willingToReview: true,
     },
   });
@@ -622,8 +682,10 @@ async function run() {
   if (!(await findSampleSubmission(dataSource, author.id, tDraft))) {
     const s = await submissionsService.create(author.id, {
       title: tDraft,
-      abstract: 'Sample draft for the author workspace.',
+      abstract:
+        'Draft on digital-learning competencies and formative feedback in large university classes (author workspace demo).',
       ...sampleJournalMetadata(),
+      ...SAMPLE_DRAFT_META,
     });
     await attachStandardFilePackage(
       submissionsService,
@@ -633,7 +695,7 @@ async function run() {
       'draft.pdf',
     );
     await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
+      topLabel: SAMPLE_DISCIPLINE_EDUCATION,
       confidence: 76,
     });
     console.log(`Seeded: ${tDraft} (draft)`);
@@ -644,8 +706,10 @@ async function run() {
   if (!(await findSampleSubmission(dataSource, author.id, tQueue))) {
     const s = await submissionsService.create(author.id, {
       title: tQueue,
-      abstract: 'Sample manuscript waiting in the editor queue.',
+      abstract:
+        'Comparative study of open-access and digital-publishing policies in peer-reviewed Arabic journals (editor queue demo).',
       ...sampleJournalMetadata(),
+      ...SAMPLE_QUEUE_META,
     });
     await attachStandardFilePackage(
       submissionsService,
@@ -668,8 +732,10 @@ async function run() {
   if (!(await findSampleSubmission(dataSource, author.id, tReview))) {
     const s = await submissionsService.create(author.id, {
       title: tReview,
-      abstract: 'Sample manuscript assigned to a reviewer.',
+      abstract:
+        'Open-access policy analysis in Arabic scholarly journals, assigned to a reviewer for active peer review.',
       ...sampleJournalMetadata(),
+      ...SAMPLE_REVIEW_META,
     });
     await attachStandardFilePackage(
       submissionsService,
@@ -701,8 +767,10 @@ async function run() {
   if (!(await findSampleSubmission(dataSource, author.id, tCompleted))) {
     const s = await submissionsService.create(author.id, {
       title: tCompleted,
-      abstract: 'Sample manuscript with one finished review.',
+      abstract:
+        'Comparative review of personal-data protection laws in selected Arab jurisdictions, with one completed accept recommendation.',
       ...sampleJournalMetadata(),
+      ...SAMPLE_COMPLETED_META,
     });
     await attachStandardFilePackage(
       submissionsService,
@@ -713,7 +781,7 @@ async function run() {
     );
     await submissionsService.submit(s.slug!, authorReq);
     await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: 'العلوم القانونية',
+      topLabel: SAMPLE_DISCIPLINE_LEGAL,
       confidence: 86,
     });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
@@ -729,8 +797,8 @@ async function run() {
     await submissionsService.submitReview(
       assignment.slug!,
       reviewer.id,
-      'For the author: solid work with minor revision suggestions.',
-      'Confidential to editor: suitable for acceptance after light copy-editing.',
+      'For the author: the legal comparison is clear; minor citation formatting updates would strengthen the policy section.',
+      'Confidential to editor: suitable for acceptance after light copy-editing on references.',
       ReviewRecommendation.ACCEPT,
     );
     console.log(`Seeded: ${tCompleted} (under_review + completed assignment)`);
@@ -741,8 +809,10 @@ async function run() {
   if (!(await findSampleSubmission(dataSource, author.id, tRev))) {
     const s = await submissionsService.create(author.id, {
       title: tRev,
-      abstract: 'Sample manuscript awaiting author revisions.',
+      abstract:
+        'Experimental study of immediate feedback in large statistics classes; round one requested major revisions on methods.',
       ...sampleJournalMetadata(),
+      ...SAMPLE_REVISIONS_META,
     });
     await attachStandardFilePackage(
       submissionsService,
@@ -753,7 +823,7 @@ async function run() {
     );
     await submissionsService.submit(s.slug!, authorReq);
     await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: 'العلوم التربوية والنفسية',
+      topLabel: SAMPLE_DISCIPLINE_EDUCATION,
       confidence: 79,
     });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
@@ -802,8 +872,10 @@ async function run() {
   if (!(await findSampleSubmission(dataSource, author.id, tCopyedit))) {
     const s = await submissionsService.create(author.id, {
       title: tCopyedit,
-      abstract: 'Sample manuscript assigned to a copyeditor for final polish.',
+      abstract:
+        'Energy-efficient routing for industrial wireless sensor networks, accepted and in copyediting with an author-facing query.',
       ...sampleJournalMetadata(),
+      ...SAMPLE_COPYEDIT_META,
     });
     await attachStandardFilePackage(
       submissionsService,
@@ -814,7 +886,7 @@ async function run() {
     );
     await submissionsService.submit(s.slug!, authorReq);
     await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: 'العلوم الهندسية',
+      topLabel: SAMPLE_DISCIPLINE_ENGINEERING,
       confidence: 87,
     });
     await submissionsService.updateStatus(
@@ -830,7 +902,7 @@ async function run() {
     await submissionsService.submitCopyeditNote(
       ceAssignment.slug!,
       copyeditor.id,
-      'Minor style edits applied. Please review the revised abstract phrasing.',
+      'Minor style edits applied to technical terms in the abstract. Please confirm the routing-protocol naming is consistent.',
       'No structural concerns; ready to publish once author acknowledges.',
     );
     console.log(`Seeded: ${tCopyedit} (copyediting, note submitted)`);
@@ -852,7 +924,7 @@ async function run() {
     pdfBytes,
     title: tPub,
     abstract:
-      'Sample publication on open-access policy and knowledge economics (public catalog).',
+      'Published study on open-access policy and knowledge economics in Arabic peer-reviewed journals (public catalog).',
     publicationMeta: SAMPLE_PUB1_META,
     manuscriptFilename: 'published.pdf',
     revisionFilename: 'published-revision.pdf',
@@ -871,7 +943,7 @@ async function run() {
     pdfBytes,
     title: tPub2,
     abstract:
-      'Sample publication on journal metadata and catalog discovery (related-articles peer).',
+      'Published review article on Arabic journal metadata, indexing standards, and catalog discovery.',
     publicationMeta: SAMPLE_PUB2_META,
     manuscriptFilename: 'published-peer.pdf',
     revisionFilename: 'published-peer-revision.pdf',
@@ -890,13 +962,20 @@ async function run() {
     pdfBytes,
     title: tPub3,
     abstract:
-      'Sample publication on clinical-research ethics with small cohorts (distant related topic).',
+      'Published case report on research ethics and informed consent in small clinical cohorts.',
     publicationMeta: SAMPLE_PUB3_META,
     manuscriptFilename: 'published-medical.pdf',
     revisionFilename: 'published-medical-revision.pdf',
     discipline: { topLabel: SAMPLE_DISCIPLINE_MEDICAL, confidence: 85 },
     logLabel: 'published, related-articles distant peer',
   });
+
+  if (aiClient.isSimilarityEnabled()) {
+    await submissionsService.backfillPublishedSimilarityIndex();
+    console.log(
+      'Indexed published [SAMPLE] articles for similarity, corpus search, and related articles.',
+    );
+  }
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
   console.log('o65834757@gmail.com         / Author123!      roles: author');
@@ -916,28 +995,35 @@ async function run() {
   console.log(`${tPub} — public catalog: published (open-access policy)`);
   console.log(`${tPub2} — public catalog: published (metadata / catalog peer)`);
   console.log(`${tPub3} — public catalog: published (medical ethics, distant peer)`);
-  console.log(
-    'Related articles: use SEED_RESET_SAMPLE=1 (npm run seed:reset) after changing published samples so Arabic abstracts re-index in ai-service.',
-  );
-  console.log('\n--- Academic field (AraBERT) ---');
+  console.log('\n--- Demo paths by role ---');
+  console.log(`Author (${author.email}): ${tDraft} — edit metadata, files, optional AI suggest; ${tRev} — resubmit flow`);
+  console.log(`Editor (${editor.email}): ${tQueue} — queue + assign reviewer; ${tCompleted} — read finished review; ${tRev} — revisions decision`);
+  console.log(`Reviewer (${reviewer.email}): ${tReview} — active assignment; ${tRev} — round-2 invite (accept on dashboard)`);
+  console.log(`Copyeditor (${copyeditor.email}): ${tCopyedit} — notes; published rows show full accept→publish path`);
+  console.log('Public catalog: search "open access", "metadata", or Arabic terms from published abstracts (keyword FTS)');
+  console.log(`Email pipeline scripts: title contains "In editor queue" (${tQueue})`);
+  console.log('\n--- AI features (optional; enable flags in backend + ai-service .env) ---');
   if (aiEnabled) {
     console.log(
-      'AI_SERVICE_ENABLED: submit() calls ai-service; samples also get fallback labels only when classification did not persist.',
+      'Discipline: submit() classifies from Arabic abstract; fallbacks apply only when classification did not persist.',
     );
   } else {
     console.log(
-      'AI_SERVICE_ENABLED=false: seeded disciplineSuggested/discipline on samples for editor/author UI (no ai-service required).',
-    );
-    console.log(
-      'To use live classification: set AI_SERVICE_ENABLED=true, AI_SERVICE_GRPC_HOST=127.0.0.1, run ai-service (HTTP :5245 probes + gRPC :5246), then npm run seed:reset',
+      'Discipline: seeded disciplineSuggested on each sample (no ai-service). Enable AI_SERVICE_ENABLED + gRPC, then npm run seed:reset.',
     );
   }
+  console.log(`Keywords suggest: author draft ${tDraft} (AI_KEYWORDS_ENABLED + OpenAI on ai-service)`);
+  console.log(`Corpus similarity: editor/reviewer on ${tQueue} or ${tReview} (AI_SIMILARITY_ENABLED; overlaps ${tPub})`);
+  console.log(`Suggested reviewers: editor on ${tQueue} or ${tReview} (AI_REVIEWER_MATCHING_ENABLED)`);
+  console.log(`Related articles: open ${tPub} in public catalog; expect ${tPub2} nearby, ${tPub3} distant`);
+  console.log('Semantic catalog: searchMode=semantic with q e.g. وصول مفتوح or بيانات تعريف فهرسة');
   console.log(
-    'Optional JOURNAL_ALLOWED_DISCIPLINES (pipe-separated Arabic labels) marks out-of-scope suggestions in the editor queue sample.',
+    'JOURNAL_ALLOWED_DISCIPLINES (pipe-separated Arabic labels): out-of-scope badge on queue sample when medical label is outside scope.',
   );
   console.log(
-    '\nRe-run safely. Dev reset options:',
+    'After changing published Arabic text: npm run seed:reset (re-indexes similarity corpus).',
   );
+  console.log('\nRe-run safely. Dev reset options:');
   console.log(
     '  SEED_RESET_ALL=1       — truncate all users/submissions/uploads, then re-seed (npm run seed:fresh)',
   );

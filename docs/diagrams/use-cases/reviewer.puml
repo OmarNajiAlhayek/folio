@@ -1,0 +1,30 @@
+@startuml folio-reviewer-use-cases
+' Folio — Reviewer essentials (assignment.view_own, review.submit)
+' Excludes editor assign-invite flow and author/editor staff diagrams
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle stickman
+
+actor "Reviewer" as RV
+
+rectangle "Folio — reviewer scope" {
+
+  usecase "Handle review assignment" as UC_Handle
+  usecase "Browse my review assignments" as UC_List
+  usecase "Accept review invitation" as UC_Accept
+  usecase "Decline review invitation" as UC_Decline
+  usecase "Read review manuscript" as UC_Read
+  usecase "Submit peer review" as UC_Submit
+}
+
+RV --> UC_Handle
+
+UC_Handle .> UC_List : <<include>>
+UC_Handle .> UC_Accept : <<include>>
+UC_Handle .> UC_Submit : <<include>>
+UC_Submit .> UC_Read : <<include>>
+UC_Decline .> UC_List : <<extend>>
+
+@enduml

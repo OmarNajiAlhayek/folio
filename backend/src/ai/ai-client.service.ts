@@ -26,6 +26,7 @@ import {
   getSimilarityGrpcClient,
 } from './grpc-client.factory';
 import type { ClassifyResponse } from './grpc/gen/folio/ai/v1/classifier';
+import { redactAiServiceLogMessage } from '../common/ai-log-redaction';
 
 @Injectable()
 export class AiClientService implements OnModuleDestroy {
@@ -139,7 +140,7 @@ export class AiClientService implements OnModuleDestroy {
       'ai-service %s gRPC %s: %s',
       rpc,
       GrpcStatus[code] ?? code,
-      message.slice(0, 200),
+      redactAiServiceLogMessage(message),
     );
   }
 

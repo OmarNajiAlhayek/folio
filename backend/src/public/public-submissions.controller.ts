@@ -15,7 +15,10 @@ import {
   ListPublicSubmissionsQueryDto,
   toPublicationCatalogFilters,
 } from './dto/list-public-submissions.query.dto';
-import { PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT } from '../submissions/publication-catalog-search.util';
+import {
+  clampPublicationCatalogPagination,
+  PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT,
+} from '../submissions/publication-catalog-search.util';
 import { SubmissionArticleType } from '../entities/submission-article-type.enum';
 import { ARABIC_DISCIPLINE_LABELS } from '../ai/discipline-labels';
 
@@ -55,6 +58,16 @@ export class PublicSubmissionsController {
     required: false,
     description: 'Max semantic hits (1–30, default 20)',
   })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Page size for keyword search (1–100, default 20)',
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    description: 'Skip rows for keyword search (default 0)',
+  })
   async list(@Query() query: ListPublicSubmissionsQueryDto) {
     const filters = toPublicationCatalogFilters(query);
     if (query.searchMode === 'semantic' && filters.q) {
@@ -62,10 +75,31 @@ export class PublicSubmissionsController {
         query.semanticLimit != null
           ? Math.min(30, Math.max(1, query.semanticLimit))
           : 20;
-      return this.submissionsService.findPublishedSemanticList(filters, limit);
+      const items =
+        await this.submissionsService.findPublishedSemanticList(filters, limit);
+      return {
+        items,
+        total: items.length,
+        limit,
+        offset: 0,
+      };
     }
-    const items = await this.submissionsService.findPublishedList(filters);
-    return items.map((s) => this.submissionsService.toPublicationListItem(s));
+    const pagination = clampPublicationCatalogPagination(
+      query.limit,
+      query.offset,
+    );
+    const { items, total } = await this.submissionsService.findPublishedList(
+      filters,
+      pagination,
+    );
+    return {
+      items: items.map((s) =>
+        this.submissionsService.toPublicationListItem(s),
+      ),
+      total,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    };
   }
 
   @Get('author-suggestions')

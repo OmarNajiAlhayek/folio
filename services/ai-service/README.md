@@ -33,8 +33,10 @@ Place fine-tuned weights under `arabert_clean_model_FINAL-20260525T161953Z-3-001
 uvicorn app.main:app --reload --port 5245
 ```
 
-- **HTTP (5245):** liveness, readiness, aggregated `GET /v1/status` only.
-- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`). See [`proto/README.md`](../../proto/README.md).
+- **HTTP (5245):** liveness, readiness, aggregated `GET /v1/status` only. Defaults to `HTTP_BIND_HOST=127.0.0.1`.
+- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`). Defaults to `GRPC_BIND_HOST=127.0.0.1`. See [`proto/README.md`](../../proto/README.md).
+
+For same-machine dev with Nest, set the same `AI_SERVICE_TOKEN` in `backend/.env` and `.env` here when `AI_SERVICE_ENABLED=true`.
 
 When `ARABERT_ENABLED=true`, startup **preloads tokenizer + weights** by default (`ARABERT_WARMUP_ON_STARTUP=true`) so the first UI classify is fast. Expect ~1 minute extra startup time on CPU; set `ARABERT_WARMUP_ON_STARTUP=false` to skip.
 

@@ -1,0 +1,38 @@
+@startuml folio-sequence-accept-review-invitation
+' Folio — Reviewer accepts invitation (UC-03)
+' Render: https://www.plantuml.com/plantuml
+
+title Accept review invitation (UC-03)
+
+actor Reviewer
+participant "Folio UI" as UI
+participant "Backend API\n(NestJS)" as API
+database "PostgreSQL" as DB
+queue "RabbitMQ" as MQ
+participant "Email service" as Email
+
+Reviewer -> UI : Open assignment;\ntap **Accept**
+UI -> API : POST .../assignments/:slug/accept\n(JWT)
+
+alt Not invited / not found
+  API --> UI : 400 / 404
+  UI --> Reviewer : Show error
+else Success
+  API -> DB : BEGIN transaction
+  API -> DB : UPDATE assignment\nstatus = **accepted**
+
+  opt Submission status was **submitted**
+    API -> DB : UPDATE submission\nstatus = **under_review**
+  end
+
+  API -> DB : In-app notifications +\noutbox (invitation accepted)
+  API -> DB : COMMIT
+
+  API -> MQ : Publish events
+  API --> UI : Accepted
+  UI --> Reviewer : Can read manuscript
+
+  MQ -> Email : Notify editors /\njournal managers
+end
+
+@enduml

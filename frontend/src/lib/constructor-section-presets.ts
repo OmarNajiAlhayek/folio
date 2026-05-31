@@ -4,13 +4,8 @@ import type {
 } from "@/lib/constructor-content.types";
 
 export type { ConstructorPresetId };
-
-export type SubmissionArticleType =
-  | "original_research"
-  | "review_article"
-  | "case_report"
-  | "short_communication"
-  | "other";
+import type { SubmissionArticleType } from "@/lib/validation/constants";
+export type { SubmissionArticleType };
 
 const ALL_PRESET_IDS: ConstructorPresetId[] = [
   "introduction",

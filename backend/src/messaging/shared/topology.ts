@@ -41,6 +41,11 @@ export type TopologyNames = {
   copyeditAuthorReadyQueue: string;
   submissionSubmittedQueue: string;
   submissionDecisionQueue: string;
+  submissionPublishedQueue: string;
+  reviewSubmittedQueue: string;
+  reviewInvitationAcceptedQueue: string;
+  reviewInvitationDeclinedQueue: string;
+  roleInvitationQueue: string;
 };
 
 export const DEFAULT_TOPOLOGY: TopologyNames = {
@@ -54,6 +59,11 @@ export const DEFAULT_TOPOLOGY: TopologyNames = {
   copyeditAuthorReadyQueue: 'email.copyedit_author_ready',
   submissionSubmittedQueue: 'email.submission_submitted',
   submissionDecisionQueue: 'email.submission_decision',
+  submissionPublishedQueue: 'email.submission_published',
+  reviewSubmittedQueue: 'email.review_submitted',
+  reviewInvitationAcceptedQueue: 'email.review_invitation_accepted',
+  reviewInvitationDeclinedQueue: 'email.review_invitation_declined',
+  roleInvitationQueue: 'email.role_invitation',
 };
 
 export async function assertTopology(
@@ -155,5 +165,70 @@ export async function assertTopology(
     names.submissionDecisionQueue,
     names.exchange,
     'submission.decision',
+  );
+
+  await channel.assertQueue(names.submissionPublishedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'submission.published.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.submissionPublishedQueue,
+    names.exchange,
+    'submission.published',
+  );
+
+  await channel.assertQueue(names.reviewSubmittedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'review.submitted.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.reviewSubmittedQueue,
+    names.exchange,
+    'review.submitted',
+  );
+
+  await channel.assertQueue(names.reviewInvitationAcceptedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'review.invitation_accepted.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.reviewInvitationAcceptedQueue,
+    names.exchange,
+    'review.invitation_accepted',
+  );
+
+  await channel.assertQueue(names.reviewInvitationDeclinedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'review.invitation_declined.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.reviewInvitationDeclinedQueue,
+    names.exchange,
+    'review.invitation_declined',
+  );
+
+  await channel.assertQueue(names.roleInvitationQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'role.invitation.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.roleInvitationQueue,
+    names.exchange,
+    'role.invitation',
   );
 }

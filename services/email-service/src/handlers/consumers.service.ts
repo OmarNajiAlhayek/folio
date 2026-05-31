@@ -10,6 +10,11 @@ import {
   CopyeditAuthorReadyEvent,
   SubmissionSubmittedEvent,
   SubmissionDecisionEvent,
+  ReviewSubmittedEvent,
+  ReviewInvitationAcceptedEvent,
+  ReviewInvitationDeclinedEvent,
+  SubmissionPublishedEvent,
+  RoleInvitationCreatedEvent,
   ROUTING_KEY,
 } from '../contracts/email-events';
 import { redactEventPayload } from '../shared/redactor';
@@ -20,6 +25,7 @@ import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
 import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
 import { SubmissionSubmittedHandler } from './submission-submitted.handler';
 import { SubmissionDecisionHandler } from './submission-decision.handler';
+import { Phase3WorkflowHandlers } from './phase3-workflow.handlers';
 import { HandlerOutcome } from './handler-result';
 
 @Injectable()
@@ -35,6 +41,7 @@ export class ConsumersService implements OnModuleInit {
     private readonly copyeditAuthorReady: CopyeditAuthorReadyHandler,
     private readonly submissionSubmitted: SubmissionSubmittedHandler,
     private readonly submissionDecision: SubmissionDecisionHandler,
+    private readonly phase3: Phase3WorkflowHandlers,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -60,6 +67,21 @@ export class ConsumersService implements OnModuleInit {
     );
     await this.rabbit.consume(topology.submissionDecisionQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.submissionDecision),
+    );
+    await this.rabbit.consume(topology.submissionPublishedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.submissionPublished),
+    );
+    await this.rabbit.consume(topology.reviewSubmittedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.reviewSubmitted),
+    );
+    await this.rabbit.consume(topology.reviewInvitationAcceptedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.reviewInvitationAccepted),
+    );
+    await this.rabbit.consume(topology.reviewInvitationDeclinedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.reviewInvitationDeclined),
+    );
+    await this.rabbit.consume(topology.roleInvitationQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.roleInvitation),
     );
   }
 
@@ -129,6 +151,41 @@ export class ConsumersService implements OnModuleInit {
       ) {
         outcome = await this.submissionDecision.handle(
           event as SubmissionDecisionEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.submissionPublished &&
+        event.type === 'SubmissionPublished'
+      ) {
+        outcome = await this.phase3.handleSubmissionPublished(
+          event as SubmissionPublishedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.reviewSubmitted &&
+        event.type === 'ReviewSubmitted'
+      ) {
+        outcome = await this.phase3.handleReviewSubmitted(
+          event as ReviewSubmittedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.reviewInvitationAccepted &&
+        event.type === 'ReviewInvitationAccepted'
+      ) {
+        outcome = await this.phase3.handleReviewInvitationAccepted(
+          event as ReviewInvitationAcceptedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.reviewInvitationDeclined &&
+        event.type === 'ReviewInvitationDeclined'
+      ) {
+        outcome = await this.phase3.handleReviewInvitationDeclined(
+          event as ReviewInvitationDeclinedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.roleInvitation &&
+        event.type === 'RoleInvitationCreated'
+      ) {
+        outcome = await this.phase3.handleRoleInvitation(
+          event as RoleInvitationCreatedEvent,
         );
       } else {
         outcome = {

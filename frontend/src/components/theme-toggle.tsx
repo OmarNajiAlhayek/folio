@@ -95,7 +95,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       onClick={() => setTheme(cycleTheme(theme))}
       className={cn(
-        "inline-flex items-center justify-center rounded-md border border-ink/15 bg-surface px-2 py-1 text-ink transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+        "inline-flex items-center justify-center rounded-md border border-ink/15 bg-surface px-2 py-1 text-ink transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface theme-icon-container",
         className,
       )}
       title={t("themeToggleTitle", { current: currentLabel })}

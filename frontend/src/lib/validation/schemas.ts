@@ -185,6 +185,16 @@ export const createReviewSchema = z
     { message: "reviewCommentsRequired", path: ["commentsForAuthor"] },
   );
 
+/** backend/src/users/dto/update-user-roles.dto.ts */
+export const updateUserRolesSchema = z.object({
+  roleSlugs: z.array(z.string().trim().min(1)).min(1),
+});
+
+/** backend/src/users/dto/create-role-invitation.dto.ts */
+export const createRoleInvitationSchema = z.object({
+  roleSlug: z.enum(["editor", "journal_manager"]),
+});
+
 /** backend/src/submissions/dto/assign-reviewer.dto.ts */
 export const assignReviewerSchema = z.object({
   reviewerId: z.string().uuid(),

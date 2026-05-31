@@ -1,21 +1,17 @@
-"use client";
-
 import { Suspense } from "react";
-import { useTranslations } from "next-intl";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { PublicationsCatalogBody } from "@/components/publications-catalog-body";
+import { PublicationsCatalogFallback } from "@/components/publications-catalog-fallback";
 import { PAGE_SHELL } from "@/lib/page-shell";
 
-function CatalogFallback() {
-  const t = useTranslations("Publications");
-  return (
-    <p className="mt-8 text-sm text-ink/60" aria-live="polite">
-      {t("loading")}
-    </p>
-  );
-}
+type Props = {
+  params: Promise<{ locale: string }>;
+};
 
-export default function PublicationsPage() {
-  const t = useTranslations("Publications");
+export default async function PublicationsPage({ params }: Props) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: "Publications" });
 
   return (
     <main className={PAGE_SHELL}>
@@ -31,7 +27,7 @@ export default function PublicationsPage() {
         </p>
       </header>
 
-      <Suspense fallback={<CatalogFallback />}>
+      <Suspense fallback={<PublicationsCatalogFallback />}>
         <PublicationsCatalogBody />
       </Suspense>
     </main>

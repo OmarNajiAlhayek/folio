@@ -9,6 +9,7 @@ import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
 import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
 import { SubmissionSubmittedHandler } from './submission-submitted.handler';
 import { SubmissionDecisionHandler } from './submission-decision.handler';
+import { Phase3WorkflowHandlers } from './phase3-workflow.handlers';
 import { DEFAULT_TOPOLOGY } from '../shared/topology';
 
 const consumerHandlerProviders = () => [
@@ -19,6 +20,16 @@ const consumerHandlerProviders = () => [
   { provide: CopyeditAuthorReadyHandler, useValue: { handle: jest.fn() } },
   { provide: SubmissionSubmittedHandler, useValue: { handle: jest.fn() } },
   { provide: SubmissionDecisionHandler, useValue: { handle: jest.fn() } },
+  {
+    provide: Phase3WorkflowHandlers,
+    useValue: {
+      handleReviewSubmitted: jest.fn(),
+      handleReviewInvitationAccepted: jest.fn(),
+      handleReviewInvitationDeclined: jest.fn(),
+      handleSubmissionPublished: jest.fn(),
+      handleRoleInvitation: jest.fn(),
+    },
+  },
 ];
 
 function makeConsumeMessage(

@@ -6,6 +6,11 @@ export const ADMIN_EMAIL_TEMPLATE_KEYS = [
   'copyedit-author-ready',
   'submission-submitted',
   'submission-decision',
+  'review-submitted',
+  'review-invitation-accepted',
+  'review-invitation-declined',
+  'submission-published',
+  'role-invitation',
 ] as const;
 
 export type AdminEmailTemplateKey =
