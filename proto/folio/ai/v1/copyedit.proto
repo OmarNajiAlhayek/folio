@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package folio.ai.v1;
+
+// CopyeditService provides AI-assisted reference cross-checking for copyeditors.
+// Grammar/spelling analysis is handled separately via LanguageTool (HTTP).
+service CopyeditService {
+  rpc CheckReferences(CheckReferencesRequest) returns (CheckReferencesResponse);
+  rpc GetCopyeditStatus(GetCopyeditStatusRequest) returns (CopyeditStatus);
+}
+
+// Inline citation strings extracted from the manuscript body (e.g. "(Smith, 2020)").
+// Reference list is the plain text of each formatted entry in the References section.
+message CheckReferencesRequest {
+  repeated string reference_list = 1;
+  repeated string inline_citations = 2;
+}
+
+message CheckReferencesResponse {
+  repeated string issues = 1;
+}
+
+message CopyeditStatus {
+  bool enabled = 1;
+}
+
+message GetCopyeditStatusRequest {}
