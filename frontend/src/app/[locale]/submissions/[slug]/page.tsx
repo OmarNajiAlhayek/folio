@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useRef, useState, useId } from "react";
+import { useCallback, useEffect, useRef, useState, useId } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { useParams } from "next/navigation";
 import {
@@ -60,6 +60,7 @@ import {
   SubmissionMetadataForm,
   type ContributorRow,
   type MetadataDisplayInitial,
+  type SubmissionMetadataFormHandle,
 } from "./submission-workflow-forms";
 import { ConstructorManuscriptRow } from "@/components/constructor/ConstructorManuscriptRow";
 import { ReviewManuscriptPresentationPicker } from "@/components/constructor/ReviewManuscriptPresentationPicker";
@@ -90,6 +91,16 @@ import { submitSubmissionForReview } from "@/lib/constructor-manuscript";
 import { stashConstructorSubmitErrors } from "@/lib/constructor-submit-errors";
 import { editorStatusOptions } from "@/lib/editor-status-transitions";
 import { submissionAllowsReviewConfiguration } from "@/lib/submission-review-phase";
+import {
+  apiCodeToFieldErrors,
+  collectSubmitReadinessErrors,
+  fileFieldKey,
+  fileRowCls,
+  hasFieldError,
+  scrollToFirstFieldError,
+  type SubmitReadinessContributor,
+} from "@/lib/submission-field-errors";
+import { SUBMISSION_API_ERROR_CODES } from "@/lib/submission-api-error-codes";
 
 type FileRow = {
   id: string;
@@ -335,7 +346,7 @@ export default function SubmissionDetailPage() {
   const reviewMethodSelectId = useId();
   const invalidateDetail = useInvalidateSubmissionDetail();
   const patchSubmission = usePatchSubmission(slug);
-  const { resolve: resolveApiError } = useApiErrorMessages();
+  const { resolve: resolveApiError, codeMessages } = useApiErrorMessages();
   const { format: formatDiscipline } = useDisciplineLabel();
   const tApi = useTranslations("ApiErrors");
   const showApiError = useToastApiError();
@@ -365,6 +376,18 @@ export default function SubmissionDetailPage() {
     ? resolveApiError(detailQuery.error, t("loadFailed"))
     : null;
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [submitFieldErrors, setSubmitFieldErrors] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const clearSubmitFieldError = useCallback((key: string) => {
+    setSubmitFieldErrors((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
   const [reviewerPick, setReviewerPick] = useState("");
   const [statusPick, setStatusPick] = useState("");
   const [busy, setBusy] = useState(false);
@@ -381,6 +404,7 @@ export default function SubmissionDetailPage() {
       presentUploaded: true,
       presentConstructor: false,
     });
+  const metadataFormRef = useRef<SubmissionMetadataFormHandle>(null);
 
   const serverStatus = sub?.status ?? "";
   useEffect(() => {
@@ -448,6 +472,7 @@ export default function SubmissionDetailPage() {
         kind,
       });
       toast.success(t("uploadSuccess"), { id: "submission-upload-success" });
+      clearSubmitFieldError(fileFieldKey(kind));
       invalidateDetail(slug);
     } catch (err) {
       showApiError(err, t("uploadFailed"), { id: "submission-upload" });
@@ -530,7 +555,13 @@ export default function SubmissionDetailPage() {
     if (!sub) return;
     setBusy(true);
     setValidationError(null);
+    setSubmitFieldErrors(new Set());
     try {
+      const saved = await metadataFormRef.current?.save({ silent: true });
+      if (saved === false) {
+        return;
+      }
+
       const enc = encodeURIComponent(sub.slug);
       const fresh = await apiJson<SubmissionDetail>(`/submissions/${enc}`);
       const cc = fresh.constructorContent as ConstructorContent | null | undefined;
@@ -539,9 +570,40 @@ export default function SubmissionDetailPage() {
         constructorContent: cc,
       });
       if (!presentationIsValid(reviewPresentation, sources)) {
+        const presentationErrors = new Set<string>(["presentation"]);
+        setSubmitFieldErrors(presentationErrors);
         toast.error(tManuscript("presentationAtLeastOne"), {
           id: "submission-presentation-required",
         });
+        scrollToFirstFieldError(presentationErrors);
+        return;
+      }
+
+      const readiness = collectSubmitReadinessErrors({
+        submission: {
+          articleType: fresh.articleType,
+          titleAr: fresh.titleAr,
+          abstract: fresh.abstract,
+          abstractAr: fresh.abstractAr,
+          keywords: fresh.keywords,
+          keywordsAr: fresh.keywordsAr,
+          contributors: fresh.contributors as SubmitReadinessContributor[] | null,
+          originalityConfirmed: fresh.originalityConfirmed,
+          conflictOfInterestStatement: fresh.conflictOfInterestStatement,
+          ethicalApprovalReference: fresh.ethicalApprovalReference,
+          aiUsageStatement: fresh.aiUsageStatement,
+        },
+        files: fresh.files ?? [],
+        presentation: reviewPresentation,
+        manuscriptSources: sources,
+        codeMessages,
+      });
+      if (readiness.errors.size > 0) {
+        setSubmitFieldErrors(readiness.errors);
+        if (readiness.message) {
+          toast.error(readiness.message, { id: "submission-submit-validation" });
+        }
+        scrollToFirstFieldError(readiness.errors);
         return;
       }
 
@@ -554,6 +616,7 @@ export default function SubmissionDetailPage() {
             : null,
       });
       toast.success(t("submitSuccess"), { id: "submission-submit-success" });
+      setSubmitFieldErrors(new Set());
       invalidateDetail(slug);
     } catch (err) {
       if (
@@ -565,6 +628,24 @@ export default function SubmissionDetailPage() {
           err.details.errors as ConstructorValidationError[],
         );
         router.push(`/submissions/${encodeURIComponent(sub.slug)}/compose`);
+        return;
+      }
+      if (
+        err instanceof ApiError &&
+        err.code &&
+        (SUBMISSION_API_ERROR_CODES as readonly string[]).includes(err.code)
+      ) {
+        const fileKinds = new Set(
+          (sub.files ?? []).map((f) => f.kind).filter(Boolean) as string[],
+        );
+        const apiErrors = apiCodeToFieldErrors(err.code, {
+          presentation: reviewPresentation,
+          fileKinds,
+          contributors: (sub.contributors as SubmitReadinessContributor[]) ?? [],
+        });
+        setSubmitFieldErrors(apiErrors);
+        scrollToFirstFieldError(apiErrors);
+        showApiError(err, t("submitFailed"), { id: "submission-submit" });
         return;
       }
       showApiError(err, t("submitFailed"), { id: "submission-submit" });
@@ -1096,10 +1177,14 @@ export default function SubmissionDetailPage() {
               <p className="mt-1 text-xs text-ink/65">{tWf("metadataEditHint")}</p>
               <div className="mt-6">
                 <SubmissionMetadataForm
+                  ref={metadataFormRef}
                   key={sub.updatedAt}
                   slug={sub.slug}
                   canEdit
                   initial={metadataFormInitial}
+                  fieldErrors={submitFieldErrors}
+                  clearFieldError={clearSubmitFieldError}
+                  onFieldErrorsChange={setSubmitFieldErrors}
                   onSaved={() => invalidateDetail(slug)}
                   onDisciplineUpdated={() => invalidateDetail(slug)}
                   onError={(msg) => {
@@ -1172,7 +1257,11 @@ export default function SubmissionDetailPage() {
                 {editableFileKinds.map(({ kind, required }) => (
                   <div
                     key={kind}
-                    className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 px-4 py-3"
+                    data-field-error={fileFieldKey(kind)}
+                    className={fileRowCls(
+                      hasFieldError(submitFieldErrors, fileFieldKey(kind)),
+                      "rounded-xl bg-paper/40 px-4 py-3",
+                    )}
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-sm font-semibold text-ink">
@@ -1231,12 +1320,20 @@ export default function SubmissionDetailPage() {
                       </label>
                     </div>
                     {kind === "manuscript" && canEditConstructor ? (
-                      <div className="mt-4 pt-4 border-t border-ink/[0.05] dark:border-white/[0.05]">
+                      <div
+                        className={`mt-4 pt-4 border-t border-ink/[0.05] dark:border-white/[0.05] ${
+                          hasFieldError(submitFieldErrors, "presentation")
+                            ? "rounded-lg border border-red-400 p-3 ring-1 ring-red-500/15"
+                            : ""
+                        }`}
+                        data-field-error="presentation"
+                      >
                         <ReviewManuscriptPresentationPicker
                           value={reviewPresentation}
                           onChange={(next) => {
                             setReviewPresentation(next);
                             writeReviewManuscriptPresentation(sub.slug, next);
+                            clearSubmitFieldError("presentation");
                           }}
                           hasUploadedManuscript={hasUploadedManuscript}
                           hasConstructorDraft={hasConstructorDraft}

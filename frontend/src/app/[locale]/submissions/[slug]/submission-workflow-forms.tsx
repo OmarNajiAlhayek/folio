@@ -1,7 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import { apiJson, apiUpload } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { useApiErrorMessages } from "@/lib/use-api-error-messages";
@@ -24,9 +31,16 @@ import {
   type KeywordSuggestionResult,
 } from "@/components/submission-keyword-suggest";
 import {
+  contributorFieldKey,
+  fieldInputCls,
+  hasFieldError,
+  zodTopLevelToFieldErrors,
+} from "@/lib/submission-field-errors";
+import {
   ABSTRACT_MAX_WORDS,
   countWords,
   createSubmissionSchema,
+  firstIssueByTopLevelPath,
   formatZodIssues,
   joinValidationBulletList,
   safeParseResult,
@@ -83,32 +97,47 @@ export function fileKindsForSubmissionDetail(_isConstructor?: boolean) {
   return [...FILE_KIND_ORDER];
 }
 
-type SubmissionMetadataFormProps =
-  | {
-      createMode: true;
-      canEdit: true;
-      initial: SubmissionMetadataFormInitial;
-      onCreated: (slug: string) => void;
-      onError: (msg: string) => void;
-      /** Overrides the default “Save metadata” label (e.g. “Save draft” on /new). */
-      saveButtonLabel?: string;
-      /** Staged files on /submissions/new; uploaded after POST /submissions succeeds. */
-      getStagedFiles?: () => Partial<Record<SubmissionFileKind, File>>;
-      clearStagedFiles?: () => void;
-      onSavingChange?: (busy: boolean) => void;
-    }
-  | {
-      createMode?: false;
-      slug: string;
-      canEdit: boolean;
-      initial: SubmissionMetadataFormInitial;
-      onSaved: () => void;
-      onError: (msg: string) => void;
-      saveButtonLabel?: string;
-      onDisciplineUpdated?: () => void;
-    };
+type SubmissionFieldErrorProps = {
+  fieldErrors?: Set<string>;
+  clearFieldError?: (key: string) => void;
+  onFieldErrorsChange?: (errors: Set<string>) => void;
+};
 
-export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
+type SubmissionMetadataFormProps = SubmissionFieldErrorProps &
+  (
+    | {
+        createMode: true;
+        canEdit: true;
+        initial: SubmissionMetadataFormInitial;
+        onCreated: (slug: string) => void;
+        onError: (msg: string) => void;
+        /** Overrides the default “Save metadata” label (e.g. “Save draft” on /new). */
+        saveButtonLabel?: string;
+        /** Staged files on /submissions/new; uploaded after POST /submissions succeeds. */
+        getStagedFiles?: () => Partial<Record<SubmissionFileKind, File>>;
+        clearStagedFiles?: () => void;
+        onSavingChange?: (busy: boolean) => void;
+      }
+    | {
+        createMode?: false;
+        slug: string;
+        canEdit: boolean;
+        initial: SubmissionMetadataFormInitial;
+        onSaved: () => void;
+        onError: (msg: string) => void;
+        saveButtonLabel?: string;
+        onDisciplineUpdated?: () => void;
+      }
+  );
+
+export type SubmissionMetadataFormHandle = {
+  save: (opts?: { silent?: boolean }) => Promise<boolean>;
+};
+
+export const SubmissionMetadataForm = forwardRef<
+  SubmissionMetadataFormHandle,
+  SubmissionMetadataFormProps
+>(function SubmissionMetadataForm(props, ref) {
   const isCreate = props.createMode === true;
   const slug = !isCreate ? props.slug : "";
   const canEdit = isCreate ? true : props.canEdit;
@@ -129,6 +158,46 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     !isCreate && "onDisciplineUpdated" in props
       ? props.onDisciplineUpdated
       : undefined;
+  const externalFieldErrors = props.fieldErrors;
+  const clearFieldErrorProp = props.clearFieldError;
+  const onFieldErrorsChange = props.onFieldErrorsChange;
+
+  const [localFieldErrors, setLocalFieldErrors] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const activeFieldErrors = externalFieldErrors ?? localFieldErrors;
+
+  const hasErr = useCallback(
+    (key: string) => hasFieldError(activeFieldErrors, key),
+    [activeFieldErrors],
+  );
+
+  const clearErr = useCallback(
+    (key: string) => {
+      if (clearFieldErrorProp) {
+        clearFieldErrorProp(key);
+        return;
+      }
+      setLocalFieldErrors((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    },
+    [clearFieldErrorProp],
+  );
+
+  const applyFieldErrors = useCallback(
+    (errors: Set<string>) => {
+      if (onFieldErrorsChange) {
+        onFieldErrorsChange(errors);
+      } else {
+        setLocalFieldErrors(errors);
+      }
+    },
+    [onFieldErrorsChange],
+  );
 
   const t = useTranslations("SubmissionWorkflow");
   const tv = useTranslations("Validation");
@@ -233,7 +302,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     initialContributorsKey,
   ]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (opts?: { silent?: boolean }): Promise<boolean> => {
     setSaving(true);
     onError("");
     try {
@@ -264,10 +333,12 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
         : submissionMetadataPatchSchema;
       const parsed = safeParseResult(metadataSchema, body);
       if (!parsed.ok) {
+        const byField = firstIssueByTopLevelPath(tv, parsed.error);
+        applyFieldErrors(zodTopLevelToFieldErrors(byField));
         onError(
           joinValidationBulletList(formatZodIssues(tv, parsed.error.issues)),
         );
-        return;
+        return false;
       }
 
       if (isCreate) {
@@ -297,20 +368,27 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             }
           }
         }
-        toast.success(t("draftCreated"), { id: "submission-metadata-draft-created" });
+        if (!opts?.silent) {
+          toast.success(t("draftCreated"), { id: "submission-metadata-draft-created" });
+        }
         if (uploadErr) onError(uploadErr);
         clearStagedFiles?.();
         onCreatedNext?.(createdSlug);
+        return true;
       } else {
         await apiJson(`/submissions/${encodeURIComponent(slug)}`, {
           method: "PATCH",
           body: JSON.stringify(parsed.data),
         });
-        toast.success(t("saveSuccess"), { id: "submission-metadata-save-success" });
+        if (!opts?.silent) {
+          toast.success(t("saveSuccess"), { id: "submission-metadata-save-success" });
+        }
         onSavedNext?.();
+        return true;
       }
     } catch (e) {
       onError(resolveApiError(e, t("saveFailed")));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -330,6 +408,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     ethics,
     originality,
     aiUsage,
+    applyFieldErrors,
     onError,
     onSavedNext,
     onCreatedNext,
@@ -340,6 +419,8 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
     tv,
     resolveApiError,
   ]);
+
+  useImperativeHandle(ref, () => ({ save }), [save]);
 
   function setCorresponding(idx: number) {
     setContributors((rows) =>
@@ -443,44 +524,76 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
         </h3>
         <p className="mt-1 text-sm text-ink/65">{t("sectionMetadataHint")}</p>
         <div className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="articleType"
+          >
             <span className="font-medium text-ink">{t("articleType")}</span>
             <SimpleSelect
               value={articleType}
-              onValueChange={setArticleType}
+              onValueChange={(v) => {
+                setArticleType(v);
+                clearErr("articleType");
+              }}
               placeholder={t("articleTypePlaceholder")}
+              className={
+                hasErr("articleType")
+                  ? "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-500/15"
+                  : undefined
+              }
               options={SUBMISSION_ARTICLE_TYPES.map((v) => ({
                 value: v,
                 label: t(`articleType_${v}`),
               }))}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="title"
+          >
             <span className="font-medium text-ink">{t("titleLabelEn")}</span>
             <input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                clearErr("title");
+              }}
               dir="ltr"
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
+              aria-invalid={hasErr("title")}
+              className={fieldInputCls(hasErr("title"), "form")}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="titleAr"
+          >
             <span className="font-medium text-ink">{t("titleLabelAr")}</span>
             <input
               value={titleAr}
-              onChange={(e) => setTitleAr(e.target.value)}
+              onChange={(e) => {
+                setTitleAr(e.target.value);
+                clearErr("titleAr");
+              }}
               dir="rtl"
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
+              aria-invalid={hasErr("titleAr")}
+              className={fieldInputCls(hasErr("titleAr"), "form")}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="abstract"
+          >
             <span className="font-medium text-ink">{t("abstractLabelEn")}</span>
             <textarea
               value={abstract}
-              onChange={(e) => setAbstract(e.target.value)}
+              onChange={(e) => {
+                setAbstract(e.target.value);
+                clearErr("abstract");
+              }}
               rows={6}
               dir="ltr"
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
+              aria-invalid={hasErr("abstract")}
+              className={fieldInputCls(hasErr("abstract"), "form")}
             />
             <span className="text-xs text-ink/55">
               {t("abstractWordCount", {
@@ -489,14 +602,21 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
               })}
             </span>
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="abstractAr"
+          >
             <span className="font-medium text-ink">{t("abstractLabelAr")}</span>
             <textarea
               value={abstractAr}
-              onChange={(e) => setAbstractAr(e.target.value)}
+              onChange={(e) => {
+                setAbstractAr(e.target.value);
+                clearErr("abstractAr");
+              }}
               rows={6}
               dir="rtl"
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 text-ink outline-none focus:border-accent"
+              aria-invalid={hasErr("abstractAr")}
+              className={fieldInputCls(hasErr("abstractAr"), "form")}
             />
             <span className="text-xs text-ink/55">
               {t("abstractWordCount", {
@@ -514,7 +634,10 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
               onSuggestions={onKeywordSuggestions}
             />
           ) : null}
-          <div className="flex flex-col gap-1 text-sm">
+          <div
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="keywords"
+          >
             <span
               id="submission-keywords-en-label"
               className="font-medium text-ink"
@@ -524,13 +647,17 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             <div dir="ltr" lang="en">
               <KeywordTagsInput
                 tags={keywordTags}
-                onChange={setKeywordTags}
+                onChange={(tags) => {
+                  setKeywordTags(tags);
+                  clearErr("keywords");
+                }}
                 inputValue={keywordDraft}
                 onInputChange={setKeywordDraft}
                 placeholder={t("keywordsPlaceholder")}
                 id="submission-keywords-en"
                 aria-labelledby="submission-keywords-en-label"
                 aria-describedby="submission-keywords-en-hint"
+                invalid={hasErr("keywords")}
               />
             </div>
             <span
@@ -549,7 +676,10 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
               lang="en"
             />
           </div>
-          <div className="flex flex-col gap-1 text-sm">
+          <div
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="keywordsAr"
+          >
             <span
               id="submission-keywords-ar-label"
               className="font-medium text-ink"
@@ -559,13 +689,17 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
             <div dir="rtl" lang="ar">
               <KeywordTagsInput
                 tags={keywordTagsAr}
-                onChange={setKeywordTagsAr}
+                onChange={(tags) => {
+                  setKeywordTagsAr(tags);
+                  clearErr("keywordsAr");
+                }}
                 inputValue={keywordDraftAr}
                 onInputChange={setKeywordDraftAr}
                 placeholder={t("keywordsPlaceholderAr")}
                 id="submission-keywords-ar"
                 aria-labelledby="submission-keywords-ar-label"
                 aria-describedby="submission-keywords-ar-hint"
+                invalid={hasErr("keywordsAr")}
               />
             </div>
             <span
@@ -596,7 +730,15 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
           {contributors.map((c, idx) => (
             <li
               key={idx}
-              className="rounded-lg border border-ink/12 bg-paper/40 p-4"
+              data-field-error={contributorFieldKey(idx, "fullName")}
+              className={`rounded-lg border bg-paper/40 p-4 ${
+                hasErr(contributorFieldKey(idx, "fullName")) ||
+                hasErr(contributorFieldKey(idx, "affiliation")) ||
+                hasErr("corresponding") ||
+                hasErr("contributors")
+                  ? "border-red-400 ring-1 ring-red-500/15"
+                  : "border-ink/12"
+              }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-medium uppercase tracking-wide text-ink/50">
@@ -607,7 +749,10 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
                     type="radio"
                     name="corresponding"
                     checked={c.isCorresponding}
-                    onChange={() => setCorresponding(idx)}
+                    onChange={() => {
+                      setCorresponding(idx);
+                      clearErr("corresponding");
+                    }}
                     className="size-4 text-accent"
                   />
                   {t("correspondingAuthor")}
@@ -620,13 +765,19 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
                     value={c.fullName}
                     onChange={(e) => {
                       const v = e.target.value;
+                      clearErr(contributorFieldKey(idx, "fullName"));
+                      clearErr("contributors");
                       setContributors((rows) =>
                         rows.map((r, i) =>
                           i === idx ? { ...r, fullName: v } : r,
                         ),
                       );
                     }}
-                    className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none focus:border-accent"
+                    aria-invalid={hasErr(contributorFieldKey(idx, "fullName"))}
+                    className={fieldInputCls(
+                      hasErr(contributorFieldKey(idx, "fullName")),
+                      "form",
+                    )}
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm">
@@ -640,7 +791,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
                         rows.map((r, i) => (i === idx ? { ...r, email: v } : r)),
                       );
                     }}
-                    className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none focus:border-accent"
+                    className={fieldInputCls(false, "form")}
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm sm:col-span-2">
@@ -649,6 +800,8 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
                     value={c.affiliation}
                     onChange={(e) => {
                       const v = e.target.value;
+                      clearErr(contributorFieldKey(idx, "affiliation"));
+                      clearErr("contributors");
                       setContributors((rows) =>
                         rows.map((r, i) =>
                           i === idx ? { ...r, affiliation: v } : r,
@@ -656,7 +809,12 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
                       );
                     }}
                     placeholder={t("authorAffiliationPlaceholder")}
-                    className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none placeholder:text-ink/35 focus:border-accent"
+                    aria-invalid={hasErr(contributorFieldKey(idx, "affiliation"))}
+                    className={fieldInputCls(
+                      hasErr(contributorFieldKey(idx, "affiliation")),
+                      "form",
+                      "placeholder:text-ink/35",
+                    )}
                   />
                 </label>
               </div>
@@ -703,40 +861,72 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
         </h3>
         <p className="mt-1 text-sm text-ink/65">{t("sectionDeclarationsHint")}</p>
         <div className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="coi"
+          >
             <span className="font-medium">{t("conflictOfInterest")}</span>
             <textarea
               value={coi}
-              onChange={(e) => setCoi(e.target.value)}
+              onChange={(e) => {
+                setCoi(e.target.value);
+                clearErr("coi");
+              }}
               rows={2}
               placeholder={t("coiPlaceholder")}
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none placeholder:text-ink/35 focus:border-accent"
+              aria-invalid={hasErr("coi")}
+              className={fieldInputCls(hasErr("coi"), "form", "placeholder:text-ink/35")}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="ethics"
+          >
             <span className="font-medium">{t("ethicalApproval")}</span>
             <input
               value={ethics}
-              onChange={(e) => setEthics(e.target.value)}
+              onChange={(e) => {
+                setEthics(e.target.value);
+                clearErr("ethics");
+              }}
               placeholder={t("ethicalPlaceholder")}
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none placeholder:text-ink/35 focus:border-accent"
+              aria-invalid={hasErr("ethics")}
+              className={fieldInputCls(hasErr("ethics"), "form", "placeholder:text-ink/35")}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label
+            className="flex flex-col gap-1 text-sm"
+            data-field-error="aiUsage"
+          >
             <span className="font-medium">{t("aiUsage")}</span>
             <textarea
               value={aiUsage}
-              onChange={(e) => setAiUsage(e.target.value)}
+              onChange={(e) => {
+                setAiUsage(e.target.value);
+                clearErr("aiUsage");
+              }}
               rows={2}
               placeholder={t("aiPlaceholder")}
-              className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none placeholder:text-ink/35 focus:border-accent"
+              aria-invalid={hasErr("aiUsage")}
+              className={fieldInputCls(hasErr("aiUsage"), "form", "placeholder:text-ink/35")}
             />
           </label>
-          <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <label
+            className={`flex cursor-pointer items-start gap-2 text-sm rounded-md border p-2 ${
+              hasErr("originality")
+                ? "border-red-400 ring-1 ring-red-500/15"
+                : "border-transparent"
+            }`}
+            data-field-error="originality"
+          >
             <input
               type="checkbox"
               checked={originality}
-              onChange={(e) => setOriginality(e.target.checked)}
+              onChange={(e) => {
+                setOriginality(e.target.checked);
+                clearErr("originality");
+              }}
+              aria-invalid={hasErr("originality")}
               className="mt-1 size-4 rounded border-ink/25 text-accent"
             />
             <span>{t("originalityConfirm")}</span>
@@ -774,7 +964,7 @@ export function SubmissionMetadataForm(props: SubmissionMetadataFormProps) {
       </button>
     </div>
   );
-}
+});
 
 export type MetadataDisplayInitial = MetadataDisplayInitialBase &
   SubmissionDisciplineFields;

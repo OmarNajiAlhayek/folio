@@ -27,6 +27,7 @@ import { useToastApiError } from "@/lib/use-toast-api-error";
 
 import { LoadingCenter } from "@/components/ui/spinner";
 import { submissionQueueShellCls } from "@/lib/submission-list-ui";
+import { CopyeditAiPanel } from "@/components/copyedit/CopyeditAiPanel";
 
 
 
@@ -504,6 +505,10 @@ export default function CopyeditWorkbenchPage() {
 
         </button>
 
+      )}
+
+      {row.slug && (
+        <CopyeditAiPanel assignmentSlug={row.slug} />
       )}
 
     </main>
