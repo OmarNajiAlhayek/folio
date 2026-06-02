@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections import defaultdict
 from typing import Any
 
 from app.config import Settings
 from app.ml.vector.ai_engine import AIEngine
+from app.ml.vector.article_ingestion_service import ArticleIngestionService
 from app.ml.vector.config import VectorConfig
 from app.ml.vector.reviewer_ingestion_service import ReviewerIngestionService
 from app.ml.vector.reviewer_matching_service import ReviewerMatchingService
@@ -33,6 +35,7 @@ class ReviewerMatchingGrpcService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._ingestion: ReviewerIngestionService | None = None
+        self._articles: ArticleIngestionService | None = None
         self._matching: ReviewerMatchingService | None = None
         self._lock = threading.Lock()
 
@@ -55,25 +58,42 @@ class ReviewerMatchingGrpcService:
 
     def _get_services(
         self,
-    ) -> tuple[ReviewerIngestionService, ReviewerMatchingService]:
+    ) -> tuple[
+        ReviewerIngestionService,
+        ArticleIngestionService,
+        ReviewerMatchingService,
+    ]:
         self._require_enabled()
-        if self._ingestion is not None and self._matching is not None:
-            return self._ingestion, self._matching
+        if (
+            self._ingestion is not None
+            and self._articles is not None
+            and self._matching is not None
+        ):
+            return self._ingestion, self._articles, self._matching
 
         with self._lock:
-            if self._ingestion is not None and self._matching is not None:
-                return self._ingestion, self._matching
+            if (
+                self._ingestion is not None
+                and self._articles is not None
+                and self._matching is not None
+            ):
+                return self._ingestion, self._articles, self._matching
             try:
                 config = vector_config_from_settings(self._settings)
                 engine = AIEngine.get_instance(config)
-                self._ingestion = ReviewerIngestionService(engine=engine, config=config)
+                self._articles = ArticleIngestionService(engine=engine, config=config)
+                self._ingestion = ReviewerIngestionService(
+                    engine=engine,
+                    config=config,
+                    article_ingestion=self._articles,
+                )
                 self._matching = ReviewerMatchingService(engine=engine, config=config)
             except VectorDependenciesError as err:
                 raise ReviewerMatchingUnavailableError(
                     'Reviewer matching dependencies are not installed. '
                     'Run: pip install -e ".[similarity]"',
                 ) from err
-            return self._ingestion, self._matching
+            return self._ingestion, self._articles, self._matching
 
     async def suggest_reviewers(
         self,
@@ -86,7 +106,7 @@ class ReviewerMatchingGrpcService:
         index_history: list[dict[str, str]] | None = None,
         use_cross_encoder: bool = True,
     ) -> list[dict[str, Any]]:
-        ingestion, matching = self._get_services()
+        ingestion, articles, matching = self._get_services()
 
         def _run() -> list[ReviewerSuggestionHit]:
             for profile in index_profiles or []:
@@ -105,22 +125,30 @@ class ReviewerMatchingGrpcService:
                     display_name=(profile.get("display_name") or "").strip(),
                 )
 
+            history_links: dict[str, list[str]] = defaultdict(list)
+            summaries_by_submission: dict[str, tuple[str, str]] = {}
             for row in index_history or []:
                 reviewer_id = (row.get("reviewer_id") or "").strip()
                 submission_id = (row.get("submission_id") or "").strip()
                 if not reviewer_id or not submission_id:
                     continue
-                try:
-                    ingestion.upsert_review_history(
-                        reviewer_id,
-                        submission_id,
+                history_links[reviewer_id].append(submission_id)
+                if submission_id not in summaries_by_submission:
+                    summaries_by_submission[submission_id] = (
                         row.get("abstract") or "",
                         row.get("keywords") or "",
                     )
+
+            for submission_id, (abstract, keywords) in summaries_by_submission.items():
+                try:
+                    articles.upsert_submission_summary(
+                        submission_id,
+                        abstract,
+                        keywords,
+                    )
                 except ValueError:
                     logger.debug(
-                        "Skipping empty history row %s::%s",
-                        reviewer_id,
+                        "Skipping empty summary for submission %s",
                         submission_id,
                     )
 
@@ -129,6 +157,7 @@ class ReviewerMatchingGrpcService:
                 limit=limit,
                 candidate_ids=candidate_ids,
                 exclude_reviewer_ids=exclude_reviewer_ids,
+                history_links=dict(history_links),
                 use_cross_encoder=use_cross_encoder,
             )
             return hits

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 SUMMARY_COLLECTION_NAME = "articles_summary_collection"
 CHUNKS_COLLECTION_NAME = "articles_chunks_collection"
 REVIEWERS_COLLECTION_NAME = "reviewers_collection"
+# Legacy collection (pre-unified summary index); cleaned up on reviewer removal.
 REVIEWER_HISTORY_COLLECTION_NAME = "reviewer_history_summary_collection"
 
 

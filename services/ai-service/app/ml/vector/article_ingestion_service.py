@@ -46,18 +46,11 @@ class ArticleIngestionService:
         if not article_id:
             raise ValueError("article_id is required")
 
-        cleaned_abstract = clean_text(abstract)
-        cleaned_keywords = clean_text(keywords)
-        summary_text = combine_summary_text(cleaned_abstract, cleaned_keywords)
-        if not summary_text:
-            raise ValueError("abstract or keywords required to index summary")
-
-        self._upsert_summary(
-            article_id=article_id,
-            summary_text=summary_text,
-            abstract=abstract.strip(),
-            keywords=keywords.strip(),
-            category=category.strip(),
+        self.upsert_submission_summary(
+            article_id,
+            abstract,
+            keywords,
+            category=category,
         )
 
         cleaned_full = clean_text(full_text)
@@ -78,6 +71,45 @@ class ArticleIngestionService:
             summary_indexed=1,
             chunks_indexed=len(chunks),
         )
+
+    def upsert_submission_summary(
+        self,
+        submission_id: str,
+        abstract: str,
+        keywords: str = "",
+        *,
+        category: str = "",
+    ) -> None:
+        """
+        Index abstract+keywords in the shared summary collection (submission id).
+
+        Used for published articles and reviewer-match history without duplicating
+        embeddings in a separate collection.
+        """
+        submission_id = submission_id.strip()
+        if not submission_id:
+            raise ValueError("submission_id is required")
+
+        cleaned_abstract = clean_text(abstract)
+        cleaned_keywords = clean_text(keywords)
+        summary_text = combine_summary_text(cleaned_abstract, cleaned_keywords)
+        if not summary_text:
+            raise ValueError("abstract or keywords required to index summary")
+
+        collection = self._engine.summary_collection
+        existing = collection.get(ids=[submission_id], include=["documents"])
+        if existing["ids"] and (existing["documents"][0] or "") == summary_text:
+            logger.debug("Summary unchanged for %s; skip re-embed", submission_id)
+            return
+
+        self._upsert_summary(
+            article_id=submission_id,
+            summary_text=summary_text,
+            abstract=abstract.strip(),
+            keywords=keywords.strip(),
+            category=category.strip(),
+        )
+        logger.info("Upserted submission summary %s", submission_id)
 
     def remove_article(self, article_id: str) -> None:
         """Delete an article from both collections."""

@@ -63,6 +63,7 @@ class ReviewerMatchingService:
         limit: int | None = None,
         candidate_ids: Sequence[str] | None = None,
         exclude_reviewer_ids: Sequence[str] | None = None,
+        history_links: dict[str, list[str]] | None = None,
         bio_weight: float | None = None,
         history_weight: float | None = None,
         use_cross_encoder: bool = True,
@@ -96,7 +97,10 @@ class ReviewerMatchingService:
             return []
 
         query_vector = self._engine.embed([cleaned_query])[0]
-        history_by_reviewer = self._load_history_grouped(reviewer_ids)
+        history_by_reviewer = self._load_history_grouped(
+            reviewer_ids,
+            history_links or {},
+        )
 
         stage1: list[_Stage1Candidate] = []
         for reviewer_id, row in bio_rows.items():
@@ -188,30 +192,48 @@ class ReviewerMatchingService:
     def _load_history_grouped(
         self,
         reviewer_ids: set[str],
+        history_links: dict[str, list[str]],
     ) -> dict[str, _ReviewerHistoryRows]:
         grouped: dict[str, _ReviewerHistoryRows] = defaultdict(
             lambda: _ReviewerHistoryRows(embeddings=[], documents=[]),
         )
 
-        id_list = sorted(reviewer_ids)
+        submission_ids: set[str] = set()
+        for rid in reviewer_ids:
+            for sid in history_links.get(rid, []):
+                cleaned = str(sid).strip()
+                if cleaned:
+                    submission_ids.add(cleaned)
+
+        if not submission_ids:
+            return dict(grouped)
+
+        by_submission: dict[str, tuple[list[float], str]] = {}
+        id_list = sorted(submission_ids)
         for offset in range(0, len(id_list), _HISTORY_IN_BATCH_SIZE):
             batch = id_list[offset : offset + _HISTORY_IN_BATCH_SIZE]
-            if not batch:
-                continue
-            result = self._engine.reviewer_history_collection.get(
-                where={"reviewer_id": {"$in": batch}},
-                include=["embeddings", "metadatas", "documents"],
+            result = self._engine.summary_collection.get(
+                ids=batch,
+                include=["embeddings", "documents"],
             )
-            for i, _row_id in enumerate(result["ids"]):
-                meta = result["metadatas"][i] or {}
-                rid = str(meta.get("reviewer_id", ""))
-                if not rid:
-                    continue
-                row = grouped[rid]
+            for i, sid in enumerate(result["ids"]):
                 embedding = result["embeddings"][i]
-                if embedding is not None:
-                    row.embeddings.append(_as_vector(embedding))
-                doc = result["documents"][i]
+                if embedding is None:
+                    continue
+                by_submission[sid] = (
+                    _as_vector(embedding),
+                    result["documents"][i] or "",
+                )
+
+        for rid in reviewer_ids:
+            row = grouped[rid]
+            for sid in history_links.get(rid, []):
+                cleaned = str(sid).strip()
+                entry = by_submission.get(cleaned)
+                if entry is None:
+                    continue
+                emb, doc = entry
+                row.embeddings.append(emb)
                 if doc:
                     row.documents.append(doc)
 

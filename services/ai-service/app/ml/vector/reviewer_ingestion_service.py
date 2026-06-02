@@ -5,12 +5,9 @@ from __future__ import annotations
 import logging
 
 from app.ml.vector.ai_engine import AIEngine
+from app.ml.vector.article_ingestion_service import ArticleIngestionService
 from app.ml.vector.config import VectorConfig
-from app.ml.vector.text_processing import (
-    clean_text,
-    combine_summary_text,
-    reviewer_history_id,
-)
+from app.ml.vector.text_processing import clean_text, reviewer_history_id
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +19,15 @@ class ReviewerIngestionService:
         self,
         engine: AIEngine | None = None,
         config: VectorConfig | None = None,
+        *,
+        article_ingestion: ArticleIngestionService | None = None,
     ) -> None:
         self._config = config or VectorConfig()
         self._engine = engine or AIEngine.get_instance(self._config)
+        self._articles = article_ingestion or ArticleIngestionService(
+            engine=self._engine,
+            config=self._config,
+        )
 
     def upsert_reviewer(
         self,
@@ -72,44 +75,20 @@ class ReviewerIngestionService:
         submission_id: str,
         abstract: str,
         keywords: str,
+        *,
+        category: str = "",
     ) -> None:
-        """Index one completed review as abstract+keywords summary."""
-        reviewer_id = reviewer_id.strip()
-        submission_id = submission_id.strip()
-        if not reviewer_id:
-            raise ValueError("reviewer_id is required")
-        if not submission_id:
-            raise ValueError("submission_id is required")
-
-        cleaned_abstract = clean_text(abstract)
-        cleaned_keywords = clean_text(keywords)
-        document = combine_summary_text(cleaned_abstract, cleaned_keywords)
-        if not document:
-            raise ValueError("abstract or keywords required to index review history")
-
-        row_id = reviewer_history_id(reviewer_id, submission_id)
-        collection = self._engine.reviewer_history_collection
-        existing = collection.get(ids=[row_id])
-        if existing["ids"]:
-            collection.delete(ids=[row_id])
-
-        embedding = self._engine.embed([document])[0]
-        metadata = {
-            "reviewer_id": reviewer_id,
-            "submission_id": submission_id,
-            "abstract": abstract.strip(),
-            "keywords": keywords.strip(),
-        }
-        collection.add(
-            ids=[row_id],
-            embeddings=[embedding],
-            documents=[document],
-            metadatas=[metadata],
+        """Index submission abstract+keywords in the shared summary collection."""
+        _ = reviewer_id  # reviewer→submission mapping comes from the suggest request
+        self._articles.upsert_submission_summary(
+            submission_id,
+            abstract,
+            keywords,
+            category=category,
         )
-        logger.info("Upserted review history %s", row_id)
 
     def remove_reviewer(self, reviewer_id: str) -> None:
-        """Delete reviewer bio and all history rows."""
+        """Delete reviewer bio and legacy per-reviewer history rows."""
         reviewer_id = reviewer_id.strip()
         if not reviewer_id:
             raise ValueError("reviewer_id is required")
@@ -121,7 +100,11 @@ class ReviewerIngestionService:
         logger.info("Removed reviewer %s from vector index", reviewer_id)
 
     def remove_review_history(self, reviewer_id: str, submission_id: str) -> None:
-        """Delete one review history row."""
+        """
+        Drop legacy reviewer-history row if present.
+
+        Does not remove the shared submission summary (may still be published).
+        """
         reviewer_id = reviewer_id.strip()
         submission_id = submission_id.strip()
         if not reviewer_id:
@@ -130,5 +113,7 @@ class ReviewerIngestionService:
             raise ValueError("submission_id is required")
 
         row_id = reviewer_history_id(reviewer_id, submission_id)
-        self._engine.reviewer_history_collection.delete(ids=[row_id])
-        logger.info("Removed review history %s", row_id)
+        existing = self._engine.reviewer_history_collection.get(ids=[row_id])
+        if existing["ids"]:
+            self._engine.reviewer_history_collection.delete(ids=[row_id])
+            logger.info("Removed legacy review history %s", row_id)
