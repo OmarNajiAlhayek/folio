@@ -122,6 +122,11 @@ class Settings(BaseSettings):
         validation_alias="REVIEWER_MATCHING_ENABLED",
     )
 
+    copyedit_analysis_enabled: bool = Field(
+        default=False,
+        validation_alias="COPYEDIT_ANALYSIS_ENABLED",
+    )
+
     @field_validator("keywords_suggestion_enabled", mode="before")
     @classmethod
     def parse_keywords_suggestion_enabled(cls, value: object) -> bool:
@@ -134,6 +139,15 @@ class Settings(BaseSettings):
     @field_validator("reviewer_matching_enabled", mode="before")
     @classmethod
     def parse_reviewer_matching_enabled(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @field_validator("copyedit_analysis_enabled", mode="before")
+    @classmethod
+    def parse_copyedit_analysis_enabled(cls, value: object) -> bool:
         if isinstance(value, bool):
             return value
         if value is None:

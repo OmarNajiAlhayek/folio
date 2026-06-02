@@ -1,6 +1,6 @@
 # Folio AI service
 
-Python **FastAPI** microservice for Folio AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, **keyword suggestions**, **article similarity**, **corpus plagiarism detection**, and **reviewer matching** — all product traffic over **gRPC** (Nest BFF only).
+Python **FastAPI** microservice for Folio AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, **keyword suggestions**, **article similarity**, **corpus plagiarism detection**, **reviewer matching**, and **copyedit reference cross-checking** — all product traffic over **gRPC** (Nest BFF only).
 
 Design record: [`docs/plans/ai-service.md`](../../docs/plans/ai-service.md).
 
@@ -34,7 +34,7 @@ uvicorn app.main:app --reload --port 5245
 ```
 
 - **HTTP (5245):** liveness, readiness, aggregated `GET /v1/status` only. Defaults to `HTTP_BIND_HOST=127.0.0.1`.
-- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`). Defaults to `GRPC_BIND_HOST=127.0.0.1`. See [`proto/README.md`](../../proto/README.md).
+- **gRPC (5246, `GRPC_PORT`):** all product RPCs for Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`, `CopyeditService`). Defaults to `GRPC_BIND_HOST=127.0.0.1`. See [`proto/README.md`](../../proto/README.md).
 
 For same-machine dev with Nest, set the same `AI_SERVICE_TOKEN` in `backend/.env` and `.env` here when `AI_SERVICE_ENABLED=true`.
 
@@ -120,6 +120,35 @@ Nest routes: `GET /submissions/:slug/corpus-similarity` (gRPC `PlagiarismService
 ```bash
 grpcurl -plaintext localhost:5246 folio.ai.v1.PlagiarismService/GetPlagiarismStatus
 grpcurl -plaintext localhost:5246 folio.ai.v1.ReviewerMatchingService/GetReviewerMatchingStatus
+```
+
+### Copyedit reference cross-checking (dev)
+
+Requires OpenAI (or compatible gateway):
+
+```bash
+# services/ai-service/.env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+COPYEDIT_ANALYSIS_ENABLED=true
+
+# backend/.env
+AI_SERVICE_ENABLED=true
+AI_COPYEDIT_ENABLED=true
+AI_SERVICE_GRPC_HOST=127.0.0.1
+```
+
+Nest route: `POST /copyedit-assignments/:slug/ai-analysis` → gRPC `CopyeditService.CheckReferences` on port **5246**. Grammar/spelling on the same route uses **LanguageTool** in Nest (`LANGUAGE_TOOL_ENABLED=true`; start the `languagetool` service from `docker-compose.dev.yml`).
+
+```bash
+grpcurl -plaintext localhost:5246 folio.ai.v1.CopyeditService/GetCopyeditStatus
+```
+
+Smoke from backend (ai-service running):
+
+```bash
+cd backend
+npx ts-node scripts/smoke-copyedit-grpc.ts
 ```
 
 ## Tests

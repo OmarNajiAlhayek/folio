@@ -7,6 +7,8 @@ import grpc
 from folio.ai.v1 import (
     classifier_pb2,
     classifier_pb2_grpc,
+    copyedit_pb2,
+    copyedit_pb2_grpc,
     keywords_pb2,
     keywords_pb2_grpc,
     plagiarism_pb2,
@@ -19,12 +21,14 @@ from folio.ai.v1 import (
 
 from app.config import Settings
 from app.grpc.interceptors import ServiceTokenInterceptor
+from app.grpc.copyedit_servicer import CopyeditGrpcServicer
 from app.grpc.keyword_servicer import KeywordGrpcServicer
 from app.grpc.plagiarism_servicer import PlagiarismGrpcServicer
 from app.grpc.servicer import ClassifierGrpcServicer
 from app.grpc.reviewer_servicer import ReviewerMatchingGrpcServicer
 from app.grpc.similarity_servicer import SimilarityGrpcServicer
 from app.services.classifier_service import ClassifierService
+from app.services.copyedit_analysis_service import CopyeditAnalysisService
 from app.services.keyword_suggestion_service import KeywordSuggestionService
 from app.services.reviewer_matching_grpc_service import ReviewerMatchingGrpcService
 from app.services.similarity_service import SimilarityService
@@ -37,6 +41,7 @@ async def start_grpc_server(
     keyword_service: KeywordSuggestionService,
     similarity_service: SimilarityService,
     reviewer_service: ReviewerMatchingGrpcService,
+    copyedit_service: CopyeditAnalysisService,
     settings: Settings,
 ) -> tuple[grpc.aio.Server, int]:
     interceptors: list[grpc.aio.ServerInterceptor] = []
@@ -64,6 +69,10 @@ async def start_grpc_server(
         ReviewerMatchingGrpcServicer(reviewer_service),
         server,
     )
+    copyedit_pb2_grpc.add_CopyeditServiceServicer_to_server(
+        CopyeditGrpcServicer(copyedit_service),
+        server,
+    )
 
     if settings.app_env == "development":
         try:
@@ -75,6 +84,7 @@ async def start_grpc_server(
                 plagiarism_pb2.DESCRIPTOR.services_by_name["PlagiarismService"].full_name,
                 similarity_pb2.DESCRIPTOR.services_by_name["SimilarityService"].full_name,
                 reviewer_pb2.DESCRIPTOR.services_by_name["ReviewerMatchingService"].full_name,
+                copyedit_pb2.DESCRIPTOR.services_by_name["CopyeditService"].full_name,
                 reflection.SERVICE_NAME,
             )
             reflection.enable_server_reflection(service_names, server)

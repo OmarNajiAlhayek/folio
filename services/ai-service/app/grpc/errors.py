@@ -10,6 +10,10 @@ from app.services.keyword_suggestion_service import (
     KeywordsDisabledError,
     KeywordsUnavailableError,
 )
+from app.services.copyedit_analysis_service import (
+    CopyeditAnalysisDisabledError,
+    CopyeditAnalysisUnavailableError,
+)
 from app.services.reviewer_matching_grpc_service import (
     ReviewerMatchingDisabledError,
     ReviewerMatchingUnavailableError,
@@ -28,6 +32,7 @@ def grpc_code_and_details(exc: BaseException) -> tuple[grpc.StatusCode, str]:
             KeywordsDisabledError,
             SimilarityDisabledError,
             ReviewerMatchingDisabledError,
+            CopyeditAnalysisDisabledError,
         ),
     ):
         return grpc.StatusCode.FAILED_PRECONDITION, str(exc)
@@ -38,6 +43,7 @@ def grpc_code_and_details(exc: BaseException) -> tuple[grpc.StatusCode, str]:
             KeywordsUnavailableError,
             SimilarityUnavailableError,
             ReviewerMatchingUnavailableError,
+            CopyeditAnalysisUnavailableError,
         ),
     ):
         return grpc.StatusCode.UNAVAILABLE, str(exc)

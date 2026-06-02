@@ -12,6 +12,7 @@ from app.grpc.server import fail_startup, start_grpc_server, stop_grpc_server
 from app.providers import create_provider
 from app.services.classifier_service import ClassifierService
 from app.services.classifier_warmup import warmup_classifier_if_configured
+from app.services.copyedit_analysis_service import CopyeditAnalysisService
 from app.services.keyword_suggestion_service import KeywordSuggestionService
 from app.services.reviewer_matching_grpc_service import ReviewerMatchingGrpcService
 from app.services.similarity_service import SimilarityService
@@ -36,13 +37,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.similarity_service = SimilarityService(settings)
     app.state.reviewer_matching_service = ReviewerMatchingGrpcService(settings)
     app.state.keyword_suggestion_service = KeywordSuggestionService(settings)
+    app.state.copyedit_analysis_service = CopyeditAnalysisService(settings)
     logging.getLogger(__name__).info(
-        "ai-service ready (provider=%s, arabert=%s, similarity=%s, reviewer_matching=%s, keywords=%s, env=%s)",
+        "ai-service ready (provider=%s, arabert=%s, similarity=%s, reviewer_matching=%s, keywords=%s, copyedit=%s, env=%s)",
         app.state.ai_provider.name,
         settings.arabert_enabled,
         settings.similarity_enabled,
         settings.reviewer_matching_enabled,
         settings.keywords_suggestion_enabled,
+        settings.copyedit_analysis_enabled,
         settings.app_env,
     )
     grpc_server = None
@@ -52,6 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             app.state.keyword_suggestion_service,
             app.state.similarity_service,
             app.state.reviewer_matching_service,
+            app.state.copyedit_analysis_service,
             settings,
         )
         app.state.grpc_server = grpc_server
