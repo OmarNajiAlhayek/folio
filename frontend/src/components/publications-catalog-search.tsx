@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  PUBLICATION_CATALOG_QUICK_SEARCH_DEBOUNCE_MS,
+  useDebouncedValue,
+} from "@/lib/use-debounced-value";
 import { useLocale, useTranslations } from "next-intl";
 import { useDisciplineLabel } from "@/lib/use-discipline-label";
 import type {
@@ -38,6 +42,12 @@ export function PublicationsCatalogSearch({
   const { selectableOptions } = useDisciplineLabel();
   const locale = useLocale();
   const [quickQ, setQuickQ] = useState(filters.q ?? "");
+  const debouncedQ = useDebouncedValue(
+    quickQ,
+    PUBLICATION_CATALOG_QUICK_SEARCH_DEBOUNCE_MS,
+  );
+  const applyQuickQueryRef = useRef(onQuickQueryChange);
+  applyQuickQueryRef.current = onQuickQueryChange;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [author, setAuthor] = useState(filters.author ?? "");
   const [discipline, setDiscipline] = useState(filters.discipline ?? "");
@@ -67,13 +77,11 @@ export function PublicationsCatalogSearch({
   ]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => {
-      if (quickQ.trim() !== (filters.q ?? "").trim()) {
-        onQuickQueryChange(quickQ);
-      }
-    }, 300);
-    return () => window.clearTimeout(handle);
-  }, [quickQ, filters.q, onQuickQueryChange]);
+    const trimmed = debouncedQ.trim();
+    if (trimmed !== (filters.q ?? "").trim()) {
+      applyQuickQueryRef.current(debouncedQ);
+    }
+  }, [debouncedQ, filters.q]);
 
   const handleApply = useCallback(() => {
     onApplyAdvanced({
@@ -175,12 +183,12 @@ export function PublicationsCatalogSearch({
 
       {/* Advanced Filters Panel */}
       {advancedOpen && (
-        <div className="relative overflow-hidden rounded-2xl border border-ink/10 dark:border-white/10 bg-surface/95 p-5 shadow-md backdrop-blur-md transition-all duration-300">
+        <div className="relative overflow-visible rounded-2xl border border-ink/10 dark:border-white/10 bg-surface/95 p-5 shadow-md backdrop-blur-md transition-all duration-300">
           
           <div className="grid gap-4 sm:grid-cols-2">
             
             {/* Author Name */}
-            <div className="sm:col-span-2">
+            <div className="relative z-20 sm:col-span-2">
               <label
                 htmlFor="pub-adv-author"
                 className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"

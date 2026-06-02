@@ -276,12 +276,13 @@ export function PublicationsCatalogBody() {
 
   const onQuickQueryChange = useCallback(
     (q: string) => {
+      const current = parsePublicationCatalogFilters(searchParams);
       replaceFilters({
-        ...filters,
+        ...current,
         q: q.trim() || undefined,
       });
     },
-    [filters, replaceFilters],
+    [searchParams, replaceFilters],
   );
 
   const onApplyAdvanced = useCallback(

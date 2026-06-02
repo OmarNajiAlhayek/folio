@@ -54,12 +54,9 @@ export default function AssignmentInvitePage() {
     setErrorCause(null);
     setAssignment(null);
     try {
-      const items = await apiJson<AssignmentRow[]>("/assignments/me");
-      const row = items.find((a) => a.slug === slug);
-      if (!row) {
-        setError(t("notFound"));
-        return;
-      }
+      const row = await apiJson<AssignmentRow>(
+        `/assignments/${encodeURIComponent(slug)}`,
+      );
       if (row.status !== "invited") {
         setError(t("notInvited"));
         return;
@@ -71,7 +68,47 @@ export default function AssignmentInvitePage() {
         return;
       }
       if (err instanceof ApiError && err.status === 403) {
-        setError(tAssignments("needReviewerRole"));
+        setError(
+          err.code === "FORBIDDEN"
+            ? t("wrongReviewerAccount")
+            : tAssignments("needReviewerRole"),
+        );
+        setErrorCause(err);
+        return;
+      }
+      if (err instanceof ApiError && err.status === 404) {
+        try {
+          const items = await apiJson<AssignmentRow[]>("/assignments/me");
+          const invited = items.filter(
+            (a) =>
+              a.status === "invited" &&
+              typeof a.slug === "string" &&
+              a.slug.length > 0,
+          );
+          if (invited.length === 1 && invited[0].slug !== slug) {
+            toast.info(t("staleLinkRedirect"), {
+              id: "assignment-invite-stale-link",
+            });
+            router.replace(
+              `/assignments/${encodeURIComponent(invited[0].slug!)}/invite`,
+            );
+            return;
+          }
+          if (invited.length === 0) {
+            setError(t("notFoundReLogin"));
+            setErrorCause(err);
+            return;
+          }
+          if (invited.length > 1) {
+            setError(t("notFoundManyInvites"));
+            setErrorCause(err);
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+        setError(t("notFound"));
+        setErrorCause(err);
         return;
       }
       setErrorCause(err);

@@ -24,6 +24,7 @@ export function KeywordTagsInput({
   onCommitFailure,
   inputValue,
   onInputChange,
+  invalid = false,
 }: {
   tags: string[];
   onChange: (next: string[]) => void;
@@ -38,6 +39,7 @@ export function KeywordTagsInput({
   onCommitFailure?: (failure: KeywordAddFailure) => void;
   inputValue: string;
   onInputChange: (v: string) => void;
+  invalid?: boolean;
 }) {
   const t = useTranslations("SubmissionWorkflow");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,9 +102,11 @@ export function KeywordTagsInput({
 
   return (
     <div
-      className={`rounded-md border border-ink/15 bg-surface px-2 py-1 outline-none transition-colors focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/25 ${
-        disabled ? "cursor-not-allowed opacity-60" : ""
-      }`}
+      className={`rounded-md border bg-surface px-2 py-1 outline-none transition-colors ${
+        invalid
+          ? "border-red-400 focus-within:border-red-400 focus-within:ring-1 focus-within:ring-red-500/15"
+          : "border-ink/15 focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/25"
+      } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
       onClick={() => {
         if (!disabled) inputRef.current?.focus();
       }}

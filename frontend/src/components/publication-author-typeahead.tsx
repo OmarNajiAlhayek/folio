@@ -48,10 +48,7 @@ export function PublicationAuthorTypeahead({
   const fetchSeq = useRef(0);
 
   const trimmed = value.trim();
-  const showList =
-    open &&
-    trimmed.length >= MIN_QUERY_LENGTH &&
-    (loading || suggestions.length > 0);
+  const showList = open && trimmed.length >= MIN_QUERY_LENGTH;
 
   const fetchSuggestions = useCallback(async (query: string) => {
     const q = query.trim();
@@ -86,6 +83,7 @@ export function PublicationAuthorTypeahead({
       setLoading(false);
       return;
     }
+    setLoading(true);
     const handle = window.setTimeout(() => {
       void fetchSuggestions(trimmed);
     }, DEBOUNCE_MS);
