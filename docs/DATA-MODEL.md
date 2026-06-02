@@ -20,6 +20,8 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 - Optional `journal_id` if you use the `Journal` table.
 - Metadata: **title**, **abstract**, **article type** (enum), **keywords** (comma/semicolon-separated; 3–6 on submit), **contributors** (JSON array: full name, optional email, affiliation, sort order, corresponding flag), **funding statement**, **declarations** (conflict of interest, ethics/IRB reference, originality confirmation, AI-use statement), **suggested / opposed reviewers** (JSON arrays, max 5 each).
 - **Discipline (Arabic journal scope):** optional **`discipline`** (confirmed label, varchar), **`discipline_source`** (`ai` \| `author` \| `editor`), **`discipline_suggested`** + **`discipline_suggested_confidence`** (from AraBERT on suggest/submit), **`discipline_classification`** (JSONB snapshot of top labels/scores). Authors confirm via API; editors may override. Catalog filter and corpus similarity can scope by `discipline`.
+- **`constructor_content`** (JSONB, nullable): Word Constructor document when the author uses builder mode; omitted from reviewer payloads.
+- **`review_manuscript_presentation`** (JSONB, nullable): Which sources (upload / constructor `.docx`) are in the review package at submit.
 - **`review_method`** (OJS-aligned enum, default `double_anonymous`): `open` | `anonymous` | `double_anonymous`. In UI/docs, label **`anonymous`** as **single-blind** (reviewer identity hidden from author; author identity still visible to reviewer unless `double_anonymous`).
 - `status`: see [Submission lifecycle](#submission-lifecycle) (store as enum or constrained text).
 - Timestamps: `created_at`, `updated_at`; optional `published_at` when `status = published`.
@@ -38,12 +40,25 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 
 ### RoleInvitation (staff roles)
 
-- `invitee_user_id`, `invited_by_user_id`, `role_slug` (MVP: `editor` only via API), `status` (`invited` | `accepted` | `declined`), `created_at`, optional `resolved_at`. Roles are applied only on **accept**.
+- `invitee_user_id`, `invited_by_user_id`, `role_slug` (`editor` | `journal_manager` via API), `status` (`invited` | `accepted` | `declined`), `created_at`, optional `resolved_at`. Roles are applied only on **accept**. Direct `PATCH …/roles` cannot newly add these slugs without invitation.
 
 ### Review
 
 - Belongs to one `ReviewAssignment` (one review document per assignment).
 - Fields: `comments_for_author` (text, may be shown to the author), `comments_to_editor_only` (text, confidential to editors), `recommendation` (e.g. `accept` | `reject` | `revisions`), `submitted_at`. **At least one** of the two comment fields must be non-empty on submit.
+
+### CopyeditAssignment
+
+- Links `Submission` + **copyeditor** (`User` with copyeditor role).
+- Fields: `slug` (unique, used in URLs), `status`: `active` | `awaiting_author` | `ready_for_review`, `assigned_at`.
+- Multiple copyeditors per submission allowed; duplicate copyeditor per submission rejected.
+- When the editor assigns the first copyeditor on an `accepted` submission, submission `status` moves to `copyediting`.
+
+### CopyeditNote
+
+- Belongs to one `CopyeditAssignment` (many rounds per assignment).
+- Fields: `round` (1-based, monotonic per assignment), `note_for_author`, `note_to_editor_only`, `submitted_at`.
+- Submitting a note moves assignment to `awaiting_author` and emails the author.
 
 ### Notification (in-app inbox)
 
@@ -75,6 +90,7 @@ Canonical **`status`** values on `Submission` (use these strings in API and UI):
 | `revisions_requested` | Editor sent back to author for changes. |
 | `accepted` | Editorial accept; not yet on public site. |
 | `rejected` | Terminal; not published. |
+| `copyediting` | Accepted manuscript in production editing; one or more copyeditors assigned. |
 | `published` | Visible in public catalog with file access per policy. |
 
 **State machine (narrative):** The author creates a `draft`, then moves to `submitted`. The editor assigns reviewers and sets `under_review` via `PATCH .../status` (or status advances automatically on the first reviewer **accept** while still `submitted`, if a review-package manuscript exists). When enough reviews exist, the editor sets `accepted`, `rejected`, or `revisions_requested`. From `revisions_requested`, the author resubmits and status returns to `submitted` (then the editor may set `under_review` again). From `accepted`, copyediting and publish follow [`API-NOTES.md`](./API-NOTES.md). `rejected` does not move to `published` without a new submission (out of scope unless you define reopen).
@@ -91,8 +107,13 @@ erDiagram
   User ||--o{ Submission : "authors"
   Submission ||--o{ SubmissionFile : "has"
   Submission ||--o{ ReviewAssignment : "has"
+  Submission ||--o{ CopyeditAssignment : "has"
   User ||--o{ ReviewAssignment : "reviewer"
+  User ||--o{ CopyeditAssignment : "copyeditor"
+  User ||--o{ RoleInvitation : "invitee"
+  User ||--o{ Notification : "recipient"
   ReviewAssignment ||--o| Review : "has"
+  CopyeditAssignment ||--o{ CopyeditNote : "has"
 
   Journal {
     uuid id PK
@@ -117,9 +138,12 @@ erDiagram
     uuid id PK
     uuid author_id FK
     uuid journal_id FK "nullable"
+    string slug UK
     string title
     text abstract
     string status
+    jsonb constructor_content "nullable"
+    jsonb discipline_classification "nullable"
     timestamptz created_at
     timestamptz updated_at
     timestamptz published_at "nullable"
@@ -133,6 +157,7 @@ erDiagram
     string mime_type
     bigint size_bytes
     string kind
+    string file_stage
     timestamptz created_at
   }
 
@@ -140,6 +165,7 @@ erDiagram
     uuid id PK
     uuid submission_id FK
     uuid reviewer_id FK
+    string slug UK
     string status
     timestamptz assigned_at
   }
@@ -147,9 +173,51 @@ erDiagram
   Review {
     uuid id PK
     uuid assignment_id FK
-    text comments
+    text comments_for_author
+    text comments_to_editor_only
     string recommendation
     timestamptz submitted_at
+  }
+
+  CopyeditAssignment {
+    uuid id PK
+    uuid submission_id FK
+    uuid copyeditor_id FK
+    string slug UK
+    string status
+    timestamptz assigned_at
+  }
+
+  CopyeditNote {
+    uuid id PK
+    uuid assignment_id FK
+    int round
+    text note_for_author
+    text note_to_editor_only
+    timestamptz submitted_at
+  }
+
+  RoleInvitation {
+    uuid id PK
+    uuid invitee_user_id FK
+    uuid invited_by_user_id FK
+    string role_slug
+    string status
+    timestamptz created_at
+    timestamptz resolved_at "nullable"
+  }
+
+  Notification {
+    uuid id PK
+    uuid user_id FK
+    string type
+    string title_key
+    string body_key
+    jsonb params
+    string href
+    string idempotency_key UK
+    timestamptz read_at "nullable"
+    timestamptz created_at
   }
 ```
 
@@ -160,5 +228,6 @@ If you omit `Journal`, drop `journal_id` from `Submission` until needed.
 ## Indexes (implementation hint)
 
 - `Submission(author_id)`, `Submission(status)`, `Submission(published_at)` for lists.
-- `ReviewAssignment(reviewer_id)`, `ReviewAssignment(submission_id)`.
+- `ReviewAssignment(reviewer_id)`, `ReviewAssignment(submission_id)`, `CopyeditAssignment(copyeditor_id)`, `CopyeditAssignment(submission_id)`.
+- `Notification(user_id, read_at)`, `Notification(idempotency_key)` unique.
 - `User(email)` unique; `User(orcid)` unique where not null.

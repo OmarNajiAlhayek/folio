@@ -19,7 +19,7 @@ The core API records facts and publishes events; the standalone email service co
 
 ## AI service (optional)
 
-Nest exposes REST routes that proxy to ai-service over gRPC (port **5246**). Feature flags on both apps must be enabled per capability. Design: [`plans/ai-service.md`](./plans/ai-service.md). Runbook: [`services/ai-service/README.md`](../services/ai-service/README.md).
+Nest exposes REST routes that proxy to ai-service over gRPC (port **5246**). Feature flags on both apps must be enabled per capability. Copyeditors can run **reference cross-checking** via `CopyeditService` (LLM) and **grammar/spelling** via self-hosted LanguageTool (HTTP, Nest-only). Workflow emails and in-app notifications go to editors and journal managers (see [`API-NOTES.md`](./API-NOTES.md)). Design: [`plans/ai-service.md`](./plans/ai-service.md). Runbook: [`services/ai-service/README.md`](../services/ai-service/README.md).
 
 ## Optional reference
 

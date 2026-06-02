@@ -15,12 +15,14 @@ rectangle "Folio — copyeditor scope" {
   usecase "Browse copyedit queue" as UC_List
   usecase "Send copyedit queries to author" as UC_Queries
   usecase "Publish submission to catalog" as UC_Publish
+  usecase "Run AI copyedit analysis" as UC_AI
 }
 
 CE --> UC_Handle
 
 UC_Handle .> UC_List : <<include>>
 UC_Handle .> UC_Queries : <<include>>
+UC_AI .> UC_Handle : <<extend>>
 UC_Publish .> UC_Handle : <<extend>>
 
 note bottom of UC_Queries
@@ -35,6 +37,12 @@ note bottom of UC_Publish
   and submission is in copyediting;
   all copyedit assignments on the
   submission must be ready.
+end note
+
+note bottom of UC_AI
+  Optional: format rules (local),
+  LanguageTool grammar, LLM reference
+  cross-check via POST .../ai-analysis.
 end note
 
 note right of UC_Handle

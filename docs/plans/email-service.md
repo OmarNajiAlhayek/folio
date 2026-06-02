@@ -50,7 +50,7 @@ flowchart LR
 | [`backend/src/messaging/`](../../backend/src/messaging) | `MessagingModule`: `RabbitMqConnection`, `EventPublisherService`, `OutboxDrainerService`, `OutboxHealthController`. |
 | [`backend/src/entities/outbound-event.entity.ts`](../../backend/src/entities/outbound-event.entity.ts) | `outbound_event_outbox` row. |
 | [`services/email-service/`](../../services/email-service) | Nest standalone app: AMQP consumer, templates, providers, reminders cron, email_log state machine. |
-| [`docker-compose.dev.yml`](../../docker-compose.dev.yml) | Local RabbitMQ for development. |
+| [`docker-compose.dev.yml`](../../docker-compose.dev.yml) | Local RabbitMQ + LanguageTool (copyedit grammar) for development. |
 
 The "canonical + mirror" pattern matches the existing convention used
 for [`constructor-content.types.ts`](../../backend/src/submissions/constructor-content.types.ts)
@@ -68,9 +68,23 @@ Asserted idempotently by both apps on startup via `assertTopology()`.
 | DLX | `folio.events.dlx` | topic, durable |
 | Queue | `email.reviewer_invited` | durable, DLX = `folio.events.dlx`, DLR-key = `reviewer.invited.dead` |
 | Queue | `email.reminder_due` | durable, DLX = `folio.events.dlx`, DLR-key = `reminder.due.dead` |
+| Queue | `email.copyedit_assigned` | durable, DLX, DLR-key = `copyedit.assigned.dead` |
+| Queue | `email.copyedit_queries_sent` | durable, DLX, DLR-key = `copyedit.queries_sent.dead` |
+| Queue | `email.copyedit_author_ready` | durable, DLX, DLR-key = `copyedit.author_ready.dead` |
+| Queue | `email.submission_submitted` | durable, DLX, DLR-key = `submission.submitted.dead` |
+| Queue | `email.submission_decision` | durable, DLX, DLR-key = `submission.decision.dead` |
+| Queue | `email.submission_published` | durable, DLX, DLR-key = `submission.published.dead` |
+| Queue | `email.review_submitted` | durable, DLX, DLR-key = `review.submitted.dead` |
+| Queue | `email.review_invitation_accepted` | durable, DLX, DLR-key = `review.invitation_accepted.dead` |
+| Queue | `email.review_invitation_declined` | durable, DLX, DLR-key = `review.invitation_declined.dead` |
+| Queue | `email.role_invitation` | durable, DLX, DLR-key = `role.invitation.dead` |
 | Queue | `folio.events.dlq` | durable, bound to `folio.events.dlx` with binding key `#` |
 | Binding | `email.reviewer_invited` | bound to `folio.events` with key `reviewer.invited` |
 | Binding | `email.reminder_due` | bound to `folio.events` with key `reminder.due` |
+| Binding | `email.copyedit_*` | `copyedit.assigned`, `copyedit.queries_sent`, `copyedit.author_ready` |
+| Binding | `email.submission_*` | `submission.submitted`, `submission.decision`, `submission.published` |
+| Binding | `email.review_*` | `review.submitted`, `review.invitation_accepted`, `review.invitation_declined` |
+| Binding | `email.role_invitation` | `role.invitation` |
 
 Choosing **topic exchange + explicit bindings** instead of
 `@nestjs/microservices`'s built-in RMQ transport: the latter wires a
@@ -110,6 +124,29 @@ type ReminderDueEvent = {
 
 `idempotencyKey` is the unique key on `email_log`; see "State machine"
 below for how it powers dedupe + crash recovery.
+
+### Full event catalog (implemented)
+
+Canonical types and routing keys: [`packages/shared/contracts/email-events.ts`](../../packages/shared/contracts/email-events.ts). Producer/consumer matrix: [`docs/API-NOTES.md`](../API-NOTES.md) § Eventing.
+
+| Routing key | Producer | Primary recipient(s) | Template key |
+|-------------|----------|----------------------|--------------|
+| `reviewer.invited` | backend | reviewer | `reviewer-invited` |
+| `reminder.due` | email-service cron | reviewer | `reminder-due` |
+| `copyedit.assigned` | backend | copyeditor | `copyedit-assigned` |
+| `copyedit.queries_sent` | backend | author | `copyedit-queries-sent` |
+| `copyedit.author_ready` | backend | copyeditor | `copyedit-author-ready` |
+| `submission.submitted` | backend | each editor **and** journal manager | `submission-submitted` |
+| `submission.decision` | backend | author | `submission-decision` |
+| `submission.published` | backend | author | `submission-published` |
+| `review.submitted` | backend | each editor and journal manager | `review-submitted` |
+| `review.invitation_accepted` | backend | each editor and journal manager | `review-invitation-accepted` |
+| `review.invitation_declined` | backend | each editor and journal manager | `review-invitation-declined` |
+| `role.invitation` | backend | invitee | `role-invitation` |
+
+Workflow notification recipients (editors + journal managers) are resolved by `RbacService.listWorkflowNotificationRecipientIds()` — users with `submission.change_status` or `email.manage_reminders`.
+
+Phase 2 design notes: [`email-phase-2-events.md`](./email-phase-2-events.md).
 
 ## Backend: publisher with transactional outbox
 
@@ -289,10 +326,13 @@ Used to build accept/decline links inside `ReviewerInvitedEvent`
 - `GET /api/v1/health/outbox` — outbox stats (counts of pending /
   published / dead, **dueNow** pending rows eligible to drain now,
   oldest pending row). Use this to detect a stuck drainer or a broker outage.
-- **Journal email admin (editors, `email.manage_reminders`):**
+- **Journal email admin (journal managers / editors with `email.manage_reminders`):**
   - `GET/PATCH /api/v1/admin/email/reminder-policy`
-  - `GET/PATCH /api/v1/admin/email/templates/:templateKey` (keys: `reviewer-invited`, `reminder-due`; invalid key → **422**)
+  - `GET/PATCH /api/v1/admin/email/templates/:templateKey` — twelve keys (see [`testing-email-pipeline.md`](../testing-email-pipeline.md)); invalid key → **422**
   - `POST /api/v1/admin/email/templates/:templateKey/preview` (no mail; fixed demo context)
+  - `GET /api/v1/admin/email/pipeline-status` — outbox, `email_log`, reminders, cached queue depths
+  - `POST /api/v1/admin/email/outbox/:id/requeue` — reset **dead** outbox row to pending
+  - `POST /api/v1/admin/email/dlq/replay` — optional body `{ "limit": 1..25 }`
 - Assignments: `GET/PATCH/POST` under `submissions/.../assignments/.../reminders` (pending reminders only) — see [`testing-email-pipeline.md`](../testing-email-pipeline.md).
 - RabbitMQ management UI: `http://localhost:15672` (guest/guest in dev).
 
@@ -305,9 +345,8 @@ Used to build accept/decline links inside `ReviewerInvitedEvent`
   `SELECT ... FOR UPDATE SKIP LOCKED` when sharding).
 - Email log retention pruning job.
 
-## Phase 2 status
+## Phase 2+ status
 
-This service ships the assignment-email and scheduled-reminder bullets
-from [`docs/API-NOTES.md`](../API-NOTES.md) "Phase 2 (deferred)".
-WebSockets/SSE for in-app notifications and refresh-token / OAuth /
-ORCID work remain on that list.
+**Shipped:** reviewer invite + reminders (v1); copyedit emails; submission submitted/decision (phase 2); review submitted, review accept/decline, submission published, role invitation (phase 3); in-app notifications (REST + SSE). See [`docs/API-NOTES.md`](../API-NOTES.md) for the live event table and notification routes.
+
+**Still deferred:** auth/welcome mail, password reset, refresh tokens, OAuth, ORCID, proactive `ReviewerResponded` reminder cancellation event.

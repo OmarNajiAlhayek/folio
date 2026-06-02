@@ -7,18 +7,23 @@ This document defines the **next** transactional emails after v1 (reviewer invit
 
 ---
 
-## Goals (v2.0 scope)
+## Goals (v2.0 scope — implemented)
 
 | # | User story | Trigger | Recipient |
 |---|------------|---------|-----------|
-| 1 | Editor learns a manuscript was submitted (or resubmitted) | Author `POST …/submit` | Every user with the **editor** role |
+| 1 | Editorial staff learn a manuscript was submitted (or resubmitted) | Author `POST …/submit` | Every user with **`submission.change_status`** or **`email.manage_reminders`** (editors and journal managers) |
 | 2 | Author learns the editor’s decision | Editor `PATCH …/status` → `revisions_requested`, `accepted`, or `rejected` | Submission **author** |
 
-**Explicitly out of v2.0** (track as v2.1+):
+**Also shipped (phase 3 — see [`../API-NOTES.md`](../API-NOTES.md)):**
 
-- Review submitted → notify editor (`review.submitted`)
+- Review submitted → notify editors and journal managers (`review.submitted`)
+- Reviewer accept/decline → notify editors and journal managers
 - Published → notify author (`submission.published`)
-- Editor role invitation email (`role.invitation`) — today in-app only
+- Editor / journal manager role invitation email (`role.invitation`)
+- In-app notifications (REST inbox + SSE) for editorial, review, and copyedit events
+
+**Still deferred:**
+
 - `under_review` transition email to author (often set automatically when a reviewer accepts)
 - Password reset / registration welcome
 
@@ -49,12 +54,11 @@ Do **not** publish on draft saves, file uploads, or constructor-only actions.
 
 ### Recipients
 
-All users with role slug `editor` (same cohort that can see the editor queue via `submission.view_editor_queue`).
+All users returned by `RbacService.listWorkflowNotificationRecipientIds()` — union of users with **`submission.change_status`** (editors) and **`email.manage_reminders`** (journal managers). One outbox row (and one email) per recipient per submit.
 
-**Query (conceptual):** distinct users joined to `user_roles` → `roles` where `roles.slug = 'editor'`, with `id`, `email`, `displayName`, `preferred_locale`.
+**Query (conceptual):** distinct user ids from permission joins, not a raw `roles.slug = 'editor'` filter.
 
-**v2.0 journal model:** one journal, broadcast to all editors.  
-**Future:** if Folio gains per-journal staff, replace broadcast with journal-scoped recipients.
+**v2.0 journal model:** one journal, broadcast to all editorial staff in that cohort.
 
 ### Routing & type
 
@@ -108,7 +112,7 @@ export type SubmissionSubmittedEvent = {
 | `SubmissionsService.updateStatus()` | After save, `next` ∈ `{ revisions_requested, accepted, rejected }` |
 
 Do **not** publish for: `under_review`, `copyediting`, `published`, or no-op transitions.  
-`published` is a separate product moment (copyeditor path) — defer to v2.1.
+`published` status changes use a separate event — **`submission.published`** (copyeditor `POST …/publish`; shipped with the copyedit workflow).
 
 ### Recipient
 
@@ -171,8 +175,8 @@ export type SubmissionDecisionEvent = {
 
 1. Wrap in `submissionsRepo.manager.transaction` (if not already).
 2. Save submission with `status = submitted`.
-3. Load editor list.
-4. For each editor: `eventPublisher.enqueue(ROUTING_KEY.submissionSubmitted, payload, em)`.
+3. Load editorial recipient list (`listWorkflowNotificationRecipientIds`).
+4. For each recipient: `eventPublisher.enqueue(ROUTING_KEY.submissionSubmitted, payload, em)`.
 
 ### `updateStatus()`
 
@@ -285,5 +289,7 @@ flowchart TD
 | `copyedit.assigned` | backend | copyeditor | `copyedit-assigned` |
 | `copyedit.queries_sent` | backend | author | `copyedit-queries-sent` |
 | `copyedit.author_ready` | backend | copyeditor | `copyedit-author-ready` |
-| **`submission.submitted`** | **backend** | **each editor** | **`submission-submitted`** |
+| **`submission.submitted`** | **backend** | **each editor + journal manager** | **`submission-submitted`** |
 | **`submission.decision`** | **backend** | **author** | **`submission-decision`** |
+
+**Also shipped (phase 3):** `review.submitted`, `review.invitation_accepted`, `review.invitation_declined`, `submission.published`, `role.invitation` — see [`../API-NOTES.md`](../API-NOTES.md) event table and admin template keys in `backend/src/admin-email/admin-email.constants.ts`.

@@ -17,7 +17,7 @@ Export PNG/SVG for docs or slides.
 | Editor | [`editor.puml`](./editor.puml) | Editorial workflow, peer review, copyeditor handoff, assignment reminders |
 | Author | [`author.puml`](./author.puml) | **Author-only**: `submission.manage_own`; **AI**: suggest discipline, keyword suggestions |
 | Reviewer | [`reviewer.puml`](./reviewer.puml) | **Reviewer-only**: accept/decline invite, read manuscript, submit review |
-| Copyeditor | [`copyeditor.puml`](./copyeditor.puml) | **Copyeditor-only**: copyedit queue, queries to author, publish |
+| Copyeditor | [`copyeditor.puml`](./copyeditor.puml) | **Copyeditor-only**: copyedit queue, queries to author, optional AI analysis, publish |
 | Reader (public) | [`reader.puml`](./reader.puml) | Published catalog (unauthenticated); **AI**: semantic search, related articles |
 
 Source of truth for staff roles: `backend/src/rbac/rbac.service.ts` (`journalManagerPerms` vs `editorPerms`). **Reader is not an RBAC role** — see `backend/src/public/public-submissions.controller.ts` and [`docs/feature-report.md`](../../feature-report.md) (Reader / public catalog).

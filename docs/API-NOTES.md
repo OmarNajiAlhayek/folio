@@ -38,11 +38,14 @@ Must include `copyediting` between acceptance and publication: `draft`, `submitt
 
 ### Copyediting
 
-- **Assign:** `POST /submissions/:slug/copyedit-assignments` body `{ copyeditorId }` — submission must be `accepted` or already `copyediting`; duplicate copyeditor per submission rejected; multiple different copyeditors allowed.
+- **Assign:** `POST /submissions/:slug/copyedit-assignments` body `{ copyeditorId }` — submission must be `accepted` or already `copyediting`; duplicate copyeditor per submission rejected; multiple different copyeditors allowed; first assignment sets submission `status` to `copyediting`.
+- **List (editor):** `GET /submissions/:slug/copyedit-assignments` — assignments with copyeditor + notes.
+- **Queue (copyeditor):** `GET /copyedit-assignments/me` — assignments for the current copyeditor, nested submission summary.
 - **Queries:** `POST /copyedit-assignments/:assignmentSlug/notes` body `{ noteForAuthor, noteToEditorOnly? }` — assignment `active` or `ready_for_review` → `awaiting_author`; emits `copyedit.queries_sent`.
 - **Author ready:** `POST /copyedit-assignments/:assignmentSlug/ready` — author only; requires new `manuscript` upload after latest note; emits `copyedit.author_ready`.
 - **Publish:** `POST /submissions/:slug/publish` — copyeditor assigned on submission; all assignments must be `ready_for_review`.
 - **List notes:** `GET /submissions/:slug/copyedit-notes` — timeline with `round`, `assignmentSlug`; author sees `noteForAuthor` only.
+- **AI analysis:** `POST /copyedit-assignments/:assignmentSlug/ai-analysis` — copyeditor (assignment owner) or editor. Returns `{ formatIssues, grammarNotes, referenceIssues, aiUnavailable }`. Format rules are local (Damascus profile). Grammar uses LanguageTool when `LANGUAGE_TOOL_ENABLED=true` (empty array when disabled/unavailable). Reference cross-check uses gRPC `CopyeditService` when `AI_COPYEDIT_ENABLED=true` (`aiUnavailable: true` when disabled/unreachable).
 - **Dev DB:** drop unique on `copyedit_notes.assignment_id` when migrating from one-note schema (TypeORM `synchronize` on fresh DBs applies automatically).
 
 ### Peer review policy (OJS-style)
@@ -112,8 +115,11 @@ Nest talks to ai-service over **gRPC** (`AI_SERVICE_GRPC_HOST`, default port `52
 | `AI_KEYWORDS_ENABLED` | Keyword suggestion routes |
 | `AI_SIMILARITY_ENABLED` | Related articles, semantic catalog, corpus similarity |
 | `AI_REVIEWER_MATCHING_ENABLED` | Suggested reviewers for editors |
+| `AI_COPYEDIT_ENABLED` | Copyedit reference cross-checking (`CopyeditService.CheckReferences`) |
 
-Common error codes when AI is misconfigured or unreachable: `AI_SERVICE_UNAVAILABLE`, `AI_CLASSIFICATION_FAILED`, `AI_KEYWORDS_SUGGESTION_FAILED`. Routes may return soft-empty payloads instead of 5xx where noted (e.g. corpus similarity `status: unavailable`).
+**LanguageTool (Nest-only, not ai-service):** `LANGUAGE_TOOL_ENABLED`, `LANGUAGE_TOOL_URL` (default `http://localhost:8010`). Used by copyedit AI analysis for grammar/spelling; returns empty results when disabled.
+
+Common error codes when AI is misconfigured or unreachable: `AI_SERVICE_UNAVAILABLE`, `AI_CLASSIFICATION_FAILED`, `AI_KEYWORDS_SUGGESTION_FAILED`. Routes may return soft-empty payloads instead of 5xx where noted (e.g. corpus similarity `status: unavailable`; copyedit analysis sets `aiUnavailable: true`).
 
 ### Files
 
@@ -135,6 +141,15 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 | GET | `/assignments/me` | Reviewer | All of the reviewer’s assignments. |
 | POST | `/assignments/:slug/accept` | Reviewer | `invited` → `accepted`; may set submission `submitted` → `under_review`. |
 | POST | `/assignments/:slug/decline` | Reviewer | `invited` → `declined`. |
+
+### Copyedit assignments
+
+| Method | Path | Who | Notes |
+|--------|------|-----|--------|
+| GET | `/copyedit-assignments/me` | Copyeditor | Queue with nested submission summary. |
+| POST | `/copyedit-assignments/:slug/notes` | Copyeditor | Production query round; emails author. |
+| POST | `/copyedit-assignments/:slug/ready` | Author | Marks assignment ready after revised manuscript upload. |
+| POST | `/copyedit-assignments/:slug/ai-analysis` | Copyeditor (owner) / Editor | Format + grammar + reference analysis (see Copyediting section). |
 
 ### Reviews
 

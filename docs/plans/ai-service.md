@@ -26,12 +26,14 @@ flowchart LR
     Plagiarism["PlagiarismService"]
     Similarity["SimilarityService"]
     Reviewer["ReviewerMatchingService"]
+    Copyedit["CopyeditService"]
   end
   AISvcGrpc --> Classifier
   AISvcGrpc --> Keywords
   AISvcGrpc --> Plagiarism
   AISvcGrpc --> Similarity
   AISvcGrpc --> Reviewer
+  AISvcGrpc --> Copyedit
 ```
 
 ## Repository layout
@@ -67,6 +69,9 @@ Aligns with the email-service health JSON shape (`status`, `checks`).
 | `plagiarism.proto` | `PlagiarismService` | Corpus chunk similarity (editor/reviewer report) |
 | `similarity.proto` | `SimilarityService` | Article index, related articles, catalog semantic search |
 | `reviewer.proto` | `ReviewerMatchingService` | Editor suggested reviewers from profiles + history |
+| `copyedit.proto` | `CopyeditService` | Copyeditor reference cross-checking (inline citations vs reference list) |
+
+Grammar/spelling for copyedit is **not** on gRPC — Nest calls self-hosted **LanguageTool** over HTTP when `LANGUAGE_TOOL_ENABLED=true` (see `backend/.env.example` and `docker-compose.dev.yml`).
 
 Regenerate stubs after editing `.proto`: `npm run proto:gen` from repo root. See [`proto/README.md`](../../proto/README.md).
 
@@ -88,6 +93,7 @@ See [`services/ai-service/.env.example`](../../services/ai-service/.env.example)
 | `SIMILARITY_ENABLED` | Chroma embeddings for related articles + catalog semantic search |
 | `REVIEWER_MATCHING_ENABLED` | Requires `SIMILARITY_ENABLED` |
 | `KEYWORDS_SUGGESTION_ENABLED` | Requires `AI_PROVIDER=openai` |
+| `COPYEDIT_ANALYSIS_ENABLED` | Requires `AI_PROVIDER=openai`; gRPC `CopyeditService.CheckReferences` |
 | `GRPC_PORT` | gRPC listen port (default `5246`) |
 | `AI_SERVICE_TOKEN` | When set, required on gRPC metadata (`x-folio-service-token`) |
 
@@ -99,6 +105,8 @@ See [`services/ai-service/.env.example`](../../services/ai-service/.env.example)
 | `AI_KEYWORDS_ENABLED` | `KEYWORDS_SUGGESTION_ENABLED` + `openai` | Author keyword suggestions |
 | `AI_SIMILARITY_ENABLED` | `SIMILARITY_ENABLED` | Related articles, `searchMode=semantic`, corpus similarity |
 | `AI_REVIEWER_MATCHING_ENABLED` | `REVIEWER_MATCHING_ENABLED` + `SIMILARITY_ENABLED` | `GET .../suggested-reviewers` |
+| `AI_COPYEDIT_ENABLED` | `COPYEDIT_ANALYSIS_ENABLED` + `openai` | `POST /copyedit-assignments/:slug/ai-analysis` (reference issues) |
+| `LANGUAGE_TOOL_ENABLED` | LanguageTool HTTP on `LANGUAGE_TOOL_URL` (default `http://localhost:8010`) | Same route (grammar notes; Nest-only, not ai-service) |
 
 Production rules (mirror email-service strictness):
 
@@ -149,6 +157,7 @@ All product AI traffic: **Nest → gRPC :5246**. The browser calls Nest only.
 | `GET /submissions/:slug/corpus-similarity` | Editor / assigned reviewer | `PlagiarismService` | Overlap with indexed corpus (`AI_SIMILARITY_ENABLED`) |
 | `GET /submissions/:slug/suggested-reviewers` | Editor | `ReviewerMatchingService` | Ranked reviewer candidates |
 | `GET /public/submissions?searchMode=semantic` | Public | `SimilarityService` | Semantic publication catalog (`q` required) |
+| `POST /copyedit-assignments/:slug/ai-analysis` | Copyeditor (assignment owner) or editor | `CopyeditService` + LanguageTool + local format rules | Copyedit workbench analysis panel |
 | On **submit** | Author | `ClassifierService` | Auto-classify when `AI_SERVICE_ENABLED` + classifier enabled |
 
 Author keyword suggestions: partial results (1–2 terms) allowed; submit still requires 3–6 keywords per language.
@@ -164,9 +173,9 @@ When ai-service is down or flags are off, routes return structured errors (`AI_S
 
 **RabbitMQ** is optional later for jobs that exceed HTTP timeouts; not required for interactive UI features.
 
-## Docker Compose (deferred)
+## Docker Compose (deferred for ai-service)
 
-[`docker-compose.dev.yml`](../../docker-compose.dev.yml) currently runs RabbitMQ only. The ai-service runs on the host in dev (same as email-service). A future compose service block:
+[`docker-compose.dev.yml`](../../docker-compose.dev.yml) runs **RabbitMQ** (email pipeline) and **LanguageTool** (copyedit grammar checks on port `8010`). The ai-service itself runs on the host in dev (same as email-service). A future compose service block:
 
 ```yaml
 # ai-service:

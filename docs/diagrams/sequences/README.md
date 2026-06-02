@@ -17,4 +17,4 @@ Same as use-case diagrams: [PlantUML online](https://www.plantuml.com/plantuml/u
 
 Read peer-review sequences **in order** (UC-02 → UC-03 → UC-04); each diagram is one interaction, not the full lifecycle on one page.
 
-Optional later: copyedit → publish → public catalog (UC-07, UC-08).
+Copyedit → publish → public catalog (UC-07, UC-08) is implemented in product code and documented in [`../../API-NOTES.md`](../../API-NOTES.md) and [`../../feature-report.md`](../../feature-report.md); sequence diagrams for those flows are not drawn yet.

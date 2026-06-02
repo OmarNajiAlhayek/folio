@@ -6,7 +6,7 @@ Use this before running Folio locally. Full run instructions are in the reposito
 
 - **Node.js** — Current LTS recommended.
 - **PostgreSQL** — Create a database (e.g. `folio_review`).
-- **Docker** — Optional; needed if you run RabbitMQ via `docker-compose.dev.yml` for the email pipeline.
+- **Docker** — Optional; `docker-compose.dev.yml` provides RabbitMQ (email pipeline) and LanguageTool (copyedit grammar checks).
 - **Python 3.12+** — Optional; needed if you run the ai-service for AI-assisted features.
 
 ## Configuration (copy examples; never commit secrets)
@@ -24,7 +24,7 @@ Set `DB_*`, `JWT_SECRET`, API URL / CORS as needed. **Mail:** only `services/ema
 
 ## Run order (typical)
 
-1. Optional: `docker compose -f docker-compose.dev.yml up -d` (RabbitMQ).
+1. Optional: `docker compose -f docker-compose.dev.yml up -d` (RabbitMQ; add `languagetool` service when using copyedit grammar checks — see `backend/.env.example`).
 2. `cd backend` → `npm install` → `npm run seed` (if you use the seed) → `npm run start:dev`.
 3. `cd frontend` → `npm install` → `npm run dev`.
 4. Optional: `cd services/email-service` → `npm install` → `npm run start:dev`.
@@ -34,6 +34,7 @@ Health: backend `/api/v1/health`; ai-service `http://localhost:5245/health` (see
 
 ## Further reading
 
+- Documentation index: [`README.md`](./README.md)
 - Features by role: [`feature-report.md`](./feature-report.md)
 - Data model: [`DATA-MODEL.md`](./DATA-MODEL.md)
 - API notes: [`API-NOTES.md`](./API-NOTES.md)

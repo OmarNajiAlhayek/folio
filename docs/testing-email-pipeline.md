@@ -16,7 +16,9 @@ RabbitMQ is **not** required for these commands: unit tests mock RabbitMQ and DB
 
 ## Journal email admin API (templates & policy)
 
-Journal managers with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all **seven** transactional templates (`reviewer-invited`, `reminder-due`, three `copyedit-*`, `submission-submitted`, `submission-decision` — unknown keys return **422**):
+Journal managers with JWT + **`email.manage_reminders`** can manage the singleton reminder policy and all **twelve** transactional templates (unknown keys return **422**):
+
+`reviewer-invited`, `reminder-due`, `copyedit-assigned`, `copyedit-queries-sent`, `copyedit-author-ready`, `submission-submitted`, `submission-decision`, `review-submitted`, `review-invitation-accepted`, `review-invitation-declined`, `submission-published`, `role-invitation`
 
 | Method | Path |
 |--------|------|
@@ -25,7 +27,7 @@ Journal managers with JWT + **`email.manage_reminders`** can manage the singleto
 | `GET` | `/api/v1/admin/email/templates/reviewer-invited` |
 | `GET` | `/api/v1/admin/email/templates/reminder-due` |
 | `GET` | `/api/v1/admin/email/templates/copyedit-assigned` (and `copyedit-queries-sent`, `copyedit-author-ready`) |
-| `GET` | `/api/v1/admin/email/templates/submission-submitted`, `submission-decision` |
+| `GET` | `/api/v1/admin/email/templates/submission-submitted`, `submission-decision`, `review-submitted`, `review-invitation-accepted`, `review-invitation-declined`, `submission-published`, `role-invitation` |
 | `PATCH` | `/api/v1/admin/email/templates/:templateKey` — full template fields + `expectedUpdatedAt`; mismatch → **409** |
 | `POST` | `/api/v1/admin/email/templates/:templateKey/preview` — optional `{ "isOverdue": true }` for reminder-due branch; **does not send mail** |
 | `GET` | `/api/v1/admin/email/pipeline-status` — outbox + `email_log` + `email.reminder` + cached RabbitMQ queue depths (redacted samples; requires **`SELECT` on `email.email_log`**) |

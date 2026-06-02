@@ -8,7 +8,7 @@
 - **Frontend:** Next.js 16 (App Router), React 19, Tailwind 4, TipTap, Radix UI, `next-intl` (EN / AR + RTL)
 - **Backend:** NestJS 11, TypeORM, PostgreSQL, Passport JWT, RBAC guards, Swagger (`/api-docs`); BFF for AI over gRPC
 - **Email Service:** Standalone NestJS app — RabbitMQ consumer, Handlebars templates, SMTP / noop, cron scheduler
-- **AI Service:** Python FastAPI + gRPC — classifier, keywords, similarity, plagiarism, reviewer matching (see [`plans/ai-service.md`](./plans/ai-service.md))
+- **AI Service:** Python FastAPI + gRPC — classifier, keywords, similarity, plagiarism, reviewer matching, copyedit reference check (see [`plans/ai-service.md`](./plans/ai-service.md))
 - **Shared:** `packages/shared/` — typed event contracts + RabbitMQ topology helpers
 - **Proto:** `proto/` — Buf contracts between Nest and ai-service
 - **Infra:** RabbitMQ topic exchange `folio.events`, transactional outbox pattern, Docker Compose (local dev)
@@ -28,13 +28,13 @@
 
 ### 2. Editor
 - View the full **submission queue** with status filters
-- Change submission **status** (`submitted → under_review → accepted / rejected / revisions_requested → published`)
+- Change submission **status** (`submitted → under_review → accepted / rejected / revisions_requested`; from `accepted`, assign copyeditors → `copyediting`)
 - Set **review method** per submission (single-blind, double-blind, open)
 - **Assign reviewers** from `willingToReview` candidates; optionally pass `X-Folio-Locale` to localise the invite email
+- **Assign copyeditors** after acceptance (`POST /submissions/:slug/copyedit-assignments`)
 - Read all **reviews** (including confidential editor-only feedback)
-- Move accepted submissions to the **public catalog**
 - Invite other editors via the **RoleInvitation** flow (consent-based, no self-elevation)
-- Manage **email templates** (`reviewer-invited`, `reminder-due`) per locale via admin UI
+- Manage **email templates** (twelve transactional keys — reviewer, copyedit, editorial, role invite) per locale via admin UI
 - View / edit **reminder policy** (due-soon / overdue thresholds)
 - Monitor **email pipeline status** (outbox depth, email log, reminder queue, RabbitMQ queue depths)
 - Preview rendered email templates before saving
@@ -49,7 +49,7 @@
 ### 3. Reviewer
 - View **pending assignments** (`invited` status)
 - **Accept or decline** an assignment; file access is granted only after acceptance
-- Download submission files (manuscript stage)
+- Download submission files in the **review package** only (`file_stage = review`; granted after acceptance)
 - Submit a **review**: author-facing comments, confidential editor feedback, and a final recommendation (`accept` / `reject` / `revisions`)
 - Receive **email reminders** automatically (due-soon + overdue) scheduled at invite time
 - **AI-assisted (optional):** view corpus similarity on assigned submissions (when enabled)
@@ -60,6 +60,7 @@
 - Send **rounds** of production queries (`POST /copyedit-assignments/:slug/notes`); author emailed (`copyedit-queries-sent`)
 - Author uploads revised manuscript and marks assignment ready (`POST /copyedit-assignments/:slug/ready`); copyeditor emailed (`copyedit-author-ready`)
 - **Publish** when all assignments are `ready_for_review` (`POST /submissions/:slug/publish`)
+- **AI-assisted analysis (optional):** run format, grammar (LanguageTool), and reference cross-check (LLM via `CopyeditService`) from the copyedit workbench (`POST /copyedit-assignments/:slug/ai-analysis`)
 
 ### 5. Reader (Public — unauthenticated)
 - Browse the **published submissions catalog**
@@ -72,7 +73,7 @@
 
 ### 6. System / Background (no human role)
 - **Outbox drainer** — polls `OutboundEvent` rows and publishes to RabbitMQ `folio.events` exchange
-- **Email consumer** — `reviewer.invited`, `reminder.due`, `copyedit.assigned`, `copyedit.queries_sent`, `copyedit.author_ready`
+- **Email consumer** — `reviewer.invited`, `reminder.due`, copyedit events (`copyedit.assigned`, `copyedit.queries_sent`, `copyedit.author_ready`), editorial events (`submission.submitted`, `submission.decision`, `submission.published`), review events (`review.submitted`, `review.invitation_accepted`, `review.invitation_declined`), `role.invitation`
 - **Reminders scheduler** — `@Cron` every minute; publishes `reminder.due` for past-due reminders → renders + sends reminder email, updates email log
 - **Health checks** — `GET /health`, `GET /health/outbox`
 
@@ -107,5 +108,6 @@ Editors move a submission to `under_review` with `PATCH /submissions/:slug/statu
 | **i18n** | EN + AR (RTL). Per-user `preferredLocale`. Email locale via `X-Folio-Locale` header. |
 | **DOCX export** | Constructor content → `.docx` via manuscript style profile (typography, margins, headings). |
 | **Email microservice** | Decoupled via RabbitMQ; DB-backed templates editable at runtime; SMTP or noop provider. |
-| **AI microservice** | Optional gRPC features: discipline, keywords, similarity, plagiarism/corpus, reviewer matching — toggled per env (see [`plans/ai-service.md`](./plans/ai-service.md)). |
+| **AI microservice** | Optional gRPC features: discipline, keywords, similarity, plagiarism/corpus, reviewer matching, copyedit reference cross-check — toggled per env (see [`plans/ai-service.md`](./plans/ai-service.md)). Copyedit grammar uses LanguageTool (Nest HTTP, Docker in `docker-compose.dev.yml`). |
+| **In-app notifications** | REST inbox + SSE live updates (header bell); copyedit, review, and editorial events. See [`API-NOTES.md`](./API-NOTES.md) § In-app notifications. |
 | **Tests** | Jest (backend unit + e2e), Vitest (frontend lib), Playwright (frontend e2e + auth cross-tab), pytest (ai-service). |
