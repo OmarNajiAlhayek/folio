@@ -12,6 +12,7 @@ export { toast } from "sonner";
 export type ToastApiErrorOptions = {
   id?: string;
   messages?: ApiErrorMessageBundle;
+  codeMessages?: Readonly<Record<string, string>>;
 };
 
 export function toastApiError(
@@ -23,6 +24,7 @@ export function toastApiError(
     err,
     fallback,
     options?.messages ?? DEFAULT_API_ERROR_MESSAGES,
+    options?.codeMessages,
   );
   if (options?.id) {
     sonnerToast.error(message, { id: options.id });

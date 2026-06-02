@@ -59,9 +59,17 @@ import {
 } from "@/components/submission-keyword-suggest";
 import { parseKeywordsFromStorage, serializeKeywords } from "@/lib/keywords";
 import {
+  contributorFieldKey,
+  fieldInputCls,
+  fileFieldKey,
+  fileRowCls,
+  zodTopLevelToFieldErrors,
+} from "@/lib/submission-field-errors";
+import {
   ABSTRACT_MAX_WORDS,
   countWords,
   createSubmissionSchema,
+  firstIssueByTopLevelPath,
   formatZodIssues,
   joinValidationBulletList,
   safeParseResult,
@@ -103,6 +111,22 @@ export default function NewSubmissionPage() {
     const trimmed = message.trim();
     if (!trimmed) return;
     toast.error(trimmed, { id: "new-submission-validation" });
+  }, []);
+
+  const [fieldErrors, setFieldErrors] = useState<Set<string>>(() => new Set());
+
+  const hasErr = useCallback(
+    (key: string) => fieldErrors.has(key),
+    [fieldErrors],
+  );
+
+  const clearErr = useCallback((key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
   }, []);
 
   // Form fields state
@@ -303,6 +327,7 @@ export default function NewSubmissionPage() {
     if (kind === "manuscript") {
       writePreSlugStagedManuscript(file);
     }
+    clearErr(fileFieldKey(kind));
     setStagedFiles((prev) => ({ ...prev, [kind]: file }));
   }
 
@@ -451,114 +476,178 @@ export default function NewSubmissionPage() {
     });
   }, [suggestedKeywordsAr, keywordAddMessages]);
 
-  // Step validation schemas
+  const collectStepErrors = useCallback(
+    (currentStep: number): { errors: Set<string>; message: string | null } => {
+      const errors = new Set<string>();
+      let message: string | null = null;
+      const setFirst = (msg: string) => {
+        if (!message) message = msg;
+      };
+
+      if (currentStep === 1) {
+        if (!articleType) {
+          errors.add("articleType");
+          setFirst(t("validationArticleTypeRequired"));
+        }
+        return { errors, message };
+      }
+
+      if (currentStep === 2) {
+        if (!title.trim()) {
+          errors.add("title");
+          setFirst(t("validationTitleEnRequired"));
+        }
+        if (title.length > 500) {
+          errors.add("title");
+          setFirst(t("validationTitleMaxLength"));
+        }
+        if (titleAr.trim() && titleAr.length > 500) {
+          errors.add("titleAr");
+          setFirst(t("validationTitleArMaxLength"));
+        }
+        if (!abstract.trim()) {
+          errors.add("abstract");
+          setFirst(t("validationAbstractEnRequired"));
+        }
+        if (countWords(abstract) > ABSTRACT_MAX_WORDS) {
+          errors.add("abstract");
+          setFirst(tv("abstractMaxWordsEn", { max: ABSTRACT_MAX_WORDS }));
+        }
+        if (abstractAr.trim() && countWords(abstractAr) > ABSTRACT_MAX_WORDS) {
+          errors.add("abstractAr");
+          setFirst(tv("abstractMaxWordsAr", { max: ABSTRACT_MAX_WORDS }));
+        }
+        if (keywordTags.length < 3 || keywordTags.length > 6) {
+          errors.add("keywords");
+          setFirst(t("validationKeywordsEnRange"));
+        }
+        if (
+          titleAr.trim() &&
+          (keywordTagsAr.length < 3 || keywordTagsAr.length > 6)
+        ) {
+          errors.add("keywordsAr");
+          setFirst(t("validationKeywordsArRange"));
+        }
+        return { errors, message };
+      }
+
+      if (currentStep === 3) {
+        if (contributors.length === 0) {
+          errors.add("contributors");
+          setFirst(t("validationAuthorsRequired"));
+        }
+        for (let i = 0; i < contributors.length; i++) {
+          const c = contributors[i];
+          const authorIndex = i + 1;
+          if (!c.fullName.trim()) {
+            errors.add(contributorFieldKey(i, "fullName"));
+            setFirst(
+              t("validationAuthorFullNameRequired", { index: authorIndex }),
+            );
+          }
+          if (!c.affiliation.trim()) {
+            errors.add(contributorFieldKey(i, "affiliation"));
+            setFirst(
+              t("validationAuthorAffiliationRequired", { index: authorIndex }),
+            );
+          }
+          if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email.trim())) {
+            errors.add(contributorFieldKey(i, "email"));
+            setFirst(
+              t("validationAuthorEmailInvalid", { index: authorIndex }),
+            );
+          }
+        }
+        const correspondingCount = contributors.filter(
+          (c) => c.isCorresponding,
+        ).length;
+        if (correspondingCount !== 1) {
+          errors.add("corresponding");
+          setFirst(t("validationCorrespondingAuthorRequired"));
+        }
+        return { errors, message };
+      }
+
+      if (currentStep === 4) {
+        if (!originality) {
+          errors.add("originality");
+          setFirst(t("validationOriginalityRequired"));
+        }
+        return { errors, message };
+      }
+
+      if (currentStep === 5) {
+        const hasCover = Boolean(stagedFiles.cover_letter);
+        const hasTitle = Boolean(stagedFiles.title_page);
+        const hasMain =
+          Boolean(stagedFiles.manuscript) || showConstructorManuscript;
+
+        if (!hasCover) {
+          errors.add(fileFieldKey("cover_letter"));
+          setFirst(t("validationCoverLetterRequired"));
+        }
+        if (!hasTitle) {
+          errors.add(fileFieldKey("title_page"));
+          setFirst(t("validationTitlePageRequired"));
+        }
+        if (!hasMain) {
+          errors.add(fileFieldKey("manuscript"));
+          setFirst(t("validationManuscriptRequired"));
+        }
+        return { errors, message };
+      }
+
+      return { errors, message };
+    },
+    [
+      articleType,
+      title,
+      titleAr,
+      abstract,
+      abstractAr,
+      keywordTags,
+      keywordTagsAr,
+      contributors,
+      originality,
+      stagedFiles,
+      showConstructorManuscript,
+      t,
+      tv,
+    ],
+  );
+
+  const wizardFieldKeyToStep = (key: string): number => {
+    if (key === "articleType") return 1;
+    if (
+      ["title", "titleAr", "abstract", "abstractAr", "keywords", "keywordsAr"].includes(
+        key,
+      )
+    ) {
+      return 2;
+    }
+    if (
+      key === "contributors" ||
+      key === "corresponding" ||
+      key.startsWith("contributors.")
+    ) {
+      return 3;
+    }
+    if (key === "originality") return 4;
+    if (key.startsWith("files.")) return 5;
+    return 2;
+  };
+
   const validateStep = (currentStep: number): boolean => {
-    if (currentStep === 1) {
-      if (!articleType) {
-        reportValidationError(t("validationArticleTypeRequired"));
-        return false;
-      }
-      return true;
-    }
-    
-    if (currentStep === 2) {
-      if (!title.trim()) {
-        reportValidationError(t("validationTitleEnRequired"));
-        return false;
-      }
-      if (title.length > 500) {
-        reportValidationError(t("validationTitleMaxLength"));
-        return false;
-      }
-      if (titleAr.trim() && titleAr.length > 500) {
-        reportValidationError(t("validationTitleArMaxLength"));
-        return false;
-      }
-      if (!abstract.trim()) {
-        reportValidationError(t("validationAbstractEnRequired"));
-        return false;
-      }
-      if (countWords(abstract) > ABSTRACT_MAX_WORDS) {
-        reportValidationError(tv("abstractMaxWordsEn", { max: ABSTRACT_MAX_WORDS }));
-        return false;
-      }
-      if (abstractAr.trim() && countWords(abstractAr) > ABSTRACT_MAX_WORDS) {
-        reportValidationError(tv("abstractMaxWordsAr", { max: ABSTRACT_MAX_WORDS }));
-        return false;
-      }
-      if (keywordTags.length < 3 || keywordTags.length > 6) {
-        reportValidationError(t("validationKeywordsEnRange"));
-        return false;
-      }
-      if (titleAr.trim() && (keywordTagsAr.length < 3 || keywordTagsAr.length > 6)) {
-        reportValidationError(t("validationKeywordsArRange"));
-        return false;
-      }
-      return true;
-    }
-    
-    if (currentStep === 3) {
-      if (contributors.length === 0) {
-        reportValidationError(t("validationAuthorsRequired"));
-        return false;
-      }
-      for (let i = 0; i < contributors.length; i++) {
-        const c = contributors[i];
-        const authorIndex = i + 1;
-        if (!c.fullName.trim()) {
-          reportValidationError(t("validationAuthorFullNameRequired", { index: authorIndex }));
-          return false;
-        }
-        if (!c.affiliation.trim()) {
-          reportValidationError(t("validationAuthorAffiliationRequired", { index: authorIndex }));
-          return false;
-        }
-        if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email.trim())) {
-          reportValidationError(t("validationAuthorEmailInvalid", { index: authorIndex }));
-          return false;
-        }
-      }
-      const correspondingCount = contributors.filter(c => c.isCorresponding).length;
-      if (correspondingCount !== 1) {
-        reportValidationError(t("validationCorrespondingAuthorRequired"));
-        return false;
-      }
-      return true;
-    }
-    
-    if (currentStep === 4) {
-      if (!originality) {
-        reportValidationError(t("validationOriginalityRequired"));
-        return false;
-      }
-      return true;
-    }
-    
-    if (currentStep === 5) {
-      const hasCover = Boolean(stagedFiles.cover_letter);
-      const hasTitle = Boolean(stagedFiles.title_page);
-      const hasMain = Boolean(stagedFiles.manuscript) || showConstructorManuscript;
-      
-      if (!hasCover) {
-        reportValidationError(t("validationCoverLetterRequired"));
-        return false;
-      }
-      if (!hasTitle) {
-        reportValidationError(t("validationTitlePageRequired"));
-        return false;
-      }
-      if (!hasMain) {
-        reportValidationError(t("validationManuscriptRequired"));
-        return false;
-      }
-      return true;
-    }
-    
-    return true;
+    const { errors, message } = collectStepErrors(currentStep);
+    if (errors.size === 0) return true;
+    setFieldErrors(errors);
+    if (message) reportValidationError(message);
+    return false;
   };
 
   const handleNext = () => {
     if (validateStep(step)) {
+      setFieldErrors(new Set());
       setStep((prev) => {
         const next = prev + 1;
         setMaxStepReached((max) => Math.max(max, next));
@@ -587,6 +676,18 @@ export default function NewSubmissionPage() {
   const save = useCallback(async () => {
     setFormSaving(true);
     try {
+      for (let s = 1; s <= 5; s++) {
+        const { errors, message } = collectStepErrors(s);
+        if (errors.size > 0) {
+          setStep(s);
+          setFieldErrors(errors);
+          if (message) reportValidationError(message);
+          setFormSaving(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+      }
+
       const body = {
         title: title.trim(),
         titleAr: titleAr.trim(),
@@ -611,6 +712,14 @@ export default function NewSubmissionPage() {
 
       const parsed = safeParseResult(createSubmissionSchema, body);
       if (!parsed.ok) {
+        const byField = firstIssueByTopLevelPath(tv, parsed.error);
+        const zodErrors = zodTopLevelToFieldErrors(byField);
+        setFieldErrors(zodErrors);
+        const firstKey = Object.keys(byField)[0];
+        if (firstKey) {
+          setStep(wizardFieldKeyToStep(firstKey));
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
         reportValidationError(
           joinValidationBulletList(formatZodIssues(tv, parsed.error.issues)),
         );
@@ -679,6 +788,7 @@ export default function NewSubmissionPage() {
     aiUsage,
     stagedFiles,
     onCreated,
+    collectStepErrors,
     reportValidationError,
     resolveApiError,
     tDetail,
@@ -856,14 +966,25 @@ export default function NewSubmissionPage() {
             </div>
 
             {/* Article type selector */}
-            <div className="border-t border-ink/[0.06] pt-6 flex flex-col gap-2">
+            <div
+              className="border-t border-ink/[0.06] pt-6 flex flex-col gap-2"
+              data-field-error="articleType"
+            >
               <label className="text-sm font-semibold text-ink">
                 {tWf("articleType")} <span className="text-red-500">*</span>
               </label>
               <SimpleSelect
                 value={articleType}
-                onValueChange={setArticleType}
+                onValueChange={(v) => {
+                  setArticleType(v);
+                  clearErr("articleType");
+                }}
                 placeholder={tWf("articleTypePlaceholder")}
+                className={
+                  hasErr("articleType")
+                    ? "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-500/15"
+                    : undefined
+                }
                 options={SUBMISSION_ARTICLE_TYPES.map((v) => ({
                   value: v,
                   label: tWfAny(`articleType_${v}`),
@@ -902,31 +1023,39 @@ export default function NewSubmissionPage() {
                   </span>
                 </div>
                 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5" data-field-error="title">
                   <label className="text-xs font-bold text-ink/70">
                     Title <span className="text-red-500">*</span>
                   </label>
                   <input
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      clearErr("title");
+                    }}
                     placeholder="Enter English title..."
-                    className="w-full rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-3 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 hover:border-ink/25 transition-all duration-200"
+                    aria-invalid={hasErr("title")}
+                    className={fieldInputCls(hasErr("title"), "wizard")}
                   />
                   <div className="flex justify-end text-[10px] font-mono text-ink/40">
                     {title.length}/500 chars
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5" data-field-error="abstract">
                   <label className="text-xs font-bold text-ink/70">
                     Abstract <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={abstract}
-                    onChange={(e) => setAbstract(e.target.value)}
+                    onChange={(e) => {
+                      setAbstract(e.target.value);
+                      clearErr("abstract");
+                    }}
                     rows={8}
                     placeholder="Provide abstract in English..."
-                    className="w-full rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-3 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 hover:border-ink/25 transition-all duration-200 font-sans"
+                    aria-invalid={hasErr("abstract")}
+                    className={`${fieldInputCls(hasErr("abstract"), "wizard")} font-sans`}
                   />
                   <div className="flex items-center justify-between text-[10px] font-mono text-ink/40">
                     <span>Max {ABSTRACT_MAX_WORDS} words</span>
@@ -948,31 +1077,40 @@ export default function NewSubmissionPage() {
                   </span>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5" data-field-error="titleAr">
                   <label className="text-xs font-bold text-ink/70">
                     العنوان العربي
                   </label>
                   <input
                     value={titleAr}
-                    onChange={(e) => setTitleAr(e.target.value)}
+                    onChange={(e) => {
+                      setTitleAr(e.target.value);
+                      clearErr("titleAr");
+                      clearErr("keywordsAr");
+                    }}
                     placeholder="أدخل العنوان باللغة العربية..."
-                    className="w-full rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-3 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 hover:border-ink/25 transition-all duration-200"
+                    aria-invalid={hasErr("titleAr")}
+                    className={fieldInputCls(hasErr("titleAr"), "wizard")}
                   />
                   <div className="flex justify-end text-[10px] font-mono text-ink/40">
                     {titleAr.length}/500 حرف
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5" data-field-error="abstractAr">
                   <label className="text-xs font-bold text-ink/70">
                     الخلاصة العربية
                   </label>
                   <textarea
                     value={abstractAr}
-                    onChange={(e) => setAbstractAr(e.target.value)}
+                    onChange={(e) => {
+                      setAbstractAr(e.target.value);
+                      clearErr("abstractAr");
+                    }}
                     rows={8}
                     placeholder="اكتب الملخص باللغة العربية..."
-                    className="w-full rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-3 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 hover:border-ink/25 transition-all duration-200 font-sans"
+                    aria-invalid={hasErr("abstractAr")}
+                    className={`${fieldInputCls(hasErr("abstractAr"), "wizard")} font-sans`}
                   />
                   <div className="flex items-center justify-between text-[10px] font-mono text-ink/40">
                     <span>الحد الأقصى {ABSTRACT_MAX_WORDS} كلمة</span>
@@ -993,7 +1131,7 @@ export default function NewSubmissionPage() {
                 onSuggestions={onKeywordSuggestions}
               />
               <div className="grid gap-6 sm:grid-cols-2">
-                <div className="flex flex-col gap-2" dir="ltr">
+                <div className="flex flex-col gap-2" dir="ltr" data-field-error="keywords">
                   <span
                     id="submission-keywords-en-label"
                     className="font-semibold text-sm text-ink"
@@ -1002,12 +1140,16 @@ export default function NewSubmissionPage() {
                   </span>
                   <KeywordTagsInput
                     tags={keywordTags}
-                    onChange={setKeywordTags}
+                    onChange={(tags) => {
+                      setKeywordTags(tags);
+                      clearErr("keywords");
+                    }}
                     inputValue={keywordDraft}
                     onInputChange={setKeywordDraft}
                     placeholder={tWf("keywordsPlaceholder")}
                     id="submission-keywords-en"
                     aria-labelledby="submission-keywords-en-label"
+                    invalid={hasErr("keywords")}
                   />
                   <span className="text-[10px] text-ink/40">
                     {tWf("keywordsCount", { count: keywordTags.length })}
@@ -1023,7 +1165,7 @@ export default function NewSubmissionPage() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-2" dir="rtl">
+                <div className="flex flex-col gap-2" dir="rtl" data-field-error="keywordsAr">
                   <span
                     id="submission-keywords-ar-label"
                     className="font-semibold text-sm text-ink"
@@ -1032,12 +1174,16 @@ export default function NewSubmissionPage() {
                   </span>
                   <KeywordTagsInput
                     tags={keywordTagsAr}
-                    onChange={setKeywordTagsAr}
+                    onChange={(tags) => {
+                      setKeywordTagsAr(tags);
+                      clearErr("keywordsAr");
+                    }}
                     inputValue={keywordDraftAr}
                     onInputChange={setKeywordDraftAr}
                     placeholder={tWf("keywordsPlaceholderAr")}
                     id="submission-keywords-ar"
                     aria-labelledby="submission-keywords-ar-label"
+                    invalid={hasErr("keywordsAr")}
                   />
                   <span className="text-[10px] text-ink/40">
                     {tWf("keywordsCount", { count: keywordTagsAr.length })}
@@ -1073,7 +1219,24 @@ export default function NewSubmissionPage() {
               {contributors.map((c, idx) => (
                 <div
                   key={idx}
-                  className="group relative rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-5 sm:p-6 shadow-2xs hover:border-accent/15 transition-all duration-300 animate-fade-in"
+                  data-field-error={
+                    hasErr(contributorFieldKey(idx, "fullName")) ||
+                    hasErr(contributorFieldKey(idx, "affiliation")) ||
+                    hasErr(contributorFieldKey(idx, "email")) ||
+                    hasErr("corresponding") ||
+                    hasErr("contributors")
+                      ? contributorFieldKey(idx, "fullName")
+                      : undefined
+                  }
+                  className={`group relative rounded-xl border bg-paper/40 p-5 sm:p-6 shadow-2xs transition-all duration-300 animate-fade-in ${
+                    hasErr(contributorFieldKey(idx, "fullName")) ||
+                    hasErr(contributorFieldKey(idx, "affiliation")) ||
+                    hasErr(contributorFieldKey(idx, "email")) ||
+                    hasErr("corresponding") ||
+                    hasErr("contributors")
+                      ? "border-red-400 ring-1 ring-red-500/15"
+                      : "border-ink/10 dark:border-white/10 hover:border-accent/15"
+                  }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/[0.06] pb-3 mb-4">
                     <span className="text-xs font-bold uppercase tracking-wider text-ink/50">
@@ -1086,7 +1249,10 @@ export default function NewSubmissionPage() {
                           type="radio"
                           name="corresponding"
                           checked={c.isCorresponding}
-                          onChange={() => setCorresponding(idx)}
+                          onChange={() => {
+                            setCorresponding(idx);
+                            clearErr("corresponding");
+                          }}
                           className="size-4 text-accent border-ink/20 focus:ring-accent"
                         />
                         <span>{tWf("correspondingAuthor")}</span>
@@ -1111,6 +1277,8 @@ export default function NewSubmissionPage() {
                         value={c.fullName}
                         onChange={(e) => {
                           const v = e.target.value;
+                          clearErr(contributorFieldKey(idx, "fullName"));
+                          clearErr("contributors");
                           setContributors((rows) =>
                             rows.map((r, i) =>
                               i === idx ? { ...r, fullName: v } : r,
@@ -1118,7 +1286,12 @@ export default function NewSubmissionPage() {
                           );
                         }}
                         placeholder="John Doe"
-                        className="rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-2.5 text-ink outline-none focus:border-accent hover:border-ink/25 transition-all duration-200"
+                        aria-invalid={hasErr(contributorFieldKey(idx, "fullName"))}
+                        className={fieldInputCls(
+                          hasErr(contributorFieldKey(idx, "fullName")),
+                          "wizard",
+                          "px-4 py-2.5",
+                        )}
                       />
                     </div>
                     
@@ -1129,6 +1302,7 @@ export default function NewSubmissionPage() {
                         value={c.email}
                         onChange={(e) => {
                           const v = e.target.value;
+                          clearErr(contributorFieldKey(idx, "email"));
                           setContributors((rows) =>
                             rows.map((r, i) =>
                               i === idx ? { ...r, email: v } : r,
@@ -1136,7 +1310,12 @@ export default function NewSubmissionPage() {
                           );
                         }}
                         placeholder="john.doe@example.com"
-                        className="rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-2.5 text-ink outline-none focus:border-accent hover:border-ink/25 transition-all duration-200"
+                        aria-invalid={hasErr(contributorFieldKey(idx, "email"))}
+                        className={fieldInputCls(
+                          hasErr(contributorFieldKey(idx, "email")),
+                          "wizard",
+                          "px-4 py-2.5",
+                        )}
                       />
                     </div>
 
@@ -1146,6 +1325,8 @@ export default function NewSubmissionPage() {
                         value={c.affiliation}
                         onChange={(e) => {
                           const v = e.target.value;
+                          clearErr(contributorFieldKey(idx, "affiliation"));
+                          clearErr("contributors");
                           setContributors((rows) =>
                             rows.map((r, i) =>
                               i === idx ? { ...r, affiliation: v } : r,
@@ -1153,7 +1334,12 @@ export default function NewSubmissionPage() {
                           );
                         }}
                         placeholder={tWf("authorAffiliationPlaceholder")}
-                        className="rounded-xl border border-ink/15 dark:border-white/15 bg-paper/60 px-4 py-2.5 text-ink outline-none focus:border-accent hover:border-ink/25 transition-all duration-200"
+                        aria-invalid={hasErr(contributorFieldKey(idx, "affiliation"))}
+                        className={fieldInputCls(
+                          hasErr(contributorFieldKey(idx, "affiliation")),
+                          "wizard",
+                          "px-4 py-2.5",
+                        )}
                       />
                     </div>
                   </div>
@@ -1232,12 +1418,22 @@ export default function NewSubmissionPage() {
               </div>
 
               {/* Originality Confirmation */}
-              <div className="border-t border-ink/[0.06] pt-5">
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-ink/10 bg-paper/30 p-4 hover:border-accent/40 transition-colors">
+              <div className="border-t border-ink/[0.06] pt-5" data-field-error="originality">
+                <label
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-paper/30 p-4 transition-colors ${
+                    hasErr("originality")
+                      ? "border-red-400 ring-1 ring-red-500/15"
+                      : "border-ink/10 hover:border-accent/40"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={originality}
-                    onChange={(e) => setOriginality(e.target.checked)}
+                    onChange={(e) => {
+                      setOriginality(e.target.checked);
+                      clearErr("originality");
+                    }}
+                    aria-invalid={hasErr("originality")}
                     className="mt-1 size-5 rounded border-ink/25 text-accent focus:ring-accent"
                   />
                   <span className="text-sm font-semibold leading-relaxed text-ink/80">
@@ -1273,7 +1469,8 @@ export default function NewSubmissionPage() {
                 return (
                   <div
                     key={kind}
-                    className="rounded-xl border border-ink/10 bg-paper/40 p-4 sm:p-5 shadow-2xs hover:border-accent/10 transition-colors animate-fade-in"
+                    data-field-error={fileFieldKey(kind)}
+                    className={`${fileRowCls(hasErr(fileFieldKey(kind)), "rounded-xl bg-paper/40 p-4 sm:p-5 shadow-2xs hover:border-accent/10 transition-colors animate-fade-in")}`}
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 mb-2">
                       <span className="text-sm font-bold text-ink">

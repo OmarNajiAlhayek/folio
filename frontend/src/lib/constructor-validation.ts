@@ -21,6 +21,52 @@ const RICH_TEXT_EMPTY_CODES: Record<RichTextBlockKind, string> = {
   dataAvailability: "CONSTRUCTOR_DATA_AVAILABILITY_EMPTY",
 };
 
+export const CONSTRUCTOR_VALIDATION_FALLBACK_MESSAGES: Record<string, string> = {
+  CONSTRUCTOR_TITLE_MISSING: "A title section is required",
+  CONSTRUCTOR_TITLE_DUPLICATE: "Only one title section of this kind is allowed",
+  CONSTRUCTOR_TITLE_EMPTY: "The English title cannot be empty",
+  CONSTRUCTOR_TITLE_AR_EMPTY: "The Arabic title cannot be empty",
+  CONSTRUCTOR_AUTHORS_DUPLICATE: "Only one authors section is allowed",
+  CONSTRUCTOR_ABSTRACT_EN_MISSING: "An English abstract is required",
+  CONSTRUCTOR_ABSTRACT_AR_MISSING: "An Arabic abstract is required",
+  CONSTRUCTOR_REFERENCES_MISSING: "A references section is required",
+  CONSTRUCTOR_REFERENCES_EMPTY:
+    "The references section must contain at least one entry",
+  CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE: "Only one acknowledgments section is allowed",
+  CONSTRUCTOR_FUNDING_DUPLICATE: "Only one funding section is allowed",
+  CONSTRUCTOR_CONFLICT_OF_INTEREST_DUPLICATE:
+    "Only one conflict of interest section is allowed",
+  CONSTRUCTOR_DATA_AVAILABILITY_DUPLICATE:
+    "Only one data availability section is allowed",
+  CONSTRUCTOR_ACKNOWLEDGMENTS_EMPTY: "Acknowledgments cannot be empty",
+  CONSTRUCTOR_FUNDING_EMPTY: "Funding statement cannot be empty",
+  CONSTRUCTOR_CONFLICT_OF_INTEREST_EMPTY:
+    "Conflict of interest statement cannot be empty",
+  CONSTRUCTOR_DATA_AVAILABILITY_EMPTY: "Data availability statement cannot be empty",
+};
+
+export function resolveConstructorValidationMessage(
+  error: ConstructorValidationError,
+  messageLookup: (code: string) => string | null,
+): string {
+  return (
+    messageLookup(error.code) ??
+    CONSTRUCTOR_VALIDATION_FALLBACK_MESSAGES[error.code] ??
+    error.message ??
+    error.code
+  );
+}
+
+export function localizeConstructorValidationErrors(
+  errors: ConstructorValidationError[],
+  messageLookup: (code: string) => string | null,
+): ConstructorValidationError[] {
+  return errors.map((error) => ({
+    ...error,
+    message: resolveConstructorValidationMessage(error, messageLookup),
+  }));
+}
+
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, "").trim();
 }
@@ -36,33 +82,13 @@ export function validateConstructorContentLive(
 ): ConstructorValidationError[] {
   const errors: ConstructorValidationError[] = [];
   const sections = content.sections;
-  const fallback: Record<string, string> = {
-    CONSTRUCTOR_TITLE_MISSING: "A title section is required",
-    CONSTRUCTOR_TITLE_DUPLICATE: "Only one title section of this kind is allowed",
-    CONSTRUCTOR_TITLE_EMPTY: "The English title cannot be empty",
-    CONSTRUCTOR_TITLE_AR_EMPTY: "The Arabic title cannot be empty",
-    CONSTRUCTOR_AUTHORS_DUPLICATE: "Only one authors section is allowed",
-    CONSTRUCTOR_ABSTRACT_EN_MISSING: "An English abstract is required",
-    CONSTRUCTOR_ABSTRACT_AR_MISSING: "An Arabic abstract is required",
-    CONSTRUCTOR_REFERENCES_MISSING: "A references section is required",
-    CONSTRUCTOR_REFERENCES_EMPTY:
-      "The references section must contain at least one entry",
-    CONSTRUCTOR_ACKNOWLEDGMENTS_DUPLICATE: "Only one acknowledgments section is allowed",
-    CONSTRUCTOR_FUNDING_DUPLICATE: "Only one funding section is allowed",
-    CONSTRUCTOR_CONFLICT_OF_INTEREST_DUPLICATE:
-      "Only one conflict of interest section is allowed",
-    CONSTRUCTOR_DATA_AVAILABILITY_DUPLICATE:
-      "Only one data availability section is allowed",
-    CONSTRUCTOR_ACKNOWLEDGMENTS_EMPTY: "Acknowledgments cannot be empty",
-    CONSTRUCTOR_FUNDING_EMPTY: "Funding statement cannot be empty",
-    CONSTRUCTOR_CONFLICT_OF_INTEREST_EMPTY:
-      "Conflict of interest statement cannot be empty",
-    CONSTRUCTOR_DATA_AVAILABILITY_EMPTY: "Data availability statement cannot be empty",
-  };
   const push = (code: string, sectionId?: string) =>
     errors.push({
       code,
-      message: messageLookup(code) ?? fallback[code] ?? code,
+      message:
+        messageLookup(code) ??
+        CONSTRUCTOR_VALIDATION_FALLBACK_MESSAGES[code] ??
+        code,
       sectionId,
     });
 

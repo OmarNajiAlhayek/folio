@@ -134,12 +134,17 @@ export function resolveApiErrorMessage(
   err: unknown,
   fallback: string,
   messages: ApiErrorMessageBundle = DEFAULT_API_ERROR_MESSAGES,
+  codeMessages?: Readonly<Record<string, string>>,
 ): string {
   if (!(err instanceof ApiError)) {
     if (err instanceof TypeError && /fetch/i.test(String(err.message))) {
       return messages.networkError;
     }
     return fallback;
+  }
+
+  if (err.code && codeMessages?.[err.code]) {
+    return codeMessages[err.code]!;
   }
 
   if (isCsrfApiError(err)) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "@/lib/toast";
@@ -17,7 +17,10 @@ import {
 import { SectionList } from "./SectionList";
 import { LivePreview } from "./LivePreview";
 import { SimpleSelect } from "@/components/ui/select";
-import { validateConstructorContentLive } from "@/lib/constructor-validation";
+import {
+  localizeConstructorValidationErrors,
+  validateConstructorContentLive,
+} from "@/lib/constructor-validation";
 import type {
   ConstructorContent,
   ConstructorValidationError,
@@ -96,24 +99,32 @@ export function ConstructorWorkspace({
     return () => clearTimeout(handle);
   }, [content]);
 
+  const validationMessageLookup = useCallback(
+    (code: string) => {
+      try {
+        return tValidation(`error_${code}` as "error_CONSTRUCTOR_TITLE_MISSING");
+      } catch {
+        return null;
+      }
+    },
+    [tValidation],
+  );
+
   const liveErrors = useMemo(
     () =>
       validateConstructorContentLive(
         debouncedContent,
-        (code) => {
-          try {
-            return tValidation(`error_${code}` as const);
-          } catch {
-            return null;
-          }
-        },
+        validationMessageLookup,
         guidance,
       ),
-    [debouncedContent, tValidation, guidance],
+    [debouncedContent, validationMessageLookup, guidance],
   );
 
-  const visibleErrors =
-    blockingErrors && blockingErrors.length > 0 ? blockingErrors : liveErrors;
+  const visibleErrors = useMemo(() => {
+    const raw =
+      blockingErrors && blockingErrors.length > 0 ? blockingErrors : liveErrors;
+    return localizeConstructorValidationErrors(raw, validationMessageLookup);
+  }, [blockingErrors, liveErrors, validationMessageLookup]);
   const errorsAreBlocking = !!(blockingErrors && blockingErrors.length > 0);
 
   function handleStyleChange(nextStyleId: string) {

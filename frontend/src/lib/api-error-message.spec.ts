@@ -104,6 +104,22 @@ describe("resolveApiErrorMessage", () => {
     );
     expect(msg).toBe("Could not update status");
   });
+
+  it("uses codeMessages for submission incomplete errors instead of English API text", () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError(
+        'Provide a conflict-of-interest statement (or "None declared")',
+        "SUBMISSION_INCOMPLETE_COI",
+        400,
+      ),
+      "فشل الإرسال",
+      MESSAGES,
+      {
+        SUBMISSION_INCOMPLETE_COI: "أدخل بيان تعارض المصالح (أو «لا يوجد»).",
+      },
+    );
+    expect(msg).toBe("أدخل بيان تعارض المصالح (أو «لا يوجد»).");
+  });
 });
 
 describe("isUserFacingApiMessage", () => {

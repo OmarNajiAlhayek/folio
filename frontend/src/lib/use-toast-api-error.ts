@@ -6,12 +6,12 @@ import { useApiErrorMessages } from "@/lib/use-api-error-messages";
 
 /** Toast helper with translated API error mapping (429, 404, …). */
 export function useToastApiError() {
-  const { messages } = useApiErrorMessages();
+  const { messages, codeMessages } = useApiErrorMessages();
 
   return useCallback(
     (err: unknown, fallback: string, options?: ToastApiErrorOptions) => {
-      toastApiError(err, fallback, { ...options, messages });
+      toastApiError(err, fallback, { ...options, messages, codeMessages });
     },
-    [messages],
+    [messages, codeMessages],
   );
 }
