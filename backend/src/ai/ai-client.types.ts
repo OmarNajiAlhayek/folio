@@ -89,3 +89,13 @@ export type SuggestReviewersOutcome =
   | { status: 'ok'; hits: ReviewerSuggestionHit[] }
   | { status: 'unavailable' }
   | { status: 'failed' };
+
+export type CheckReferencesInput = {
+  referenceList: string[];
+  inlineCitations: string[];
+};
+
+export type CheckReferencesOutcome =
+  | { status: 'ok'; issues: string[] }
+  | { status: 'unavailable' }
+  | { status: 'failed' };

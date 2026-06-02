@@ -25,10 +25,21 @@ Monorepo overview, all services, and sample accounts: [`../README.md`](../README
 | Data model | [`../docs/DATA-MODEL.md`](../docs/DATA-MODEL.md) |
 | Email pipeline | [`../docs/testing-email-pipeline.md`](../docs/testing-email-pipeline.md) |
 | AI integration | [`../docs/plans/ai-service.md`](../docs/plans/ai-service.md) |
+| Documentation index | [`../docs/README.md`](../docs/README.md) |
+| Copyedit workflow | [`../docs/API-NOTES.md`](../docs/API-NOTES.md#copyediting) |
 
 ## Tests
 
 ```bash
 npm test
 npm run test:e2e
+npm run test:pipeline   # opt-in: assign → outbox → RabbitMQ (see docs/testing-email-pipeline.md)
+```
+
+### Optional: copyedit gRPC smoke
+
+With ai-service running and `AI_COPYEDIT_ENABLED=true`:
+
+```bash
+npx ts-node scripts/smoke-copyedit-grpc.ts
 ```

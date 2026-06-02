@@ -16,10 +16,13 @@ import type {
   SuggestReviewersInput,
   SuggestReviewersOutcome,
   ReviewerSuggestionHit,
+  CheckReferencesInput,
+  CheckReferencesOutcome,
 } from './ai-client.types';
 import {
   closeAiGrpcClients,
   getClassifierGrpcClient,
+  getCopyeditGrpcClient,
   getKeywordGrpcClient,
   getPlagiarismGrpcClient,
   getReviewerMatchingGrpcClient,
@@ -70,6 +73,17 @@ export class AiClientService implements OnModuleDestroy {
     if (
       this.config
         .get<string>('AI_REVIEWER_MATCHING_ENABLED', 'false')
+        .toLowerCase() !== 'true'
+    ) {
+      return false;
+    }
+    return this.isEnabled();
+  }
+
+  isCopyeditEnabled(): boolean {
+    if (
+      this.config
+        .get<string>('AI_COPYEDIT_ENABLED', 'false')
         .toLowerCase() !== 'true'
     ) {
       return false;
@@ -497,6 +511,50 @@ export class AiClientService implements OnModuleDestroy {
             }),
           );
           resolve({ status: 'ok', hits });
+        },
+      );
+    });
+  }
+
+  async checkReferences(
+    input: CheckReferencesInput,
+  ): Promise<CheckReferencesOutcome> {
+    if (!this.isCopyeditEnabled()) {
+      return { status: 'unavailable' };
+    }
+    const host = this.grpcHost();
+    if (!host) {
+      return { status: 'unavailable' };
+    }
+    const client = getCopyeditGrpcClient(host, this.grpcPort());
+    const deadline = new Date(Date.now() + this.timeoutMs());
+
+    return new Promise((resolve) => {
+      client.checkReferences(
+        {
+          referenceList: input.referenceList,
+          inlineCitations: input.inlineCitations,
+        },
+        this.metadata(),
+        { deadline },
+        (err, response) => {
+          if (err) {
+            this.logGrpcFailure('CheckReferences', err.code, err.message);
+            if (
+              err.code === GrpcStatus.FAILED_PRECONDITION ||
+              err.code === GrpcStatus.UNAVAILABLE
+            ) {
+              resolve({ status: 'unavailable' });
+              return;
+            }
+            resolve({ status: 'failed' });
+            return;
+          }
+          if (!response) {
+            resolve({ status: 'failed' });
+            return;
+          }
+          resolve({ status: 'ok', issues: [...(response.issues ?? [])] });
         },
       );
     });

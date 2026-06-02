@@ -1,5 +1,6 @@
 import { credentials, type ChannelCredentials } from '@grpc/grpc-js';
 import { ClassifierServiceClient } from './grpc/gen/folio/ai/v1/classifier';
+import { CopyeditServiceClient } from './grpc/gen/folio/ai/v1/copyedit';
 import { KeywordServiceClient } from './grpc/gen/folio/ai/v1/keywords';
 import { PlagiarismServiceClient } from './grpc/gen/folio/ai/v1/plagiarism';
 import { ReviewerMatchingServiceClient } from './grpc/gen/folio/ai/v1/reviewer';
@@ -19,6 +20,9 @@ let similarityClientTarget: string | null = null;
 
 let reviewerClient: ReviewerMatchingServiceClient | null = null;
 let reviewerClientTarget: string | null = null;
+
+let copyeditClient: CopyeditServiceClient | null = null;
+let copyeditClientTarget: string | null = null;
 
 export function getClassifierGrpcClient(
   host: string,
@@ -160,10 +164,39 @@ export function closeReviewerMatchingGrpcClient(): void {
   }
 }
 
+export function getCopyeditGrpcClient(
+  host: string,
+  port: number,
+): CopyeditServiceClient {
+  const target = `${host}:${port}`;
+  if (copyeditClient && copyeditClientTarget === target) {
+    return copyeditClient;
+  }
+  if (copyeditClient) {
+    copyeditClient.close();
+    copyeditClient = null;
+  }
+  copyeditClientTarget = target;
+  copyeditClient = new CopyeditServiceClient(
+    target,
+    credentials.createInsecure() as ChannelCredentials,
+  );
+  return copyeditClient;
+}
+
+export function closeCopyeditGrpcClient(): void {
+  if (copyeditClient) {
+    copyeditClient.close();
+    copyeditClient = null;
+    copyeditClientTarget = null;
+  }
+}
+
 export function closeAiGrpcClients(): void {
   closeClassifierGrpcClient();
   closeKeywordGrpcClient();
   closePlagiarismGrpcClient();
   closeSimilarityGrpcClient();
   closeReviewerMatchingGrpcClient();
+  closeCopyeditGrpcClient();
 }

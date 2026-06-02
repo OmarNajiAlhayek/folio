@@ -15,5 +15,7 @@ export const aiClientServiceMock = {
     upsertSimilarityArticle: jest.fn().mockResolvedValue(false),
     findSimilarArticles: jest.fn().mockResolvedValue([]),
     semanticSearchPublications: jest.fn().mockResolvedValue([]),
+    isCopyeditEnabled: jest.fn().mockReturnValue(false),
+    checkReferences: jest.fn().mockResolvedValue({ status: 'unavailable' }),
   },
 };
