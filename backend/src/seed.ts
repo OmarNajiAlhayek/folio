@@ -22,7 +22,10 @@ import { SubmissionsService } from './submissions/submissions.service';
 import type { RequestUser } from './common/types/request-user';
 import { Submission } from './entities/submission.entity';
 import { SubmissionFile } from './entities/submission-file.entity';
-import { ReviewAssignment } from './entities/review-assignment.entity';
+import {
+  AssignmentStatus,
+  ReviewAssignment,
+} from './entities/review-assignment.entity';
 import { Review, ReviewRecommendation } from './entities/review.entity';
 import { CopyeditAssignment } from './entities/copyedit-assignment.entity';
 import { CopyeditNote } from './entities/copyedit-note.entity';
@@ -47,6 +50,12 @@ const SAMPLE_DISCIPLINE_LEGAL = 'العلوم القانونية';
 const SAMPLE_DISCIPLINE_ENGINEERING = 'العلوم الهندسية';
 
 const SAMPLE_TITLE_PREFIX = '[SAMPLE]';
+
+/** Stable assignment slug for the dev invite sample (matches slugified title). */
+const SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG =
+  'sample-reviewer-invite-pending-accept-this-one--invite';
+
+const SAMPLE_INVITE_PENDING_LEGACY_TITLE = `${SAMPLE_TITLE_PREFIX} Reviewer invite pending`;
 
 function uploadRoot(): string {
   const rel = process.env.UPLOAD_DIR ?? join('..', 'uploads');
@@ -143,13 +152,15 @@ const SAMPLE_PUB1_META = {
   keywordsAr: 'وصول مفتوح, نشر رقمي, اقتصاد, مجلات عربية, سياسات',
 } as const;
 
+/** Near-duplicate of SAMPLE_PUB1_META for related-articles / semantic similarity demos. */
 const SAMPLE_PUB2_META = {
-  articleType: SubmissionArticleType.REVIEW_ARTICLE,
-  titleAr: 'فهرسة المجلات العلمية العربية وبيانات التعريف للقراء',
+  titleAr:
+    'سياسات الوصول المفتوح والاقتصاد المعرفي في المجلات العربية المحكّمة',
   abstractAr:
-    'تبحث الدراسة في معايير فهرسة المقالات المنشورة وبيانات التعريف (العنوان، الملخص، الكلمات المفتاحية) لتحسين اكتشاف المحتوى في الفهارس العامة. تُقترح إطار عمل لتوحيد حقول الميتاداتا بين الناشرين العرب دون التضحية بالتنوع اللغوي.',
-  keywords: 'metadata, catalog, DOI, discovery, arabic scholarly publishing',
-  keywordsAr: 'بيانات تعريف, فهرسة, اكتشاف, نشر علمي عربي, مجلات',
+    'يحلل هذا البحث أثر سياسات الوصول المفتوح على انتشار المعرفة الاقتصادية، ويقارن نماذج تمويل النشر بين المجلات المحكّمة العربية والدولية. تُطبَّق منهجية تحليل وثائقي على عينة من سياسات النشر لدى عشر مجلات خلال 2020–2024، مع توصيات لتوسيع الوصول دون الإضرار باستدامة النشر الأكاديمي.',
+  keywords:
+    'open access, digital publishing, economics, arabic journals, policy',
+  keywordsAr: 'وصول مفتوح, نشر رقمي, اقتصاد, مجلات عربية, سياسات',
 } as const;
 
 const SAMPLE_PUB3_META = {
@@ -591,6 +602,105 @@ async function findSampleSubmission(
   });
 }
 
+/** Re-seed repair: assign again when no pending invite and no active duplicate. */
+async function ensureReviewerInviteForSubmission(
+  dataSource: DataSource,
+  submissionsService: SubmissionsService,
+  submission: Submission,
+  reviewerId: string,
+  editorReq: RequestUser,
+): Promise<boolean> {
+  if (!submission.slug) return false;
+  const assignmentRepo = dataSource.getRepository(ReviewAssignment);
+  const invited = await assignmentRepo.findOne({
+    where: {
+      submissionId: submission.id,
+      reviewerId,
+      status: AssignmentStatus.INVITED,
+    },
+  });
+  if (invited) return false;
+
+  const activeDup = await assignmentRepo.findOne({
+    where: {
+      submissionId: submission.id,
+      reviewerId,
+      status: In([AssignmentStatus.INVITED, AssignmentStatus.ACCEPTED]),
+    },
+  });
+  if (activeDup) return false;
+
+  await submissionsService.assignReviewer(
+    submission.slug,
+    reviewerId,
+    editorReq,
+  );
+  return true;
+}
+
+/** Keep dev invite sample on a fixed assignment slug; repair when submission already exists. */
+async function ensureInvitePendingReviewerAssignment(
+  dataSource: DataSource,
+  submissionsService: SubmissionsService,
+  submission: Submission,
+  reviewerId: string,
+  editorReq: RequestUser,
+): Promise<'ok' | 'pinned' | 'assigned' | false> {
+  if (!submission.slug) return false;
+  const assignmentRepo = dataSource.getRepository(ReviewAssignment);
+
+  const stable = await assignmentRepo.findOne({
+    where: { slug: SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG },
+  });
+  if (
+    stable &&
+    stable.submissionId === submission.id &&
+    stable.reviewerId === reviewerId &&
+    stable.status === AssignmentStatus.INVITED
+  ) {
+    return 'ok';
+  }
+
+  const invited = await assignmentRepo.findOne({
+    where: {
+      submissionId: submission.id,
+      reviewerId,
+      status: AssignmentStatus.INVITED,
+    },
+  });
+  if (invited) {
+    if (invited.slug !== SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG) {
+      const slugTaken = await assignmentRepo.exist({
+        where: { slug: SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG },
+      });
+      if (!slugTaken) {
+        invited.slug = SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG;
+        await assignmentRepo.save(invited);
+        return 'pinned';
+      }
+    }
+    return 'ok';
+  }
+
+  const activeDup = await assignmentRepo.findOne({
+    where: {
+      submissionId: submission.id,
+      reviewerId,
+      status: In([AssignmentStatus.INVITED, AssignmentStatus.ACCEPTED]),
+    },
+  });
+  if (activeDup) return false;
+
+  await submissionsService.assignReviewer(
+    submission.slug,
+    reviewerId,
+    editorReq,
+    undefined,
+    { assignmentSlug: SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG },
+  );
+  return 'assigned';
+}
+
 async function run() {
   const resetAll = process.env.SEED_RESET_ALL === '1';
   const resetSample =
@@ -754,6 +864,8 @@ async function run() {
       s.slug!,
       reviewer.id,
       editorReq,
+      undefined,
+      { emitReviewerInvited: false },
     );
     await submissionsService.acceptReviewInvitation(
       reviewAssignment.slug!,
@@ -789,6 +901,8 @@ async function run() {
       s.slug!,
       reviewer.id,
       editorReq,
+      undefined,
+      { emitReviewerInvited: false },
     );
     await submissionsService.acceptReviewInvitation(
       assignment.slug!,
@@ -831,6 +945,8 @@ async function run() {
       s.slug!,
       reviewer.id,
       editorReq,
+      undefined,
+      { emitReviewerInvited: false },
     );
     await submissionsService.acceptReviewInvitation(
       revAssignment.slug!,
@@ -861,10 +977,101 @@ async function run() {
       force: true,
     });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
-    await submissionsService.assignReviewer(s.slug!, reviewer.id, editorReq);
+    await submissionsService.assignReviewer(
+      s.slug!,
+      reviewer.id,
+      editorReq,
+      undefined,
+      { emitReviewerInvited: false },
+    );
     console.log(
       `Seeded: ${tRev} (round1 revisions_requested → author resubmit → round2 same reviewer, invited assignment — accept on dashboard)`,
     );
+  } else {
+    const existingRev = await findSampleSubmission(dataSource, author.id, tRev);
+    if (existingRev) {
+      const repaired = await ensureReviewerInviteForSubmission(
+        dataSource,
+        submissionsService,
+        existingRev,
+        reviewer.id,
+        editorReq,
+      );
+      if (repaired) {
+        console.log(
+          `Repaired: ${tRev} (new invited assignment — round-2 invite was missing or already accepted)`,
+        );
+      }
+    }
+  }
+
+  // 5b) Reviewer invite pending — only sample that sends reviewer-invited email during seed
+  const tInvitePending = `${SAMPLE_TITLE_PREFIX} Reviewer invite pending (accept this one)`;
+  const legacyInvite = await findSampleSubmission(
+    dataSource,
+    author.id,
+    SAMPLE_INVITE_PENDING_LEGACY_TITLE,
+  );
+  if (legacyInvite && legacyInvite.title !== tInvitePending) {
+    await dataSource.getRepository(ReviewAssignment).delete({
+      submissionId: legacyInvite.id,
+    });
+    await dataSource.getRepository(Submission).delete(legacyInvite.id);
+    console.log(
+      `Removed legacy sample "${SAMPLE_INVITE_PENDING_LEGACY_TITLE}" (frees dev invite slug)`,
+    );
+  }
+  if (!(await findSampleSubmission(dataSource, author.id, tInvitePending))) {
+    const s = await submissionsService.create(author.id, {
+      title: tInvitePending,
+      abstract:
+        'Manuscript awaiting reviewer response to invitation (dev sample for reviewer-invited email and /assignments/.../invite).',
+      ...sampleJournalMetadata(),
+      ...SAMPLE_QUEUE_META,
+    });
+    await attachStandardFilePackage(
+      submissionsService,
+      s.slug!,
+      authorReq,
+      pdfBytes,
+      'invite-pending.pdf',
+    );
+    await submissionsService.submit(s.slug!, authorReq);
+    await syncSampleDiscipline(dataSource, s.id, {
+      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
+      confidence: 88,
+    });
+    await promoteManuscriptsToReviewPackage(dataSource, s.id);
+    await submissionsService.assignReviewer(
+      s.slug!,
+      reviewer.id,
+      editorReq,
+      undefined,
+      { assignmentSlug: SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG },
+    );
+    console.log(
+      `Seeded: ${tInvitePending} (reviewer invited — stable invite URL slug: ${SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG})`,
+    );
+  } else {
+    const existingInvite = await findSampleSubmission(
+      dataSource,
+      author.id,
+      tInvitePending,
+    );
+    if (existingInvite) {
+      const repaired = await ensureInvitePendingReviewerAssignment(
+        dataSource,
+        submissionsService,
+        existingInvite,
+        reviewer.id,
+        editorReq,
+      );
+      if (repaired === 'pinned' || repaired === 'assigned') {
+        console.log(
+          `Repaired: ${tInvitePending} (${repaired} — invite slug: ${SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG})`,
+        );
+      }
+    }
   }
 
   // 6) In copyediting — accepted and assigned to copyeditor, note submitted
@@ -908,7 +1115,7 @@ async function run() {
     console.log(`Seeded: ${tCopyedit} (copyediting, note submitted)`);
   }
 
-  // 7–9) Published catalog samples — distinct Arabic text for similarity / related articles
+  // 7–9) Published catalog — pub + pub2 share topic/keywords for high embedding similarity
   const tPub = `${SAMPLE_TITLE_PREFIX} Published article`;
   const tPub2 = `${SAMPLE_TITLE_PREFIX} Related publication peer`;
   const tPub3 = `${SAMPLE_TITLE_PREFIX} Published medical ethics`;
@@ -943,7 +1150,7 @@ async function run() {
     pdfBytes,
     title: tPub2,
     abstract:
-      'Published review article on Arabic journal metadata, indexing standards, and catalog discovery.',
+      'Published companion on open-access policy and knowledge economics in Arabic peer-reviewed journals (near-duplicate of the primary published sample for similarity demos).',
     publicationMeta: SAMPLE_PUB2_META,
     manuscriptFilename: 'published-peer.pdf',
     revisionFilename: 'published-peer-revision.pdf',
@@ -986,6 +1193,9 @@ async function run() {
   console.log('\n--- Sample submissions (title prefix [SAMPLE]) ---');
   console.log(`${tDraft} — author: draft with file`);
   console.log(`${tQueue} — editor queue: submitted`);
+  console.log(
+    `${tInvitePending} — reviewer invite pending (reviewer-invited email + /assignments/.../invite)`,
+  );
   console.log(`${tReview} — editor/reviewer: under review`);
   console.log(`${tCompleted} — reviewer: assignment completed`);
   console.log(
@@ -993,15 +1203,20 @@ async function run() {
   );
   console.log(`${tCopyedit} — copyediting: assigned + note submitted`);
   console.log(`${tPub} — public catalog: published (open-access policy)`);
-  console.log(`${tPub2} — public catalog: published (metadata / catalog peer)`);
+  console.log(`${tPub2} — public catalog: published (near-duplicate of ${tPub} for similarity)`);
   console.log(`${tPub3} — public catalog: published (medical ethics, distant peer)`);
   console.log('\n--- Demo paths by role ---');
   console.log(`Author (${author.email}): ${tDraft} — edit metadata, files, optional AI suggest; ${tRev} — resubmit flow`);
   console.log(`Editor (${editor.email}): ${tQueue} — queue + assign reviewer; ${tCompleted} — read finished review; ${tRev} — revisions decision`);
-  console.log(`Reviewer (${reviewer.email}): ${tReview} — active assignment; ${tRev} — round-2 invite (accept on dashboard)`);
+  console.log(
+    `Reviewer (${reviewer.email} / Reviewer123!): ${tInvitePending} — invited (email accept link works); ${tReview} — active review; ${tRev} — round-2 invite if still pending`,
+  );
+  console.log(
+    `Reviewer-invited email: log in as ${reviewer.email} (not author/editor). After seed:fresh, the TOP inbox message should be "Review invitation: ${tInvitePending}" — or visit /en/assignments/${SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG}/invite`,
+  );
   console.log(`Copyeditor (${copyeditor.email}): ${tCopyedit} — notes; published rows show full accept→publish path`);
   console.log('Public catalog: search "open access", "metadata", or Arabic terms from published abstracts (keyword FTS)');
-  console.log(`Email pipeline scripts: title contains "In editor queue" (${tQueue})`);
+  console.log(`Email pipeline scripts: title contains "In editor queue" (${tQueue}) or "${tInvitePending}"`);
   console.log('\n--- AI features (optional; enable flags in backend + ai-service .env) ---');
   if (aiEnabled) {
     console.log(
@@ -1015,8 +1230,8 @@ async function run() {
   console.log(`Keywords suggest: author draft ${tDraft} (AI_KEYWORDS_ENABLED + OpenAI on ai-service)`);
   console.log(`Corpus similarity: editor/reviewer on ${tQueue} or ${tReview} (AI_SIMILARITY_ENABLED; overlaps ${tPub})`);
   console.log(`Suggested reviewers: editor on ${tQueue} or ${tReview} (AI_REVIEWER_MATCHING_ENABLED)`);
-  console.log(`Related articles: open ${tPub} in public catalog; expect ${tPub2} nearby, ${tPub3} distant`);
-  console.log('Semantic catalog: searchMode=semantic with q e.g. وصول مفتوح or بيانات تعريف فهرسة');
+  console.log(`Related articles: open ${tPub} or ${tPub2} — expect the other with high similarity; ${tPub3} stays distant`);
+  console.log('Semantic catalog: searchMode=semantic with q e.g. وصول مفتوح or نشر رقمي مجلات عربية');
   console.log(
     'JOURNAL_ALLOWED_DISCIPLINES (pipe-separated Arabic labels): out-of-scope badge on queue sample when medical label is outside scope.',
   );
