@@ -10,6 +10,7 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 
 | Document | Purpose |
 |----------|---------|
+| [`docs/README.md`](docs/README.md) | Documentation index |
 | [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) | Product context, stack, MVP summary |
 | [`docs/feature-report.md`](docs/feature-report.md) | Features and workflows by role |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Entities, submission lifecycle, ERD |
@@ -23,7 +24,7 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 | `frontend/` | Next.js app (Folio UI) |
 | `backend/` | NestJS API (`/api/v1/...`) |
 | `services/email-service/` | NestJS standalone email microservice (RabbitMQ consumer, scheduled reminders) |
-| `services/ai-service/` | Python FastAPI + gRPC AI microservice (classifier, keywords, similarity, plagiarism, reviewer matching) |
+| `services/ai-service/` | Python FastAPI + gRPC AI microservice (classifier, keywords, similarity, plagiarism, reviewer matching, copyedit reference check) |
 | `proto/` | Buf protobuf contracts between Nest and ai-service |
 | `packages/shared/` | Canonical event contracts + small messaging helpers (mirrored into each app) |
 | `docs/` | Specs |
@@ -55,19 +56,20 @@ See [`packages/shared/README.md`](packages/shared/README.md).
 1. **Backend:** copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and set `DB_*`, `JWT_SECRET`, optional `FRONTEND_ORIGIN` (default `http://localhost:5240`), plus the RabbitMQ + `APP_BASE_URL` block (used to publish reviewer-invite events to the email-service). Do **not** put `SMTP_*` or `EMAIL_PROVIDER` here — mail is configured only in the email-service. OpenAPI is on by default in non-production; set `SWAGGER_ENABLED=true` to expose it when `NODE_ENV=production`.
 2. **Frontend:** copy [`frontend/.env.local.example`](frontend/.env.local.example) to `frontend/.env.local`. Leave `NEXT_PUBLIC_API_URL` empty so the browser calls same-origin `/api/v1` (Next.js rewrites to the API on `API_PROXY_TARGET`, default `http://127.0.0.1:5243`). A direct `NEXT_PUBLIC_API_URL=http://localhost:5243` breaks httpOnly cookie auth and is blocked by CSP (`connect-src 'self'`).
 3. **Email service:** copy [`services/email-service/.env.example`](services/email-service/.env.example) to `services/email-service/.env`. Default `EMAIL_PROVIDER=noop` logs would-be sends and requires no SMTP server.
-4. **AI service** (optional): copy [`services/ai-service/.env.example`](services/ai-service/.env.example) to `services/ai-service/.env`. Enable features per flag (see Terminal 4). Mirror toggles in [`backend/.env.example`](backend/.env.example): `AI_SERVICE_ENABLED`, `AI_SIMILARITY_ENABLED`, `AI_KEYWORDS_ENABLED`, `AI_REVIEWER_MATCHING_ENABLED`.
+4. **AI service** (optional): copy [`services/ai-service/.env.example`](services/ai-service/.env.example) to `services/ai-service/.env`. Enable features per flag (see Terminal 4). Mirror toggles in [`backend/.env.example`](backend/.env.example): `AI_SERVICE_ENABLED`, `AI_SIMILARITY_ENABLED`, `AI_KEYWORDS_ENABLED`, `AI_REVIEWER_MATCHING_ENABLED`, `AI_COPYEDIT_ENABLED`. For copyedit grammar checks, set `LANGUAGE_TOOL_ENABLED=true` and start LanguageTool via Docker (see below).
 
 **Production:** both apps refuse example `DB_PASSWORD` / weak `JWT_SECRET` (backend) and `guest:guest` RabbitMQ when `NODE_ENV=production`. Generate secrets before deploy; see [`docs/PREP-STEPS.md`](docs/PREP-STEPS.md).
 
 ## Run locally
 
-**Terminal 0 — RabbitMQ (only when running the email-service)**
+**Terminal 0 — Docker (optional infrastructure)**
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-Management UI: `http://localhost:15672` (guest/guest).
+- **RabbitMQ** (email pipeline): AMQP `5672`, management UI `http://localhost:15672` (guest/guest).
+- **LanguageTool** (copyedit grammar/spelling): HTTP `http://localhost:8010` — start with `docker compose -f docker-compose.dev.yml up -d languagetool`, then set `LANGUAGE_TOOL_ENABLED=true` in `backend/.env`.
 
 **Terminal 1 — API**
 
@@ -102,7 +104,7 @@ npm install
 npm run start:dev
 ```
 
-The service connects to RabbitMQ, runs its own migrations into a dedicated `email` schema in the same Postgres database, and starts consuming `reviewer.invited` and `reminder.due` events. With `EMAIL_PROVIDER=noop` (default) it logs each would-be send instead of contacting an SMTP host. See [`docs/plans/email-service.md`](docs/plans/email-service.md) for the full design.
+The service connects to RabbitMQ, runs its own migrations into a dedicated `email` schema in the same Postgres database, and starts consuming `reviewer.invited` and `reminder.due` events. With `EMAIL_PROVIDER=noop` (default) it logs each would-be send instead of contacting an SMTP host. See [`services/email-service/README.md`](services/email-service/README.md) and [`docs/plans/email-service.md`](docs/plans/email-service.md).
 
 **Terminal 4 — AI service** (optional; required for AI-assisted UI features)
 
@@ -118,7 +120,7 @@ uvicorn app.main:app --reload --port 5245
 ```
 
 - **HTTP (5245):** liveness/readiness only — `http://localhost:5245/health`, `http://localhost:5245/ready`
-- **gRPC (5246):** product RPCs consumed by Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`). See [`proto/README.md`](proto/README.md).
+- **gRPC (5246):** product RPCs consumed by Nest (`ClassifierService`, `KeywordService`, `PlagiarismService`, `SimilarityService`, `ReviewerMatchingService`, `CopyeditService`). See [`proto/README.md`](proto/README.md).
 
 In **`backend/.env`**, set `AI_SERVICE_ENABLED=true` and `AI_SERVICE_GRPC_HOST=127.0.0.1`, then enable feature flags as needed:
 
@@ -128,6 +130,8 @@ In **`backend/.env`**, set `AI_SERVICE_ENABLED=true` and `AI_SERVICE_GRPC_HOST=1
 | `AI_KEYWORDS_ENABLED` | `KEYWORDS_SUGGESTION_ENABLED=true`, `AI_PROVIDER=openai` | Author keyword suggestions |
 | `AI_SIMILARITY_ENABLED` | `SIMILARITY_ENABLED=true` (+ `.[similarity]`) | Related articles, semantic catalog search, corpus similarity |
 | `AI_REVIEWER_MATCHING_ENABLED` | `REVIEWER_MATCHING_ENABLED=true`, `SIMILARITY_ENABLED=true` | Editor suggested reviewers |
+| `AI_COPYEDIT_ENABLED` | `COPYEDIT_ANALYSIS_ENABLED=true`, `AI_PROVIDER=openai` | Copyeditor reference cross-checking (LLM) |
+| `LANGUAGE_TOOL_ENABLED` | LanguageTool container on `8010` (Nest HTTP, not gRPC) | Copyeditor grammar/spelling suggestions |
 
 Default `AI_PROVIDER=noop` needs no API keys for health/gRPC startup. Full runbook: [`services/ai-service/README.md`](services/ai-service/README.md), design: [`docs/plans/ai-service.md`](docs/plans/ai-service.md).
 
@@ -146,6 +150,8 @@ Default `AI_PROVIDER=noop` needs no API keys for health/gRPC startup. Full runbo
 After **accepted**, an editor assigns one or more **copyeditors** (`POST /api/v1/submissions/:slug/copyedit-assignments`). The submission moves to **`copyediting`**. Copyeditors send **rounds** of author-facing queries (`POST /api/v1/copyedit-assignments/:assignmentSlug/notes`); the author is emailed, uploads a revised **manuscript** file, then marks that assignment ready (`POST /api/v1/copyedit-assignments/:assignmentSlug/ready`). When every assignment is **ready for review**, a copyeditor may **publish** (`POST /api/v1/submissions/:slug/publish`). UI: **Copyediting** nav (copyeditor queue) and a copyedit panel on the submission detail page.
 
 Email templates (admin): `copyedit-assigned`, `copyedit-queries-sent`, `copyedit-author-ready`.
+
+**Copyedit AI analysis (optional):** On the copyedit workbench, `POST /api/v1/copyedit-assignments/:assignmentSlug/ai-analysis` runs three checks on constructor content: (1) Damascus journal format rules (always, no external service), (2) grammar/spelling via **LanguageTool** when `LANGUAGE_TOOL_ENABLED=true`, (3) inline-citation vs reference-list cross-check via **CopyeditService** gRPC when `AI_COPYEDIT_ENABLED=true`. Returns `{ formatIssues, grammarNotes, referenceIssues, aiUnavailable }`. Disabled services yield empty arrays (grammar) or `aiUnavailable: true` (references).
 
 New self-registered users are **authors** with a researcher profile (affiliation, optional ORCID, review interests). **Reviewer** and **copyeditor** can be assigned by a **journal manager** (`users.manage_roles`) via `PATCH /api/v1/users/:id/roles`. **Editor** and **journal manager** roles require an in-app invitation:
 

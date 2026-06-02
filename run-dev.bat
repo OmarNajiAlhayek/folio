@@ -18,6 +18,11 @@ if not exist "%ROOT%services\email-service\package.json" (
   exit /b 1
 )
 
+if not exist "%ROOT%services\ai-service\pyproject.toml" (
+  echo [ERROR] services\ai-service\pyproject.toml not found.
+  exit /b 1
+)
+
 echo Starting RabbitMQ ^(docker compose^)...
 docker compose -f "%ROOT%docker-compose.dev.yml" up -d
 if errorlevel 1 (
@@ -50,10 +55,23 @@ start "folio-frontend" cmd /k "cd /d "%ROOT%frontend" && npm run dev"
 echo Starting email-service...
 start "folio-email-service" cmd /k "cd /d "%ROOT%services\email-service" && npm run start:dev"
 
-echo Launched: backend, frontend, email-service ^(separate terminals^).
+echo Preparing LM Studio for ai-service ^(OPENAI_MODEL from services\ai-service\.env^)...
+call "%ROOT%dev-lmstudio.bat"
+
+echo Starting ai-service...
+if exist "%ROOT%services\ai-service\.venv\Scripts\python.exe" (
+  start "folio-ai-service" cmd /k "cd /d "%ROOT%services\ai-service" && .venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 5245"
+) else (
+  echo [WARN] services\ai-service\.venv not found — using system python. Run: python -m venv .venv ^&^& pip install -e ".[dev]"
+  start "folio-ai-service" cmd /k "cd /d "%ROOT%services\ai-service" && python -m uvicorn app.main:app --reload --port 5245"
+)
+
+echo Launched: backend, frontend, email-service, ai-service ^(separate terminals^).
 echo Infra: docker-compose.dev.yml ^(RabbitMQ 5672 / management UI 15672^).
 echo Backend: npm run start:dev
 echo Frontend: npm run dev
 echo Email-service: npm run start:dev
+echo AI-service: uvicorn app.main:app --reload --port 5245 ^(HTTP 5245, gRPC 5246^)
+echo LLM: LM Studio localhost:1234 — model from services\ai-service\.env OPENAI_MODEL
 
 endlocal

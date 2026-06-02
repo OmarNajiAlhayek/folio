@@ -1,9 +1,13 @@
 # Local development infrastructure for Folio.
 #
-# Currently provides RabbitMQ (with the management UI) so the backend
-# and the email-service can talk to each other. Run with:
+# Provides RabbitMQ (email pipeline) and LanguageTool (copyedit grammar checks).
+# Run all services:
 #
 #   docker compose -f docker-compose.dev.yml up -d
+#
+# Or start individually, e.g.:
+#   docker compose -f docker-compose.dev.yml up -d rabbitmq
+#   docker compose -f docker-compose.dev.yml up -d languagetool
 #
 # A production compose file is intentionally NOT included yet; that
 # lives with the deployment story (see docs/plans/email-service.md).
@@ -23,6 +27,22 @@ services:
     restart: unless-stopped
     volumes:
       - folio-rabbitmq-data:/var/lib/rabbitmq
+
+  languagetool:
+    image: erikvl87/languagetool:latest
+    container_name: folio-languagetool
+    ports:
+      - "8010:8010"
+    environment:
+      # Omit langtool_languageModel unless you mount ngram data (see image docs).
+      - Java_Xms=256m
+      - Java_Xmx=512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8010/v2/languages | grep -q 'name'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   folio-rabbitmq-data:
