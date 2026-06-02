@@ -81,6 +81,7 @@ import {
   PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT,
   PUBLICATION_AUTHOR_SUGGESTION_MAX_LIMIT,
   PUBLICATION_AUTHOR_SUGGESTION_MIN_QUERY_LENGTH,
+  PUBLICATION_AUTHOR_SUGGESTION_RANK_ALIAS,
   PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
   PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
   publicationCatalogHasTextOrFilters,
@@ -148,6 +149,14 @@ import {
   isCorpusPlainTextSufficient,
 } from './submission-corpus-text.util';
 import {
+  buildBodyPlainText,
+  checkDamascusStructure,
+  damascusFormatIssues,
+  extractInlineCitations,
+  extractReferenceList,
+} from './submission-copyedit-text.util';
+import { LanguageToolService } from './language-tool.service';
+import {
   buildReviewerMatchQueryText,
   isReviewerMatchQuerySufficient,
 } from './submission-reviewer-match.util';
@@ -211,6 +220,7 @@ export class SubmissionsService implements OnModuleInit {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly aiClient: AiClientService,
+    private readonly languageTool: LanguageToolService,
   ) {}
 
   listDisciplineLabels(): { labels: readonly string[]; journalScope: string[] } {
@@ -881,6 +891,26 @@ export class SubmissionsService implements OnModuleInit {
     });
   }
 
+  private async allocateAssignmentSlug(
+    submissionSlug: string,
+    preferred?: string,
+  ): Promise<string> {
+    const trimmed = preferred?.trim();
+    if (trimmed) {
+      const taken = await this.assignmentsRepo.exist({
+        where: { slug: trimmed },
+      });
+      if (taken) {
+        throw new BadRequestException({
+          message: 'Assignment slug already in use',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+      return trimmed;
+    }
+    return this.nextAssignmentSlug(submissionSlug);
+  }
+
   async create(
     authorId: string,
     dto: CreateSubmissionDto,
@@ -995,7 +1025,11 @@ export class SubmissionsService implements OnModuleInit {
       .andWhere("COALESCE(author.display_name, '') <> ''")
       .andWhere(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL, matchParams)
       .groupBy('author.displayName')
-      .orderBy(PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL, 'DESC')
+      .addSelect(
+        PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
+        PUBLICATION_AUTHOR_SUGGESTION_RANK_ALIAS,
+      )
+      .orderBy(PUBLICATION_AUTHOR_SUGGESTION_RANK_ALIAS, 'DESC')
       .addOrderBy('COUNT(s.id)', 'DESC')
       .setParameters(matchParams)
       .limit(lim)
@@ -1971,6 +2005,7 @@ export class SubmissionsService implements OnModuleInit {
     reviewerId: string,
     editor: RequestUser,
     editorFolioLocale?: string,
+    options?: { assignmentSlug?: string; emitReviewerInvited?: boolean },
   ): Promise<ReviewAssignment> {
     if (!this.hasPerm(editor, PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER)) {
       throw new ForbiddenException({
@@ -2015,7 +2050,10 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    const assignmentSlug = await this.nextAssignmentSlug(submission.slug);
+    const assignmentSlug = await this.allocateAssignmentSlug(
+      submission.slug,
+      options?.assignmentSlug,
+    );
 
     const pending: Notification[] = [];
     return this.assignmentsRepo.manager
@@ -2028,17 +2066,20 @@ export class SubmissionsService implements OnModuleInit {
           slug: assignmentSlug,
         });
         const saved = await assignmentRepo.save(row);
-        const n = await this.enqueueReviewerInvitedEvent(
-          {
-            assignment: saved,
-            submission,
-            reviewer,
-            editorId: editor.sub,
-            editorFolioLocale,
-          },
-          em,
-        );
-        if (n) pending.push(n);
+        const emitInvite = options?.emitReviewerInvited !== false;
+        if (emitInvite) {
+          const n = await this.enqueueReviewerInvitedEvent(
+            {
+              assignment: saved,
+              submission,
+              reviewer,
+              editorId: editor.sub,
+              editorFolioLocale,
+            },
+            em,
+          );
+          if (n) pending.push(n);
+        }
         return saved;
       })
       .then((saved) => {
@@ -2544,6 +2585,22 @@ export class SubmissionsService implements OnModuleInit {
     });
   }
 
+  private assignmentToReviewerListJson(
+    a: ReviewAssignment,
+  ): Record<string, unknown> {
+    const sub = a.submission;
+    const payload: Record<string, unknown> = {
+      id: a.id,
+      slug: a.slug,
+      status: a.status,
+      assignedAt: a.assignedAt,
+    };
+    if (sub) {
+      payload.submission = submissionToViewerJson(sub, 'reviewer');
+    }
+    return payload;
+  }
+
   async listMyAssignments(
     reviewerId: string,
   ): Promise<Array<Record<string, unknown>>> {
@@ -2552,19 +2609,30 @@ export class SubmissionsService implements OnModuleInit {
       relations: ['submission', 'submission.files', 'submission.author'],
       order: { assignedAt: 'DESC' },
     });
-    return rows.map((a) => {
-      const sub = a.submission;
-      const payload: Record<string, unknown> = {
-        id: a.id,
-        slug: a.slug,
-        status: a.status,
-        assignedAt: a.assignedAt,
-      };
-      if (sub) {
-        payload.submission = submissionToViewerJson(sub, 'reviewer');
-      }
-      return payload;
+    return rows.map((a) => this.assignmentToReviewerListJson(a));
+  }
+
+  async getMyAssignmentBySlug(
+    assignmentSlug: string,
+    reviewerId: string,
+  ): Promise<Record<string, unknown>> {
+    const assignment = await this.assignmentsRepo.findOne({
+      where: { slug: assignmentSlug },
+      relations: ['submission', 'submission.files', 'submission.author'],
     });
+    if (!assignment) {
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    if (assignment.reviewerId !== reviewerId) {
+      throw new ForbiddenException({
+        message: 'This invitation belongs to another reviewer account',
+        code: 'FORBIDDEN',
+      });
+    }
+    return this.assignmentToReviewerListJson(assignment);
   }
 
   async listReviews(
@@ -3680,5 +3748,61 @@ export class SubmissionsService implements OnModuleInit {
       a.slug = await this.nextAssignmentSlug(sub.slug);
       await this.assignmentsRepo.save(a);
     }
+  }
+
+  async runCopyeditAnalysis(
+    assignmentSlug: string,
+    user: RequestUser,
+  ): Promise<{
+    formatIssues: string[];
+    grammarNotes: Array<{ excerpt: string; suggestion: string; rule: string }>;
+    referenceIssues: string[];
+    aiUnavailable: boolean;
+  }> {
+    const assignment = await this.copyeditAssignmentsRepo.findOne({
+      where: { slug: assignmentSlug },
+      relations: ['submission'],
+    });
+    if (!assignment) {
+      throw new NotFoundException({ message: 'Assignment not found', code: 'NOT_FOUND' });
+    }
+    const isCopyeditor = assignment.copyeditorId === user.sub;
+    const isEditor = this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE);
+    if (!isCopyeditor && !isEditor) {
+      throw new ForbiddenException({ message: 'Access denied', code: 'FORBIDDEN' });
+    }
+
+    const submission = await this.submissionsRepo.findOne({
+      where: { id: assignment.submissionId },
+      select: ['id', 'constructorContent'],
+    });
+
+    const content = submission?.constructorContent ?? null;
+
+    // Check 1: Format validation (deterministic, no external service)
+    const structureCheck = checkDamascusStructure(content);
+    const formatIssues = damascusFormatIssues(structureCheck);
+
+    // Check 2: Grammar/spelling via LanguageTool
+    const bodyText = buildBodyPlainText(content);
+    const grammarNotes = await this.languageTool.check(bodyText);
+
+    // Check 3: Reference cross-checking via AI service gRPC
+    const referenceList = extractReferenceList(content);
+    const inlineCitations = extractInlineCitations(content);
+    let referenceIssues: string[] = [];
+    let aiUnavailable = false;
+
+    const refOutcome = await this.aiClient.checkReferences({
+      referenceList,
+      inlineCitations,
+    });
+    if (refOutcome.status === 'ok') {
+      referenceIssues = refOutcome.issues;
+    } else {
+      aiUnavailable = true;
+    }
+
+    return { formatIssues, grammarNotes, referenceIssues, aiUnavailable };
   }
 }

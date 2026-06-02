@@ -73,6 +73,9 @@ export const PUBLICATION_QUICK_SEARCH_RANK_SQL = `GREATEST(
   word_similarity(:pubQ, COALESCE(author.display_name, ''))
 )`;
 
+/** TypeORM orderBy alias — avoids comma-splitting GREATEST(...) in orderBy(). */
+export const PUBLICATION_QUICK_SEARCH_RANK_ALIAS = 'pub_search_rank';
+
 /** Author filter / suggestions: pg_trgm + FTS on display_name (same family as catalog quick search). */
 export const PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL = `(
   word_similarity(:pubAuthor, COALESCE(author.display_name, '')) > :pubAuthorSimMin
@@ -96,6 +99,9 @@ export const PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL = `GREATEST(
     ELSE 0
   END
 )`;
+
+/** TypeORM orderBy alias for author suggestions. */
+export const PUBLICATION_AUTHOR_SUGGESTION_RANK_ALIAS = 'pub_author_rank';
 
 export const PUBLICATION_AUTHOR_SUGGESTION_MIN_QUERY_LENGTH = 2;
 export const PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT = 10;
@@ -153,7 +159,9 @@ export function applyPublicationCatalogQuery(
       pubDocSimMin: PUBLICATION_SEARCH_DOC_SIMILARITY_MIN,
       pubAuthorSimMin: PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
     });
-    qb.orderBy(PUBLICATION_QUICK_SEARCH_RANK_SQL, 'DESC');
+    // orderBy(GREATEST(...)) breaks: TypeORM splits on commas inside GREATEST.
+    qb.addSelect(PUBLICATION_QUICK_SEARCH_RANK_SQL, PUBLICATION_QUICK_SEARCH_RANK_ALIAS);
+    qb.orderBy(PUBLICATION_QUICK_SEARCH_RANK_ALIAS, 'DESC');
     qb.addOrderBy('s.publishedAt', 'DESC');
   } else {
     qb.orderBy('s.publishedAt', 'DESC');

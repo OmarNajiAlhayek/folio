@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionFile } from '../entities/submission-file.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
@@ -149,6 +150,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
           },
         },
         aiClientServiceMock,
+        languageToolServiceMock,
       ],
     }).compile();
 

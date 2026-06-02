@@ -22,6 +22,15 @@ export class AssignmentsController {
     return this.submissionsService.listMyAssignments(user.sub);
   }
 
+  @Get(':slug')
+  @Permissions(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN)
+  myAssignment(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.getMyAssignmentBySlug(slug, user.sub);
+  }
+
   @Post(':slug/accept')
   @Permissions(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN)
   acceptInvitation(

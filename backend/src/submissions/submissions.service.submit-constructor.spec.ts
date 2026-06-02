@@ -4,6 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionFile } from '../entities/submission-file.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -160,6 +161,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
           useValue: { get: jest.fn((_k: string, def?: string) => def) },
         },
         aiClientServiceMock,
+        languageToolServiceMock,
       ],
     }).compile();
 

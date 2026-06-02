@@ -9,6 +9,7 @@ import {
   PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
   PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
   PUBLICATION_QUICK_SEARCH_MATCH_SQL,
+  PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
   PUBLICATION_QUICK_SEARCH_RANK_SQL,
   trimCatalogFilter,
 } from './publication-catalog-search.util';
@@ -76,6 +77,7 @@ describe('publication-catalog-search.util', () => {
     const andWhere = jest.fn().mockReturnThis();
     const where = jest.fn().mockReturnThis();
     const innerJoinAndSelect = jest.fn().mockReturnThis();
+    const addSelect = jest.fn().mockReturnThis();
     const orderBy = jest.fn().mockReturnThis();
     const addOrderBy = jest.fn().mockReturnThis();
 
@@ -83,6 +85,7 @@ describe('publication-catalog-search.util', () => {
       where,
       andWhere,
       innerJoinAndSelect,
+      addSelect,
       orderBy,
       addOrderBy,
     } as unknown as import('typeorm').SelectQueryBuilder<Submission>;
@@ -100,6 +103,14 @@ describe('publication-catalog-search.util', () => {
     expect(andWhere).toHaveBeenCalledWith(
       PUBLICATION_QUICK_SEARCH_MATCH_SQL,
       expect.objectContaining({ pubQ: 'metadata' }),
+    );
+    expect(addSelect).toHaveBeenCalledWith(
+      PUBLICATION_QUICK_SEARCH_RANK_SQL,
+      PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
+    );
+    expect(orderBy).toHaveBeenCalledWith(
+      PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
+      'DESC',
     );
     expect(andWhere).toHaveBeenCalledWith('s.discipline = :pubDiscipline', {
       pubDiscipline: 'العلوم الأساسية',

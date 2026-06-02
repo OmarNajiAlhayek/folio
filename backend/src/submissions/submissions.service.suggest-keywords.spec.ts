@@ -4,6 +4,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
 import { AiClientService } from '../ai/ai-client.service';
+import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -80,6 +81,7 @@ describe('SubmissionsService.suggestKeywords', () => {
           provide: ConfigService,
           useValue: { get: jest.fn() },
         },
+        languageToolServiceMock,
       ],
     }).compile();
 

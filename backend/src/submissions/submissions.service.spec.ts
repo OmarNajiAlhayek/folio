@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -146,6 +147,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
           },
         },
         aiClientServiceMock,
+        languageToolServiceMock,
       ],
     }).compile();
 

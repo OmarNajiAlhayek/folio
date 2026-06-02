@@ -15,6 +15,7 @@ import { AssignmentRemindersController } from './assignment-reminders.controller
 import { DocxGeneratorService } from './docx-generator.service';
 import { DocxImportService } from './docx-import.service';
 import { EquationRenderService } from './equation-render.service';
+import { LanguageToolService } from './language-tool.service';
 import { RemindersService } from './reminders.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RbacModule } from '../rbac/rbac.module';
@@ -52,6 +53,7 @@ import { AiModule } from '../ai/ai.module';
     DocxGeneratorService,
     DocxImportService,
     EquationRenderService,
+    LanguageToolService,
     PermissionsGuard,
   ],
   exports: [SubmissionsService],
