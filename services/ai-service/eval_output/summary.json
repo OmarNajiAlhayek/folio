@@ -1,0 +1,7 @@
+{
+  "n_samples": 475,
+  "accuracy": 0.8884,
+  "model_path": "C:\\Users\\ASUS ROG\\Documents\\Projects\\folio\\services\\ai-service\\arabert_clean_model_FINAL-20260525T161953Z-3-001\\arabert_clean_model_FINAL",
+  "csv": "C:\\Users\\ASUS ROG\\Documents\\Projects\\folio\\services\\ai-service\\extracted_test_set.csv",
+  "threshold": 0.0
+}
