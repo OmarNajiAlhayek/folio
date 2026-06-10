@@ -48,6 +48,9 @@ Thumbs.db
 # Uploads (when you add local file storage)
 uploads/
 
+# Local AI / vector store data
+backend/data/
+
 # Local DOCX / equation debugging (never commit)
 _docx-inspect/
 _inspect.docx
