@@ -49,13 +49,13 @@ const SAMPLE_DISCIPLINE_EDUCATION = 'العلوم التربوية والنفس�
 const SAMPLE_DISCIPLINE_LEGAL = 'العلوم القانونية';
 const SAMPLE_DISCIPLINE_ENGINEERING = 'العلوم الهندسية';
 
-const SAMPLE_TITLE_PREFIX = '[SAMPLE]';
+const SAMPLE_TITLE_PREFIX = '[Demo]';
 
 /** Stable assignment slug for the dev invite sample (matches slugified title). */
 const SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG =
-  'sample-reviewer-invite-pending-accept-this-one--invite';
+  'demo-open-access-policies-arabic-journals-pending-review--invite';
 
-const SAMPLE_INVITE_PENDING_LEGACY_TITLE = `${SAMPLE_TITLE_PREFIX} Reviewer invite pending`;
+const SAMPLE_INVITE_PENDING_LEGACY_TITLE = `${SAMPLE_TITLE_PREFIX} Open-Access Policies in Arabic Peer-Reviewed Journals (Pending Review)`;
 
 function uploadRoot(): string {
   const rel = process.env.UPLOAD_DIR ?? join('..', 'uploads');
@@ -194,14 +194,14 @@ function sampleJournalMetadata(): Omit<
     contributors: [
       {
         fullName: 'A. Researcher',
-        email: 'author@folio.local',
-        affiliation: 'Department of Example Studies, State University',
+        email: 'author@folio.dev',
+        affiliation: 'Faculty of Information Studies, Arab Open University',
         sortOrder: 0,
         isCorresponding: true,
       },
     ],
     fundingStatement:
-      'Supported by Example Grant G-2024-001 (illustrative sample only).',
+      'Supported by Research Grant AOF-2024-001, Arab Open University Research Fund.',
     conflictOfInterestStatement: 'The authors declare no competing interests.',
     ethicalApprovalReference: 'N/A — no human or animal subjects.',
     originalityConfirmed: true,
@@ -545,7 +545,7 @@ async function resetSampleSubmissions(dataSource: DataSource): Promise<void> {
   const ids = sampleSubs.map((s) => s.id);
   if (ids.length === 0) {
     console.log(
-      'SEED_RESET_SAMPLE: no [SAMPLE] or legacy [DEMO] submissions to remove',
+      'SEED_RESET_SAMPLE: no [Demo] / [SAMPLE] / [DEMO] submissions to remove',
     );
     return;
   }
@@ -734,7 +734,7 @@ async function run() {
     displayName: 'A. Researcher',
     roleSlugs: [ROLE_SLUGS.AUTHOR],
     profile: {
-      affiliation: 'Department of Example Studies, State University',
+      affiliation: 'Faculty of Information Studies, Arab Open University',
       reviewKeywords: 'methods, reproducibility',
       willingToReview: false,
     },
@@ -752,11 +752,11 @@ async function run() {
     email: 'k76462338@gmail.com',
     password: 'Editor123!',
     displayName: 'C. Editor',
-    roleSlugs: [ROLE_SLUGS.EDITOR, ROLE_SLUGS.REVIEWER],
+    roleSlugs: [ROLE_SLUGS.EDITOR],
     profile: {
       affiliation: 'Folio Journal — Editorial office',
-      reviewKeywords: 'editorial policy, scholarly publishing',
-      willingToReview: true,
+      reviewKeywords: null,
+      willingToReview: false,
     },
   });
   const reviewer = await ensureUser(usersService, rbacService, {
@@ -772,7 +772,7 @@ async function run() {
     },
   });
   const copyeditor = await ensureUser(usersService, rbacService, {
-    email: 'copyeditor@folio.local',
+    email: 'h90196124@gmail.com',
     password: 'Copyeditor123!',
     displayName: 'P. Copyeditor',
     roleSlugs: [ROLE_SLUGS.COPYEDITOR],
@@ -788,12 +788,12 @@ async function run() {
   const pdfBytes = Buffer.from('%PDF-1.4 sample manuscript placeholder\n');
 
   // 1) Draft + file
-  const tDraft = `${SAMPLE_TITLE_PREFIX} Draft manuscript`;
+  const tDraft = `${SAMPLE_TITLE_PREFIX} Measuring Digital Learning Competencies Among University Students`;
   if (!(await findSampleSubmission(dataSource, author.id, tDraft))) {
     const s = await submissionsService.create(author.id, {
       title: tDraft,
       abstract:
-        'Draft on digital-learning competencies and formative feedback in large university classes (author workspace demo).',
+        'This study develops and validates a scale for measuring digital learning competencies among undergraduate students and examines the effect of immediate formative feedback on academic achievement in higher-education courses.',
       ...sampleJournalMetadata(),
       ...SAMPLE_DRAFT_META,
     });
@@ -812,12 +812,12 @@ async function run() {
   }
 
   // 2) Submitted — stays in editor queue (no assignment)
-  const tQueue = `${SAMPLE_TITLE_PREFIX} In editor queue`;
+  const tQueue = `${SAMPLE_TITLE_PREFIX} Open-Access Policies in Arabic Peer-Reviewed Journals: A Comparative Study`;
   if (!(await findSampleSubmission(dataSource, author.id, tQueue))) {
     const s = await submissionsService.create(author.id, {
       title: tQueue,
       abstract:
-        'Comparative study of open-access and digital-publishing policies in peer-reviewed Arabic journals (editor queue demo).',
+        'This study examines the impact of open-access and digital-publishing policies on the dissemination of knowledge in Arabic peer-reviewed journals, comparing funding models and article processing charges across ten journals over the period 2020–2024.',
       ...sampleJournalMetadata(),
       ...SAMPLE_QUEUE_META,
     });
@@ -838,12 +838,12 @@ async function run() {
   }
 
   // 3) Under review — assign reviewer
-  const tReview = `${SAMPLE_TITLE_PREFIX} Under review`;
+  const tReview = `${SAMPLE_TITLE_PREFIX} Digital Publishing and Open-Access Policy Frameworks in Arabic Scholarly Journals`;
   if (!(await findSampleSubmission(dataSource, author.id, tReview))) {
     const s = await submissionsService.create(author.id, {
       title: tReview,
       abstract:
-        'Open-access policy analysis in Arabic scholarly journals, assigned to a reviewer for active peer review.',
+        'This paper analyses open-access and digital-publishing policy frameworks adopted by Arabic scholarly journals, evaluating their effect on knowledge diffusion and comparing sustainability models across regional and international peer-reviewed outlets.',
       ...sampleJournalMetadata(),
       ...SAMPLE_REVIEW_META,
     });
@@ -875,12 +875,12 @@ async function run() {
   }
 
   // 4) Completed review
-  const tCompleted = `${SAMPLE_TITLE_PREFIX} With completed review`;
+  const tCompleted = `${SAMPLE_TITLE_PREFIX} Personal Data Protection in Contemporary Arab Legislation`;
   if (!(await findSampleSubmission(dataSource, author.id, tCompleted))) {
     const s = await submissionsService.create(author.id, {
       title: tCompleted,
       abstract:
-        'Comparative review of personal-data protection laws in selected Arab jurisdictions, with one completed accept recommendation.',
+        'This study reviews personal-data protection provisions in selected contemporary Arab legal frameworks and compares them with the principles of the General Data Protection Regulation, focusing on data-subject consent, cross-border data transfers, and controller liability.',
       ...sampleJournalMetadata(),
       ...SAMPLE_COMPLETED_META,
     });
@@ -919,12 +919,12 @@ async function run() {
   }
 
   // 5) Revisions requested
-  const tRev = `${SAMPLE_TITLE_PREFIX} Revisions requested`;
+  const tRev = `${SAMPLE_TITLE_PREFIX} The Effect of Immediate Feedback on Student Performance in Large Classes`;
   if (!(await findSampleSubmission(dataSource, author.id, tRev))) {
     const s = await submissionsService.create(author.id, {
       title: tRev,
       abstract:
-        'Experimental study of immediate feedback in large statistics classes; round one requested major revisions on methods.',
+        'This study experimentally evaluates an immediate-feedback programme delivered through an e-learning platform in an introductory statistics course, comparing short-test and final-project outcomes between two groups while analysing student perceptions of instructional clarity.',
       ...sampleJournalMetadata(),
       ...SAMPLE_REVISIONS_META,
     });
@@ -1006,7 +1006,7 @@ async function run() {
   }
 
   // 5b) Reviewer invite pending — only sample that sends reviewer-invited email during seed
-  const tInvitePending = `${SAMPLE_TITLE_PREFIX} Reviewer invite pending (accept this one)`;
+  const tInvitePending = `${SAMPLE_TITLE_PREFIX} Open-Access Policies in Arabic Peer-Reviewed Journals (Pending Review)`;
   const legacyInvite = await findSampleSubmission(
     dataSource,
     author.id,
@@ -1025,7 +1025,7 @@ async function run() {
     const s = await submissionsService.create(author.id, {
       title: tInvitePending,
       abstract:
-        'Manuscript awaiting reviewer response to invitation (dev sample for reviewer-invited email and /assignments/.../invite).',
+        'This paper investigates open-access policies in Arabic peer-reviewed journals and their influence on knowledge dissemination, drawing on a comparative documentary analysis of ten journals from 2020 to 2024.',
       ...sampleJournalMetadata(),
       ...SAMPLE_QUEUE_META,
     });
@@ -1075,12 +1075,12 @@ async function run() {
   }
 
   // 6) In copyediting — accepted and assigned to copyeditor, note submitted
-  const tCopyedit = `${SAMPLE_TITLE_PREFIX} In copyediting`;
+  const tCopyedit = `${SAMPLE_TITLE_PREFIX} Improving Wireless Sensor Network Efficiency in Industrial Environments`;
   if (!(await findSampleSubmission(dataSource, author.id, tCopyedit))) {
     const s = await submissionsService.create(author.id, {
       title: tCopyedit,
       abstract:
-        'Energy-efficient routing for industrial wireless sensor networks, accepted and in copyediting with an author-facing query.',
+        'This paper proposes an energy-efficient routing protocol for wireless sensor networks deployed in industrial IoT environments, comparing response time and power consumption against reference protocols across three load scenarios.',
       ...sampleJournalMetadata(),
       ...SAMPLE_COPYEDIT_META,
     });
@@ -1116,9 +1116,9 @@ async function run() {
   }
 
   // 7–9) Published catalog — pub + pub2 share topic/keywords for high embedding similarity
-  const tPub = `${SAMPLE_TITLE_PREFIX} Published article`;
-  const tPub2 = `${SAMPLE_TITLE_PREFIX} Related publication peer`;
-  const tPub3 = `${SAMPLE_TITLE_PREFIX} Published medical ethics`;
+  const tPub = `${SAMPLE_TITLE_PREFIX} Digital Publishing Policies and Knowledge Economics in Arabic Journals`;
+  const tPub2 = `${SAMPLE_TITLE_PREFIX} Open-Access Policies and Knowledge Economics in Arabic Peer-Reviewed Journals`;
+  const tPub3 = `${SAMPLE_TITLE_PREFIX} Research Ethics in Small-Sample Clinical Studies`;
 
   await seedPublishedSample({
     dataSource,
@@ -1131,7 +1131,7 @@ async function run() {
     pdfBytes,
     title: tPub,
     abstract:
-      'Published study on open-access policy and knowledge economics in Arabic peer-reviewed journals (public catalog).',
+      'This study examines the impact of digital publishing policies on knowledge economics in Arabic journals, comparing open-access funding models and article processing charges across peer-reviewed Arabic and international outlets from 2020 to 2024.',
     publicationMeta: SAMPLE_PUB1_META,
     manuscriptFilename: 'published.pdf',
     revisionFilename: 'published-revision.pdf',
@@ -1150,7 +1150,7 @@ async function run() {
     pdfBytes,
     title: tPub2,
     abstract:
-      'Published companion on open-access policy and knowledge economics in Arabic peer-reviewed journals (near-duplicate of the primary published sample for similarity demos).',
+      'This study analyses open-access policies and their effect on knowledge economics in Arabic peer-reviewed journals, applying documentary analysis to publishing policies of ten journals over 2020–2024, with recommendations for expanding access without compromising the sustainability of academic publishing.',
     publicationMeta: SAMPLE_PUB2_META,
     manuscriptFilename: 'published-peer.pdf',
     revisionFilename: 'published-peer-revision.pdf',
@@ -1169,7 +1169,7 @@ async function run() {
     pdfBytes,
     title: tPub3,
     abstract:
-      'Published case report on research ethics and informed consent in small clinical cohorts.',
+      'This case report discusses the challenges of informed consent and confidentiality in small-sample clinical studies, with a focus on teaching-hospital contexts and practical recommendations for institutional ethics review boards when statistical power is limited.',
     publicationMeta: SAMPLE_PUB3_META,
     manuscriptFilename: 'published-medical.pdf',
     revisionFilename: 'published-medical-revision.pdf',
@@ -1180,17 +1180,17 @@ async function run() {
   if (aiClient.isSimilarityEnabled()) {
     await submissionsService.backfillPublishedSimilarityIndex();
     console.log(
-      'Indexed published [SAMPLE] articles for similarity, corpus search, and related articles.',
+      'Indexed published [Demo] articles for similarity, corpus search, and related articles.',
     );
   }
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
-  console.log('o65834757@gmail.com         / Author123!      roles: author');
+  console.log('author@folio.dev            / Author123!      roles: author');
   console.log('manager@folio.local         / Manager123!     roles: journal_manager');
-  console.log('k76462338@gmail.com         / Editor123!      roles: editor, reviewer');
-  console.log('ysryrwthqsdthwy@gmail.com   / Reviewer123!    roles: reviewer');
+  console.log('editor@folio.dev            / Editor123!      roles: editor');
+  console.log('reviewer@folio.dev          / Reviewer123!    roles: reviewer');
   console.log('copyeditor@folio.local      / Copyeditor123!  roles: copyeditor');
-  console.log('\n--- Sample submissions (title prefix [SAMPLE]) ---');
+  console.log('\n--- Demo submissions (title prefix [Demo]) ---');
   console.log(`${tDraft} — author: draft with file`);
   console.log(`${tQueue} — editor queue: submitted`);
   console.log(
@@ -1216,7 +1216,7 @@ async function run() {
   );
   console.log(`Copyeditor (${copyeditor.email}): ${tCopyedit} — notes; published rows show full accept→publish path`);
   console.log('Public catalog: search "open access", "metadata", or Arabic terms from published abstracts (keyword FTS)');
-  console.log(`Email pipeline scripts: title contains "In editor queue" (${tQueue}) or "${tInvitePending}"`);
+  console.log(`Email pipeline scripts: similarity title contains keywords from "${tQueue}" or "${tInvitePending}"`);
   console.log('\n--- AI features (optional; enable flags in backend + ai-service .env) ---');
   if (aiEnabled) {
     console.log(
@@ -1243,7 +1243,7 @@ async function run() {
     '  SEED_RESET_ALL=1       — truncate all users/submissions/uploads, then re-seed (npm run seed:fresh)',
   );
   console.log(
-    '  SEED_RESET_SAMPLE=1    — remove only [SAMPLE] / [DEMO] submissions, then re-seed (npm run seed:reset)',
+    '  SEED_RESET_SAMPLE=1    — remove only [Demo] / [SAMPLE] / [DEMO] submissions, then re-seed (npm run seed:reset)',
   );
 
   await app.close();
