@@ -1,0 +1,34 @@
+%% Wider layout: LR. Needs Mermaid 10.3+ (VS Code extension / mermaid.live).
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ submissions : authors
+  submissions ||--o{ submission_files : has
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+  }
+
+  submissions {
+    uuid id PK
+    uuid author_id FK
+    string slug UK
+    string title
+    string status
+    string review_method
+    json constructor_content
+    datetime published_at
+  }
+
+  submission_files {
+    uuid id PK
+    uuid submission_id FK
+    string storage_key
+    string kind
+    string file_stage
+    boolean is_public
+    datetime created_at
+  }

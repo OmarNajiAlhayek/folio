@@ -1,0 +1,178 @@
+%%{init: {"fontSize": 13, "themeVariables": {"fontSize": "13px"}, "er": {"layoutDirection": "LR", "fontSize": 13, "diagramPadding": 10, "entityPadding": 5, "nodeSpacing": 8, "rankSpacing": 70, "minEntityWidth": 100, "minEntityHeight": 38, "useMaxWidth": false}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ user_roles : has
+  roles ||--o{ user_roles : assigned_to
+  roles ||--o{ role_permissions : grants
+  permissions ||--o{ role_permissions : included_in
+  users ||--o{ role_invitations : invitee
+  users ||--o{ role_invitations : invited_by
+
+  users ||--o{ submissions : authors
+  submissions ||--o{ submission_files : has
+  submissions ||--o{ review_assignments : has
+  users ||--o{ review_assignments : reviewer
+  review_assignments ||--o| reviews : has
+  submissions ||--o{ copyedit_assignments : has
+  users ||--o{ copyedit_assignments : copyeditor
+  copyedit_assignments ||--o{ copyedit_notes : has
+
+  users ||--o{ notifications : recipient
+  users ||--o{ revoked_tokens : logout
+
+  review_assignments ||--o{ reminder : slug_snapshot
+  users ||--o{ reminder : reviewer_snapshot
+  submissions ||--o{ reminder : title_snapshot
+  email_reminder_policy ||--o{ reminder : cadence
+  email_template ||--o{ email_log : template_key
+  users ||--o{ email_log : recipient_email
+  outbound_event_outbox ||--o{ email_log : outbox_event
+  outbound_event_outbox ||--o{ reminder : outbox_event
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+    string orcid UK
+    boolean willing_to_review
+    string preferred_locale
+  }
+
+  roles {
+    uuid id PK
+    string slug UK
+    string name
+  }
+
+  permissions {
+    uuid id PK
+    string slug UK
+    string description
+  }
+
+  user_roles {
+    uuid user_id PK
+    uuid role_id PK
+  }
+
+  role_permissions {
+    uuid role_id PK
+    uuid permission_id PK
+  }
+
+  role_invitations {
+    uuid id PK
+    uuid invitee_user_id FK
+    uuid invited_by_user_id FK
+    string role_slug
+    string status
+    datetime resolved_at
+  }
+
+  submissions {
+    uuid id PK
+    uuid author_id FK
+    string slug UK
+    string title
+    string status
+    string review_method
+    datetime published_at
+  }
+
+  submission_files {
+    uuid id PK
+    uuid submission_id FK
+    string storage_key
+    string kind
+    string file_stage
+    boolean is_public
+  }
+
+  review_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid reviewer_id FK
+    string status
+    datetime assigned_at
+  }
+
+  reviews {
+    uuid id PK
+    uuid assignment_id UK
+    string recommendation
+    datetime submitted_at
+  }
+
+  copyedit_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid copyeditor_id FK
+    string status
+    datetime assigned_at
+  }
+
+  copyedit_notes {
+    uuid id PK
+    uuid assignment_id FK
+    int round
+    datetime submitted_at
+  }
+
+  notifications {
+    uuid id PK
+    uuid user_id FK
+    string type
+    string idempotency_key UK
+    datetime read_at
+    datetime created_at
+  }
+
+  revoked_tokens {
+    string jti PK
+    uuid user_id FK
+    datetime expires_at
+    datetime revoked_at
+  }
+
+  outbound_event_outbox {
+    uuid id PK
+    string routing_key
+    string status
+    datetime next_attempt_at
+    datetime published_at
+  }
+
+  email_template {
+    string template_key PK
+    string locale PK
+    string subject_template
+    datetime updated_at
+  }
+
+  email_reminder_policy {
+    int id PK
+    int review_due_in_days
+    datetime updated_at
+  }
+
+  reminder {
+    uuid id PK
+    string assignment_slug
+    string submission_title
+    string reviewer_email
+    string kind
+    datetime send_at
+    string status
+  }
+
+  email_log {
+    uuid id PK
+    string idempotency_key UK
+    string recipient
+    string template
+    string status
+    datetime sent_at
+  }

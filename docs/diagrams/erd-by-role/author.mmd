@@ -1,0 +1,40 @@
+%% Author — own manuscripts (submission.manage_own). See use-cases/author.puml
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ submissions : authors
+  submissions ||--o{ submission_files : uploads
+  users ||--o{ notifications : inbox
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+  }
+
+  submissions {
+    uuid id PK
+    uuid author_id FK
+    string slug UK
+    string title
+    string status
+    json constructor_content
+    datetime published_at
+  }
+
+  submission_files {
+    uuid id PK
+    uuid submission_id FK
+    string kind
+    string file_stage
+    datetime created_at
+  }
+
+  notifications {
+    uuid id PK
+    uuid user_id FK
+    string type
+    string href
+    datetime read_at
+  }

@@ -1,0 +1,84 @@
+%%{init: {"fontSize": 22, "themeVariables": {"fontSize": "22px"}, "class": {"fontSize": 22, "diagramPadding": 14, "nodeSpacing": 60, "rankSpacing": 100, "useMaxWidth": false}} }%%
+%% Folio — Academic Class Overview with UML notations
+classDiagram
+  direction LR
+
+  class User {
+    +UUID id
+    +string email
+    +string displayName
+    +string affiliation
+    +boolean willingToReview
+  }
+
+  class Role {
+    +UUID id
+    +string slug
+    +string name
+  }
+
+  class Submission {
+    +UUID id
+    +UUID authorId
+    +string slug
+    +string title
+    +SubmissionStatus status
+    +SubmissionReviewMethod reviewMethod
+    +Date publishedAt
+  }
+
+  class SubmissionFile {
+    +UUID id
+    +UUID submissionId
+    +string storageKey
+    +string kind
+    +SubmissionFileStage fileStage
+    +bigint sizeBytes
+  }
+
+  class ReviewAssignment {
+    +UUID id
+    +UUID submissionId
+    +UUID reviewerId
+    +AssignmentStatus status
+    +Date assignedAt
+  }
+
+  class Review {
+    +UUID id
+    +UUID assignmentId
+    +ReviewRecommendation recommendation
+    +string commentsForAuthor
+    +Date submittedAt
+  }
+
+  class CopyeditAssignment {
+    +UUID id
+    +UUID submissionId
+    +UUID copyeditorId
+    +CopyeditAssignmentStatus status
+    +Date assignedAt
+  }
+
+  class CopyeditNote {
+    +UUID id
+    +UUID assignmentId
+    +int round
+    +string noteForAuthor
+    +Date submittedAt
+  }
+
+  %% Relationships: Cardinality and UML Notations
+  User "0..*" --> "0..*" Role : possesses
+  User "1" --> "0..*" Submission : authors
+  
+  %% Composition (Solid Diamonds)
+  Submission "1" *-- "1..*" SubmissionFile : contains
+  Submission "1" *-- "0..*" ReviewAssignment : undergoes
+  ReviewAssignment "1" *-- "0..1" Review : yields
+  Submission "1" *-- "0..*" CopyeditAssignment : undergoes
+  CopyeditAssignment "1" *-- "0..*" CopyeditNote : includes
+  
+  %% Associations
+  User "1" --> "0..*" ReviewAssignment : performs
+  User "1" --> "0..*" CopyeditAssignment : executes

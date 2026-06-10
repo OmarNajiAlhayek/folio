@@ -1,0 +1,23 @@
+%% Reader — public catalog only (status=published, files with is_public)
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  submissions ||--o{ submission_files : public_downloads
+
+  submissions {
+    uuid id PK
+    string slug UK
+    string title
+    string abstract
+    string status
+    datetime published_at
+  }
+
+  submission_files {
+    uuid id PK
+    uuid submission_id FK
+    string kind
+    boolean is_public
+    string storage_key
+  }

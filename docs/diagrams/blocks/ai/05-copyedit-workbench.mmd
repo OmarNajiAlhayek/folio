@@ -1,0 +1,27 @@
+%% Copyedit AI analysis panel — three independent checks, one REST call
+flowchart TB
+  UI["Copyeditor AI Analysis"]
+
+  subgraph nest["Nest — SubmissionsService.runCopyeditAnalysis"]
+    SRC["constructorContent\n(manuscript JSON)"]
+    B1["Check 1 — Format\nDamascus structure rules\n(local, deterministic)"]
+    B2["Check 2 — Grammar\nLanguageToolService\nHTTP POST :8010"]
+    B3["Check 3 — References\nextract lists → AiClientService.checkReferences"]
+    OUT["Response:\nformatIssues, grammarNotes,\nreferenceIssues, aiUnavailable"]
+    SRC --> B1 & B2 & B3
+    B1 & B2 & B3 --> OUT
+  end
+
+  subgraph external["Outside ai-service"]
+    LT["LanguageTool\n(docker-compose.dev)"]
+  end
+
+  subgraph py["ai-service"]
+    GRPC["CopyeditService.CheckReferences"]
+    LLM["CopyeditAnalysisService → OpenAI\n(see 03-openai-llm)"]
+    GRPC --> LLM
+  end
+
+  UI --> nest
+  B2 --> LT
+  B3 -->|"gRPC"| GRPC

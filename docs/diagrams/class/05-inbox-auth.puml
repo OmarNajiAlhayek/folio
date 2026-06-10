@@ -1,0 +1,42 @@
+@startuml folio-class-inbox-auth
+' notification.entity.ts, revoked-token.entity.ts
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+}
+
+class Notification <<entity>> {
+  +id: UUID
+  +userId: UUID
+  +type: string
+  +titleKey: string
+  +bodyKey: string
+  +params: JSON
+  +href: string
+  +idempotencyKey: string
+  +readAt: Date?
+  +createdAt: Date
+}
+
+class RevokedToken <<entity>> {
+  +jti: string
+  +userId: UUID
+  +expiresAt: Date
+  +revokedAt: Date
+}
+
+User "1" -- "0..*" Notification : recipient
+User "1" -- "0..*" RevokedToken : logout
+
+note bottom of Notification
+  table: notifications
+  user_id: no TypeORM FK decorator
+end note
+
+@enduml

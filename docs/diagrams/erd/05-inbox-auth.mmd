@@ -1,0 +1,29 @@
+erDiagram
+  users ||--o{ notifications : recipient
+  users ||--o{ revoked_tokens : logout_blocklist
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+  }
+
+  notifications {
+    uuid id PK
+    uuid user_id FK
+    string type
+    string title_key
+    string body_key
+    json params
+    string href
+    string idempotency_key UK
+    datetime read_at
+    datetime created_at
+  }
+
+  revoked_tokens {
+    string jti PK
+    uuid user_id FK
+    datetime expires_at
+    datetime revoked_at
+  }

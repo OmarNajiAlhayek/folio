@@ -1,0 +1,57 @@
+@startuml folio-class-by-role-author
+' Author — submission.manage_own. See use-cases/author.puml
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+}
+
+enum SubmissionStatus <<enum>> {
+  DRAFT
+  SUBMITTED
+  REVISIONS_REQUESTED
+  PUBLISHED
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +authorId: UUID
+  +slug: string?
+  +title: string
+  +status: SubmissionStatus
+  +constructorContent: JSON?
+  +publishedAt: Date?
+}
+
+enum SubmissionFileStage <<enum>> {
+  SUBMISSION
+  REVIEW
+}
+
+class SubmissionFile <<entity>> {
+  +id: UUID
+  +submissionId: UUID
+  +kind: string
+  +fileStage: SubmissionFileStage
+  +createdAt: Date
+}
+
+class Notification <<entity>> {
+  +id: UUID
+  +userId: UUID
+  +type: string
+  +href: string
+  +readAt: Date?
+}
+
+User "1" -- "0..*" Submission : author >
+Submission "1" *-- "0..*" SubmissionFile : files
+User "1" -- "0..*" Notification : inbox
+Submission ..> SubmissionStatus
+SubmissionFile ..> SubmissionFileStage
+
+@enduml

@@ -1,0 +1,56 @@
+@startuml folio-class-copyedit
+' copyedit-assignment.entity.ts, copyedit-note.entity.ts
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +slug: string?
+  +title: string
+  +status: SubmissionStatus
+}
+
+enum SubmissionStatus <<enum>> {
+  COPYEDITING
+  ACCEPTED
+  PUBLISHED
+}
+
+enum CopyeditAssignmentStatus <<enum>> {
+  ACTIVE
+  AWAITING_AUTHOR
+  READY_FOR_REVIEW
+}
+
+class CopyeditAssignment <<entity>> {
+  +id: UUID
+  +slug: string?
+  +submissionId: UUID
+  +copyeditorId: UUID
+  +status: CopyeditAssignmentStatus
+  +assignedAt: Date
+}
+
+class CopyeditNote <<entity>> {
+  +id: UUID
+  +assignmentId: UUID
+  +round: int
+  +noteForAuthor: string
+  +noteToEditorOnly: string
+  +submittedAt: Date
+}
+
+Submission "1" *-- "0..*" CopyeditAssignment : copyeditAssignments
+User "1" -- "0..*" CopyeditAssignment : copyeditor >
+CopyeditAssignment "1" *-- "0..*" CopyeditNote : notes
+CopyeditAssignment ..> CopyeditAssignmentStatus
+
+@enduml

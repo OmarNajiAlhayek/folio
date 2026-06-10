@@ -15,6 +15,8 @@ Informal stack context: [`docs/PROJECT-CONTEXT.md`](../PROJECT-CONTEXT.md). Runb
 
 ## High-level architecture
 
+Block diagrams by feature group (shared platform, classifier, OpenAI, Chroma, copyedit workbench): [`docs/diagrams/blocks/ai/`](../diagrams/blocks/ai/).
+
 ```mermaid
 flowchart LR
   UI["Next.js"] --> API["Nest backend"]

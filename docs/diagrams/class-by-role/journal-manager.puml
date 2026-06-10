@@ -1,0 +1,79 @@
+@startuml folio-class-by-role-journal-manager
+' Journal manager — users.manage_roles, email.manage_reminders, staff assignment
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+  +reviewKeywords: string?
+  +willingToReview: boolean
+}
+
+class Role <<entity>> {
+  +id: UUID
+  +slug: string
+  +name: string
+}
+
+class UserRole <<entity>> {
+  +userId: UUID
+  +roleId: UUID
+}
+
+enum RoleInvitationStatus <<enum>> {
+  INVITED
+  ACCEPTED
+  DECLINED
+}
+
+class RoleInvitation <<entity>> {
+  +id: UUID
+  +inviteeUserId: UUID
+  +invitedByUserId: UUID
+  +roleSlug: string
+  +status: RoleInvitationStatus
+}
+
+class ReviewAssignment <<entity>> {
+  +id: UUID
+  +reviewerId: UUID
+  +submissionId: UUID
+}
+
+class CopyeditAssignment <<entity>> {
+  +id: UUID
+  +copyeditorId: UUID
+  +submissionId: UUID
+}
+
+class EmailTemplate <<entity>> {
+  +templateKey: string
+  +locale: string
+  +subjectTemplate: string
+}
+
+class EmailReminderPolicy <<entity>> {
+  +id: short
+  +reviewDueInDays: int
+}
+
+User "1" *-- "0..*" UserRole
+Role "1" *-- "0..*" UserRole
+User "1" *-- "0..*" RoleInvitation : invitee
+User "1" *-- "0..*" RoleInvitation : invitedBy
+User "1" -- "0..*" ReviewAssignment : assignsReviewer
+User "1" -- "0..*" CopyeditAssignment : assignsCopyeditor
+RoleInvitation ..> RoleInvitationStatus
+
+note bottom of EmailTemplate
+  schema: email.email_template
+end note
+
+note bottom of EmailReminderPolicy
+  schema: email.email_reminder_policy
+end note
+
+@enduml

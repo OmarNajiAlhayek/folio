@@ -17,6 +17,7 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 | Document | Purpose |
 |----------|---------|
 | [`plans/ai-service.md`](./plans/ai-service.md) | AI microservice architecture, gRPC services, feature flags |
+| [`AI-FEATURES.md`](./AI-FEATURES.md) | Detailed end-to-end guide for each AI product feature |
 | [`plans/email-service.md`](./plans/email-service.md) | Email pipeline, RabbitMQ topology, handler state machine |
 | [`plans/email-phase-2-events.md`](./plans/email-phase-2-events.md) | Submission/decision email design (implemented) |
 | [`plans/word-constructor.md`](./plans/word-constructor.md) | In-app manuscript builder |
@@ -48,6 +49,11 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 | [`diagrams/use-cases/`](./diagrams/use-cases/) | PlantUML use-case diagrams by role |
 | [`diagrams/sequences/`](./diagrams/sequences/) | PlantUML sequence diagrams (peer review) |
 | [`diagrams/activities/`](./diagrams/activities/) | PlantUML activity diagrams |
+| [`diagrams/erd/`](./diagrams/erd/) | Mermaid ER diagrams (by domain) |
+| [`diagrams/erd-by-role/`](./diagrams/erd-by-role/) | Mermaid ER diagrams (by role) |
+| [`diagrams/class/`](./diagrams/class/) | PlantUML class diagrams (TypeORM entities, by domain) |
+| [`diagrams/class-by-role/`](./diagrams/class-by-role/) | PlantUML class diagrams (by role) |
+| [`diagrams/blocks/ai/`](./diagrams/blocks/ai/) | Mermaid block diagrams for AI features |
 
 ## Local infrastructure (Docker Compose)
 

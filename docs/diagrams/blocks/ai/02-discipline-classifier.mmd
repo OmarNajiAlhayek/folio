@@ -1,0 +1,27 @@
+%% Arabic discipline classification (AraBERT) — not OpenAI
+flowchart LR
+  subgraph ui["Author UI"]
+    A1["Suggest discipline\n(draft wizard)"]
+    A2["Submit manuscript"]
+  end
+
+  subgraph nest["Nest"]
+    R1["POST …/suggest-discipline"]
+    R2["Submit handler\n(auto-classify)"]
+    DB[("submission row\n disciplineSuggested*\n discipline + source")]
+    ACL["AiClientService\n.classifyArticle"]
+    R1 --> ACL
+    R2 --> ACL
+    ACL --> DB
+  end
+
+  subgraph py["ai-service"]
+    GRPC["ClassifierService.ClassifyArticle"]
+    SVC["ClassifierService\n(arabic_classifier)"]
+    ML["AraBERT weights\n(BertForSequenceClassification\n10 Arabic labels)"]
+    GRPC --> SVC --> ML
+  end
+
+  A1 --> R1
+  A2 --> R2
+  ACL -->|"gRPC"| GRPC

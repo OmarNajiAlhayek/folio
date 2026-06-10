@@ -1,0 +1,46 @@
+%% Reviewer — own assignments; files only file_stage=review; metadata filtered by review_method
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ review_assignments : invited_to
+  review_assignments ||--o| reviews : submits
+  submissions ||--o{ review_assignments : on
+  submissions ||--o{ submission_files : review_package
+
+  users {
+    uuid id PK
+    string email UK
+    boolean willing_to_review
+  }
+
+  submissions {
+    uuid id PK
+    string slug UK
+    string title
+    string status
+    string review_method
+  }
+
+  review_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid reviewer_id FK
+    string status
+    datetime assigned_at
+  }
+
+  reviews {
+    uuid id PK
+    uuid assignment_id FK
+    string recommendation
+    datetime submitted_at
+  }
+
+  submission_files {
+    uuid id PK
+    uuid submission_id FK
+    string kind
+    string file_stage
+  }

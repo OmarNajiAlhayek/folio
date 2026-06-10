@@ -1,0 +1,80 @@
+@startuml folio-class-by-role-reviewer
+' Reviewer — own assignments; files fileStage=REVIEW; metadata filtered by reviewMethod
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +willingToReview: boolean
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +slug: string?
+  +title: string
+  +status: SubmissionStatus
+  +reviewMethod: SubmissionReviewMethod
+}
+
+enum SubmissionStatus <<enum>> {
+  UNDER_REVIEW
+  SUBMITTED
+}
+
+enum SubmissionReviewMethod <<enum>> {
+  OPEN
+  ANONYMOUS
+  DOUBLE_ANONYMOUS
+}
+
+enum AssignmentStatus <<enum>> {
+  INVITED
+  ACCEPTED
+  DECLINED
+  COMPLETED
+}
+
+enum ReviewRecommendation <<enum>> {
+  ACCEPT
+  REJECT
+  REVISIONS
+}
+
+class ReviewAssignment <<entity>> {
+  +id: UUID
+  +slug: string?
+  +submissionId: UUID
+  +reviewerId: UUID
+  +status: AssignmentStatus
+  +assignedAt: Date
+}
+
+class Review <<entity>> {
+  +id: UUID
+  +assignmentId: UUID
+  +recommendation: ReviewRecommendation
+  +submittedAt: Date
+}
+
+enum SubmissionFileStage <<enum>> {
+  REVIEW
+}
+
+class SubmissionFile <<entity>> {
+  +id: UUID
+  +submissionId: UUID
+  +kind: string
+  +fileStage: SubmissionFileStage
+}
+
+User "1" -- "0..*" ReviewAssignment : reviewer >
+ReviewAssignment "1" -- "0..1" Review : review
+Submission "1" *-- "0..*" ReviewAssignment
+Submission "1" *-- "0..*" SubmissionFile : reviewPackage
+ReviewAssignment ..> AssignmentStatus
+Review ..> ReviewRecommendation
+Submission ..> SubmissionReviewMethod
+
+@enduml

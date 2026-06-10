@@ -1,0 +1,36 @@
+@startuml folio-class-by-role-reader
+' Reader — public catalog (status=published, SubmissionFile.isPublic)
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+enum SubmissionStatus <<enum>> {
+  PUBLISHED
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +slug: string?
+  +title: string
+  +abstract: string
+  +status: SubmissionStatus
+  +publishedAt: Date
+}
+
+class SubmissionFile <<entity>> {
+  +id: UUID
+  +submissionId: UUID
+  +kind: string
+  +isPublic: boolean
+  +storageKey: string
+}
+
+Submission "1" *-- "0..*" SubmissionFile : publicDownloads
+Submission ..> SubmissionStatus
+
+note right of SubmissionFile
+  Only rows with isPublic=true
+  are exposed to readers
+end note
+
+@enduml

@@ -1,0 +1,47 @@
+@startuml folio-class-overview
+' Compact map of all backend entities (no attributes)
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User
+class Role
+class Permission
+class UserRole
+class RolePermission
+class RoleInvitation
+
+class Submission
+class SubmissionFile
+
+class ReviewAssignment
+class Review
+
+class CopyeditAssignment
+class CopyeditNote
+
+class Notification
+class RevokedToken
+class OutboundEvent
+
+User *-- UserRole
+Role *-- UserRole
+Role *-- RolePermission
+Permission *-- RolePermission
+User *-- RoleInvitation
+
+User -- Submission
+Submission *-- SubmissionFile
+Submission *-- ReviewAssignment
+User -- ReviewAssignment
+ReviewAssignment -- Review
+
+Submission *-- CopyeditAssignment
+User -- CopyeditAssignment
+CopyeditAssignment *-- CopyeditNote
+
+User -- Notification
+User -- RevokedToken
+
+@enduml

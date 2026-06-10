@@ -1,0 +1,61 @@
+%% Journal manager — staff roles, invitations, email platform (users.manage_roles, email.manage_*)
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ user_roles : has
+  roles ||--o{ user_roles : grants
+  users ||--o{ role_invitations : invitee
+  users ||--o{ role_invitations : invited_by
+  users ||--o{ review_assignments : assigns_reviewer
+  users ||--o{ copyedit_assignments : assigns_copyeditor
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+    string review_keywords
+    boolean willing_to_review
+  }
+
+  roles {
+    uuid id PK
+    string slug UK
+    string name
+  }
+
+  user_roles {
+    uuid user_id PK
+    uuid role_id PK
+  }
+
+  role_invitations {
+    uuid id PK
+    uuid invitee_user_id FK
+    uuid invited_by_user_id FK
+    string role_slug
+    string status
+  }
+
+  review_assignments {
+    uuid id PK
+    uuid reviewer_id FK
+    uuid submission_id FK
+  }
+
+  copyedit_assignments {
+    uuid id PK
+    uuid copyeditor_id FK
+    uuid submission_id FK
+  }
+
+  email_template {
+    string template_key PK
+    string locale PK
+    string subject_template
+  }
+
+  email_reminder_policy {
+    int id PK
+    int review_due_in_days
+  }

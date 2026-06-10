@@ -1,0 +1,97 @@
+@startuml folio-class-by-role-editor
+' Editor — queue, assign reviewers, curate review package, workflow status
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+class Submission <<entity>> {
+  +id: UUID
+  +authorId: UUID
+  +slug: string?
+  +title: string
+  +status: SubmissionStatus
+  +reviewMethod: SubmissionReviewMethod
+  +publishedAt: Date?
+}
+
+enum SubmissionStatus <<enum>> {
+  SUBMITTED
+  UNDER_REVIEW
+  REVISIONS_REQUESTED
+  ACCEPTED
+  REJECTED
+  COPYEDITING
+}
+
+enum SubmissionReviewMethod <<enum>> {
+  OPEN
+  ANONYMOUS
+  DOUBLE_ANONYMOUS
+}
+
+enum SubmissionFileStage <<enum>> {
+  SUBMISSION
+  REVIEW
+}
+
+class SubmissionFile <<entity>> {
+  +id: UUID
+  +submissionId: UUID
+  +kind: string
+  +fileStage: SubmissionFileStage
+}
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+}
+
+enum AssignmentStatus <<enum>> {
+  INVITED
+  ACCEPTED
+  COMPLETED
+}
+
+class ReviewAssignment <<entity>> {
+  +id: UUID
+  +slug: string?
+  +submissionId: UUID
+  +reviewerId: UUID
+  +status: AssignmentStatus
+}
+
+enum ReviewRecommendation <<enum>> {
+  ACCEPT
+  REJECT
+  REVISIONS
+}
+
+class Review <<entity>> {
+  +id: UUID
+  +assignmentId: UUID
+  +recommendation: ReviewRecommendation
+}
+
+enum CopyeditAssignmentStatus <<enum>> {
+  ACTIVE
+  AWAITING_AUTHOR
+  READY_FOR_REVIEW
+}
+
+class CopyeditAssignment <<entity>> {
+  +id: UUID
+  +slug: string?
+  +submissionId: UUID
+  +copyeditorId: UUID
+  +status: CopyeditAssignmentStatus
+}
+
+Submission "1" *-- "0..*" SubmissionFile
+Submission "1" *-- "0..*" ReviewAssignment
+User "1" -- "0..*" ReviewAssignment : reviewer >
+ReviewAssignment "1" -- "0..1" Review
+Submission "1" *-- "0..*" CopyeditAssignment
+Submission ..> SubmissionStatus
+
+@enduml

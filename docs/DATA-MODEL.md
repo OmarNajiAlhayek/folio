@@ -101,64 +101,53 @@ Adjust edge cases in implementation, but **keep the same status strings** as [`A
 
 ## ER diagram (Mermaid)
 
+**ER diagrams (by domain):** [`diagrams/erd/README.md`](./diagrams/erd/README.md) — six focused Mermaid files (`01`–`06`). **ER diagrams (by role):** [`diagrams/erd-by-role/README.md`](./diagrams/erd-by-role/README.md). **Class diagrams (TypeORM):** [`diagrams/class/folio-overview.mmd`](./diagrams/class/folio-overview.mmd) (one Mermaid diagram, all roles) · [`diagrams/class/README.md`](./diagrams/class/README.md) (by domain) · [`diagrams/class-by-role/README.md`](./diagrams/class-by-role/README.md) (by role). **All links in one table:** [`diagrams/erd/LINKS.md`](./diagrams/erd/LINKS.md). Compact overview (no columns): [`diagrams/erd/folio-overview.puml`](./diagrams/erd/folio-overview.puml) / [`folio-overview.mmd`](./diagrams/erd/folio-overview.mmd). Optional full detail: [`diagrams/erd/folio-full.mmd`](./diagrams/erd/folio-full.mmd).
+
+Mermaid `erDiagram` attributes must use `type name [PK|FK|UK]` only — no commas (`FK,UK`), no quoted `"nullable"`, avoid `enum` / `jsonb` / `timestamptz` as types (use `string`, `json`, `datetime`).
+
+Simplified MVP view (no `Journal` table in code yet):
+
 ```mermaid
 erDiagram
-  Journal ||--o{ Submission : "has"
-  User ||--o{ Submission : "authors"
-  Submission ||--o{ SubmissionFile : "has"
-  Submission ||--o{ ReviewAssignment : "has"
-  Submission ||--o{ CopyeditAssignment : "has"
-  User ||--o{ ReviewAssignment : "reviewer"
-  User ||--o{ CopyeditAssignment : "copyeditor"
-  User ||--o{ RoleInvitation : "invitee"
-  User ||--o{ Notification : "recipient"
-  ReviewAssignment ||--o| Review : "has"
-  CopyeditAssignment ||--o{ CopyeditNote : "has"
-
-  Journal {
-    uuid id PK
-    string name
-    string slug
-  }
+  User ||--o{ Submission : authors
+  Submission ||--o{ SubmissionFile : has
+  Submission ||--o{ ReviewAssignment : has
+  Submission ||--o{ CopyeditAssignment : has
+  User ||--o{ ReviewAssignment : reviewer
+  User ||--o{ CopyeditAssignment : copyeditor
+  User ||--o{ RoleInvitation : invitee
+  User ||--o{ Notification : recipient
+  ReviewAssignment ||--o| Review : has
+  CopyeditAssignment ||--o{ CopyeditNote : has
 
   User {
     uuid id PK
     string email UK
     string password_hash
     string display_name
-    string affiliation "nullable"
-    string orcid UK "nullable"
-    text review_keywords "nullable"
-    boolean willing_to_review
-    timestamptz created_at
-    timestamptz updated_at
+    datetime created_at
+    datetime updated_at
   }
 
   Submission {
     uuid id PK
     uuid author_id FK
-    uuid journal_id FK "nullable"
     string slug UK
     string title
-    text abstract
+    string abstract
     string status
-    jsonb constructor_content "nullable"
-    jsonb discipline_classification "nullable"
-    timestamptz created_at
-    timestamptz updated_at
-    timestamptz published_at "nullable"
+    datetime created_at
+    datetime updated_at
+    datetime published_at
   }
 
   SubmissionFile {
     uuid id PK
     uuid submission_id FK
     string storage_key
-    string original_name
-    string mime_type
-    bigint size_bytes
     string kind
     string file_stage
-    timestamptz created_at
+    datetime created_at
   }
 
   ReviewAssignment {
@@ -167,16 +156,14 @@ erDiagram
     uuid reviewer_id FK
     string slug UK
     string status
-    timestamptz assigned_at
+    datetime assigned_at
   }
 
   Review {
     uuid id PK
     uuid assignment_id FK
-    text comments_for_author
-    text comments_to_editor_only
     string recommendation
-    timestamptz submitted_at
+    datetime submitted_at
   }
 
   CopyeditAssignment {
@@ -185,16 +172,14 @@ erDiagram
     uuid copyeditor_id FK
     string slug UK
     string status
-    timestamptz assigned_at
+    datetime assigned_at
   }
 
   CopyeditNote {
     uuid id PK
     uuid assignment_id FK
     int round
-    text note_for_author
-    text note_to_editor_only
-    timestamptz submitted_at
+    datetime submitted_at
   }
 
   RoleInvitation {
@@ -203,25 +188,19 @@ erDiagram
     uuid invited_by_user_id FK
     string role_slug
     string status
-    timestamptz created_at
-    timestamptz resolved_at "nullable"
+    datetime created_at
+    datetime resolved_at
   }
 
   Notification {
     uuid id PK
     uuid user_id FK
     string type
-    string title_key
-    string body_key
-    jsonb params
-    string href
     string idempotency_key UK
-    timestamptz read_at "nullable"
-    timestamptz created_at
+    datetime read_at
+    datetime created_at
   }
 ```
-
-If you omit `Journal`, drop `journal_id` from `Submission` until needed.
 
 ---
 

@@ -1,0 +1,55 @@
+%% Editor — queue, assign reviewers, curate review package, workflow status, assign copyeditor
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  submissions ||--o{ submission_files : files
+  submissions ||--o{ review_assignments : assigns
+  users ||--o{ review_assignments : reviewer
+  review_assignments ||--o| reviews : reads
+  submissions ||--o{ copyedit_assignments : production
+
+  submissions {
+    uuid id PK
+    uuid author_id FK
+    string slug UK
+    string title
+    string status
+    string review_method
+    datetime published_at
+  }
+
+  submission_files {
+    uuid id PK
+    uuid submission_id FK
+    string kind
+    string file_stage
+  }
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+  }
+
+  review_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid reviewer_id FK
+    string status
+  }
+
+  reviews {
+    uuid id PK
+    uuid assignment_id FK
+    string recommendation
+  }
+
+  copyedit_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid copyeditor_id FK
+    string status
+  }

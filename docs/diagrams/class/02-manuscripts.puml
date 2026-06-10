@@ -1,0 +1,85 @@
+@startuml folio-class-manuscripts
+' backend/src/entities/submission*.ts, submission-file.entity.ts
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+}
+
+enum SubmissionStatus <<enum>> {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISIONS_REQUESTED
+  ACCEPTED
+  REJECTED
+  COPYEDITING
+  PUBLISHED
+}
+
+enum SubmissionReviewMethod <<enum>> {
+  OPEN
+  ANONYMOUS
+  DOUBLE_ANONYMOUS
+}
+
+enum SubmissionArticleType <<enum>> {
+  original_research
+  review_article
+  case_report
+  short_communication
+  other
+}
+
+enum SubmissionFileStage <<enum>> {
+  SUBMISSION
+  REVIEW
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +authorId: UUID
+  +slug: string?
+  +title: string
+  +titleAr: string?
+  +abstract: string
+  +abstractAr: string?
+  +articleType: SubmissionArticleType?
+  +keywords: string?
+  +keywordsAr: string?
+  +contributors: JSON?
+  +status: SubmissionStatus
+  +reviewMethod: SubmissionReviewMethod
+  +constructorContent: JSON?
+  +discipline: string?
+  +publishedAt: Date?
+  +createdAt: Date
+  +updatedAt: Date
+}
+
+class SubmissionFile <<entity>> {
+  +id: UUID
+  +submissionId: UUID
+  +storageKey: string
+  +originalName: string
+  +mimeType: string
+  +sizeBytes: bigint
+  +kind: string
+  +fileStage: SubmissionFileStage
+  +isPublic: boolean
+  +createdAt: Date
+}
+
+User "1" -- "0..*" Submission : author >
+Submission "1" *-- "0..*" SubmissionFile : files
+Submission ..> SubmissionStatus
+Submission ..> SubmissionReviewMethod
+Submission ..> SubmissionArticleType
+SubmissionFile ..> SubmissionFileStage
+
+@enduml

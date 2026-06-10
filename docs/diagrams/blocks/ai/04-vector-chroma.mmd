@@ -1,0 +1,35 @@
+%% Vector stack — one AIEngine (Chroma + encoders) powers multiple features
+flowchart TB
+  subgraph nest["Nest"]
+    PUB["Published article indexing\n"]
+    F1["Semantic catalog search\n"]
+    F2["Related articles\n"]
+    F3["Corpus similarity report\n"]
+    F4["Suggested reviewers\n"]
+    ACL["AiClientService\nSimilarity / Plagiarism /\nReviewerMatching gRPC"]
+    PUB & F1 & F2 & F3 & F4 --> ACL
+  end
+
+  subgraph py["ai-service — shared vector core"]
+    ENG["AIEngine singleton\nChroma persistent store\nbi-encoder SentenceTransformer\ncross-encoder lazy"]
+    subgraph rpc["gRPC servicers"]
+      SIM["SimilarityService\nindex, related, semanticSearch"]
+      PLAG["PlagiarismService\ncorpus chunk overlap"]
+      REV["ReviewerMatchingService\nSuggestReviewers"]
+    end
+    ING["ArticleIngestionService"]
+    SRC["SearchService / SimilarityService\n/ PlagiarismService / ReviewerMatching"]
+    SIM --> ING & SRC
+    PLAG --> SRC
+    REV --> SRC
+    ING & SRC --> ENG
+  end
+
+  subgraph data["Indexed content"]
+    ART["Published articles\n(summary + chunks)"]
+    REVDATA["Reviewer profiles +\nreview history\n(sent per RPC from Nest)"]
+  end
+
+  ACL -->|"gRPC"| SIM & PLAG & REV
+  ING --> ART
+  REV --> REVDATA

@@ -1,0 +1,109 @@
+@startuml folio-class-email-events
+' backend: outbound-event.entity.ts
+' services/email-service/src: email schema
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "backend" {
+  enum OutboundEventStatus <<enum>> {
+    pending
+    published
+    dead
+  }
+
+  class OutboundEvent <<entity>> {
+    +id: UUID
+    +routingKey: string
+    +payload: JSON
+    +attempts: int
+    +lastError: string?
+    +status: OutboundEventStatus
+    +nextAttemptAt: Date?
+    +claimedAt: Date?
+    +publishedAt: Date?
+    +createdAt: Date
+  }
+
+  class ReviewAssignment <<entity>> {
+    +id: UUID
+    +slug: string?
+    +reviewerId: UUID
+  }
+
+  OutboundEvent ..> OutboundEventStatus
+}
+
+package "email schema" <<Database>> {
+  class EmailTemplate <<entity>> {
+    +templateKey: string
+    +locale: string
+    +subjectTemplate: string
+    +htmlBody: string
+    +textBody: string
+    +updatedAt: Date
+  }
+
+  class EmailReminderPolicy <<entity>> {
+    +id: short
+    +reviewDueInDays: int
+    +updatedAt: Date
+  }
+
+  enum ReminderKind <<enum>> {
+    review_due_soon
+    review_overdue
+  }
+
+  enum ReminderStatus <<enum>> {
+    pending
+    sent
+    cancelled
+  }
+
+  class Reminder <<entity>> {
+    +id: UUID
+    +assignmentSlug: string
+    +submissionTitle: string
+    +reviewerId: string
+    +reviewerEmail: string
+    +kind: ReminderKind
+    +emailLocale: string
+    +sendAt: Date
+    +status: ReminderStatus
+    +sentAt: Date?
+  }
+
+  enum EmailLogStatus <<enum>> {
+    pending
+    sent
+    failed
+  }
+
+  class EmailLog <<entity>> {
+    +id: UUID
+    +idempotencyKey: string
+    +recipient: string
+    +template: string
+    +context: JSON
+    +status: EmailLogStatus
+    +providerMessageId: string?
+    +sentAt: Date?
+  }
+
+  Reminder ..> ReminderKind
+  Reminder ..> ReminderStatus
+  EmailLog ..> EmailLogStatus
+}
+
+OutboundEvent ..> Reminder : <<publish>>\nRabbitMQ
+OutboundEvent ..> EmailLog : <<publish>>
+ReviewAssignment ..> Reminder : assignmentSlug\n<<logical>>
+
+note bottom of Reminder
+  No FK to review_assignments;
+  slug + email snapshots
+end note
+
+@enduml

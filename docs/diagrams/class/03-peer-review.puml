@@ -1,0 +1,83 @@
+@startuml folio-class-peer-review
+' review-assignment.entity.ts, review.entity.ts
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +willingToReview: boolean
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +slug: string?
+  +title: string
+  +status: SubmissionStatus
+  +reviewMethod: SubmissionReviewMethod
+}
+
+enum SubmissionStatus <<enum>> {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISIONS_REQUESTED
+  ACCEPTED
+  REJECTED
+  COPYEDITING
+  PUBLISHED
+}
+
+enum SubmissionReviewMethod <<enum>> {
+  OPEN
+  ANONYMOUS
+  DOUBLE_ANONYMOUS
+}
+
+enum AssignmentStatus <<enum>> {
+  INVITED
+  ACCEPTED
+  DECLINED
+  COMPLETED
+}
+
+enum ReviewRecommendation <<enum>> {
+  ACCEPT
+  REJECT
+  REVISIONS
+}
+
+class ReviewAssignment <<entity>> {
+  +id: UUID
+  +slug: string?
+  +submissionId: UUID
+  +reviewerId: UUID
+  +status: AssignmentStatus
+  +assignedAt: Date
+}
+
+class Review <<entity>> {
+  +id: UUID
+  +assignmentId: UUID
+  +commentsForAuthor: string
+  +commentsToEditorOnly: string
+  +recommendation: ReviewRecommendation
+  +submittedAt: Date
+}
+
+Submission "1" *-- "0..*" ReviewAssignment : reviewAssignments
+User "1" -- "0..*" ReviewAssignment : reviewer >
+ReviewAssignment "1" -- "0..1" Review : review
+Submission ..> SubmissionStatus
+Submission ..> SubmissionReviewMethod
+ReviewAssignment ..> AssignmentStatus
+Review ..> ReviewRecommendation
+
+note right of Review
+  assignment_id UNIQUE
+  one review per assignment
+end note
+
+@enduml

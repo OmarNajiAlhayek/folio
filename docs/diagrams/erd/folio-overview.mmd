@@ -1,0 +1,29 @@
+%% Compact ERD — tables and links only (no columns).
+%% Mirrors diagrams/class/folio-overview.puml
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ user_roles : has
+  roles ||--o{ user_roles : assigned_to
+  roles ||--o{ role_permissions : grants
+  permissions ||--o{ role_permissions : included_in
+  users ||--o{ role_invitations : invitee
+  users ||--o{ role_invitations : invited_by
+
+  users ||--o{ submissions : authors
+  submissions ||--o{ submission_files : has
+  submissions ||--o{ review_assignments : has
+  users ||--o{ review_assignments : reviewer
+  review_assignments ||--o| reviews : has
+
+  submissions ||--o{ copyedit_assignments : has
+  users ||--o{ copyedit_assignments : copyeditor
+  copyedit_assignments ||--o{ copyedit_notes : has
+
+  users ||--o{ notifications : recipient
+  users ||--o{ revoked_tokens : logout
+
+  outbound_event_outbox {
+    uuid id PK
+  }

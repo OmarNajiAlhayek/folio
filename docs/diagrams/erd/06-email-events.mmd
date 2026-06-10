@@ -1,0 +1,60 @@
+erDiagram
+  users ||--o{ review_assignments : reviewer
+  review_assignments ||--o{ reminder : slug_snapshot
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+    string preferred_locale
+  }
+
+  review_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid reviewer_id FK
+    string status
+  }
+
+  outbound_event_outbox {
+    uuid id PK
+    string routing_key
+    json payload
+    string status
+    datetime created_at
+  }
+
+  email_template {
+    string template_key PK
+    string locale PK
+    string subject_template
+    datetime updated_at
+  }
+
+  email_reminder_policy {
+    int id PK
+    int review_due_in_days
+    datetime updated_at
+  }
+
+  reminder {
+    uuid id PK
+    string assignment_slug
+    string submission_title
+    string reviewer_id
+    string reviewer_email
+    string kind
+    string email_locale
+    datetime send_at
+    string status
+  }
+
+  email_log {
+    uuid id PK
+    string idempotency_key UK
+    string recipient
+    string template
+    string status
+    datetime sent_at
+  }

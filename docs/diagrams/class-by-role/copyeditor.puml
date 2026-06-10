@@ -1,0 +1,54 @@
+@startuml folio-class-by-role-copyeditor
+' Copyeditor — copyedit.view_queue, submit_note, publish. See use-cases/copyeditor.puml
+
+left to right direction
+skinparam classAttributeIconSize 0
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +displayName: string
+}
+
+class Submission <<entity>> {
+  +id: UUID
+  +slug: string?
+  +title: string
+  +status: SubmissionStatus
+}
+
+enum SubmissionStatus <<enum>> {
+  COPYEDITING
+  ACCEPTED
+  PUBLISHED
+}
+
+enum CopyeditAssignmentStatus <<enum>> {
+  ACTIVE
+  AWAITING_AUTHOR
+  READY_FOR_REVIEW
+}
+
+class CopyeditAssignment <<entity>> {
+  +id: UUID
+  +slug: string?
+  +submissionId: UUID
+  +copyeditorId: UUID
+  +status: CopyeditAssignmentStatus
+  +assignedAt: Date
+}
+
+class CopyeditNote <<entity>> {
+  +id: UUID
+  +assignmentId: UUID
+  +round: int
+  +noteForAuthor: string
+  +submittedAt: Date
+}
+
+User "1" -- "0..*" CopyeditAssignment : copyeditor >
+CopyeditAssignment "1" *-- "0..*" CopyeditNote : notes
+Submission "1" *-- "0..*" CopyeditAssignment
+CopyeditAssignment ..> CopyeditAssignmentStatus
+
+@enduml

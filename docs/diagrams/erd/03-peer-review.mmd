@@ -1,0 +1,38 @@
+%% Wider layout: LR. Needs Mermaid 10.3+ (VS Code extension / mermaid.live).
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  submissions ||--o{ review_assignments : has
+  users ||--o{ review_assignments : reviewer
+  review_assignments ||--o| reviews : has
+
+  submissions {
+    uuid id PK
+    uuid author_id FK
+    string slug UK
+    string status
+    string review_method
+  }
+
+  users {
+    uuid id PK
+    string email UK
+    boolean willing_to_review
+  }
+
+  review_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid reviewer_id FK
+    string status
+    datetime assigned_at
+  }
+
+  reviews {
+    uuid id PK
+    uuid assignment_id FK
+    string recommendation
+    datetime submitted_at
+  }

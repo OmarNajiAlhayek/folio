@@ -1,0 +1,38 @@
+%% LLM features — local fine-tuned Qwen 2.5 7B via LM Studio (OpenAI-compatible API)
+%% Layout: left-to-right for a wide, shallow diagram
+flowchart LR
+  subgraph ui["UI / roles"]
+    direction LR
+    U1["Author — keyword suggestions"]
+    U2["Copyeditor — reference cross-check"]
+  end
+
+  subgraph nest["Nest"]
+    direction LR
+    RK["POST suggest-keywords / preview"]
+    RC["AiClientService"]
+    RK --> RC
+  end
+
+  subgraph py["ai-service"]
+    direction LR
+    GK["KeywordService"]
+    GX["CopyeditService"]
+    KS["KeywordSuggestionService"]
+    CS["CopyeditAnalysisService"]
+    PR["OpenAiCompatProvider"]
+    GK --> KS --> PR
+    GX --> CS --> PR
+  end
+
+  subgraph lms["Local inference"]
+    direction LR
+    LM["LM Studio localhost:1234/v1"]
+    LLM["Fine-tuned Qwen 2.5 7B"]
+    LM --> LLM
+  end
+
+  U1 --> RK
+  U2 --> RC
+  RC -->|"gRPC"| GK & GX
+  PR -->|"chat/completions"| LM

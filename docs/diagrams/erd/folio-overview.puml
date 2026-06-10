@@ -1,0 +1,54 @@
+@startuml folio-erd-overview
+' Compact ERD — tables and links only (no columns).
+' Mirrors diagrams/class/folio-overview.puml
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam linetype ortho
+
+entity users
+entity roles
+entity permissions
+entity user_roles
+entity role_permissions
+entity role_invitations
+
+entity submissions
+entity submission_files
+
+entity review_assignments
+entity reviews
+
+entity copyedit_assignments
+entity copyedit_notes
+
+entity notifications
+entity revoked_tokens
+entity outbound_event_outbox
+
+users ||--o{ user_roles
+roles ||--o{ user_roles
+roles ||--o{ role_permissions
+permissions ||--o{ role_permissions
+users ||--o{ role_invitations
+users ||--o{ role_invitations : invited_by
+
+users ||--o{ submissions
+submissions ||--o{ submission_files
+submissions ||--o{ review_assignments
+users ||--o{ review_assignments : reviewer
+review_assignments ||--o| reviews
+
+submissions ||--o{ copyedit_assignments
+users ||--o{ copyedit_assignments : copyeditor
+copyedit_assignments ||--o{ copyedit_notes
+
+users ||--o{ notifications
+users ||--o{ revoked_tokens
+
+note right of outbound_event_outbox
+  No FK to other tables;
+  transactional outbox → RabbitMQ
+end note
+
+@enduml

@@ -1,0 +1,35 @@
+erDiagram
+  users ||--o{ submissions : authors
+  submissions ||--o{ copyedit_assignments : has
+  users ||--o{ copyedit_assignments : copyeditor
+  copyedit_assignments ||--o{ copyedit_notes : has
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+  }
+
+  submissions {
+    uuid id PK
+    uuid author_id FK
+    string slug UK
+    string title
+    string status
+  }
+
+  copyedit_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid copyeditor_id FK
+    string status
+    datetime assigned_at
+  }
+
+  copyedit_notes {
+    uuid id PK
+    uuid assignment_id FK
+    int round
+    datetime submitted_at
+  }

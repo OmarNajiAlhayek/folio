@@ -1,0 +1,53 @@
+erDiagram
+  users ||--o{ user_roles : has
+  roles ||--o{ user_roles : assigned_to
+  roles ||--o{ role_permissions : grants
+  permissions ||--o{ role_permissions : included_in
+  users ||--o{ role_invitations : invitee
+  users ||--o{ role_invitations : invited_by
+
+  users {
+    uuid id PK
+    string email UK
+    string password_hash
+    string display_name
+    string affiliation
+    string orcid UK
+    string review_keywords
+    boolean willing_to_review
+    string preferred_locale
+    datetime created_at
+    datetime updated_at
+  }
+
+  roles {
+    uuid id PK
+    string slug UK
+    string name
+  }
+
+  permissions {
+    uuid id PK
+    string slug UK
+    string description
+  }
+
+  user_roles {
+    uuid user_id PK
+    uuid role_id PK
+  }
+
+  role_permissions {
+    uuid role_id PK
+    uuid permission_id PK
+  }
+
+  role_invitations {
+    uuid id PK
+    uuid invitee_user_id FK
+    uuid invited_by_user_id FK
+    string role_slug
+    string status
+    datetime created_at
+    datetime resolved_at
+  }

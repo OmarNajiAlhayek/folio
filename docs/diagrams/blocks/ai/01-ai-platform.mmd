@@ -1,0 +1,32 @@
+%% Folio AI — shared platform (all product features)
+flowchart TB
+  subgraph client["Client tier"]
+    UI["Next.js frontend"]
+  end
+
+  subgraph api["Nest backend (BFF)"]
+    REST["REST controllers\n(submissions, public, copyedit-assignments)"]
+    ACL["AiClientService\n+ feature flags"]
+    PG[("PostgreSQL\nsubmissions, users, …")]
+    REST --> ACL
+    REST --> PG
+  end
+
+  subgraph aisvc["ai-service (Python)"]
+    GRPC["gRPC server :5246\noptional x-folio-service-token"]
+    HTTP["HTTP :5245\nhealth / ready only"]
+    subgraph rpc["Product RPCs"]
+      C["ClassifierService"]
+      K["KeywordService"]
+      P["PlagiarismService"]
+      S["SimilarityService"]
+      R["ReviewerMatchingService"]
+      X["CopyeditService"]
+    end
+    GRPC --> C & K & P & S & R & X
+  end
+
+  UI -->|"HTTPS REST\n(JWT cookies)"| REST
+  ACL -->|"gRPC"| GRPC
+
+  UI -.->|"never"| aisvc

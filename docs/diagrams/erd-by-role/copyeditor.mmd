@@ -1,0 +1,37 @@
+%% Copyeditor — assigned manuscripts and note rounds. See use-cases/copyeditor.puml
+%%{init: {"er": {"layoutDirection": "LR"}} }%%
+erDiagram
+  direction LR
+
+  users ||--o{ copyedit_assignments : assigned
+  copyedit_assignments ||--o{ copyedit_notes : rounds
+  submissions ||--o{ copyedit_assignments : in_production
+
+  users {
+    uuid id PK
+    string email UK
+    string display_name
+  }
+
+  submissions {
+    uuid id PK
+    string slug UK
+    string title
+    string status
+  }
+
+  copyedit_assignments {
+    uuid id PK
+    string slug UK
+    uuid submission_id FK
+    uuid copyeditor_id FK
+    string status
+    datetime assigned_at
+  }
+
+  copyedit_notes {
+    uuid id PK
+    uuid assignment_id FK
+    int round
+    datetime submitted_at
+  }

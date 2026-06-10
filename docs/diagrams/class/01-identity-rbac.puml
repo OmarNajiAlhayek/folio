@@ -1,0 +1,79 @@
+@startuml folio-class-identity-rbac
+' TypeORM entities: backend/src/entities/
+' Render: https://www.plantuml.com/plantuml
+
+left to right direction
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User <<entity>> {
+  +id: UUID
+  +email: string
+  +passwordHash: string
+  +displayName: string
+  +affiliation: string?
+  +orcid: string?
+  +reviewKeywords: string?
+  +willingToReview: boolean
+  +preferredLocale: string?
+  +createdAt: Date
+  +updatedAt: Date
+}
+
+class Role <<entity>> {
+  +id: UUID
+  +slug: string
+  +name: string
+}
+
+class Permission <<entity>> {
+  +id: UUID
+  +slug: string
+  +description: string?
+}
+
+class UserRole <<entity>> {
+  +userId: UUID
+  +roleId: UUID
+}
+
+class RolePermission <<entity>> {
+  +roleId: UUID
+  +permissionId: UUID
+}
+
+enum RoleInvitationStatus <<enum>> {
+  INVITED
+  ACCEPTED
+  DECLINED
+}
+
+class RoleInvitation <<entity>> {
+  +id: UUID
+  +inviteeUserId: UUID
+  +invitedByUserId: UUID
+  +roleSlug: string
+  +status: RoleInvitationStatus
+  +createdAt: Date
+  +resolvedAt: Date?
+}
+
+User "1" *-- "0..*" UserRole : userRoles
+Role "1" *-- "0..*" UserRole
+User "1" *-- "0..*" RoleInvitation : invitee
+User "1" *-- "0..*" RoleInvitation : invitedBy
+Role "1" *-- "0..*" RolePermission : rolePermissions
+Permission "1" *-- "0..*" RolePermission
+RoleInvitation ..> RoleInvitationStatus
+
+note bottom of UserRole
+  table: user_roles
+  composite PK (user_id, role_id)
+end note
+
+note bottom of RolePermission
+  table: role_permissions
+  composite PK (role_id, permission_id)
+end note
+
+@enduml
