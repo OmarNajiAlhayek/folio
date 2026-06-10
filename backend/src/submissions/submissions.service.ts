@@ -2712,10 +2712,14 @@ export class SubmissionsService implements OnModuleInit {
     }
     const authorPart = (commentsForAuthor ?? '').trim();
     const editorPart = (commentsToEditorOnly ?? '').trim();
-    if (!authorPart && !editorPart) {
+    if (
+      recommendation !== ReviewRecommendation.ACCEPT &&
+      !authorPart &&
+      !editorPart
+    ) {
       throw new BadRequestException({
         message:
-          'Provide comments for the author and/or confidential comments for the editor',
+          'For reject or revisions, provide comments for the author and/or confidential comments for the editor',
         code: 'VALIDATION_ERROR',
       });
     }
@@ -3524,6 +3528,39 @@ export class SubmissionsService implements OnModuleInit {
         this.emitPendingNotifications(pending);
         return saved;
       });
+  }
+
+  /** Copyeditor skips the author query round when no author corrections are needed. */
+  async markCopyeditCopyeditorApproved(
+    assignmentSlug: string,
+    copyeditorId: string,
+  ): Promise<CopyeditAssignment> {
+    const assignment = await this.copyeditAssignmentsRepo.findOne({
+      where: { slug: assignmentSlug, copyeditorId },
+      relations: ['submission'],
+    });
+    if (!assignment) {
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    const submission = assignment.submission;
+    if (!submission || submission.status !== SubmissionStatus.COPYEDITING) {
+      throw new BadRequestException({
+        message: 'Submission is not in copyediting',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (assignment.status !== CopyeditAssignmentStatus.ACTIVE) {
+      throw new BadRequestException({
+        message:
+          'Only active assignments can be approved without an author round',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    assignment.status = CopyeditAssignmentStatus.READY_FOR_REVIEW;
+    return this.copyeditAssignmentsRepo.save(assignment);
   }
 
   async listCopyeditNotes(

@@ -754,9 +754,11 @@
     "comments": "Comments",
     "commentsHint": "Summarize strengths and weaknesses for the author and editor. Be specific and constructive.",
     "commentsForAuthor": "Comments for the author",
-    "commentsForAuthorHint": "The author can see this text. Optional if you provide confidential editor comments below.",
+    "commentsForAuthorHint": "The author can see this text.",
+    "commentsOptionalOnAccept": "For an acceptance recommendation, both comment fields are optional.",
+    "commentsRequiredOnRejectOrRevisions": "For reject or revisions, enter comments for the author and/or confidential comments for the editor (at least one).",
     "commentsToEditorOnly": "Confidential comments for the editor",
-    "commentsToEditorOnlyHint": "Only editors see this. Optional if you provide author comments above — at least one of the two is required.",
+    "commentsToEditorOnlyHint": "Only editors see this.",
     "recommendation": "Recommendation",
     "formSection": "Your review",
     "recHintAccept": "Ready for acceptance or only minor edits.",
@@ -1130,6 +1132,10 @@
     "sendQuery": "Send to author",
     "noteSent": "Copyedit query sent.",
     "noteFailed": "Could not send query.",
+    "approveReadyButton": "Approve for publication (no author changes)",
+    "approveReadyHint": "Use when the manuscript needs no author corrections. You can publish to the catalog afterward.",
+    "approveReadySuccess": "Approved — ready to publish.",
+    "approveReadyFailed": "Could not approve for publication.",
     "publishButton": "Publish to catalog",
     "published": "Published.",
     "publishFailed": "Could not publish.",
@@ -1181,6 +1187,6 @@
     "invalid": "Invalid input.",
     "abstractMaxWordsEn": "English abstract must be at most {max} words.",
     "abstractMaxWordsAr": "Arabic abstract must be at most {max} words.",
-    "reviewCommentsRequired": "Enter comments for the author and/or confidential comments for the editor (at least one)."
+    "reviewCommentsRequired": "For reject or revisions, enter comments for the author and/or confidential comments for the editor (at least one)."
   }
 }

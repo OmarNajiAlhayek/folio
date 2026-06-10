@@ -211,4 +211,33 @@ describe('SubmissionsService copyedit workflow', () => {
       service.markCopyeditAuthorReady(assignment.slug!, author.sub),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('markCopyeditCopyeditorApproved sets ready_for_review when active', async () => {
+    const activeAssignment = {
+      ...assignment,
+      status: CopyeditAssignmentStatus.ACTIVE,
+      notes: [],
+    };
+    copyeditAssignmentsRepo.findOne.mockResolvedValue(activeAssignment);
+    const saved = await service.markCopyeditCopyeditorApproved(
+      assignment.slug!,
+      assignment.copyeditorId,
+    );
+    expect(saved.status).toBe(CopyeditAssignmentStatus.READY_FOR_REVIEW);
+    expect(copyeditAssignmentsRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: CopyeditAssignmentStatus.READY_FOR_REVIEW,
+      }),
+    );
+  });
+
+  it('markCopyeditCopyeditorApproved rejects non-active assignments', async () => {
+    copyeditAssignmentsRepo.findOne.mockResolvedValue(assignment);
+    await expect(
+      service.markCopyeditCopyeditorApproved(
+        assignment.slug!,
+        assignment.copyeditorId,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

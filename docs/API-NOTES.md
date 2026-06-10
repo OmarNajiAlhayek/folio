@@ -43,6 +43,7 @@ Must include `copyediting` between acceptance and publication: `draft`, `submitt
 - **Queue (copyeditor):** `GET /copyedit-assignments/me` — assignments for the current copyeditor, nested submission summary.
 - **Queries:** `POST /copyedit-assignments/:assignmentSlug/notes` body `{ noteForAuthor, noteToEditorOnly? }` — assignment `active` or `ready_for_review` → `awaiting_author`; emits `copyedit.queries_sent`.
 - **Author ready:** `POST /copyedit-assignments/:assignmentSlug/ready` — author only; requires new `manuscript` upload after latest note; emits `copyedit.author_ready`.
+- **Approve without author round:** `POST /copyedit-assignments/:assignmentSlug/approve-ready` — copyeditor (assignment owner); assignment must be `active`; sets `ready_for_review` (no email).
 - **Publish:** `POST /submissions/:slug/publish` — copyeditor assigned on submission; all assignments must be `ready_for_review`.
 - **List notes:** `GET /submissions/:slug/copyedit-notes` — timeline with `round`, `assignmentSlug`; author sees `noteForAuthor` only.
 - **AI analysis:** `POST /copyedit-assignments/:assignmentSlug/ai-analysis` — copyeditor (assignment owner) or editor. Returns `{ formatIssues, grammarNotes, referenceIssues, aiUnavailable }`. Format rules are local (Damascus profile). Grammar uses LanguageTool when `LANGUAGE_TOOL_ENABLED=true` (empty array when disabled/unavailable). Reference cross-check uses gRPC `CopyeditService` when `AI_COPYEDIT_ENABLED=true` (`aiUnavailable: true` when disabled/unreachable).

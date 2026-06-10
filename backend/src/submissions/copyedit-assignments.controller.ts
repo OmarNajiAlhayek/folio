@@ -46,6 +46,15 @@ export class CopyeditAssignmentsController {
     return this.submissionsService.markCopyeditAuthorReady(slug, user.sub);
   }
 
+  @Post(':slug/approve-ready')
+  @Permissions(PERMISSION_SLUGS.COPYEDIT_SUBMIT_NOTE)
+  approveReadyWithoutAuthor(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.markCopyeditCopyeditorApproved(slug, user.sub);
+  }
+
   @Post(':slug/ai-analysis')
   @Permissions(PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE)
   runAiAnalysis(

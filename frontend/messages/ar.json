@@ -754,9 +754,11 @@
     "comments": "التعليقات",
     "commentsHint": "لخّص نقاط القوة والضعف للمؤلف والمحرر. كن محددًا وبنّاءً.",
     "commentsForAuthor": "تعليقات للمؤلف",
-    "commentsForAuthorHint": "يمكن للمؤلف رؤية هذا النص. اختياري إن أدخلت تعليقات سرية للمحرّر أدناه.",
+    "commentsForAuthorHint": "يمكن للمؤلف رؤية هذا النص.",
+    "commentsOptionalOnAccept": "عند توصية القبول، حقلَا التعليقات اختياريان.",
+    "commentsRequiredOnRejectOrRevisions": "عند الرفض أو طلب التعديلات، أدخل تعليقات للمؤلف و/أو تعليقات سرية للمحرّر (أحدهما على الأقل).",
     "commentsToEditorOnly": "تعليقات سرية للمحرّر",
-    "commentsToEditorOnlyHint": "يراها المحرّرون فقط. اختياري إن أدخلت تعليقات للمؤلف أعلاه — مطلوب أحدهما على الأقل.",
+    "commentsToEditorOnlyHint": "يراها المحرّرون فقط.",
     "recommendation": "التوصية",
     "formSection": "مراجعتك",
     "recHintAccept": "جاهزة للقبول أو لتعديلات طفيفة فقط.",
@@ -1130,6 +1132,10 @@
     "sendQuery": "إرسال للمؤلف",
     "noteSent": "تم إرسال طلب التحرير.",
     "noteFailed": "تعذّر الإرسال.",
+    "approveReadyButton": "الموافقة للنشر (بدون تعديلات من المؤلف)",
+    "approveReadyHint": "استخدمها عندما لا تحتاج المخطوطة إلى تصحيحات من المؤلف. يمكنك النشر في الفهرس بعد ذلك.",
+    "approveReadySuccess": "تمت الموافقة — جاهز للنشر.",
+    "approveReadyFailed": "تعذّرت الموافقة للنشر.",
     "publishButton": "النشر في الفهرس",
     "published": "تم النشر.",
     "publishFailed": "تعذّر النشر.",
@@ -1181,6 +1187,6 @@
     "invalid": "إدخال غير صالح.",
     "abstractMaxWordsEn": "يجب ألا يزيد الملخص الإنجليزي عن {max} كلمة.",
     "abstractMaxWordsAr": "يجب ألا يزيد الملخص العربي عن {max} كلمة.",
-    "reviewCommentsRequired": "أدخل تعليقات للمؤلف و/أو تعليقات سرية للمحرّر (أحدهما على الأقل)."
+    "reviewCommentsRequired": "عند الرفض أو طلب التعديلات، أدخل تعليقات للمؤلف و/أو تعليقات سرية للمحرّر (أحدهما على الأقل)."
   }
 }

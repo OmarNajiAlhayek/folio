@@ -475,7 +475,9 @@ export default function ReviewFormPage() {
                 {t("formSection")}
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-ink/65">
-                {t("commentsForAuthorHint")} {t("commentsToEditorOnlyHint")}
+                {recommendation === "accept"
+                  ? t("commentsOptionalOnAccept")
+                  : t("commentsRequiredOnRejectOrRevisions")}
               </p>
 
               <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-8">

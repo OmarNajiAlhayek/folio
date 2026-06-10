@@ -181,7 +181,9 @@ export const createReviewSchema = z
   })
   .refine(
     (d) =>
-      d.commentsForAuthor.length > 0 || d.commentsToEditorOnly.length > 0,
+      d.recommendation === "accept" ||
+      d.commentsForAuthor.length > 0 ||
+      d.commentsToEditorOnly.length > 0,
     { message: "reviewCommentsRequired", path: ["commentsForAuthor"] },
   );
 

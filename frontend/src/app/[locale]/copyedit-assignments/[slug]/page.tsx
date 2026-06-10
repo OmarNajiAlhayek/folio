@@ -175,7 +175,9 @@ export default function CopyeditWorkbenchPage() {
 
     row.submission?.status === "copyediting";
 
+  const canApproveReady =
 
+    row?.status === "active" && row.submission?.status === "copyediting";
 
   async function submitNote() {
 
@@ -219,7 +221,23 @@ export default function CopyeditWorkbenchPage() {
 
   }
 
-
+  async function approveReadyWithoutAuthor() {
+    if (!row?.slug) return;
+    setBusy(true);
+    try {
+      await apiJson(`/copyedit-assignments/${row.slug}/approve-ready`, {
+        method: "POST",
+      });
+      toast.success(t("approveReadySuccess"));
+      await load();
+    } catch (err) {
+      showApiError(err, t("approveReadyFailed"), {
+        id: "copyedit-assignment-approve-ready",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function publish() {
 
@@ -487,24 +505,29 @@ export default function CopyeditWorkbenchPage() {
 
 
 
+      {canApproveReady && (
+        <section className="mt-6 rounded-xl border border-ink/10 bg-paper/40 p-4">
+          <p className="text-sm text-ink/70">{t("approveReadyHint")}</p>
+          <button
+            type="button"
+            disabled={busy}
+            className="mt-3 rounded-lg border border-ink/20 bg-surface px-4 py-2 text-sm font-medium text-ink disabled:opacity-50"
+            onClick={() => void approveReadyWithoutAuthor()}
+          >
+            {t("approveReadyButton")}
+          </button>
+        </section>
+      )}
+
       {canPublish && (
-
         <button
-
           type="button"
-
           disabled={busy}
-
           className="mt-6 rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 disabled:opacity-50"
-
           onClick={() => void publish()}
-
         >
-
           {t("publishButton")}
-
         </button>
-
       )}
 
       {row.slug && (
