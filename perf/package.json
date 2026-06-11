@@ -1,0 +1,10 @@
+{
+  "name": "@folio/perf",
+  "private": true,
+  "description": "Folio performance and load test harness (k6 + fixture setup)",
+  "type": "module",
+  "scripts": {
+    "setup": "node setup.mjs",
+    "run": "node run.mjs"
+  }
+}

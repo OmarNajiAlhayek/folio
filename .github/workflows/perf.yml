@@ -1,0 +1,99 @@
+name: Performance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 0'
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Build shared package
+        run: |
+          npm ci
+          npm run build
+        working-directory: packages/shared
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Install ai-service (dev)
+        run: pip install -e ".[dev]"
+        working-directory: services/ai-service
+
+      - name: Start full stack
+        run: docker compose -f docker-compose.local.yml up -d --wait
+        env:
+          COMPOSE_HTTP_TIMEOUT: 300
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5243/api/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "backend health check timed out"
+          exit 1
+
+      - name: Seed perf fixtures
+        run: npm run seed:perf
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USERNAME: postgres
+          DB_PASSWORD: changeme
+          DB_DATABASE: folio_review
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672
+          EMAIL_SERVICE_URL: http://localhost:5244
+          EMAIL_SERVICE_TOKEN: dev-email-internal-token
+          AI_SERVICE_GRPC_HOST: localhost
+          AI_SERVICE_GRPC_PORT: '5246'
+          AUTH_RETURN_BEARER: 'true'
+          THROTTLE_DEFAULT_LIMIT: '10000'
+          THROTTLE_LOGIN_LIMIT: '10000'
+          SEED_PERF_FIXTURES: '1'
+
+      - name: Prepare perf auth tokens
+        run: node perf/setup.mjs
+        env:
+          FOLIO_API_BASE: http://localhost:5243/api/v1
+
+      - name: Run performance harness
+        run: node perf/run.mjs --ci --skip-setup
+        env:
+          FOLIO_API_BASE: http://localhost:5243/api/v1
+
+      - name: Upload perf reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-reports
+          path: perf/reports/
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f docker-compose.local.yml down -v

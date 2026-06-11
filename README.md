@@ -26,23 +26,32 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 | `services/email-service/` | NestJS standalone email microservice (RabbitMQ consumer, scheduled reminders) |
 | `services/ai-service/` | Python FastAPI + gRPC AI microservice (classifier, keywords, similarity, plagiarism, reviewer matching, copyedit reference check) |
 | `proto/` | Buf protobuf contracts between Nest and ai-service |
-| `packages/shared/` | Canonical event contracts + small messaging helpers (mirrored into each app) |
+| `packages/shared/` | `@folio/shared` workspace package — event contracts + messaging helpers |
 | `docs/` | Specs |
 | `uploads/` | Created at runtime for manuscript files (gitignored at repo root) |
 
 ### Shared messaging contracts
 
-Event types, RabbitMQ topology, idempotency keys, and the log redactor are authored under **`packages/shared/`** and copied into `backend/` and `services/email-service/` (Nest `tsc` layout). After editing shared code:
+Event types, RabbitMQ topology, idempotency keys, and the log redactor live in the **`@folio/shared`** package (`packages/shared/`). Both Nest apps import it directly — no file copies. After editing shared code:
 
 ```bash
 # from repository root
-npm run sync:shared    # copy canonical → mirrors
-npm run check:shared   # fail if mirrors drift (CI-friendly)
+npm run build:shared
 ```
 
 See [`packages/shared/README.md`](packages/shared/README.md).
 
-**Email ops (RabbitMQ, grants, outbox repair, manual E2E):** [`docs/testing-email-pipeline.md`](docs/testing-email-pipeline.md) — operator runbooks, `grant-email-reminder-admin.sql`, and opt-in `npm run test:pipeline` for assign → outbox → queue.
+### Git hooks
+
+Root `npm install` enables **Husky** pre-commit hooks that run **lint-staged** (Prettier + ESLint on staged TypeScript). Install once from the repo root:
+
+```bash
+npm install
+```
+
+**Email ops (RabbitMQ, outbox repair, manual E2E):** [`docs/testing-email-pipeline.md`](docs/testing-email-pipeline.md) — operator runbooks and opt-in `npm run test:pipeline` for assign → outbox → queue.
+
+**Performance / load tests:** [`docs/testing-performance.md`](docs/testing-performance.md) — `npm run test:perf` (k6 + gRPC benchmarks; weekly GitHub Actions workflow).
 
 ## Prerequisites
 
@@ -76,8 +85,17 @@ docker compose -f docker-compose.dev.yml up -d
 ```bash
 cd backend
 npm install
+npm run migrate    # apply TypeORM migrations (also runs on API startup by default)
 npm run seed
 npm run start:dev
+```
+
+Migrations replace `synchronize: true` for schema management. Set `DB_SYNCHRONIZE=true` in `.env` only for quick local experiments.
+
+**Existing local DB** created with the old auto-sync? Either run `npm run seed:fresh` after migrations, or baseline the migration history if the schema already matches:
+
+```sql
+INSERT INTO migrations (timestamp, name) VALUES (1781093303431, 'Init1781093303431');
 ```
 
 `npm run seed` also applies the publication catalog search schema (FTS + `pg_trgm` on `submissions`). For a DB you seeded before that step existed, run `npm run db:publication-search` once.
@@ -104,7 +122,7 @@ npm install
 npm run start:dev
 ```
 
-The service connects to RabbitMQ, runs its own migrations into a dedicated `email` schema in the same Postgres database, and starts consuming `reviewer.invited` and `reminder.due` events. With `EMAIL_PROVIDER=noop` (default) it logs each would-be send instead of contacting an SMTP host. See [`services/email-service/README.md`](services/email-service/README.md) and [`docs/plans/email-service.md`](docs/plans/email-service.md).
+The service connects to its own Postgres database (`folio_email` on port **5433** via `docker-compose.dev.yml`), runs migrations into schema `email`, exposes an internal HTTP API on port **5244** for admin operations (proxied by the Nest backend), and consumes `reviewer.invited` and `reminder.due` events from RabbitMQ. With `EMAIL_PROVIDER=noop` (default) it logs each would-be send instead of contacting an SMTP host. See [`services/email-service/README.md`](services/email-service/README.md) and [`docs/plans/email-service.md`](docs/plans/email-service.md).
 
 **Terminal 4 — AI service** (optional; required for AI-assisted UI features)
 
@@ -115,7 +133,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-# Optional extras: pip install -e ".[dev,ml]" (AraBERT), pip install -e ".[dev,similarity]" (Chroma)
+# Optional extras: pip install -e ".[dev,ml]" (AraBERT), pip install -e ".[dev,similarity]" (pgvector)
 uvicorn app.main:app --reload --port 5245
 ```
 

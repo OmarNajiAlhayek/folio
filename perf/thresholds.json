@@ -1,0 +1,17 @@
+{
+  "reviewSubmit": {
+    "httpReqDurationP95Ms": 2000,
+    "httpReqDurationP99Ms": 5000,
+    "httpReqFailedRate": 0.01
+  },
+  "emailPipeline": {
+    "drainSecondsMax": 120,
+    "inviteCount": 50,
+    "minThroughputPerSecond": 0.3
+  },
+  "aiGrpc": {
+    "syncRpcP95Ms": 500,
+    "corpusJobsCount": 10,
+    "corpusJobsDrainSecondsMax": 180
+  }
+}

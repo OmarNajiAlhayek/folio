@@ -3,13 +3,39 @@
   "private": true,
   "description": "Folio peer-review monorepo (frontend, backend, email-service, ai-service)",
   "scripts": {
-    "sync:shared": "node scripts/sync-shared-mirrors.mjs",
-    "check:shared": "node scripts/check-shared-mirrors.mjs",
+    "build:shared": "npm run build --prefix packages/shared",
+    "prepare": "husky",
     "test:pipeline": "npm run test:pipeline --prefix backend",
+    "test:perf": "node perf/run.mjs",
+    "test:perf:setup": "node perf/setup.mjs",
+    "seed:perf": "npm run seed:perf --prefix backend",
     "proto:gen": "cd proto && buf generate",
     "proto:lint": "cd proto && buf lint"
   },
   "devDependencies": {
-    "@bufbuild/buf": "^1.70.0"
+    "@bufbuild/buf": "^1.70.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.4.2"
+  },
+  "lint-staged": {
+    "backend/**/*.{ts,json,md}": [
+      "prettier --write --config backend/.prettierrc"
+    ],
+    "frontend/**/*.{ts,tsx,json,md,css}": [
+      "prettier --write"
+    ],
+    "services/email-service/**/*.{ts,json,md}": [
+      "prettier --write"
+    ],
+    "packages/shared/**/*.ts": [
+      "prettier --write --config backend/.prettierrc"
+    ],
+    "backend/**/*.ts": [
+      "eslint --fix --config backend/eslint.config.mjs"
+    ],
+    "frontend/**/*.{ts,tsx}": [
+      "eslint --fix --config frontend/eslint.config.mjs"
+    ]
   }
 }
