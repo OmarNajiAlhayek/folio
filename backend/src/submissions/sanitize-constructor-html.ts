@@ -30,6 +30,8 @@ export const CONSTRUCTOR_TIPTAP_ALLOWED_TAGS = [
   'ol',
   'li',
   'br',
+  'span',
+  'img',
 ] as const;
 
 const RICH_TEXT_BLOCK_KINDS = new Set<RichTextBlockKind>([
@@ -64,11 +66,16 @@ function normalizeReferenceEntry(
   return next;
 }
 
+const ALLOWED_DIR = new Set(['ltr', 'rtl']);
+
 export function sanitizeConstructorTipTapHtml(html: string): string {
   const sanitized = sanitizeHtml(html ?? '', {
     allowedTags: [...CONSTRUCTOR_TIPTAP_ALLOWED_TAGS],
     allowedAttributes: {
       a: ['href'],
+      span: ['dir'],
+      sup: ['data-footnote-id', 'class'],
+      img: ['data-file-id', 'alt', 'class'],
     },
     transformTags: {
       a: (tagName, attribs) => {
@@ -77,6 +84,40 @@ export function sanitizeConstructorTipTapHtml(html: string): string {
           return { tagName: 'span', attribs: {} as Attributes };
         }
         return { tagName, attribs: { href: safe } };
+      },
+      span: (_tagName, attribs) => {
+        const dir = attribs.dir?.toLowerCase();
+        if (dir && ALLOWED_DIR.has(dir)) {
+          return { tagName: 'span', attribs: { dir } as Attributes };
+        }
+        return { tagName: 'span', attribs: {} as Attributes };
+      },
+      img: (_tagName, attribs) => {
+        const fileId = attribs['data-file-id']?.trim();
+        if (!fileId || attribs.src) {
+          return { tagName: 'span', attribs: {} as Attributes };
+        }
+        return {
+          tagName: 'img',
+          attribs: {
+            'data-file-id': fileId,
+            ...(attribs.alt ? { alt: attribs.alt.slice(0, 500) } : {}),
+            class: 'folio-inline-image',
+          } as Attributes,
+        };
+      },
+      sup: (_tagName, attribs) => {
+        const footnoteId = attribs['data-footnote-id']?.trim();
+        if (!footnoteId) {
+          return { tagName: 'sup', attribs: {} as Attributes };
+        }
+        return {
+          tagName: 'sup',
+          attribs: {
+            'data-footnote-id': footnoteId,
+            class: 'folio-footnote-ref',
+          } as Attributes,
+        };
       },
     },
   });
@@ -92,6 +133,14 @@ export function sanitizeConstructorContent(
   if (!content) return null;
   return {
     ...content,
+    ...(content.footnotes?.length
+      ? {
+          footnotes: content.footnotes.map((fn) => ({
+            ...fn,
+            text: sanitizeConstructorTipTapHtml(fn.text),
+          })),
+        }
+      : {}),
     sections: content.sections.map((section) => {
       if (section.kind === 'references') {
         return {

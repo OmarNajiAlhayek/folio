@@ -15,6 +15,8 @@ import { AssignmentRemindersController } from './assignment-reminders.controller
 import { DocxGeneratorService } from './docx-generator.service';
 import { DocxImportService } from './docx-import.service';
 import { EquationRenderService } from './equation-render.service';
+import { EquationOmmlService } from './equation-omml.service';
+import { ConstructorCollabGateway } from './constructor-collab.gateway';
 import { LanguageToolService } from './language-tool.service';
 import { RemindersService } from './reminders.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -23,6 +25,9 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ManuscriptStylesModule } from '../manuscript-styles/manuscript-styles.module';
 import { AiModule } from '../ai/ai.module';
+import { AiJobsModule } from '../ai-jobs/ai-jobs.module';
+import { UsersModule } from '../users/users.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -31,6 +36,9 @@ import { AiModule } from '../ai/ai.module';
     NotificationsModule,
     ManuscriptStylesModule,
     AiModule,
+    AiJobsModule,
+    UsersModule,
+    AuthModule,
     TypeOrmModule.forFeature([
       Submission,
       SubmissionFile,
@@ -53,6 +61,8 @@ import { AiModule } from '../ai/ai.module';
     DocxGeneratorService,
     DocxImportService,
     EquationRenderService,
+    EquationOmmlService,
+    ConstructorCollabGateway,
     LanguageToolService,
     PermissionsGuard,
   ],

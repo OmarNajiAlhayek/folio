@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -7,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -110,6 +112,8 @@ describe('SubmissionsService.generateDocx (attach)', () => {
           useValue: { get: jest.fn((_k: string, def?: string) => def) },
         },
         aiClientServiceMock,
+
+        aiJobsServiceMock,
         languageToolServiceMock,
       ],
     }).compile();
@@ -160,10 +164,15 @@ describe('SubmissionsService.generateDocx (attach)', () => {
       },
     ]);
 
-    await service.generateDocx(draftSubmission.slug!, authorUser, minimalContent, {
-      attach: true,
-      attachKind: 'manuscript_constructor',
-    });
+    await service.generateDocx(
+      draftSubmission.slug!,
+      authorUser,
+      minimalContent,
+      {
+        attach: true,
+        attachKind: 'manuscript_constructor',
+      },
+    );
 
     expect(filesRepo.remove).toHaveBeenCalled();
     expect(existsSync(join(uploadDir, oldKey))).toBe(false);

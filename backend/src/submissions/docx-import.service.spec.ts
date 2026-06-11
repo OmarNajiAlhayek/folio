@@ -78,8 +78,10 @@ describe('DocxImportService', () => {
     const result = await service.importFromBuffer(validZipHeader);
     const authors = result.content.sections.find((s) => s.kind === 'authors');
     expect(authors).toBeDefined();
-    expect((authors as { authors: { fullName: string; email: string }[] }).authors[0]
-      ?.fullName).toContain('Ada');
+    expect(
+      (authors as { authors: { fullName: string; email: string }[] }).authors[0]
+        ?.fullName,
+    ).toContain('Ada');
     expect(
       (authors as { authors: { email: string }[] }).authors[0]?.email,
     ).toContain('ada@test.dev');
@@ -100,7 +102,8 @@ describe('DocxImportService', () => {
     expect((arAbstract as { text: string }).text).toContain('نص الملخص');
     expect(
       result.content.sections.some(
-        (s) => s.kind === 'heading2' && (s as { text: string }).text === 'الملخص',
+        (s) =>
+          s.kind === 'heading2' && (s as { text: string }).text === 'الملخص',
       ),
     ).toBe(false);
   });
@@ -123,7 +126,9 @@ describe('DocxImportService', () => {
       value: `<h2>Abstract</h2><h1>References</h1><p><img src="data:image/png;base64,abc" /></p>`,
       messages: [],
     });
-    await expect(service.importFromBuffer(validZipHeader)).rejects.toMatchObject({
+    await expect(
+      service.importFromBuffer(validZipHeader),
+    ).rejects.toMatchObject({
       response: { code: CONSTRUCTOR_IMPORT_NO_CONTENT },
     });
   });

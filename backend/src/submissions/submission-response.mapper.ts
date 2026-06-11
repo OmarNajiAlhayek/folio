@@ -36,7 +36,6 @@ export function submissionToViewerJson(
       ? files.filter((f) => f.fileStage === SubmissionFileStage.REVIEW)
       : files;
 
-
   const base: Record<string, unknown> = {
     id: s.id,
     slug: s.slug,
@@ -91,6 +90,7 @@ export function submissionToViewerJson(
   }
 
   if (viewer === 'author' || viewer === 'editor') {
+    base.messageForAuthor = s.messageForAuthor;
     base.reviewManuscriptPresentation = s.reviewManuscriptPresentation;
     base.discipline = s.discipline;
     base.disciplineSource = s.disciplineSource;

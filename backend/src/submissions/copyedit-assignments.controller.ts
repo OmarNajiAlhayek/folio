@@ -52,15 +52,15 @@ export class CopyeditAssignmentsController {
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.submissionsService.markCopyeditCopyeditorApproved(slug, user.sub);
+    return this.submissionsService.markCopyeditCopyeditorApproved(
+      slug,
+      user.sub,
+    );
   }
 
   @Post(':slug/ai-analysis')
   @Permissions(PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE)
-  runAiAnalysis(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  runAiAnalysis(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
     return this.submissionsService.runCopyeditAnalysis(slug, user);
   }
 }

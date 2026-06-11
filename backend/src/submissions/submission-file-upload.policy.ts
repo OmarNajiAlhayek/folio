@@ -26,21 +26,11 @@ const POLICY: Record<
   },
   figure: {
     extensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
-    mimeTypes: [
-      'image/png',
-      'image/jpeg',
-      'image/gif',
-      'image/webp',
-    ],
+    mimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
   },
   table: {
     extensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
-    mimeTypes: [
-      'image/png',
-      'image/jpeg',
-      'image/gif',
-      'image/webp',
-    ],
+    mimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
   },
   supplementary: {
     extensions: ['.pdf', '.docx', '.zip'],
@@ -50,9 +40,7 @@ const POLICY: Record<
 
 /** Union of every allowed extension (for Multer fileFilter when kind is unknown). */
 export const ALL_ALLOWED_UPLOAD_EXTENSIONS = [
-  ...new Set(
-    Object.values(POLICY).flatMap((p) => p.extensions),
-  ),
+  ...new Set(Object.values(POLICY).flatMap((p) => p.extensions)),
 ] as readonly string[];
 
 export function allowedExtensionsForKind(
@@ -90,7 +78,6 @@ export function sniffUploadMime(
   ext: string,
   kind: SubmissionFileKind,
 ): MagicSniffResult {
-  const allowedMimes = POLICY[kind].mimeTypes;
   const normalizedExt = ext.toLowerCase();
 
   if (normalizedExt === '.pdf') {
@@ -137,7 +124,10 @@ export function sniffUploadMime(
   }
 
   if (normalizedExt === '.webp') {
-    if (readAscii(buf, 4) !== 'RIFF' || readAscii(buf.subarray(8), 4) !== 'WEBP') {
+    if (
+      readAscii(buf, 4) !== 'RIFF' ||
+      readAscii(buf.subarray(8), 4) !== 'WEBP'
+    ) {
       return { ok: false, reason: 'File content does not match WebP' };
     }
     return { ok: true, mimeType: 'image/webp' };
@@ -145,7 +135,7 @@ export function sniffUploadMime(
 
   return {
     ok: false,
-    reason: `Unsupported extension ${normalizedExt}`,
+    reason: `Unsupported extension ${normalizedExt} for ${kind}`,
   };
 }
 
@@ -159,13 +149,10 @@ export function canonicalMimeForSniff(
   if (allowedMimesIncludes(kind, result.mimeType)) {
     return result.mimeType;
   }
-  return POLICY[kind].mimeTypes[0]!;
+  return POLICY[kind].mimeTypes[0];
 }
 
-function allowedMimesIncludes(
-  kind: SubmissionFileKind,
-  mime: string,
-): boolean {
+function allowedMimesIncludes(kind: SubmissionFileKind, mime: string): boolean {
   return POLICY[kind].mimeTypes.includes(mime);
 }
 

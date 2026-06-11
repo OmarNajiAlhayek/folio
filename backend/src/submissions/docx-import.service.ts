@@ -16,6 +16,11 @@ import type {
 import { sniffUploadMime } from './submission-file-upload.policy';
 import { filterDocxImportWarnings } from './docx-import-warnings';
 import {
+  getTableCellText,
+  isTableCellCovered,
+  normalizeTableCell,
+} from './constructor-table-utils';
+import {
   CONSTRUCTOR_IMPORT_BACK_MATTER_UNCERTAIN,
   CONSTRUCTOR_IMPORT_EQUATION_LOST,
   CONSTRUCTOR_IMPORT_MAMMOTH_NOTES,
@@ -27,15 +32,7 @@ type Element = DefaultTreeAdapterMap['element'];
 type ChildNode = DefaultTreeAdapterMap['childNode'];
 type TextNode = DefaultTreeAdapterMap['textNode'];
 
-const BLOCK_TAGS = new Set([
-  'h1',
-  'h2',
-  'h3',
-  'p',
-  'ul',
-  'ol',
-  'table',
-]);
+const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'table']);
 
 const INLINE_ALLOWED = new Set([
   'strong',
@@ -159,7 +156,7 @@ export class DocxImportService {
     });
     const doc = parse(`<body>${sanitized}</body>`, {
       sourceCodeLocationInfo: false,
-    }) as DefaultTreeAdapterMap['document'];
+    });
     const htmlEl = findChildElement(doc.childNodes, 'html');
     const bodyEl =
       (htmlEl && findChildElement(htmlEl.childNodes, 'body')) ??
@@ -224,7 +221,9 @@ export class DocxImportService {
       pendingBackMatter = null;
     };
 
-    const detectBackMatterHeading = (text: string): RichTextBlockKind | null => {
+    const detectBackMatterHeading = (
+      text: string,
+    ): RichTextBlockKind | null => {
       if (ACKNOWLEDGMENTS_HEADING.test(text)) return 'acknowledgments';
       if (FUNDING_HEADING.test(text)) return 'funding';
       if (CONFLICT_HEADING.test(text)) return 'conflictOfInterest';
@@ -260,7 +259,11 @@ export class DocxImportService {
       });
     };
 
-    const pushHeading = (level: 1 | 2 | 3, text: string, dir: ConstructorDir) => {
+    const pushHeading = (
+      level: 1 | 2 | 3,
+      text: string,
+      dir: ConstructorDir,
+    ) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       const kind =
@@ -285,9 +288,6 @@ export class DocxImportService {
       } else if (!titleEnFilled) {
         titleEnFilled = true;
         sections.push(titleSection('en', trimmed));
-      } else if (!titleArFilled && lang === 'ar') {
-        titleArFilled = true;
-        sections.push(titleSection('ar', trimmed));
       } else {
         pushHeading(1, trimmed, lang === 'ar' ? 'rtl' : 'ltr');
       }
@@ -302,18 +302,13 @@ export class DocxImportService {
       const trimmed = text.trim();
       if (!trimmed) return;
       const lang = preferLang ?? textLang(trimmed);
-      const keywords = keywordsLine
-        ? stripKeywordsPrefix(keywordsLine)
-        : '';
+      const keywords = keywordsLine ? stripKeywordsPrefix(keywordsLine) : '';
       if (lang === 'ar' && !abstractArFilled) {
         abstractArFilled = true;
         sections.push(abstractSection('ar', trimmed, keywords));
       } else if (!abstractEnFilled && lang === 'en') {
         abstractEnFilled = true;
         sections.push(abstractSection('en', trimmed, keywords));
-      } else if (!abstractArFilled && lang === 'ar') {
-        abstractArFilled = true;
-        sections.push(abstractSection('ar', trimmed, keywords));
       } else if (!abstractEnFilled) {
         abstractEnFilled = true;
         sections.push(abstractSection('en', trimmed, keywords));
@@ -334,7 +329,7 @@ export class DocxImportService {
         .filter(Boolean);
 
       if (email && authorEntries.length > 0) {
-        const last = authorEntries[authorEntries.length - 1]!;
+        const last = authorEntries[authorEntries.length - 1];
         if (!last.email) {
           const affPart = parts.find((p) => !EMAIL_RE.test(p)) ?? '';
           if (affPart) last.affiliation = affPart;
@@ -344,12 +339,12 @@ export class DocxImportService {
       }
 
       if (parts.length >= 2) {
-        const first = parts[0]!;
-        const second = parts[1]!;
+        const first = parts[0];
+        const second = parts[1];
         if (EMAIL_RE.test(second)) {
           const emailAddr = second.match(EMAIL_RE)?.[0] ?? second;
           if (authorEntries.length > 0) {
-            const last = authorEntries[authorEntries.length - 1]!;
+            const last = authorEntries[authorEntries.length - 1];
             if (!last.affiliation) {
               last.affiliation = first.replace(/\*/g, '').trim();
             }
@@ -377,11 +372,11 @@ export class DocxImportService {
 
       if (parts.length === 1) {
         authorEntries.push({
-          fullName: parts[0]!.replace(/\*/g, '').trim(),
+          fullName: parts[0].replace(/\*/g, '').trim(),
           title: '',
           affiliation: '',
           email: email,
-          isCorresponding: parts[0]!.includes('*'),
+          isCorresponding: parts[0].includes('*'),
         });
         return true;
       }
@@ -526,7 +521,8 @@ export class DocxImportService {
         }
         const inner = serializeInnerHtml(node);
         const rawHtml = node as Element & { attrs?: { style?: string }[] };
-        const styleAttr = rawHtml.attrs?.find((a) => a.name === 'style')?.value ?? '';
+        const styleAttr =
+          rawHtml.attrs?.find((a) => a.name === 'style')?.value ?? '';
         if (
           lastTableIdx >= 0 &&
           text.length > 0 &&
@@ -610,7 +606,8 @@ function abstractSection(
 }
 
 function tableFromElement(el: Element): ConstructorSection | null {
-  const rows: string[][] = [];
+  const rows: import('./constructor-content.types').ConstructorTableCell[][] =
+    [];
   for (const child of el.childNodes) {
     if (!isElement(child)) continue;
     if (child.tagName === 'tr') {
@@ -633,11 +630,28 @@ function tableFromElement(el: Element): ConstructorSection | null {
   };
 }
 
-function rowCells(tr: Element): string[] {
-  const cells: string[] = [];
+function rowCells(
+  tr: Element,
+): import('./constructor-content.types').ConstructorTableCell[] {
+  const cells: import('./constructor-content.types').ConstructorTableCell[] =
+    [];
   for (const c of tr.childNodes) {
     if (isElement(c) && (c.tagName === 'td' || c.tagName === 'th')) {
-      cells.push(getTextContent(c).trim());
+      const rowSpan = parseInt(
+        c.attrs?.find((a) => a.name === 'rowspan')?.value ?? '1',
+        10,
+      );
+      const colSpan = parseInt(
+        c.attrs?.find((a) => a.name === 'colspan')?.value ?? '1',
+        10,
+      );
+      cells.push(
+        normalizeTableCell({
+          text: getTextContent(c).trim(),
+          ...(rowSpan > 1 ? { rowSpan } : {}),
+          ...(colSpan > 1 ? { colSpan } : {}),
+        }),
+      );
     }
   }
   return cells;
@@ -647,10 +661,7 @@ function isElement(node: ChildNode): node is Element {
   return 'tagName' in node && node.nodeName !== '#text';
 }
 
-function findChildElement(
-  nodes: ChildNode[],
-  tagName: string,
-): Element | null {
+function findChildElement(nodes: ChildNode[], tagName: string): Element | null {
   for (const c of nodes) {
     if (isElement(c) && c.tagName === tagName) return c;
   }
@@ -667,10 +678,7 @@ function getTextContent(el: Element): string {
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function wrapParagraphHtml(inner: string): string {
@@ -723,7 +731,7 @@ function textDir(text: string): ConstructorDir {
 
 function detectDefaultDir(sections: ConstructorSection[]): ConstructorDir {
   for (const s of sections) {
-    if (s.kind === 'title' && (s as TitleSection).lang === 'ar') return 'rtl';
+    if (s.kind === 'title' && s.lang === 'ar') return 'rtl';
     if (s.kind === 'paragraph' && s.dir === 'rtl') return 'rtl';
   }
   return 'ltr';
@@ -808,7 +816,12 @@ function sectionHasImportContent(s: ConstructorSection): boolean {
       );
     case 'table':
       return (
-        s.rows.some((row) => row.some((c) => c.trim().length > 0)) ||
+        s.rows.some((row) =>
+          row.some(
+            (c) =>
+              !isTableCellCovered(c) && getTableCellText(c).trim().length > 0,
+          ),
+        ) ||
         (s.notes?.trim().length ?? 0) > 0 ||
         s.caption.trim().length > 0
       );

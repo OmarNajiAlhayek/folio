@@ -1,5 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ARABIC_DISCIPLINE_LABELS } from '../../ai/discipline-labels';
 
 export class DisciplineSuggestionResponseDto {
   @ApiProperty()

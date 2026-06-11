@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { SubmissionsService } from './submissions.service';
@@ -6,6 +14,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/types/request-user';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { EmailVerifiedGuard } from '../users/email-verified.guard';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { CreateReviewDto } from '../reviews/dto/create-review.dto';
 
@@ -24,14 +33,13 @@ export class AssignmentsController {
 
   @Get(':slug')
   @Permissions(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN)
-  myAssignment(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  myAssignment(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
     return this.submissionsService.getMyAssignmentBySlug(slug, user.sub);
   }
 
   @Post(':slug/accept')
+  @HttpCode(200)
+  @UseGuards(EmailVerifiedGuard)
   @Permissions(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN)
   acceptInvitation(
     @Param('slug') slug: string,
@@ -41,6 +49,7 @@ export class AssignmentsController {
   }
 
   @Post(':slug/decline')
+  @UseGuards(EmailVerifiedGuard)
   @Permissions(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN)
   declineInvitation(
     @Param('slug') slug: string,
@@ -50,6 +59,7 @@ export class AssignmentsController {
   }
 
   @Post(':slug/reviews')
+  @UseGuards(EmailVerifiedGuard)
   @Permissions(PERMISSION_SLUGS.REVIEW_SUBMIT)
   submitReview(
     @Param('slug') slug: string,

@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unused-vars */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -175,6 +177,8 @@ describe('SubmissionsService copyedit workflow', () => {
           },
         },
         aiClientServiceMock,
+
+        aiJobsServiceMock,
         languageToolServiceMock,
       ],
     }).compile();

@@ -5,9 +5,10 @@ import {
 
 describe('keyword-list.util', () => {
   it('normalizeKeywordSuggestions dedupes English case-insensitively', () => {
-    expect(
-      normalizeKeywordSuggestions(['AI', 'ai', 'Science'], 'en'),
-    ).toEqual(['AI', 'Science']);
+    expect(normalizeKeywordSuggestions(['AI', 'ai', 'Science'], 'en')).toEqual([
+      'AI',
+      'Science',
+    ]);
   });
 
   it('hasKeywordLanguagePair requires both title and abstract', () => {

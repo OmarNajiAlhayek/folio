@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
 import { AiClientService } from '../ai/ai-client.service';
+import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -72,6 +74,7 @@ describe('SubmissionsService.suggestKeywords', () => {
         { provide: getRepositoryToken(CopyeditNote), useValue: {} },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: AiClientService, useValue: aiClient },
+        aiJobsServiceMock,
         { provide: RbacService, useValue: {} },
         { provide: DocxGeneratorService, useValue: {} },
         { provide: ManuscriptStyleRegistryService, useValue: {} },

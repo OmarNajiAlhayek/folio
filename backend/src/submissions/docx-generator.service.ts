@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import {
   AlignmentType,
   Document,
+  EndnoteReferenceRun,
   ExternalHyperlink,
+  FootnoteReferenceRun,
   HeadingLevel,
   ImageRun,
   LevelFormat,
@@ -15,6 +17,7 @@ import {
   TextRun,
   WidthType,
   convertMillimetersToTwip,
+  type IPropertiesOptions,
   type IRunOptions,
   type ParagraphChild,
 } from 'docx';
@@ -33,6 +36,7 @@ import type {
   AuthorsSection,
   ConstructorContent,
   ConstructorDir,
+  ConstructorFootnote,
   EquationSection,
   HeadingSection,
   ImageSection,
@@ -43,7 +47,13 @@ import type {
   TitleSection,
 } from './constructor-content.types';
 import { resolveSectionDir } from './constructor-content.types';
-import { EquationRenderService } from './equation-render.service';
+import { collectFootnoteIdsFromHtml } from './constructor-rich-text-html';
+import {
+  getTableCellText,
+  isTableCellCovered,
+  normalizeTableRows,
+} from './constructor-table-utils';
+import { EquationOmmlService } from './equation-omml.service';
 
 type Node = DefaultTreeAdapterMap['node'];
 type Element = DefaultTreeAdapterMap['element'];
@@ -59,6 +69,18 @@ type InlineMarks = {
   underline?: boolean;
   superScript?: boolean;
   subScript?: boolean;
+  runDir?: ConstructorDir;
+};
+
+type ImageResolver = (
+  fileId: string,
+) => Promise<{ data: Buffer; mime: string } | null>;
+
+type DocxBuildContext = {
+  imageResolver: ImageResolver;
+  footnoteNumById: Map<string, number>;
+  endnoteNumById: Map<string, number>;
+  footnotesById: Map<string, ConstructorFootnote>;
 };
 
 function toAlignmentType(a: ManuscriptAlignment) {
@@ -74,7 +96,7 @@ function toAlignmentType(a: ManuscriptAlignment) {
 
 @Injectable()
 export class DocxGeneratorService {
-  constructor(private readonly equationRender: EquationRenderService) {}
+  constructor(private readonly equationOmml: EquationOmmlService) {}
 
   /**
    * Builds a `.docx` Buffer from a ConstructorContent payload.
@@ -85,14 +107,11 @@ export class DocxGeneratorService {
    */
   async generate(
     content: ConstructorContent,
-    imageResolver: (
-      fileId: string,
-    ) => Promise<{ data: Buffer; mime: string } | null>,
+    imageResolver: ImageResolver,
     profile: ManuscriptStyleProfile,
   ): Promise<Buffer> {
-    this.equationRender.clearCache();
-
     const defaultDir = content.defaultDir;
+    const ctx = this.buildDocxContext(content, imageResolver);
     let figureCounter = 0;
     let tableCounter = 0;
     let equationCounter = 0;
@@ -117,7 +136,9 @@ export class DocxGeneratorService {
           children.push(this.buildHeading(section, dir, profile));
           break;
         case 'paragraph':
-          children.push(...this.buildParagraph(section, dir, profile));
+          children.push(
+            ...(await this.buildParagraph(section, dir, profile, ctx)),
+          );
           break;
         case 'image': {
           figureCounter += 1;
@@ -134,7 +155,9 @@ export class DocxGeneratorService {
         }
         case 'table': {
           tableCounter += 1;
-          children.push(...this.buildTable(section, dir, tableCounter, profile));
+          children.push(
+            ...this.buildTable(section, dir, tableCounter, profile),
+          );
           break;
         }
         case 'acknowledgments':
@@ -142,7 +165,7 @@ export class DocxGeneratorService {
         case 'conflictOfInterest':
         case 'dataAvailability':
           children.push(
-            ...this.buildRichTextBlock(section as RichTextBlockSection, dir, profile),
+            ...(await this.buildRichTextBlock(section, dir, profile, ctx)),
           );
           break;
         case 'equation': {
@@ -158,17 +181,17 @@ export class DocxGeneratorService {
           break;
         }
         case 'references':
-          children.push(...this.buildReferences(section, profile));
+          children.push(...(await this.buildReferences(section, profile, ctx)));
           break;
       }
     }
 
-    this.equationRender.clearCache();
-
     const mm = profile.pageMarginsMm;
+    const noteParts = this.buildDocxFootnoteParts(ctx, profile, defaultDir);
     const doc = new Document({
       styles: this.buildStyles(profile),
       numbering: this.buildNumbering(profile),
+      ...noteParts,
       sections: [
         {
           properties: {
@@ -303,7 +326,9 @@ export class DocxGeneratorService {
 
   private tableCaptionStyleId(profile: ManuscriptStyleProfile): string {
     const t = profile.paragraphStyles.find(
-      (p) => p.id === 'TableCaption' || p.name.toLowerCase().includes('table caption'),
+      (p) =>
+        p.id === 'TableCaption' ||
+        p.name.toLowerCase().includes('table caption'),
     );
     return t?.id ?? 'TableCaption';
   }
@@ -335,8 +360,7 @@ export class DocxGeneratorService {
     return new Paragraph({
       heading: level,
       bidirectional: dir === 'rtl',
-      alignment:
-        dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+      alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
       children: [this.run(section.text || '', dir, profile, { bold: true })],
     });
   }
@@ -374,22 +398,19 @@ export class DocxGeneratorService {
     profile: ManuscriptStyleProfile,
   ): Paragraph[] {
     const dir: ConstructorDir = section.lang === 'ar' ? 'rtl' : 'ltr';
-    const headingText =
-      section.lang === 'ar' ? 'الملخص' : 'Abstract';
+    const headingText = section.lang === 'ar' ? 'الملخص' : 'Abstract';
     const keywordsLabel =
       section.lang === 'ar' ? 'الكلمات المفتاحية: ' : 'Keywords: ';
     const out: Paragraph[] = [
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
         bidirectional: dir === 'rtl',
-        alignment:
-          dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
         children: [this.run(headingText, dir, profile, { bold: true })],
       }),
       new Paragraph({
         bidirectional: dir === 'rtl',
-        alignment:
-          dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
         children: [this.run(section.text || '', dir, profile)],
       }),
     ];
@@ -397,8 +418,7 @@ export class DocxGeneratorService {
       out.push(
         new Paragraph({
           bidirectional: dir === 'rtl',
-          alignment:
-            dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+          alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
           children: [
             this.run(keywordsLabel, dir, profile, { bold: true }),
             this.run(section.keywords, dir, profile),
@@ -409,17 +429,130 @@ export class DocxGeneratorService {
     return out;
   }
 
-  private buildParagraph(
+  private buildDocxContext(
+    content: ConstructorContent,
+    imageResolver: ImageResolver,
+  ): DocxBuildContext {
+    const footnotesById = new Map(
+      (content.footnotes ?? []).map((fn) => [fn.id, fn]),
+    );
+    const referenced = new Set<string>();
+    for (const section of content.sections) {
+      if ('html' in section && section.html) {
+        for (const id of collectFootnoteIdsFromHtml(section.html)) {
+          referenced.add(id);
+        }
+      }
+      if (section.kind === 'references') {
+        for (const item of section.items) {
+          const html = resolveReferenceEntryHtml(item);
+          for (const id of collectFootnoteIdsFromHtml(html)) {
+            referenced.add(id);
+          }
+        }
+      }
+    }
+    const footnoteNumById = new Map<string, number>();
+    const endnoteNumById = new Map<string, number>();
+    let footnoteNum = 0;
+    let endnoteNum = 0;
+    for (const id of referenced) {
+      const fn = footnotesById.get(id);
+      if (!fn) continue;
+      if (fn.placement === 'endnote') {
+        endnoteNum += 1;
+        endnoteNumById.set(id, endnoteNum);
+      } else {
+        footnoteNum += 1;
+        footnoteNumById.set(id, footnoteNum);
+      }
+    }
+    return {
+      imageResolver,
+      footnoteNumById,
+      endnoteNumById,
+      footnotesById,
+    };
+  }
+
+  private buildDocxFootnoteParts(
+    ctx: DocxBuildContext,
+    profile: ManuscriptStyleProfile,
+    defaultDir: ConstructorDir,
+  ): Pick<IPropertiesOptions, 'footnotes' | 'endnotes'> {
+    const footnotes: Record<number, { children: Paragraph[] }> = {};
+    const endnotes: Record<number, { children: Paragraph[] }> = {};
+    for (const [id, num] of ctx.footnoteNumById) {
+      const fn = ctx.footnotesById.get(id);
+      if (!fn) continue;
+      footnotes[num] = {
+        children: [
+          new Paragraph({
+            children: [
+              this.run(
+                fn.text.replace(/<[^>]+>/g, '').trim(),
+                defaultDir,
+                profile,
+              ),
+            ],
+          }),
+        ],
+      };
+    }
+    for (const [id, num] of ctx.endnoteNumById) {
+      const fn = ctx.footnotesById.get(id);
+      if (!fn) continue;
+      endnotes[num] = {
+        children: [
+          new Paragraph({
+            children: [
+              this.run(
+                fn.text.replace(/<[^>]+>/g, '').trim(),
+                defaultDir,
+                profile,
+              ),
+            ],
+          }),
+        ],
+      };
+    }
+    return {
+      ...(Object.keys(footnotes).length ? { footnotes } : {}),
+      ...(Object.keys(endnotes).length ? { endnotes } : {}),
+    };
+  }
+
+  private async buildFootnoteBody(
+    html: string,
+    defaultDir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+    ctx: DocxBuildContext,
+  ): Promise<Paragraph[]> {
+    const sanitized = sanitizeConstructorTipTapHtml(html ?? '');
+    const wrapped = `<root>${sanitized}</root>`;
+    const root = parse(wrapped, {
+      sourceCodeLocationInfo: false,
+    });
+    return this.htmlToParagraphs(
+      root as unknown as Node,
+      defaultDir,
+      profile,
+      ctx,
+    );
+  }
+
+  private async buildParagraph(
     section: ParagraphSection,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
-  ): Paragraph[] {
+    ctx: DocxBuildContext,
+  ): Promise<Paragraph[]> {
     const sanitized = sanitizeConstructorTipTapHtml(section.html ?? '');
     const wrapped = `<root>${sanitized}</root>`;
     const root = parse(wrapped, {
       sourceCodeLocationInfo: false,
-    }) as DefaultTreeAdapterMap['document'];
-    return this.htmlToParagraphs(root as unknown as Node, dir, profile);
+    });
+    return this.htmlToParagraphs(root as unknown as Node, dir, profile, ctx);
   }
 
   private async buildImage(
@@ -512,13 +645,19 @@ export class DocxGeneratorService {
       ],
     });
 
-    const rows = (section.rows ?? []).map((row, rowIdx) => {
+    const normalizedRows = normalizeTableRows(section.rows);
+    const rows = normalizedRows.map((row, rowIdx) => {
       const isHeader = section.hasHeaderRow && rowIdx === 0;
       return new TableRow({
         tableHeader: isHeader,
-        children: row.map(
-          (cell) =>
-            new TableCell({
+        children: row
+          .filter((cell) => !isTableCellCovered(cell))
+          .map((cell) => {
+            const rowSpan = cell.rowSpan ?? 1;
+            const colSpan = cell.colSpan ?? 1;
+            return new TableCell({
+              rowSpan: rowSpan > 1 ? rowSpan : undefined,
+              columnSpan: colSpan > 1 ? colSpan : undefined,
               shading: isHeader
                 ? { type: 'clear', color: 'auto', fill: 'EEEEEE' }
                 : undefined,
@@ -528,12 +667,17 @@ export class DocxGeneratorService {
                   alignment:
                     dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
                   children: [
-                    this.run(cell ?? '', dir, profile, isHeader ? { bold: true } : {}),
+                    this.run(
+                      getTableCellText(cell),
+                      dir,
+                      profile,
+                      isHeader ? { bold: true } : {},
+                    ),
                   ],
                 }),
               ],
-            }),
-        ),
+            });
+          }),
       });
     });
     const tableBlock =
@@ -568,15 +712,17 @@ export class DocxGeneratorService {
     return out;
   }
 
-  private buildRichTextBlock(
+  private async buildRichTextBlock(
     section: RichTextBlockSection,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
-  ): Paragraph[] {
+    ctx: DocxBuildContext,
+  ): Promise<Paragraph[]> {
     return this.buildParagraph(
       { ...section, kind: 'paragraph', html: section.html },
       dir,
       profile,
+      ctx,
     );
   }
 
@@ -600,34 +746,22 @@ export class DocxGeneratorService {
       return out;
     }
     try {
-      const { png, widthPx, heightPx } =
-        await this.equationRender.renderLatexToPngWithSize(latex);
-      // PNG is captured at deviceScaleFactor=2, so logical pixel dimensions are half.
-      // maxW≈A4 text column (160 mm at 96 dpi); maxH handles fractions/integrals/matrices.
-      // Never upscale — short equations stay at their natural logical size.
-      const logicalW = Math.round(widthPx / 2);
-      const logicalH = Math.round(heightPx / 2);
-      const maxW = 440;
-      const maxH = 180;
-      let scale = 1;
-      if (logicalW > maxW) scale = maxW / logicalW;
-      if (logicalH * scale > maxH) {
-        scale = Math.min(scale, maxH / logicalH);
-      }
-      const children: ParagraphChild[] = [
-        new ImageRun({
-          type: 'png',
-          data: png,
-          transformation: {
-            width: Math.round(logicalW * scale),
-            height: Math.round(logicalH * scale),
-          },
-        }),
-      ];
+      const rendered = await this.equationOmml.renderEquation(latex);
+      const children: ParagraphChild[] =
+        rendered.kind === 'omml'
+          ? [...rendered.children]
+          : [
+              new ImageRun({
+                type: 'png',
+                data: rendered.png,
+                transformation: {
+                  width: Math.round(rendered.widthPx / 2),
+                  height: Math.round(rendered.heightPx / 2),
+                },
+              }),
+            ];
       if (section.numbered) {
-        children.push(
-          this.run(` (${equationNumber})`, dir, profile),
-        );
+        children.push(this.run(` (${equationNumber})`, dir, profile));
       }
       out.push(
         new Paragraph({
@@ -652,10 +786,11 @@ export class DocxGeneratorService {
     return out;
   }
 
-  private buildReferences(
+  private async buildReferences(
     section: ReferencesSection,
     profile: ManuscriptStyleProfile,
-  ): Paragraph[] {
+    ctx: DocxBuildContext,
+  ): Promise<Paragraph[]> {
     const items = [...section.items].filter((i) => referenceEntryHasContent(i));
     const arabic = items
       .filter((i) => i.lang === 'ar')
@@ -674,17 +809,24 @@ export class DocxGeneratorService {
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
         children: [
-          this.run(profile.references.headingText, 'ltr', profile, { bold: true }),
+          this.run(profile.references.headingText, 'ltr', profile, {
+            bold: true,
+          }),
         ],
       }),
     ];
     const sp = profile.references.entrySpacing;
-    const renderEntry = (
+    const renderEntry = async (
       entry: ReferencesSection['items'][number],
       dir: ConstructorDir,
     ) => {
       const html = resolveReferenceEntryHtml(entry);
-      const children = this.collectInlineFromSanitizedHtml(html, dir, profile);
+      const children = await this.collectInlineFromSanitizedHtml(
+        html,
+        dir,
+        profile,
+        ctx,
+      );
       if (entry.doi?.trim()) {
         children.push(
           this.run(` https://doi.org/${entry.doi.trim()}`, 'ltr', profile),
@@ -692,56 +834,57 @@ export class DocxGeneratorService {
       }
       return new Paragraph({
         bidirectional: dir === 'rtl',
-        alignment:
-          dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
         spacing: { before: sp.before, after: sp.after },
         children,
       });
     };
     for (const item of ordered) {
-      out.push(renderEntry(item, item.lang === 'ar' ? 'rtl' : 'ltr'));
+      out.push(await renderEntry(item, item.lang === 'ar' ? 'rtl' : 'ltr'));
     }
     return out;
   }
 
   /** Flatten sanitized reference HTML into a single paragraph's inline runs. */
-  private collectInlineFromSanitizedHtml(
+  private async collectInlineFromSanitizedHtml(
     html: string,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
-  ): ParagraphChild[] {
+    ctx: DocxBuildContext,
+  ): Promise<ParagraphChild[]> {
     const sanitized = sanitizeConstructorTipTapHtml(html);
     const wrapped = `<root>${sanitized}</root>`;
     const root = parse(wrapped, {
       sourceCodeLocationInfo: false,
-    }) as DefaultTreeAdapterMap['document'];
+    });
     const out: ParagraphChild[] = [];
-    const walk = (node: Node): void => {
+    const walk = async (node: Node): Promise<void> => {
       if (!('childNodes' in node) || !node.childNodes) return;
       for (const child of node.childNodes) {
         if (!('tagName' in child)) continue;
         const tag = child.tagName.toLowerCase();
         if (tag === 'p' || tag === 'li') {
-          out.push(...this.collectInline(child, dir, profile, {}));
+          out.push(...(await this.collectInline(child, dir, profile, {}, ctx)));
         } else if (tag === 'root' || tag === 'body' || tag === 'html') {
-          walk(child);
+          await walk(child);
         }
       }
     };
-    walk(root as unknown as Node);
+    await walk(root as unknown as Node);
     if (out.length === 0) {
       out.push(this.run('', dir, profile));
     }
     return out;
   }
 
-  private htmlToParagraphs(
+  private async htmlToParagraphs(
     node: Node,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
-  ): Paragraph[] {
+    ctx: DocxBuildContext,
+  ): Promise<Paragraph[]> {
     const out: Paragraph[] = [];
-    this.walkBlocks(node, dir, profile, out, {});
+    await this.walkBlocks(node, dir, profile, out, {}, ctx);
     if (out.length === 0) {
       out.push(
         new Paragraph({
@@ -753,24 +896,31 @@ export class DocxGeneratorService {
     return out;
   }
 
-  private walkBlocks(
+  private async walkBlocks(
     node: Node,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
     out: Paragraph[],
     activeMarks: InlineMarks,
-  ): void {
+    ctx: DocxBuildContext,
+  ): Promise<void> {
     if (!('childNodes' in node) || !node.childNodes) return;
     for (const child of node.childNodes) {
       if (!('tagName' in child)) continue;
       const tag = child.tagName.toLowerCase();
       if (tag === 'p') {
+        const inline = await this.collectInline(
+          child,
+          dir,
+          profile,
+          activeMarks,
+          ctx,
+        );
         out.push(
           new Paragraph({
-            bidirectional: dir === 'rtl',
-            alignment:
-              dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-            children: this.collectInline(child, dir, profile, activeMarks),
+            bidirectional: true,
+            alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+            children: inline,
           }),
         );
       } else if (tag === 'ul' || tag === 'ol') {
@@ -783,51 +933,66 @@ export class DocxGeneratorService {
             'tagName' in li &&
             (li as Element).tagName.toLowerCase() === 'li'
           ) {
+            const inline = await this.collectInline(
+              li as Element,
+              dir,
+              profile,
+              activeMarks,
+              ctx,
+            );
             out.push(
               new Paragraph({
                 bidirectional: dir === 'rtl',
                 alignment:
                   dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
                 numbering: { reference: ref, level: 0 },
-                children: this.collectInline(li as Element, dir, profile, activeMarks),
+                children: inline,
               }),
             );
           }
         }
       } else if (tag === 'root' || tag === 'html' || tag === 'body') {
-        this.walkBlocks(child, dir, profile, out, activeMarks);
+        await this.walkBlocks(child, dir, profile, out, activeMarks, ctx);
       } else {
         out.push(
           new Paragraph({
             bidirectional: dir === 'rtl',
-            children: this.collectInline(child, dir, profile, activeMarks),
+            children: await this.collectInline(
+              child,
+              dir,
+              profile,
+              activeMarks,
+              ctx,
+            ),
           }),
         );
       }
     }
   }
 
-  private collectInline(
+  private async collectInline(
     node: Node,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
     inheritedMarks: InlineMarks,
-  ): ParagraphChild[] {
+    ctx: DocxBuildContext,
+  ): Promise<ParagraphChild[]> {
     const out: ParagraphChild[] = [];
-    this.walkInline(node, dir, profile, inheritedMarks, out);
+    await this.walkInline(node, dir, profile, inheritedMarks, out, ctx);
     if (out.length === 0) {
       out.push(this.run('', dir, profile, inheritedMarks));
     }
     return out;
   }
 
-  private walkInline(
+  private async walkInline(
     node: Node,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
     marks: InlineMarks,
     out: ParagraphChild[],
-  ): void {
+    ctx: DocxBuildContext,
+  ): Promise<void> {
     if (!('childNodes' in node) || !node.childNodes) return;
     for (const child of node.childNodes) {
       if (this.isTextNode(child)) {
@@ -851,11 +1016,8 @@ export class DocxGeneratorService {
         const href = sanitizeConstructorLinkHref(
           this.elementAttr(child as Element, 'href'),
         );
-        const linkChildren = this.collectInline(
-          child,
-          dir,
-          profile,
-          marks,
+        const linkChildren = (
+          await this.collectInline(child, dir, profile, marks, ctx)
         ).filter((c): c is TextRun => c instanceof TextRun);
         if (href && linkChildren.length > 0) {
           out.push(
@@ -865,9 +1027,45 @@ export class DocxGeneratorService {
             }),
           );
         } else {
-          this.walkInline(child, dir, profile, marks, out);
+          await this.walkInline(child, dir, profile, marks, out, ctx);
         }
         continue;
+      }
+      if (tag === 'img') {
+        const fileId = this.elementAttr(
+          child as Element,
+          'data-file-id',
+        )?.trim();
+        if (fileId) {
+          const resolved = await ctx.imageResolver(fileId);
+          if (resolved) {
+            out.push(
+              new ImageRun({
+                type: this.imageTypeFromMime(resolved.mime),
+                data: resolved.data,
+                transformation: { width: 180, height: 120 },
+              }),
+            );
+          }
+        }
+        continue;
+      }
+      if (tag === 'sup') {
+        const footnoteId = this.elementAttr(
+          child as Element,
+          'data-footnote-id',
+        )?.trim();
+        if (footnoteId) {
+          const fn = ctx.footnotesById.get(footnoteId);
+          if (fn?.placement === 'endnote') {
+            const num = ctx.endnoteNumById.get(footnoteId);
+            if (num) out.push(new EndnoteReferenceRun(num));
+          } else {
+            const num = ctx.footnoteNumById.get(footnoteId);
+            if (num) out.push(new FootnoteReferenceRun(num));
+          }
+          continue;
+        }
       }
       const nextMarks: InlineMarks = { ...marks };
       if (tag === 'strong' || tag === 'b') nextMarks.bold = true;
@@ -875,7 +1073,16 @@ export class DocxGeneratorService {
       else if (tag === 'u') nextMarks.underline = true;
       else if (tag === 'sup') nextMarks.superScript = true;
       else if (tag === 'sub') nextMarks.subScript = true;
-      this.walkInline(child, dir, profile, nextMarks, out);
+      else if (tag === 'span') {
+        const spanDir = this.elementAttr(
+          child as Element,
+          'dir',
+        )?.toLowerCase();
+        if (spanDir === 'ltr' || spanDir === 'rtl') {
+          nextMarks.runDir = spanDir;
+        }
+      }
+      await this.walkInline(child, dir, profile, nextMarks, out, ctx);
     }
   }
 
@@ -901,7 +1108,7 @@ export class DocxGeneratorService {
     profile: ManuscriptStyleProfile,
     marks: InlineMarks,
   ): IRunOptions {
-    const isRtl = dir === 'rtl';
+    const isRtl = (marks.runDir ?? dir) === 'rtl';
     const f = profile.fonts;
     const s = profile.sizesHalfPoints;
     return {

@@ -1,4 +1,7 @@
-import { buildSubmissionCorpusPlainText, isCorpusPlainTextSufficient } from './submission-corpus-text.util';
+import {
+  buildSubmissionCorpusPlainText,
+  isCorpusPlainTextSufficient,
+} from './submission-corpus-text.util';
 import type { Submission } from '../entities/submission.entity';
 
 describe('submission-corpus-text.util', () => {

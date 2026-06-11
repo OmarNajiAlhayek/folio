@@ -12,7 +12,26 @@
  * is derived per-render by walking the section list in order.
  */
 
+export const CONSTRUCTOR_SCHEMA_VERSION = 2;
+
 export type ConstructorDir = 'ltr' | 'rtl';
+
+export type ConstructorFootnotePlacement = 'footnote' | 'endnote';
+
+export interface ConstructorFootnote {
+  id: string;
+  /** Sanitized rich-text (paragraph subset). */
+  text: string;
+  placement: ConstructorFootnotePlacement;
+}
+
+export interface ConstructorTableCell {
+  text: string;
+  rowSpan?: number;
+  colSpan?: number;
+  /** Absorbed by a merged anchor cell — omitted from render. */
+  covered?: boolean;
+}
 
 export type ConstructorPresetId =
   | 'introduction'
@@ -110,7 +129,8 @@ export interface TableSection extends BaseConstructorSection {
   kind: 'table';
   caption: string;
   hasHeaderRow: boolean;
-  rows: string[][];
+  /** v2 structured cells; legacy `string` cells are normalized on read. */
+  rows: (ConstructorTableCell | string)[][];
   /** Plain-text table note below the grid (TableNote style in docx). */
   notes?: string;
 }
@@ -161,9 +181,13 @@ export type ConstructorSection =
   | ReferencesSection;
 
 export interface ConstructorContent {
+  /** `2` when v2 features (footnotes, merged cells, inline images) are in use. */
+  schemaVersion?: number;
   defaultDir: ConstructorDir;
   /** Curated profile id; see `GET /public/manuscript-styles`. Omitted → server default. */
   manuscriptStyleId?: string;
+  /** Document-level footnote/endnote bodies keyed by `id` (referenced inline in HTML). */
+  footnotes?: ConstructorFootnote[];
   sections: ConstructorSection[];
 }
 

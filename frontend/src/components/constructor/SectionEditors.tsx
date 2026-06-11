@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import {
   useEffect,
   useId,
@@ -8,29 +8,31 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
-} from "react";
-import { useTranslations } from "next-intl";
-import { apiBlob, apiUpload } from "@/lib/api";
-import { toast } from "@/lib/toast";
-import { useToastApiError } from "@/lib/use-toast-api-error";
+} from 'react';
+import { useTranslations } from 'next-intl';
+import { apiBlob, apiUpload } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import { useToastApiError } from '@/lib/use-toast-api-error';
 import {
   detectDirection,
   resolveSectionDir,
-} from "@/lib/constructor-direction";
-import { parseKeywordsFromStorage, serializeKeywords } from "@/lib/keywords";
-import { KeywordTagsInput } from "@/components/ui/keyword-tags-input";
-import { Spinner } from "@/components/ui/spinner";
-import { ConstructorRichTextToolbar } from "@/components/constructor/ConstructorRichTextToolbar";
-import { createConstructorTipTapExtensions } from "@/lib/constructor-tiptap-extensions";
-import { resolveReferenceEntryHtml } from "@/lib/constructor-rich-text";
+} from '@/lib/constructor-direction';
+import { parseKeywordsFromStorage, serializeKeywords } from '@/lib/keywords';
+import { KeywordTagsInput } from '@/components/ui/keyword-tags-input';
+import { Spinner } from '@/components/ui/spinner';
+import { SimpleTooltip } from '@/components/ui/tooltip';
+import { ConstructorRichTextToolbar } from '@/components/constructor/ConstructorRichTextToolbar';
+import { createConstructorTipTapExtensions } from '@/lib/constructor-tiptap-extensions';
+import { resolveReferenceEntryHtml } from '@/lib/constructor-rich-text';
 import {
   sanitizeConstructorTipTapHtml,
   sanitizeKatexPreviewHtml,
-} from "@/lib/sanitize-constructor-html";
+} from '@/lib/sanitize-constructor-html';
 import type {
   AbstractSection,
   AuthorsSection,
   ConstructorAuthorEntry,
+  ConstructorFootnote,
   ConstructorReferenceEntry,
   ConstructorDir,
   ConstructorSection,
@@ -43,7 +45,14 @@ import type {
   RichTextBlockSection,
   TableSection,
   TitleSection,
-} from "@/lib/constructor-content.types";
+} from '@/lib/constructor-content.types';
+import {
+  getTableCellText,
+  isTableCellCovered,
+  mergeTableCellRange,
+  normalizeTableRows,
+  splitTableCell,
+} from '@/lib/constructor-table-utils';
 
 interface CommonProps<T extends ConstructorSection> {
   section: T;
@@ -51,6 +60,8 @@ interface CommonProps<T extends ConstructorSection> {
   onChange: (next: T) => void;
   slug?: string;
   readOnly?: boolean;
+  footnotes?: ConstructorFootnote[];
+  onFootnotesChange?: (next: ConstructorFootnote[]) => void;
   /** 1-based index among equation sections when `section.kind === 'equation'`. */
   equationNumber?: number;
 }
@@ -64,53 +75,39 @@ export function SectionEditor(
 ): ReactElement {
   const { section, equationNumber } = props;
   switch (section.kind) {
-    case "title":
-      return (
-        <TitleEditor {...(props as CommonProps<TitleSection>)} />
-      );
-    case "authors":
-      return (
-        <AuthorsEditor {...(props as CommonProps<AuthorsSection>)} />
-      );
-    case "abstract":
-      return (
-        <AbstractEditor {...(props as CommonProps<AbstractSection>)} />
-      );
-    case "heading1":
-    case "heading2":
-    case "heading3":
-      return (
-        <HeadingEditor {...(props as CommonProps<HeadingSection>)} />
-      );
-    case "paragraph":
-      return (
-        <ParagraphEditor {...(props as CommonProps<ParagraphSection>)} />
-      );
-    case "image":
-      return (
-        <ImageEditor {...(props as CommonProps<ImageSection>)} />
-      );
-    case "table":
-      return (
-        <TableEditor {...(props as CommonProps<TableSection>)} />
-      );
-    case "acknowledgments":
-    case "funding":
-    case "conflictOfInterest":
-    case "dataAvailability":
+    case 'title':
+      return <TitleEditor {...(props as CommonProps<TitleSection>)} />;
+    case 'authors':
+      return <AuthorsEditor {...(props as CommonProps<AuthorsSection>)} />;
+    case 'abstract':
+      return <AbstractEditor {...(props as CommonProps<AbstractSection>)} />;
+    case 'heading1':
+    case 'heading2':
+    case 'heading3':
+      return <HeadingEditor {...(props as CommonProps<HeadingSection>)} />;
+    case 'paragraph':
+      return <ParagraphEditor {...(props as CommonProps<ParagraphSection>)} />;
+    case 'image':
+      return <ImageEditor {...(props as CommonProps<ImageSection>)} />;
+    case 'table':
+      return <TableEditor {...(props as CommonProps<TableSection>)} />;
+    case 'acknowledgments':
+    case 'funding':
+    case 'conflictOfInterest':
+    case 'dataAvailability':
       return (
         <RichTextBlockEditor
           {...(props as CommonProps<RichTextBlockSection>)}
         />
       );
-    case "equation":
+    case 'equation':
       return (
         <EquationEditor
           {...(props as CommonProps<EquationSection>)}
           equationNumber={equationNumber}
         />
       );
-    case "references":
+    case 'references':
       return (
         <ReferencesEditor {...(props as CommonProps<ReferencesSection>)} />
       );
@@ -132,38 +129,40 @@ function DirectionBadge({
   onChange: (next: ConstructorSection) => void;
   disabled?: boolean;
 }) {
-  const t = useTranslations("ConstructorEditor");
-  if (section.kind === "abstract") {
+  const t = useTranslations('ConstructorEditor');
+  if (section.kind === 'abstract') {
     // Abstract direction is locked to its `lang` field.
     return null;
   }
   const dir = resolveSectionDir(section, defaultDir);
-  const source = section.dirSource ?? "auto";
+  const source = section.dirSource ?? 'auto';
   const label =
-    source === "manual"
-      ? dir === "rtl"
-        ? t("dirRtlManual")
-        : t("dirLtrManual")
-      : dir === "rtl"
-        ? t("dirRtlAuto")
-        : t("dirLtrAuto");
-  const next: ConstructorDir = dir === "rtl" ? "ltr" : "rtl";
+    source === 'manual'
+      ? dir === 'rtl'
+        ? t('dirRtlManual')
+        : t('dirLtrManual')
+      : dir === 'rtl'
+        ? t('dirRtlAuto')
+        : t('dirLtrAuto');
+  const next: ConstructorDir = dir === 'rtl' ? 'ltr' : 'rtl';
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() =>
-        onChange({
-          ...section,
-          dir: next,
-          dirSource: "manual",
-        } as ConstructorSection)
-      }
-      className="inline-flex items-center gap-1 rounded border border-ink/15 bg-paper px-2 py-1 text-xs text-ink/70 hover:border-accent/40 disabled:opacity-50"
-      title={t("dirToggleHint")}
-    >
-      {label}
-    </button>
+    <SimpleTooltip content={t('dirToggleHint')}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() =>
+          onChange({
+            ...section,
+            dir: next,
+            dirSource: 'manual',
+          } as ConstructorSection)
+        }
+        className="inline-flex items-center gap-1 rounded border border-ink/15 bg-paper px-2 py-1 text-xs text-ink/70 hover:border-accent/40 disabled:opacity-50"
+        aria-label={t('dirToggleHint')}
+      >
+        {label}
+      </button>
+    </SimpleTooltip>
   );
 }
 
@@ -177,12 +176,12 @@ function TitleEditor({
   onChange,
   readOnly,
 }: CommonProps<TitleSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const dir = resolveSectionDir(section, defaultDir);
   return (
     <SectionFrame
-      label={t("titleLabel")}
-      hint={t("titleHint")}
+      label={t('titleLabel')}
+      hint={t('titleHint')}
       headerExtra={
         <DirectionBadge
           section={section}
@@ -201,7 +200,7 @@ function TitleEditor({
           onChange(applyAutoDir(section, { text: e.target.value }))
         }
         className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 font-serif text-xl font-semibold text-ink shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-        placeholder={t("titlePlaceholder")}
+        placeholder={t('titlePlaceholder')}
       />
     </SectionFrame>
   );
@@ -213,18 +212,18 @@ function HeadingEditor({
   onChange,
   readOnly,
 }: CommonProps<HeadingSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const dir = resolveSectionDir(section, defaultDir);
   const sizeCls =
-    section.kind === "heading1"
-      ? "text-2xl font-bold"
-      : section.kind === "heading2"
-        ? "text-xl font-semibold"
-        : "text-lg font-semibold";
+    section.kind === 'heading1'
+      ? 'text-2xl font-bold'
+      : section.kind === 'heading2'
+        ? 'text-xl font-semibold'
+        : 'text-lg font-semibold';
   return (
     <SectionFrame
       label={t(`heading_${section.kind}` as const)}
-      hint={t("headingHint")}
+      hint={t('headingHint')}
       headerExtra={
         <DirectionBadge
           section={section}
@@ -243,7 +242,7 @@ function HeadingEditor({
           onChange(applyAutoDir(section, { text: e.target.value }))
         }
         className={`w-full rounded-md border border-ink/20 bg-paper px-3 py-2 font-serif text-ink shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent ${sizeCls}`}
-        placeholder={t("headingPlaceholder")}
+        placeholder={t('headingPlaceholder')}
       />
     </SectionFrame>
   );
@@ -259,7 +258,7 @@ function AuthorsEditor({
   onChange,
   readOnly,
 }: CommonProps<AuthorsSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const dir = resolveSectionDir(section, defaultDir);
 
   function update(idx: number, patch: Partial<ConstructorAuthorEntry>) {
@@ -274,10 +273,10 @@ function AuthorsEditor({
       authors: [
         ...section.authors,
         {
-          fullName: "",
-          title: "",
-          affiliation: "",
-          email: "",
+          fullName: '',
+          title: '',
+          affiliation: '',
+          email: '',
           isCorresponding: section.authors.length === 0,
         },
       ],
@@ -301,8 +300,8 @@ function AuthorsEditor({
 
   return (
     <SectionFrame
-      label={t("authorsLabel")}
-      hint={t("authorsHint")}
+      label={t('authorsLabel')}
+      hint={t('authorsHint')}
       headerExtra={
         <DirectionBadge
           section={section}
@@ -325,7 +324,7 @@ function AuthorsEditor({
                 value={a.fullName}
                 onChange={(e) => update(idx, { fullName: e.target.value })}
                 className="rounded border border-ink/20 bg-paper px-2 py-1 text-sm"
-                placeholder={t("authorFullName")}
+                placeholder={t('authorFullName')}
               />
               <input
                 dir={dir}
@@ -333,7 +332,7 @@ function AuthorsEditor({
                 value={a.title}
                 onChange={(e) => update(idx, { title: e.target.value })}
                 className="rounded border border-ink/20 bg-paper px-2 py-1 text-sm"
-                placeholder={t("authorTitle")}
+                placeholder={t('authorTitle')}
               />
               <input
                 dir={dir}
@@ -341,14 +340,14 @@ function AuthorsEditor({
                 value={a.affiliation}
                 onChange={(e) => update(idx, { affiliation: e.target.value })}
                 className="rounded border border-ink/20 bg-paper px-2 py-1 text-sm sm:col-span-2"
-                placeholder={t("authorAffiliation")}
+                placeholder={t('authorAffiliation')}
               />
               <input
                 disabled={readOnly}
                 value={a.email}
                 onChange={(e) => update(idx, { email: e.target.value })}
                 className="rounded border border-ink/20 bg-paper px-2 py-1 text-sm"
-                placeholder={t("authorEmail")}
+                placeholder={t('authorEmail')}
               />
               <label className="flex items-center gap-2 text-sm text-ink/80">
                 <input
@@ -357,7 +356,7 @@ function AuthorsEditor({
                   checked={a.isCorresponding}
                   onChange={() => setCorresponding(idx)}
                 />
-                {t("authorCorresponding")}
+                {t('authorCorresponding')}
               </label>
             </div>
             <div className="mt-2 text-end">
@@ -367,7 +366,7 @@ function AuthorsEditor({
                 onClick={() => remove(idx)}
                 className="text-xs text-red-700 hover:underline dark:text-red-300 disabled:opacity-50"
               >
-                {t("authorRemove")}
+                {t('authorRemove')}
               </button>
             </div>
           </li>
@@ -379,7 +378,7 @@ function AuthorsEditor({
         onClick={addAuthor}
         className="mt-3 rounded-md border border-ink/15 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
       >
-        {t("authorAdd")}
+        {t('authorAdd')}
       </button>
     </SectionFrame>
   );
@@ -394,47 +393,50 @@ function AbstractEditor({
   onChange,
   readOnly,
 }: CommonProps<AbstractSection>) {
-  const t = useTranslations("ConstructorEditor");
-  const tWf = useTranslations("SubmissionWorkflow");
+  const t = useTranslations('ConstructorEditor');
+  const tWf = useTranslations('SubmissionWorkflow');
   const idBase = useId();
   const kwLabelId = `${idBase}-abstract-kw-label`;
   const kwHintId = `${idBase}-abstract-kw-hint`;
   const kwInputId = `${idBase}-abstract-kw-input`;
 
-  const [keywordDraft, setKeywordDraft] = useState("");
+  const [keywordDraft, setKeywordDraft] = useState('');
   const keywordTags = useMemo(
     () => parseKeywordsFromStorage(section.keywords),
     [section.keywords],
   );
 
-  const dir: ConstructorDir = section.lang === "ar" ? "rtl" : "ltr";
+  const dir: ConstructorDir = section.lang === 'ar' ? 'rtl' : 'ltr';
   const kwPlaceholder =
-    section.lang === "ar"
-      ? tWf("keywordsPlaceholderAr")
-      : tWf("keywordsPlaceholder");
+    section.lang === 'ar'
+      ? tWf('keywordsPlaceholderAr')
+      : tWf('keywordsPlaceholder');
 
   return (
     <SectionFrame
-      label={t(section.lang === "ar" ? "abstractAr" : "abstractEn")}
-      hint={t("abstractHint")}
+      label={t(section.lang === 'ar' ? 'abstractAr' : 'abstractEn')}
+      hint={t('abstractHint')}
       headerExtra={
-        <div className="inline-flex rounded-md border border-ink/12 bg-paper/50 p-0.5" role="group">
+        <div
+          className="inline-flex rounded-md border border-ink/12 bg-paper/50 p-0.5"
+          role="group"
+        >
           <button
             type="button"
             disabled={readOnly}
             onClick={() =>
               onChange({
                 ...section,
-                lang: "en",
+                lang: 'en',
               })
             }
             className={`rounded-sm px-2.5 py-1 text-[11px] font-semibold transition-all ${
-              section.lang === "en"
-                ? "bg-ink text-paper shadow-sm"
-                : "text-ink/60 hover:text-ink disabled:opacity-50"
+              section.lang === 'en'
+                ? 'bg-ink text-paper shadow-sm'
+                : 'text-ink/60 hover:text-ink disabled:opacity-50'
             }`}
           >
-            {t("abstractLangEn")}
+            {t('abstractLangEn')}
           </button>
           <button
             type="button"
@@ -442,16 +444,16 @@ function AbstractEditor({
             onClick={() =>
               onChange({
                 ...section,
-                lang: "ar",
+                lang: 'ar',
               })
             }
             className={`rounded-sm px-2.5 py-1 text-[11px] font-semibold transition-all ${
-              section.lang === "ar"
-                ? "bg-ink text-paper shadow-sm"
-                : "text-ink/60 hover:text-ink disabled:opacity-50"
+              section.lang === 'ar'
+                ? 'bg-ink text-paper shadow-sm'
+                : 'text-ink/60 hover:text-ink disabled:opacity-50'
             }`}
           >
-            {t("abstractLangAr")}
+            {t('abstractLangAr')}
           </button>
         </div>
       }
@@ -462,20 +464,17 @@ function AbstractEditor({
         value={section.text}
         onChange={(e) => onChange({ ...section, text: e.target.value })}
         className="min-h-32 w-full rounded-md border border-ink/20 bg-paper px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-        placeholder={t("abstractPlaceholder")}
+        placeholder={t('abstractPlaceholder')}
       />
       <div className="mt-2 flex flex-col gap-1 text-sm">
-        <span
-          id={kwLabelId}
-          className="font-medium text-ink"
-        >
-          {section.lang === "ar"
-            ? tWf("keywordsLabelAr")
-            : tWf("keywordsLabelEn")}
+        <span id={kwLabelId} className="font-medium text-ink">
+          {section.lang === 'ar'
+            ? tWf('keywordsLabelAr')
+            : tWf('keywordsLabelEn')}
         </span>
         <div
-          dir={section.lang === "ar" ? "rtl" : "ltr"}
-          lang={section.lang === "ar" ? "ar" : "en"}
+          dir={section.lang === 'ar' ? 'rtl' : 'ltr'}
+          lang={section.lang === 'ar' ? 'ar' : 'en'}
         >
           <KeywordTagsInput
             tags={keywordTags}
@@ -495,7 +494,7 @@ function AbstractEditor({
           />
         </div>
         <span id={kwHintId} className="text-xs text-ink/55">
-          {tWf("keywordsCount", { count: keywordTags.length })}
+          {tWf('keywordsCount', { count: keywordTags.length })}
         </span>
       </div>
     </SectionFrame>
@@ -511,8 +510,11 @@ function ParagraphEditor({
   defaultDir,
   onChange,
   readOnly,
+  slug,
+  footnotes,
+  onFootnotesChange,
 }: CommonProps<ParagraphSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const dir = resolveSectionDir(section, defaultDir);
 
   const editor = useEditor(
@@ -520,8 +522,8 @@ function ParagraphEditor({
       // Allowlist enforced by disabling the rest of StarterKit.
       // Image extension is INTENTIONALLY left out so paragraphs cannot
       // contain inline base64 images (use the dedicated Image section).
-      extensions: createConstructorTipTapExtensions("full"),
-      content: sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
+      extensions: createConstructorTipTapExtensions('full'),
+      content: sanitizeConstructorTipTapHtml(section.html || '<p></p>'),
       editable: !readOnly,
       immediatelyRender: false, // required for SSR (Next.js)
       onUpdate: ({ editor }) => {
@@ -537,21 +539,9 @@ function ParagraphEditor({
           // below is the live source of truth (directionality cascades to the
           // contenteditable via the bidi algorithm).
           class:
-            "prose prose-sm max-w-none min-h-24 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm",
+            'prose prose-sm max-w-none min-h-24 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm',
         },
         transformPastedHTML: sanitizeConstructorTipTapHtml,
-        // Prevent pasting images (would inline as base64)
-        handlePaste: (_view, event) => {
-          const items = event.clipboardData?.items;
-          if (!items) return false;
-          for (const item of items) {
-            if (item.type.startsWith("image/")) {
-              event.preventDefault();
-              return true;
-            }
-          }
-          return false;
-        },
       },
     },
     [readOnly],
@@ -560,8 +550,8 @@ function ParagraphEditor({
   // External content updates (e.g., on initial load) — only apply when the
   // editor is empty or the HTML differs significantly to avoid cursor jumps.
   useEffect(() => {
-    const next = sanitizeConstructorTipTapHtml(section.html || "<p></p>");
-    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? "");
+    const next = sanitizeConstructorTipTapHtml(section.html || '<p></p>');
+    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? '');
     if (editor && next !== current && !editor.isFocused) {
       editor.commands.setContent(next, { emitUpdate: false });
     }
@@ -569,8 +559,8 @@ function ParagraphEditor({
 
   return (
     <SectionFrame
-      label={t("paragraphLabel")}
-      hint={t("paragraphHint")}
+      label={t('paragraphLabel')}
+      hint={t('paragraphHint')}
       headerExtra={
         <DirectionBadge
           section={section}
@@ -581,7 +571,14 @@ function ParagraphEditor({
       }
     >
       {editor ? (
-        <ConstructorRichTextToolbar editor={editor} disabled={readOnly} variant="full" />
+        <ConstructorRichTextToolbar
+          editor={editor}
+          disabled={readOnly}
+          variant="full"
+          slug={slug}
+          footnotes={footnotes}
+          onFootnotesChange={onFootnotesChange}
+        />
       ) : null}
       <div dir={dir}>
         <EditorContent editor={editor} />
@@ -601,7 +598,7 @@ function ImageEditor({
   slug,
   readOnly,
 }: CommonProps<ImageSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const showApiError = useToastApiError();
   const fileInputId = useId();
   const [uploading, setUploading] = useState(false);
@@ -610,7 +607,9 @@ function ImageEditor({
   async function handleFile(file: File | undefined) {
     if (!file) return;
     if (!slug) {
-      toast.error(t("imageNeedsDraft"), { id: "constructor-image-needs-draft" });
+      toast.error(t('imageNeedsDraft'), {
+        id: 'constructor-image-needs-draft',
+      });
       return;
     }
     setUploading(true);
@@ -618,12 +617,16 @@ function ImageEditor({
       const row = (await apiUpload(
         `/submissions/${encodeURIComponent(slug)}/files`,
         file,
-        { kind: "figure" },
+        { kind: 'figure' },
       )) as { id: string };
       onChange({ ...section, fileId: row.id });
-      toast.success(t("imageUploadSuccess"), { id: "constructor-image-upload-success" });
+      toast.success(t('imageUploadSuccess'), {
+        id: 'constructor-image-upload-success',
+      });
     } catch (e) {
-      showApiError(e, t("imageUploadFailed"), { id: "constructor-image-upload" });
+      showApiError(e, t('imageUploadFailed'), {
+        id: 'constructor-image-upload',
+      });
     } finally {
       setUploading(false);
     }
@@ -631,8 +634,8 @@ function ImageEditor({
 
   return (
     <SectionFrame
-      label={t("imageLabel")}
-      hint={t("imageHint")}
+      label={t('imageLabel')}
+      hint={t('imageHint')}
       headerExtra={
         <DirectionBadge
           section={section}
@@ -652,26 +655,26 @@ function ImageEditor({
             disabled={readOnly || uploading}
             onChange={(e) => {
               void handleFile(e.target.files?.[0] ?? undefined);
-              e.target.value = "";
+              e.target.value = '';
             }}
           />
           <label
             htmlFor={fileInputId}
             className={`inline-flex cursor-pointer items-center rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 ${
-              readOnly || uploading ? "pointer-events-none opacity-50" : ""
+              readOnly || uploading ? 'pointer-events-none opacity-50' : ''
             }`}
           >
-            {section.fileId ? t("imageReplace") : t("imageUpload")}
+            {section.fileId ? t('imageReplace') : t('imageUpload')}
           </label>
           {section.fileId ? (
-            <span className="text-xs text-ink/60">{t("imageAttached")}</span>
+            <span className="text-xs text-ink/60">{t('imageAttached')}</span>
           ) : (
-            <span className="text-xs text-ink/50">{t("imageNotUploaded")}</span>
+            <span className="text-xs text-ink/50">{t('imageNotUploaded')}</span>
           )}
           {uploading ? (
             <span className="inline-flex items-center gap-1.5 text-xs text-ink/60">
               <Spinner size="sm" />
-              <span className="sr-only">{t("imageUploading")}</span>
+              <span className="sr-only">{t('imageUploading')}</span>
             </span>
           ) : null}
         </div>
@@ -683,7 +686,7 @@ function ImageEditor({
           readOnly={readOnly}
           value={section.altText}
           onChange={(e) => onChange({ ...section, altText: e.target.value })}
-          placeholder={t("imageAltText")}
+          placeholder={t('imageAltText')}
           className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 text-sm shadow-sm"
         />
         <input
@@ -693,7 +696,7 @@ function ImageEditor({
           onChange={(e) =>
             onChange(applyAutoDir(section, { caption: e.target.value }))
           }
-          placeholder={t("imageCaption")}
+          placeholder={t('imageCaption')}
           className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 text-sm shadow-sm"
         />
       </div>
@@ -706,10 +709,9 @@ function ImagePreview({ slug, fileId }: { slug: string; fileId: string }) {
   useEffect(() => {
     let objectUrl: string | null = null;
     const controller = new AbortController();
-    apiBlob(
-      `/submissions/${encodeURIComponent(slug)}/files/${fileId}`,
-      { signal: controller.signal },
-    )
+    apiBlob(`/submissions/${encodeURIComponent(slug)}/files/${fileId}`, {
+      signal: controller.signal,
+    })
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
@@ -743,47 +745,74 @@ function TableEditor({
   onChange,
   readOnly,
 }: CommonProps<TableSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const dir = resolveSectionDir(section, defaultDir);
+  const rows = normalizeTableRows(section.rows);
+  const [selAnchor, setSelAnchor] = useState<{ r: number; c: number } | null>(
+    null,
+  );
 
   function setCell(r: number, c: number, value: string) {
-    const next = section.rows.map((row, i) =>
-      i === r ? row.map((cell, j) => (j === c ? value : cell)) : row,
+    const next = rows.map((row, i) =>
+      i === r
+        ? row.map((cell, j) => (j === c ? { ...cell, text: value } : cell))
+        : row,
     );
     onChange({ ...section, rows: next });
   }
   function addRow() {
-    const cols = section.rows[0]?.length ?? 2;
+    const cols = rows[0]?.length ?? 2;
     onChange({
       ...section,
-      rows: [...section.rows, Array(cols).fill("")],
+      rows: [...rows, Array.from({ length: cols }, () => ({ text: '' }))],
     });
   }
   function addColumn() {
     onChange({
       ...section,
-      rows: section.rows.map((r) => [...r, ""]),
+      rows: rows.map((r) => [...r, { text: '' }]),
     });
   }
   function removeRow(r: number) {
-    if (section.rows.length <= 1) return;
+    if (rows.length <= 1) return;
     onChange({
       ...section,
-      rows: section.rows.filter((_, i) => i !== r),
+      rows: rows.filter((_, i) => i !== r),
     });
   }
   function removeColumn(c: number) {
-    if ((section.rows[0]?.length ?? 0) <= 1) return;
+    if ((rows[0]?.length ?? 0) <= 1) return;
     onChange({
       ...section,
-      rows: section.rows.map((r) => r.filter((_, j) => j !== c)),
+      rows: rows.map((r) => r.filter((_, j) => j !== c)),
     });
+  }
+
+  function handleCellClick(r: number, c: number) {
+    if (readOnly) return;
+    if (!selAnchor) {
+      setSelAnchor({ r, c });
+      return;
+    }
+    if (selAnchor.r === r && selAnchor.c === c) {
+      setSelAnchor(null);
+      return;
+    }
+    onChange({
+      ...section,
+      rows: mergeTableCellRange(rows, selAnchor.r, selAnchor.c, r, c),
+    });
+    setSelAnchor(null);
+  }
+
+  function handleSplitCell(r: number, c: number) {
+    onChange({ ...section, rows: splitTableCell(rows, r, c) });
   }
 
   return (
     <SectionFrame
-      label={t("tableLabel")}
-      hint={t("tableHint")}
+      label={t('tableLabel')}
+      hint={t('tableHint')}
       headerExtra={
         <DirectionBadge
           section={section}
@@ -801,7 +830,7 @@ function TableEditor({
           onChange={(e) =>
             onChange(applyAutoDir(section, { caption: e.target.value }))
           }
-          placeholder={t("tableCaption")}
+          placeholder={t('tableCaption')}
           className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 text-sm shadow-sm"
         />
         <label className="flex items-center gap-2 text-sm text-ink/80">
@@ -813,54 +842,84 @@ function TableEditor({
               onChange({ ...section, hasHeaderRow: e.target.checked })
             }
           />
-          {t("tableHasHeader")}
+          {t('tableHasHeader')}
         </label>
         <div className="overflow-auto rounded border border-ink/10">
           <table className="min-w-full border-collapse">
             <tbody>
-              {section.rows.map((row, r) => (
+              {rows.map((row, r) => (
                 <tr key={r}>
-                  {row.map((cell, c) => (
-                    <td key={c} className="border border-ink/10 p-1 align-top">
-                      <textarea
-                        dir={dir}
-                        readOnly={readOnly}
-                        value={cell}
-                        onChange={(e) => setCell(r, c, e.target.value)}
-                        rows={1}
-                        className={`w-full min-w-32 resize-y rounded border-0 bg-transparent px-2 py-1 text-sm focus:bg-accent/5 focus:outline-none ${
-                          section.hasHeaderRow && r === 0 ? "font-semibold" : ""
-                        }`}
-                      />
-                    </td>
-                  ))}
+                  {row.map((cell, c) => {
+                    if (isTableCellCovered(cell)) return null;
+                    const selected = selAnchor?.r === r && selAnchor?.c === c;
+                    return (
+                      <td
+                        key={c}
+                        rowSpan={cell.rowSpan}
+                        colSpan={cell.colSpan}
+                        className={`border border-ink/10 p-1 align-top ${selected ? 'ring-2 ring-accent/50' : ''}`}
+                        onClick={() => handleCellClick(r, c)}
+                      >
+                        <textarea
+                          dir={dir}
+                          readOnly={readOnly}
+                          value={getTableCellText(cell)}
+                          onChange={(e) => setCell(r, c, e.target.value)}
+                          rows={1}
+                          className={`w-full min-w-32 resize-y rounded border-0 bg-transparent px-2 py-1 text-sm focus:bg-accent/5 focus:outline-none ${
+                            section.hasHeaderRow && r === 0
+                              ? 'font-semibold'
+                              : ''
+                          }`}
+                        />
+                        {!readOnly &&
+                        ((cell.rowSpan ?? 1) > 1 || (cell.colSpan ?? 1) > 1) ? (
+                          <button
+                            type="button"
+                            className="mt-1 text-[10px] text-accent hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSplitCell(r, c);
+                            }}
+                          >
+                            {t('tableSplitCell')}
+                          </button>
+                        ) : null}
+                      </td>
+                    );
+                  })}
                   <td className="border-l border-ink/10 p-1 text-center">
-                    <button
-                      type="button"
-                      disabled={readOnly || section.rows.length <= 1}
-                      onClick={() => removeRow(r)}
-                      className="text-xs text-red-700 hover:underline dark:text-red-300 disabled:opacity-30"
-                      title={t("tableRemoveRow")}
-                    >
-                      ×
-                    </button>
+                    <SimpleTooltip content={t('tableRemoveRow')}>
+                      <button
+                        type="button"
+                        disabled={readOnly || section.rows.length <= 1}
+                        onClick={() => removeRow(r)}
+                        className="text-xs text-red-700 hover:underline dark:text-red-300 disabled:opacity-30"
+                        aria-label={t('tableRemoveRow')}
+                      >
+                        ×
+                      </button>
+                    </SimpleTooltip>
                   </td>
                 </tr>
               ))}
               <tr>
-                {section.rows[0]?.map((_, c) => (
-                  <td key={c} className="border-t border-ink/10 p-1 text-center">
-                    <button
-                      type="button"
-                      disabled={
-                        readOnly || (section.rows[0]?.length ?? 0) <= 1
-                      }
-                      onClick={() => removeColumn(c)}
-                      className="text-xs text-red-700 hover:underline dark:text-red-300 disabled:opacity-30"
-                      title={t("tableRemoveColumn")}
-                    >
-                      ×
-                    </button>
+                {rows[0]?.map((_, c) => (
+                  <td
+                    key={c}
+                    className="border-t border-ink/10 p-1 text-center"
+                  >
+                    <SimpleTooltip content={t('tableRemoveColumn')}>
+                      <button
+                        type="button"
+                        disabled={readOnly || (rows[0]?.length ?? 0) <= 1}
+                        onClick={() => removeColumn(c)}
+                        className="text-xs text-red-700 hover:underline dark:text-red-300 disabled:opacity-30"
+                        aria-label={t('tableRemoveColumn')}
+                      >
+                        ×
+                      </button>
+                    </SimpleTooltip>
                   </td>
                 ))}
                 <td />
@@ -875,7 +934,7 @@ function TableEditor({
             onClick={addRow}
             className="rounded-md border border-ink/15 bg-paper px-3 py-1 text-sm text-ink hover:border-accent/40 disabled:opacity-50"
           >
-            {t("tableAddRow")}
+            {t('tableAddRow')}
           </button>
           <button
             type="button"
@@ -883,22 +942,22 @@ function TableEditor({
             onClick={addColumn}
             className="rounded-md border border-ink/15 bg-paper px-3 py-1 text-sm text-ink hover:border-accent/40 disabled:opacity-50"
           >
-            {t("tableAddColumn")}
+            {t('tableAddColumn')}
           </button>
         </div>
-        <p className="text-xs text-ink/55">{t("tableNoMergedCells")}</p>
+        <p className="text-xs text-ink/55">{t('tableMergeHint')}</p>
         <label className="block text-sm font-medium text-ink/80">
-          {t("tableNotesLabel")}
+          {t('tableNotesLabel')}
         </label>
         <textarea
           dir={dir}
           readOnly={readOnly}
           data-testid="constructor-table-notes"
-          value={section.notes ?? ""}
+          value={section.notes ?? ''}
           onChange={(e) =>
             onChange(applyAutoDir(section, { notes: e.target.value }))
           }
-          placeholder={t("tableNotesPlaceholder")}
+          placeholder={t('tableNotesPlaceholder')}
           rows={3}
           className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 text-sm shadow-sm"
         />
@@ -917,7 +976,7 @@ function RichTextBlockEditor({
   onChange,
   readOnly,
 }: CommonProps<RichTextBlockSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const kind = section.kind as RichTextBlockKind;
   const labelKey = `richText_${kind}_label` as const;
   const hintKey = `richText_${kind}_hint` as const;
@@ -925,8 +984,8 @@ function RichTextBlockEditor({
 
   const editor = useEditor(
     {
-      extensions: createConstructorTipTapExtensions("full"),
-      content: sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
+      extensions: createConstructorTipTapExtensions('full'),
+      content: sanitizeConstructorTipTapHtml(section.html || '<p></p>'),
       editable: !readOnly,
       immediatelyRender: false,
       onUpdate: ({ editor }) => {
@@ -939,14 +998,14 @@ function RichTextBlockEditor({
       editorProps: {
         attributes: {
           class:
-            "prose prose-sm max-w-none min-h-20 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm",
+            'prose prose-sm max-w-none min-h-20 focus:outline-none rounded-md border border-ink/20 bg-paper px-3 py-2 shadow-sm',
         },
         transformPastedHTML: sanitizeConstructorTipTapHtml,
         handlePaste: (_view, event) => {
           const items = event.clipboardData?.items;
           if (!items) return false;
           for (const item of items) {
-            if (item.type.startsWith("image/")) {
+            if (item.type.startsWith('image/')) {
               event.preventDefault();
               return true;
             }
@@ -959,8 +1018,8 @@ function RichTextBlockEditor({
   );
 
   useEffect(() => {
-    const next = sanitizeConstructorTipTapHtml(section.html || "<p></p>");
-    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? "");
+    const next = sanitizeConstructorTipTapHtml(section.html || '<p></p>');
+    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? '');
     if (editor && next !== current && !editor.isFocused) {
       editor.commands.setContent(next, { emitUpdate: false });
     }
@@ -980,7 +1039,11 @@ function RichTextBlockEditor({
       }
     >
       {editor ? (
-        <ConstructorRichTextToolbar editor={editor} disabled={readOnly} variant="full" />
+        <ConstructorRichTextToolbar
+          editor={editor}
+          disabled={readOnly}
+          variant="full"
+        />
       ) : null}
       <div dir={dir} data-testid={`constructor-rich-text-${kind}`}>
         <EditorContent editor={editor} />
@@ -999,7 +1062,7 @@ function EquationEditor({
   readOnly,
   equationNumber,
 }: CommonProps<EquationSection> & { equationNumber?: number }) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState(false);
 
@@ -1013,8 +1076,8 @@ function EquationEditor({
         return;
       }
       try {
-        const katex = await import("katex");
-        await import("katex/dist/katex.min.css");
+        const katex = await import('katex');
+        await import('katex/dist/katex.min.css');
         const html = katex.default.renderToString(latex, {
           throwOnError: true,
           displayMode: true,
@@ -1037,18 +1100,18 @@ function EquationEditor({
 
   const label =
     section.numbered && equationNumber != null
-      ? t("equationNumberedLabel", { n: equationNumber })
-      : t("equationLabel");
+      ? t('equationNumberedLabel', { n: equationNumber })
+      : t('equationLabel');
 
   return (
-    <SectionFrame label={label} hint={t("equationHint")}>
+    <SectionFrame label={label} hint={t('equationHint')}>
       <div className="space-y-3">
         <textarea
           readOnly={readOnly}
           data-testid="constructor-equation-latex"
           value={section.latex}
           onChange={(e) => onChange({ ...section, latex: e.target.value })}
-          placeholder={t("equationPlaceholder")}
+          placeholder={t('equationPlaceholder')}
           rows={4}
           className="w-full rounded-md border border-ink/20 bg-paper px-3 py-2 font-mono text-sm shadow-sm"
         />
@@ -1062,7 +1125,7 @@ function EquationEditor({
               onChange({ ...section, numbered: e.target.checked })
             }
           />
-          {t("equationNumbered")}
+          {t('equationNumbered')}
         </label>
         <div
           className="min-h-12 rounded-md border border-ink/10 bg-paper/50 px-4 py-3 text-center"
@@ -1070,7 +1133,7 @@ function EquationEditor({
         >
           {previewError ? (
             <p className="text-xs text-amber-800 dark:text-amber-200">
-              {t("equationPreviewError")}
+              {t('equationPreviewError')}
             </p>
           ) : previewHtml ? (
             <div
@@ -1080,7 +1143,7 @@ function EquationEditor({
               }}
             />
           ) : (
-            <p className="text-xs text-ink/50">{t("equationPreviewEmpty")}</p>
+            <p className="text-xs text-ink/50">{t('equationPreviewEmpty')}</p>
           )}
         </div>
       </div>
@@ -1105,8 +1168,8 @@ function ReferenceEntryEditor({
 }) {
   const editor = useEditor(
     {
-      extensions: createConstructorTipTapExtensions("reference"),
-      content: sanitizeConstructorTipTapHtml(html || "<p></p>"),
+      extensions: createConstructorTipTapExtensions('reference'),
+      content: sanitizeConstructorTipTapHtml(html || '<p></p>'),
       editable: !readOnly,
       immediatelyRender: false,
       onUpdate: ({ editor: ed }) => {
@@ -1115,7 +1178,7 @@ function ReferenceEntryEditor({
       editorProps: {
         attributes: {
           class:
-            "prose prose-sm max-w-none min-h-[2.5rem] focus:outline-none rounded-md border border-ink/20 bg-paper px-2 py-1 text-sm shadow-sm",
+            'prose prose-sm max-w-none min-h-[2.5rem] focus:outline-none rounded-md border border-ink/20 bg-paper px-2 py-1 text-sm shadow-sm',
         },
         transformPastedHTML: sanitizeConstructorTipTapHtml,
       },
@@ -1124,8 +1187,8 @@ function ReferenceEntryEditor({
   );
 
   useEffect(() => {
-    const next = sanitizeConstructorTipTapHtml(html || "<p></p>");
-    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? "");
+    const next = sanitizeConstructorTipTapHtml(html || '<p></p>');
+    const current = sanitizeConstructorTipTapHtml(editor?.getHTML() ?? '');
     if (editor && next !== current && !editor.isFocused) {
       editor.commands.setContent(next, { emitUpdate: false });
     }
@@ -1150,7 +1213,7 @@ function ReferencesEditor({
   onChange,
   readOnly,
 }: CommonProps<ReferencesSection>) {
-  const t = useTranslations("ConstructorEditor");
+  const t = useTranslations('ConstructorEditor');
 
   function updateItem(idx: number, patch: Partial<ConstructorReferenceEntry>) {
     onChange({
@@ -1163,7 +1226,7 @@ function ReferencesEditor({
   function addItem() {
     onChange({
       ...section,
-      items: [...section.items, { lang: "en", html: "<p></p>" }],
+      items: [...section.items, { lang: 'en', html: '<p></p>' }],
     });
   }
   function removeItem(idx: number) {
@@ -1174,57 +1237,60 @@ function ReferencesEditor({
   }
 
   return (
-    <SectionFrame label={t("referencesLabel")} hint={t("referencesHint")}>
+    <SectionFrame label={t('referencesLabel')} hint={t('referencesHint')}>
       <ul className="space-y-2">
         {section.items.map((item, idx) => {
-          const dir: ConstructorDir = item.lang === "ar" ? "rtl" : "ltr";
+          const dir: ConstructorDir = item.lang === 'ar' ? 'rtl' : 'ltr';
           return (
             <li
               key={idx}
               className="rounded-md border border-ink/10 bg-paper/40 p-2"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-md border border-ink/12 bg-paper/50 p-0.5" role="group">
+                <div
+                  className="inline-flex rounded-md border border-ink/12 bg-paper/50 p-0.5"
+                  role="group"
+                >
                   <button
                     type="button"
                     disabled={readOnly}
                     onClick={() =>
                       updateItem(idx, {
-                        lang: "en",
+                        lang: 'en',
                       })
                     }
                     className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold transition-all ${
-                      item.lang === "en"
-                        ? "bg-ink text-paper shadow-sm"
-                        : "text-ink/60 hover:text-ink disabled:opacity-50"
+                      item.lang === 'en'
+                        ? 'bg-ink text-paper shadow-sm'
+                        : 'text-ink/60 hover:text-ink disabled:opacity-50'
                     }`}
                   >
-                    {t("referencesLangEn")}
+                    {t('referencesLangEn')}
                   </button>
                   <button
                     type="button"
                     disabled={readOnly}
                     onClick={() =>
                       updateItem(idx, {
-                        lang: "ar",
+                        lang: 'ar',
                       })
                     }
                     className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold transition-all ${
-                      item.lang === "ar"
-                        ? "bg-ink text-paper shadow-sm"
-                        : "text-ink/60 hover:text-ink disabled:opacity-50"
+                      item.lang === 'ar'
+                        ? 'bg-ink text-paper shadow-sm'
+                        : 'text-ink/60 hover:text-ink disabled:opacity-50'
                     }`}
                   >
-                    {t("referencesLangAr")}
+                    {t('referencesLangAr')}
                   </button>
                 </div>
                 <input
                   disabled={readOnly}
-                  value={item.doi ?? ""}
+                  value={item.doi ?? ''}
                   onChange={(e) =>
                     updateItem(idx, { doi: e.target.value || undefined })
                   }
-                  placeholder={t("referencesDoiPlaceholder")}
+                  placeholder={t('referencesDoiPlaceholder')}
                   className="flex-1 rounded border border-ink/15 bg-paper px-2 py-1 text-xs"
                 />
                 <button
@@ -1233,7 +1299,7 @@ function ReferencesEditor({
                   onClick={() => removeItem(idx)}
                   className="text-xs text-red-700 hover:underline dark:text-red-300 disabled:opacity-50"
                 >
-                  {t("referencesRemove")}
+                  {t('referencesRemove')}
                 </button>
               </div>
               <ReferenceEntryEditor
@@ -1252,7 +1318,7 @@ function ReferencesEditor({
         onClick={addItem}
         className="mt-3 rounded-md border border-ink/15 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
       >
-        {t("referencesAdd")}
+        {t('referencesAdd')}
       </button>
     </SectionFrame>
   );
@@ -1299,96 +1365,109 @@ function applyAutoDir<T extends ConstructorSection>(
 ): T {
   const merged = { ...section, ...patch } as T;
   if (
-    merged.kind === "abstract" ||
-    merged.kind === "image" ||
-    merged.kind === "table" ||
-    merged.kind === "references" ||
-    merged.kind === "authors"
+    merged.kind === 'abstract' ||
+    merged.kind === 'image' ||
+    merged.kind === 'table' ||
+    merged.kind === 'references' ||
+    merged.kind === 'authors'
   ) {
     // Only auto-detect on flat text sections (title/heading/paragraph).
     return merged;
   }
-  if (merged.dirSource === "manual") return merged;
-  let textForDetection = "";
-  if (merged.kind === "title" || merged.kind === "heading1" || merged.kind === "heading2" || merged.kind === "heading3") {
+  if (merged.dirSource === 'manual') return merged;
+  let textForDetection = '';
+  if (
+    merged.kind === 'title' ||
+    merged.kind === 'heading1' ||
+    merged.kind === 'heading2' ||
+    merged.kind === 'heading3'
+  ) {
     textForDetection = (merged as TitleSection | HeadingSection).text;
-  } else if (merged.kind === "paragraph") {
-    textForDetection = (merged as ParagraphSection).html.replace(/<[^>]+>/g, " ");
+  } else if (merged.kind === 'paragraph') {
+    textForDetection = (merged as ParagraphSection).html.replace(
+      /<[^>]+>/g,
+      ' ',
+    );
   }
   if (!textForDetection.trim()) return merged;
   const detected = detectDirection(textForDetection);
-  return { ...merged, dir: detected, dirSource: "auto" } as T;
+  return { ...merged, dir: detected, dirSource: 'auto' } as T;
 }
 
 // Re-export to help consumers list section kinds easily
-export const SECTION_KIND_ORDER: ConstructorSection["kind"][] = [
-  "title",
-  "authors",
-  "abstract",
-  "heading1",
-  "heading2",
-  "heading3",
-  "paragraph",
-  "image",
-  "table",
-  "references",
+export const SECTION_KIND_ORDER: ConstructorSection['kind'][] = [
+  'title',
+  'authors',
+  'abstract',
+  'heading1',
+  'heading2',
+  'heading3',
+  'paragraph',
+  'image',
+  'table',
+  'references',
 ];
 
 // Helper: produce a fresh blank section of the given kind.
 export function createBlankSection(
-  kind: ConstructorSection["kind"],
+  kind: ConstructorSection['kind'],
   defaultDir: ConstructorDir,
-  options?: { lang?: "en" | "ar" },
+  options?: { lang?: 'en' | 'ar' },
 ): ConstructorSection {
   const id = cryptoId();
-  const base = { id, dir: defaultDir, dirSource: "auto" as const };
+  const base = { id, dir: defaultDir, dirSource: 'auto' as const };
   switch (kind) {
-    case "title":
-      return { ...base, kind, text: "", ...(options?.lang ? { lang: options.lang } : {}) };
-    case "authors":
-      return { ...base, kind, authors: [] };
-    case "abstract":
+    case 'title':
       return {
         ...base,
         kind,
-        lang: options?.lang ?? "en",
-        text: "",
-        keywords: "",
+        text: '',
+        ...(options?.lang ? { lang: options.lang } : {}),
       };
-    case "heading1":
-    case "heading2":
-    case "heading3":
-      return { ...base, kind, text: "" };
-    case "paragraph":
-      return { ...base, kind, html: "<p></p>" };
-    case "image":
-      return { ...base, kind, fileId: null, altText: "", caption: "" };
-    case "table":
+    case 'authors':
+      return { ...base, kind, authors: [] };
+    case 'abstract':
       return {
         ...base,
         kind,
-        caption: "",
+        lang: options?.lang ?? 'en',
+        text: '',
+        keywords: '',
+      };
+    case 'heading1':
+    case 'heading2':
+    case 'heading3':
+      return { ...base, kind, text: '' };
+    case 'paragraph':
+      return { ...base, kind, html: '<p></p>' };
+    case 'image':
+      return { ...base, kind, fileId: null, altText: '', caption: '' };
+    case 'table':
+      return {
+        ...base,
+        kind,
+        caption: '',
         hasHeaderRow: true,
-        notes: "",
+        notes: '',
         rows: [
-          ["", ""],
-          ["", ""],
+          [{ text: '' }, { text: '' }],
+          [{ text: '' }, { text: '' }],
         ],
       };
-    case "acknowledgments":
-    case "funding":
-    case "conflictOfInterest":
-    case "dataAvailability":
-      return { ...base, kind, html: "<p></p>" };
-    case "equation":
-      return { ...base, kind, latex: "", numbered: false };
-    case "references":
+    case 'acknowledgments':
+    case 'funding':
+    case 'conflictOfInterest':
+    case 'dataAvailability':
+      return { ...base, kind, html: '<p></p>' };
+    case 'equation':
+      return { ...base, kind, latex: '', numbered: false };
+    case 'references':
       return { ...base, kind, items: [] };
   }
 }
 
 function cryptoId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
   return Math.random().toString(36).slice(2) + Date.now().toString(36);

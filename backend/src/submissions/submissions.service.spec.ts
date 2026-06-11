@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
@@ -8,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -25,8 +27,8 @@ import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
 import { notificationsServiceMock } from '../notifications/notifications.service.mock';
-import { ROUTING_KEY } from '../messaging/contracts/email-events';
-import { reviewerInvitedKey } from '../messaging/shared/idempotency';
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
+import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import type { RequestUser } from '../common/types/request-user';
 
@@ -114,7 +116,10 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
         SubmissionsService,
         { provide: getRepositoryToken(Submission), useValue: {} },
         { provide: getRepositoryToken(SubmissionFile), useValue: {} },
-        { provide: getRepositoryToken(ReviewAssignment), useValue: assignmentsRepo },
+        {
+          provide: getRepositoryToken(ReviewAssignment),
+          useValue: assignmentsRepo,
+        },
         { provide: getRepositoryToken(Review), useValue: {} },
         { provide: getRepositoryToken(CopyeditAssignment), useValue: {} },
         { provide: getRepositoryToken(CopyeditNote), useValue: {} },
@@ -131,7 +136,9 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
           provide: ManuscriptStyleRegistryService,
           useValue: {
             assertConstructorContentStyleKnown: jest.fn(),
-            resolveEffectiveStyleId: jest.fn().mockReturnValue('damascus-university-journal-v1'),
+            resolveEffectiveStyleId: jest
+              .fn()
+              .mockReturnValue('damascus-university-journal-v1'),
             getProfile: jest.fn(),
           },
         },
@@ -147,6 +154,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
           },
         },
         aiClientServiceMock,
+        aiJobsServiceMock,
         languageToolServiceMock,
       ],
     }).compile();
@@ -197,15 +205,12 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
   });
 
   it('rolls back when enqueue rejects (transaction propagates error)', async () => {
-    eventPublisher.enqueue.mockRejectedValueOnce(new Error('outbox insert failed'));
+    eventPublisher.enqueue.mockRejectedValueOnce(
+      new Error('outbox insert failed'),
+    );
 
     await expect(
-      service.assignReviewer(
-        'paper-one',
-        reviewer.id,
-        editorUser,
-        undefined,
-      ),
+      service.assignReviewer('paper-one', reviewer.id, editorUser, undefined),
     ).rejects.toThrow('outbox insert failed');
 
     expect(assignmentsRepo.manager.transaction).toHaveBeenCalledTimes(1);
@@ -236,12 +241,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     );
 
     await expect(
-      service.assignReviewer(
-        'paper-one',
-        reviewer.id,
-        editorUser,
-        undefined,
-      ),
+      service.assignReviewer('paper-one', reviewer.id, editorUser, undefined),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
@@ -249,12 +249,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     rbacUserHasPermission.mockResolvedValueOnce(false);
 
     await expect(
-      service.assignReviewer(
-        'paper-one',
-        reviewer.id,
-        editorUser,
-        undefined,
-      ),
+      service.assignReviewer('paper-one', reviewer.id, editorUser, undefined),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(eventPublisher.enqueue).not.toHaveBeenCalled();
   });
@@ -266,12 +261,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     } as Submission);
 
     await expect(
-      service.assignReviewer(
-        'paper-one',
-        reviewer.id,
-        editorUser,
-        undefined,
-      ),
+      service.assignReviewer('paper-one', reviewer.id, editorUser, undefined),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(eventPublisher.enqueue).not.toHaveBeenCalled();
   });

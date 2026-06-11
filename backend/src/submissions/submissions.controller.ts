@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Headers,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -15,7 +16,13 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
 import { FolioThrottlerGuard } from '../common/guards/folio-throttler.guard';
@@ -42,6 +49,7 @@ import type { ConstructorContent } from './constructor-content.types';
 import { Readable } from 'stream';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { EmailVerifiedGuard } from '../users/email-verified.guard';
 import {
   PERMISSION_SLUGS,
   SUBMISSION_LIST_PERMISSIONS,
@@ -100,10 +108,7 @@ export class SubmissionsController {
   @UseGuards(FolioThrottlerGuard)
   @Throttle({ docx: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
-  async generateStandaloneDocx(
-    @Body() dto: GenerateDocxDto,
-    @CurrentUser() _user: RequestUser,
-  ) {
+  async generateStandaloneDocx(@Body() dto: GenerateDocxDto) {
     const buffer = await this.submissionsService.generateDocxStandalone(
       dto.content as unknown as ConstructorContent,
     );
@@ -149,13 +154,32 @@ export class SubmissionsController {
     return this.submissionsService.findAllForUser(user, s);
   }
 
-  @Get(':slug/corpus-similarity')
+  @Post(':slug/corpus-similarity/jobs')
   @Permissions(...SUBMISSION_READ_PERMISSIONS)
-  getCorpusSimilarity(
+  startCorpusSimilarityJob(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.submissionsService.getCorpusSimilarityReport(slug, user);
+    return this.submissionsService.startCorpusSimilarityJob(slug, user);
+  }
+
+  @Get(':slug/corpus-similarity/jobs/latest')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
+  getLatestCorpusSimilarityJob(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.getLatestCorpusSimilarityJob(slug, user);
+  }
+
+  @Get(':slug/corpus-similarity/jobs/:jobId')
+  @Permissions(...SUBMISSION_READ_PERMISSIONS)
+  getCorpusSimilarityJob(
+    @Param('slug') slug: string,
+    @Param('jobId') jobId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.getCorpusSimilarityJob(slug, jobId, user);
   }
 
   @Get(':slug/suggested-reviewers')
@@ -213,7 +237,10 @@ export class SubmissionsController {
   @UseGuards(FolioThrottlerGuard)
   @Throttle({ default: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
-  suggestDiscipline(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
+  suggestDiscipline(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
     return this.submissionsService.suggestDiscipline(slug, user);
   }
 
@@ -221,7 +248,10 @@ export class SubmissionsController {
   @UseGuards(FolioThrottlerGuard)
   @Throttle({ default: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
-  suggestKeywords(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
+  suggestKeywords(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
     return this.submissionsService.suggestKeywords(slug, user);
   }
 
@@ -232,7 +262,11 @@ export class SubmissionsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: PatchDisciplineDto,
   ) {
-    return this.submissionsService.setDisciplineForUser(slug, user, dto.discipline);
+    return this.submissionsService.setDisciplineForUser(
+      slug,
+      user,
+      dto.discipline,
+    );
   }
 
   @Patch(':slug')
@@ -246,6 +280,8 @@ export class SubmissionsController {
   }
 
   @Post(':slug/submit')
+  @HttpCode(200)
+  @UseGuards(EmailVerifiedGuard)
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   submit(
     @Param('slug') slug: string,
@@ -275,6 +311,7 @@ export class SubmissionsController {
       user,
       dto.status,
       folioLocale,
+      dto.messageForAuthor,
     );
   }
 
@@ -316,7 +353,11 @@ export class SubmissionsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: AssignCopyeditorDto,
   ) {
-    return this.submissionsService.assignCopyeditor(slug, dto.copyeditorId, user);
+    return this.submissionsService.assignCopyeditor(
+      slug,
+      dto.copyeditorId,
+      user,
+    );
   }
 
   @Get(':slug/copyedit-assignments')
@@ -416,6 +457,20 @@ export class SubmissionsController {
    *                  (replacing any existing) and return the file row.
    *   default      → stream the binary as a download.
    */
+  @Post(':slug/reimport-attached-constructor-docx')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  async reimportAttachedConstructorDocx(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const buffer =
+      await this.submissionsService.readAttachedConstructorDocxBuffer(
+        slug,
+        user,
+      );
+    return this.docxImportService.importFromBuffer(buffer);
+  }
+
   @Post(':slug/generate-docx')
   @UseGuards(FolioThrottlerGuard)
   @Throttle({ docx: {} })
@@ -446,5 +501,4 @@ export class SubmissionsController {
       disposition: `attachment; filename="${slug}-constructor.docx"`,
     });
   }
-
 }

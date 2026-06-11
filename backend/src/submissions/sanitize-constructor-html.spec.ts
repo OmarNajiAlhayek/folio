@@ -19,6 +19,8 @@ const BACKEND_BUILD_PARAGRAPH_TAGS = [
   'ol',
   'li',
   'br',
+  'span',
+  'img',
 ];
 
 describe('sanitizeConstructorTipTapHtml', () => {
@@ -52,11 +54,9 @@ describe('sanitizeConstructorTipTapHtml', () => {
     ).toBe('<p>ok</p>');
     expect(
       sanitizeConstructorTipTapHtml('<a href="javascript:alert(1)">x</a>'),
-    ).toBe('x');
+    ).toBe('<span>x</span>');
     expect(
-      sanitizeConstructorTipTapHtml(
-        '<a href="https://example.org">link</a>',
-      ),
+      sanitizeConstructorTipTapHtml('<a href="https://example.org">link</a>'),
     ).toContain('href="https://example.org/"');
     expect(sanitizeConstructorTipTapHtml('<p>H<sub>2</sub>O</p>')).toContain(
       'sub',
@@ -66,7 +66,7 @@ describe('sanitizeConstructorTipTapHtml', () => {
     );
     expect(
       sanitizeConstructorTipTapHtml('<p><img src=x onerror=alert(1)>text</p>'),
-    ).toBe('<p>text</p>');
+    ).toBe('<p><span></span>text</p>');
   });
 });
 

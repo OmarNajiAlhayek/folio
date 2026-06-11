@@ -20,10 +20,7 @@ export type SuggestedReviewersReport =
 
 export function enrichReviewerSuggestions(
   hits: ReviewerSuggestionHit[],
-  profilesById: Map<
-    string,
-    { displayName: string; email: string }
-  >,
+  profilesById: Map<string, { displayName: string; email: string }>,
 ): SuggestedReviewerRow[] {
   const rows: SuggestedReviewerRow[] = [];
   for (const hit of hits) {

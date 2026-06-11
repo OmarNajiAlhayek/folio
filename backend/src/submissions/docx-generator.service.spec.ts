@@ -1,13 +1,22 @@
-import JSZip from 'jszip';
+/* eslint-disable @typescript-eslint/require-await */
+import { mathJaxReady } from '@micromatrix.org/docx-math-converter';
 import { DocxGeneratorService } from './docx-generator.service';
 import { EquationRenderService } from './equation-render.service';
+import { EquationOmmlService } from './equation-omml.service';
 import type { ConstructorContent } from './constructor-content.types';
 import { validateConstructorContentForSubmit } from './constructor-content-utils';
 import { damascusUniversityJournalV1 } from '../manuscript-styles/profiles/damascus-university-journal-v1.profile';
 import { extractDocumentXml } from './ooxml-docx.test-utils';
 
 describe('DocxGeneratorService', () => {
-  const service = new DocxGeneratorService(new EquationRenderService());
+  const equationRender = new EquationRenderService();
+  const equationOmml = new EquationOmmlService(equationRender);
+  const service = new DocxGeneratorService(equationOmml);
+
+  beforeAll(async () => {
+    await mathJaxReady();
+    await equationOmml.onModuleInit();
+  });
 
   /**
    * Minimal end-to-end: build a tiny ConstructorContent with mixed RTL/LTR,
@@ -109,7 +118,7 @@ describe('DocxGeneratorService', () => {
     expect(validateConstructorContentForSubmit(valid)).toEqual([]);
   });
 
-  it('embeds a full typeset equation PNG in the docx (not a clipped band)', async () => {
+  it('embeds native OMML equation markup in the docx', async () => {
     const content: ConstructorContent = {
       defaultDir: 'ltr',
       sections: [
@@ -142,14 +151,8 @@ describe('DocxGeneratorService', () => {
       async () => null,
       damascusUniversityJournalV1,
     );
-    const zip = await JSZip.loadAsync(buffer);
-    const mediaKeys = Object.keys(zip.files).filter(
-      (k) => k.startsWith('word/media/') && k.endsWith('.png'),
-    );
-    expect(mediaKeys.length).toBeGreaterThanOrEqual(1);
-    const png = await zip.file(mediaKeys[0]!)!.async('nodebuffer');
-    expect(png.length).toBeGreaterThan(2000);
     const docXml = await extractDocumentXml(buffer);
+    expect(docXml).toContain('m:oMath');
     expect(docXml).not.toContain('[Equation:');
   });
 

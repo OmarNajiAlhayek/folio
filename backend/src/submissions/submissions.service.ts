@@ -7,6 +7,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,7 +21,7 @@ import {
   reviewSubmittedKey,
 } from '../notifications/notification-idempotency';
 import { Notification } from '../entities/notification.entity';
-import { ROUTING_KEY } from '../messaging/contracts/email-events';
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import type {
   CopyeditAssignedEvent,
   CopyeditAuthorReadyEvent,
@@ -29,11 +30,15 @@ import type {
   ReviewInvitationDeclinedEvent,
   ReviewSubmittedEvent,
   ReviewerInvitedEvent,
+  ReviewerRespondedEvent,
+  ReviewerRespondedOutcome,
   SubmissionDecisionEvent,
   SubmissionDecisionKind,
   SubmissionPublishedEvent,
   SubmissionSubmittedEvent,
-} from '../messaging/contracts/email-events';
+  SubmissionUnderReviewEvent,
+  SubmissionUnderReviewTrigger,
+} from '@folio/shared/contracts/email-events';
 import {
   copyeditAssignedKey,
   copyeditAuthorReadyKey,
@@ -42,10 +47,12 @@ import {
   reviewInvitationDeclinedEmailKey,
   reviewSubmittedEmailKey,
   reviewerInvitedKey,
+  reviewerRespondedKey,
   submissionDecisionKey,
   submissionPublishedKey,
   submissionSubmittedKey,
-} from '../messaging/shared/idempotency';
+  submissionUnderReviewKey,
+} from '@folio/shared/messaging/idempotency';
 import { truncateCopyeditNoteExcerpt } from '../common/copyedit-email-excerpt';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join, extname } from 'path';
@@ -121,6 +128,7 @@ import { sanitizeConstructorContent } from './sanitize-constructor-html';
 import { submissionToViewerJson } from './submission-response.mapper';
 import type { SubmissionViewerRole } from './submission-viewer-role';
 import { AiClientService } from '../ai/ai-client.service';
+import { AiJobsService, type AiJobResponse } from '../ai-jobs/ai-jobs.service';
 import { SubmissionDisciplineSource } from '../entities/submission-discipline-source.enum';
 import {
   isValidDisciplineLabel,
@@ -135,15 +143,8 @@ import {
   hasKeywordLanguagePair,
   normalizeKeywordSuggestions,
 } from './keyword-list.util';
-import {
-  isSimilarityCorpusArticleId,
-  publicationSimilarityIndexPayload,
-} from './publication-similarity.util';
-import {
-  aggregateCorpusSimilarityMatches,
-  attachPublicationMetadata,
-  type CorpusSimilarityReport,
-} from './corpus-similarity-report.util';
+import { isSimilarityCorpusArticleId } from './publication-similarity.util';
+import type { CorpusSimilarityReport } from './corpus-similarity-report.util';
 import {
   buildSubmissionCorpusPlainText,
   isCorpusPlainTextSufficient,
@@ -164,6 +165,7 @@ import {
   enrichReviewerSuggestions,
   type SuggestedReviewersReport,
 } from './suggested-reviewers-report.util';
+import { SearchService } from '../search/search.service';
 const EDITOR_TRANSITIONS: Partial<
   Record<SubmissionStatus, SubmissionStatus[]>
 > = {
@@ -220,10 +222,15 @@ export class SubmissionsService implements OnModuleInit {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly aiClient: AiClientService,
+    private readonly aiJobs: AiJobsService,
     private readonly languageTool: LanguageToolService,
+    @Optional() private readonly searchService: SearchService | null = null,
   ) {}
 
-  listDisciplineLabels(): { labels: readonly string[]; journalScope: string[] } {
+  listDisciplineLabels(): {
+    labels: readonly string[];
+    journalScope: string[];
+  } {
     return {
       labels: ARABIC_DISCIPLINE_LABELS,
       journalScope: this.journalAllowedDisciplines(),
@@ -236,7 +243,9 @@ export class SubmissionsService implements OnModuleInit {
     );
   }
 
-  private async refreshDisciplineSuggestion(submission: Submission): Promise<boolean> {
+  private async refreshDisciplineSuggestion(
+    submission: Submission,
+  ): Promise<boolean> {
     const text = resolveClassifyText(submission);
     if (!text.abstract.trim()) {
       return false;
@@ -248,7 +257,10 @@ export class SubmissionsService implements OnModuleInit {
     const allowed = this.journalAllowedDisciplines();
     submission.disciplineSuggested = result.top_label;
     submission.disciplineSuggestedConfidence = String(result.top_confidence);
-    submission.disciplineClassification = buildClassificationJson(result, allowed);
+    submission.disciplineClassification = buildClassificationJson(
+      result,
+      allowed,
+    );
     return true;
   }
 
@@ -276,7 +288,8 @@ export class SubmissionsService implements OnModuleInit {
       s.status !== SubmissionStatus.REVISIONS_REQUESTED
     ) {
       throw new BadRequestException({
-        message: 'Discipline suggestion is only available while editing the draft',
+        message:
+          'Discipline suggestion is only available while editing the draft',
         code: 'VALIDATION_ERROR',
       });
     }
@@ -342,7 +355,8 @@ export class SubmissionsService implements OnModuleInit {
       s.status !== SubmissionStatus.REVISIONS_REQUESTED
     ) {
       throw new BadRequestException({
-        message: 'Keyword suggestions are only available while editing the draft',
+        message:
+          'Keyword suggestions are only available while editing the draft',
         code: 'VALIDATION_ERROR',
       });
     }
@@ -475,10 +489,9 @@ export class SubmissionsService implements OnModuleInit {
   }
 
   private appBaseUrl(): string {
-    return (this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240').replace(
-      /\/+$/,
-      '',
-    );
+    return (
+      this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240'
+    ).replace(/\/+$/, '');
   }
 
   private hasPerm(user: RequestUser, slug: string): boolean {
@@ -504,7 +517,9 @@ export class SubmissionsService implements OnModuleInit {
     return 'reviewer';
   }
 
-  private async assertHasReviewManuscriptPackage(submissionId: string): Promise<void> {
+  private async assertHasReviewManuscriptPackage(
+    submissionId: string,
+  ): Promise<void> {
     const count = await this.filesRepo.count({
       where: {
         submissionId,
@@ -797,9 +812,7 @@ export class SubmissionsService implements OnModuleInit {
   }
 
   private async readFileSniffBuffer(
-    source:
-      | { type: 'path'; path: string }
-      | { type: 'buffer'; buffer: Buffer },
+    source: { type: 'path'; path: string } | { type: 'buffer'; buffer: Buffer },
   ): Promise<Buffer> {
     if (source.type === 'buffer') {
       return source.buffer.subarray(0, Math.min(4096, source.buffer.length));
@@ -817,9 +830,7 @@ export class SubmissionsService implements OnModuleInit {
    */
   private async persistSubmissionFile(params: {
     submissionId: string;
-    source:
-      | { type: 'path'; path: string }
-      | { type: 'buffer'; buffer: Buffer };
+    source: { type: 'path'; path: string } | { type: 'buffer'; buffer: Buffer };
     originalName: string;
     kind: SubmissionFileKind;
     sizeBytes: number;
@@ -970,6 +981,19 @@ export class SubmissionsService implements OnModuleInit {
     filters: PublicationCatalogFilters = {},
     pagination?: { limit?: number; offset?: number },
   ): Promise<{ items: Submission[]; total: number }> {
+    if (this.searchService?.isEnabled()) {
+      try {
+        return await this.searchService.searchAsSubmissions(
+          filters,
+          pagination,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Typesense search failed, falling back to PostgreSQL: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     const { limit, offset } = clampPublicationCatalogPagination(
       pagination?.limit,
       pagination?.offset,
@@ -1054,7 +1078,12 @@ export class SubmissionsService implements OnModuleInit {
     if (!q || !this.aiClient.isSimilarityEnabled()) {
       return [];
     }
-    await this.backfillPublishedSimilarityIndex();
+    void this.aiJobs.enqueueMissingSimilarityIndexJobs().catch((err) => {
+      this.logger.warn(
+        'Failed to enqueue missing similarity index jobs: %s',
+        err instanceof Error ? err.message : String(err),
+      );
+    });
     const lim = Math.min(30, Math.max(1, limit));
     const hits = (
       await this.aiClient.semanticSearchPublications({ query: q, limit: lim })
@@ -1064,7 +1093,8 @@ export class SubmissionsService implements OnModuleInit {
     }
 
     const ids = hits.map((h) => h.article_id);
-    const { q: _omit, ...rest } = filters;
+    const { q, ...rest } = filters;
+    void q;
     const filtersWithoutQ: PublicationCatalogFilters = rest;
     const qb = this.submissionsRepo.createQueryBuilder('s');
     applyPublicationCatalogQuery(qb, filtersWithoutQ, {
@@ -1111,34 +1141,22 @@ export class SubmissionsService implements OnModuleInit {
     return s;
   }
 
-  async indexPublishedSubmissionForSimilarity(s: Submission): Promise<void> {
+  /** Queue async similarity indexing for a published submission. */
+  async enqueuePublishedSubmissionForSimilarity(
+    submissionId: string,
+  ): Promise<void> {
     if (!this.aiClient.isSimilarityEnabled()) {
       return;
     }
-    const payload = publicationSimilarityIndexPayload(s);
-    if (!payload) {
-      return;
-    }
-    await this.aiClient.upsertSimilarityArticle({
-      articleId: s.id,
-      abstract: payload.abstract,
-      keywords: payload.keywords,
-      category: payload.category,
-      fullText: payload.fullText,
-    });
+    await this.aiJobs.enqueueSimilarityIndex(submissionId);
   }
 
-  /** Index all published articles so related search works for existing corpus. */
-  async backfillPublishedSimilarityIndex(): Promise<void> {
+  /** Queue index jobs for published articles not yet in the similarity corpus. */
+  async enqueueMissingSimilarityIndexJobs(): Promise<number> {
     if (!this.aiClient.isSimilarityEnabled()) {
-      return;
+      return 0;
     }
-    const published = await this.submissionsRepo.find({
-      where: { status: SubmissionStatus.PUBLISHED },
-    });
-    for (const row of published) {
-      await this.indexPublishedSubmissionForSimilarity(row);
-    }
+    return this.aiJobs.enqueueMissingSimilarityIndexJobs();
   }
 
   async findRelatedPublications(
@@ -1158,7 +1176,12 @@ export class SubmissionsService implements OnModuleInit {
     if (!this.aiClient.isSimilarityEnabled()) {
       return [];
     }
-    await this.backfillPublishedSimilarityIndex();
+    void this.aiJobs.enqueueMissingSimilarityIndexJobs().catch((err) => {
+      this.logger.warn(
+        'Failed to enqueue missing similarity index jobs: %s',
+        err instanceof Error ? err.message : String(err),
+      );
+    });
     const s = await this.findPublishedOne(slug);
     const hits = (
       await this.aiClient.findSimilarArticles({
@@ -1166,8 +1189,7 @@ export class SubmissionsService implements OnModuleInit {
         limit,
       })
     ).filter(
-      (h) =>
-        isSimilarityCorpusArticleId(h.article_id) && h.article_id !== s.id,
+      (h) => isSimilarityCorpusArticleId(h.article_id) && h.article_id !== s.id,
     );
     if (hits.length === 0) {
       return [];
@@ -1216,6 +1238,50 @@ export class SubmissionsService implements OnModuleInit {
       });
     }
     return s;
+  }
+
+  async getBySlugForAuthor(
+    slug: string,
+    authorId: string,
+  ): Promise<Submission | null> {
+    const s = await this.submissionsRepo.findOne({ where: { slug } });
+    if (!s || s.authorId !== authorId) return null;
+    return s;
+  }
+
+  /** Read the attached `manuscript_constructor` file for round-trip re-import. */
+  async readAttachedConstructorDocxBuffer(
+    slug: string,
+    user: RequestUser,
+  ): Promise<Buffer> {
+    const s = await this.getBySlugOrThrow(slug);
+    if (s.authorId !== user.sub) {
+      throw new ForbiddenException({
+        message: 'Only the author can re-import constructor documents',
+        code: 'FORBIDDEN',
+      });
+    }
+    const file = await this.filesRepo.findOne({
+      where: {
+        submissionId: s.id,
+        kind: 'manuscript_constructor' as SubmissionFileKind,
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (!file) {
+      throw new BadRequestException({
+        message: 'No attached constructor Word file to re-import',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    try {
+      return await readFile(join(this.uploadRoot(), file.storageKey));
+    } catch {
+      throw new BadRequestException({
+        message: 'Attached constructor Word file is missing on disk',
+        code: 'VALIDATION_ERROR',
+      });
+    }
   }
 
   /** Drafts are author-only until submit; editor queue must not read them by slug. */
@@ -1267,7 +1333,13 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<Record<string, unknown>> {
     const s = await this.submissionsRepo.findOne({
       where: { slug },
-      relations: ['files', 'author', 'reviewAssignments', 'reviewAssignments.reviewer', 'copyeditAssignments'],
+      relations: [
+        'files',
+        'author',
+        'reviewAssignments',
+        'reviewAssignments.reviewer',
+        'copyeditAssignments',
+      ],
     });
     if (!s) {
       throw new NotFoundException({
@@ -1280,19 +1352,10 @@ export class SubmissionsService implements OnModuleInit {
     return submissionToViewerJson(s, role);
   }
 
-  private static readonly CORPUS_SIMILARITY_THRESHOLD = 0.85;
-
-  async getCorpusSimilarityReport(
-    slug: string,
+  private async assertCorpusSimilarityAccess(
+    s: Submission,
     user: RequestUser,
-  ): Promise<CorpusSimilarityReport> {
-    const s = await this.submissionsRepo.findOne({ where: { slug } });
-    if (!s) {
-      throw new NotFoundException({
-        message: 'Submission not found',
-        code: 'NOT_FOUND',
-      });
-    }
+  ): Promise<void> {
     await this.assertCanRead(s, user);
 
     if (s.authorId === user.sub) {
@@ -1324,62 +1387,95 @@ export class SubmissionsService implements OnModuleInit {
     });
     if (!isEditor && !assignedReviewer) {
       throw new ForbiddenException({
-        message: 'Corpus similarity requires editor or assigned reviewer access',
+        message:
+          'Corpus similarity requires editor or assigned reviewer access',
         code: 'FORBIDDEN',
       });
     }
+  }
 
+  private corpusSimilarityPrecheck(
+    s: Submission,
+  ): CorpusSimilarityReport | null {
     if (!this.aiClient.isCorpusSimilarityEnabled()) {
       return { status: 'unavailable' };
     }
-
     const plainText = buildSubmissionCorpusPlainText(s);
     if (!isCorpusPlainTextSufficient(plainText)) {
       return { status: 'no_text' };
     }
+    return null;
+  }
 
-    const threshold = SubmissionsService.CORPUS_SIMILARITY_THRESHOLD;
-    const matches = await this.aiClient.detectCorpusSimilarity({
-      submissionText: plainText,
-      threshold,
-      category: s.discipline?.trim() || undefined,
-    });
-    if (matches === null) {
-      return { status: 'unavailable' };
-    }
-
-    const aggregated = aggregateCorpusSimilarityMatches(s, matches);
-    const articleIds = aggregated.sources.map((src) => src.articleId);
-    const publishedById = new Map<
-      string,
-      { slug: string; title: string; titleAr: string | null }
-    >();
-    if (articleIds.length > 0) {
-      const rows = await this.submissionsRepo.find({
-        where: {
-          id: In(articleIds),
-          status: SubmissionStatus.PUBLISHED,
-        },
-        select: ['id', 'slug', 'title', 'titleAr'],
+  async startCorpusSimilarityJob(
+    slug: string,
+    user: RequestUser,
+  ): Promise<AiJobResponse | CorpusSimilarityReport> {
+    const s = await this.submissionsRepo.findOne({ where: { slug } });
+    if (!s) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
       });
-      for (const row of rows) {
-        if (!row.slug) {
-          continue;
-        }
-        publishedById.set(row.id, {
-          slug: row.slug,
-          title: row.title ?? '',
-          titleAr: row.titleAr,
-        });
-      }
+    }
+    await this.assertCorpusSimilarityAccess(s, user);
+
+    const precheck = this.corpusSimilarityPrecheck(s);
+    if (precheck) {
+      return precheck;
     }
 
-    return {
-      status: 'ok',
-      threshold,
-      matchCount: aggregated.matchCount,
-      sources: attachPublicationMetadata(aggregated.sources, publishedById),
-    };
+    const job = await this.aiJobs.enqueueCorpusSimilarity({
+      submissionId: s.id,
+      submissionSlug: slug,
+      requestedByUserId: user.sub,
+    });
+    return this.aiJobs.toResponse(job);
+  }
+
+  async getCorpusSimilarityJob(
+    slug: string,
+    jobId: string,
+    user: RequestUser,
+  ): Promise<AiJobResponse> {
+    const s = await this.submissionsRepo.findOne({ where: { slug } });
+    if (!s) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    await this.assertCorpusSimilarityAccess(s, user);
+
+    const job = await this.aiJobs.getJob(jobId);
+    if (job.submissionSlug !== slug) {
+      throw new NotFoundException({
+        message: 'AI job not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    return this.aiJobs.toResponse(job);
+  }
+
+  async getLatestCorpusSimilarityJob(
+    slug: string,
+    user: RequestUser,
+  ): Promise<AiJobResponse | null> {
+    const s = await this.submissionsRepo.findOne({ where: { slug } });
+    if (!s) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    await this.assertCorpusSimilarityAccess(s, user);
+
+    const active = await this.aiJobs.findActiveCorpusJob(slug);
+    if (active) {
+      return this.aiJobs.toResponse(active);
+    }
+    const completed = await this.aiJobs.getLatestCompletedCorpusJob(slug);
+    return completed ? this.aiJobs.toResponse(completed) : null;
   }
 
   async getSuggestedReviewers(
@@ -1482,13 +1578,7 @@ export class SubmissionsService implements OnModuleInit {
     }
     return this.usersRepo.find({
       where: { id: In(ids), willingToReview: true },
-      select: [
-        'id',
-        'displayName',
-        'email',
-        'affiliation',
-        'reviewKeywords',
-      ],
+      select: ['id', 'displayName', 'email', 'affiliation', 'reviewKeywords'],
       order: { displayName: 'ASC', email: 'ASC' },
     });
   }
@@ -1528,7 +1618,11 @@ export class SubmissionsService implements OnModuleInit {
       if (!sub) {
         continue;
       }
-      const abstract = (sub.abstractAr?.trim() || sub.abstract?.trim() || '').trim();
+      const abstract = (
+        sub.abstractAr?.trim() ||
+        sub.abstract?.trim() ||
+        ''
+      ).trim();
       const keywords = [sub.keywordsAr, sub.keywords]
         .map((k) => k?.trim())
         .filter((k): k is string => !!k)
@@ -1713,7 +1807,8 @@ export class SubmissionsService implements OnModuleInit {
     }
     if (presentation.presentUploaded && !hasUploadedManuscript) {
       throw new BadRequestException({
-        message: 'Upload a main manuscript file before submitting with that option',
+        message:
+          'Upload a main manuscript file before submitting with that option',
         code: 'SUBMISSION_INCOMPLETE_FILES',
       });
     }
@@ -1767,7 +1862,10 @@ export class SubmissionsService implements OnModuleInit {
     }
     await this.submissionsRepo.save(s);
     const previousStatus = s.status;
-    const isResubmission = previousStatus === SubmissionStatus.REVISIONS_REQUESTED;
+    const isResubmission =
+      previousStatus === SubmissionStatus.REVISIONS_REQUESTED;
+    const editorIds =
+      await this.rbacService.listWorkflowNotificationRecipientIds();
 
     const pending: Notification[] = [];
     return this.submissionsRepo.manager
@@ -1779,6 +1877,7 @@ export class SubmissionsService implements OnModuleInit {
           {
             submission: saved,
             isResubmission,
+            editorIds,
           },
           em,
         );
@@ -1809,7 +1908,10 @@ export class SubmissionsService implements OnModuleInit {
       attach?: boolean;
       attachKind?: SubmissionFileKind;
     } = {},
-  ): Promise<{ kind: 'buffer'; data: Buffer } | { kind: 'attached'; file: SubmissionFile }> {
+  ): Promise<
+    | { kind: 'buffer'; data: Buffer }
+    | { kind: 'attached'; file: SubmissionFile }
+  > {
     const s = await this.getBySlugOrThrow(submissionSlug);
     if (s.authorId !== user.sub) {
       throw new ForbiddenException({
@@ -1877,7 +1979,7 @@ export class SubmissionsService implements OnModuleInit {
     const profile = this.manuscriptStyles.getProfile(styleId);
     return this.docxGeneratorService.generate(
       sanitized,
-      async () => null,
+      () => Promise.resolve(null),
       profile,
     );
   }
@@ -1887,6 +1989,7 @@ export class SubmissionsService implements OnModuleInit {
     user: RequestUser,
     next: SubmissionStatus,
     editorFolioLocale?: string,
+    messageForAuthorInput?: string,
   ): Promise<Submission> {
     if (!this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS)) {
       throw new ForbiddenException({
@@ -1908,18 +2011,37 @@ export class SubmissionsService implements OnModuleInit {
       await this.assertHasReviewManuscriptPackage(s.id);
     }
     const decisionKind = DECISION_STATUS_TO_KIND[next];
+    const trimmedMessage = (messageForAuthorInput ?? '').trim();
+    if (!decisionKind && trimmedMessage) {
+      throw new BadRequestException({
+        message:
+          'messageForAuthor is only allowed when setting accepted, rejected, or revisions_requested',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const previousStatus = s.status;
+    const submittedCycleAt =
+      next === SubmissionStatus.UNDER_REVIEW &&
+      previousStatus === SubmissionStatus.SUBMITTED
+        ? s.updatedAt
+        : null;
 
     const pending: Notification[] = [];
     return this.submissionsRepo.manager
       .transaction(async (em) => {
         const submissionRepo = em.getRepository(Submission);
         s.status = next;
+        if (decisionKind) {
+          s.messageForAuthor = trimmedMessage || null;
+        }
         if (next === SubmissionStatus.PUBLISHED) {
           s.publishedAt = new Date();
-          await em.getRepository(SubmissionFile).update(
-            { submissionId: s.id, kind: 'manuscript' },
-            { isPublic: true },
-          );
+          await em
+            .getRepository(SubmissionFile)
+            .update(
+              { submissionId: s.id, kind: 'manuscript' },
+              { isPublic: true },
+            );
         }
         const saved = await submissionRepo.save(s);
         if (decisionKind) {
@@ -1928,6 +2050,20 @@ export class SubmissionsService implements OnModuleInit {
               submission: saved,
               decision: decisionKind,
               editorId: user.sub,
+              editorFolioLocale,
+              messageForAuthor: saved.messageForAuthor,
+            },
+            em,
+          );
+          if (n) pending.push(n);
+        }
+        if (submittedCycleAt) {
+          const n = await this.enqueueSubmissionUnderReviewEvent(
+            {
+              submission: saved,
+              submittedCycleAt,
+              trigger: 'editor',
+              initiatedByUserId: user.sub,
               editorFolioLocale,
             },
             em,
@@ -2147,11 +2283,7 @@ export class SubmissionsService implements OnModuleInit {
         id: editorRow.id,
         displayName: editorRow.displayName,
       },
-      acceptUrl: assignmentInvitePageUrl(
-        baseUrl,
-        assignment.slug,
-        emailLocale,
-      ),
+      acceptUrl: assignmentInvitePageUrl(baseUrl, assignment.slug, emailLocale),
       declineUrl: assignmentInvitePageUrl(
         baseUrl,
         assignment.slug,
@@ -2182,10 +2314,11 @@ export class SubmissionsService implements OnModuleInit {
     args: {
       submission: Submission;
       isResubmission: boolean;
+      editorIds: string[];
     },
     em: EntityManager,
   ): Promise<Notification[]> {
-    const { submission, isResubmission } = args;
+    const { submission, isResubmission, editorIds } = args;
     if (!submission.slug) {
       throw new InternalServerErrorException({
         message: 'Cannot enqueue submission submitted: missing slug',
@@ -2203,8 +2336,6 @@ export class SubmissionsService implements OnModuleInit {
         code: 'INTERNAL_ERROR',
       });
     }
-    const editorIds =
-      await this.rbacService.listWorkflowNotificationRecipientIds();
     if (editorIds.length === 0) {
       this.logger.warn(
         `submission.submitted: no editorial recipients to notify for slug=${slug}`,
@@ -2271,10 +2402,17 @@ export class SubmissionsService implements OnModuleInit {
       decision: SubmissionDecisionKind;
       editorId: string;
       editorFolioLocale?: string;
+      messageForAuthor?: string | null;
     },
     em: EntityManager,
   ): Promise<Notification | null> {
-    const { submission, decision, editorId, editorFolioLocale } = args;
+    const {
+      submission,
+      decision,
+      editorId,
+      editorFolioLocale,
+      messageForAuthor,
+    } = args;
     if (!submission.slug) {
       throw new InternalServerErrorException({
         message: 'Cannot enqueue submission decision: missing slug',
@@ -2325,6 +2463,7 @@ export class SubmissionsService implements OnModuleInit {
         displayName: editorRow.displayName,
       },
       submissionUrl: `${this.appBaseUrl()}/submissions/${submission.slug}`,
+      ...(messageForAuthor ? { messageForAuthor } : {}),
     };
     await this.eventPublisher.enqueue(
       ROUTING_KEY.submissionDecision,
@@ -2346,9 +2485,124 @@ export class SubmissionsService implements OnModuleInit {
     );
   }
 
+  private async enqueueSubmissionUnderReviewEvent(
+    args: {
+      submission: Submission;
+      submittedCycleAt: Date;
+      trigger: SubmissionUnderReviewTrigger;
+      initiatedByUserId: string;
+      editorFolioLocale?: string;
+    },
+    em: EntityManager,
+  ): Promise<Notification | null> {
+    const {
+      submission,
+      submittedCycleAt,
+      trigger,
+      initiatedByUserId,
+      editorFolioLocale,
+    } = args;
+    if (!submission.slug) {
+      throw new InternalServerErrorException({
+        message: 'Cannot enqueue submission under review: missing slug',
+        code: 'INTERNAL_ERROR',
+      });
+    }
+    const author = await em.getRepository(User).findOne({
+      where: { id: submission.authorId },
+      select: ['id', 'email', 'displayName', 'preferredLocale'],
+    });
+    if (!author) {
+      throw new InternalServerErrorException({
+        message: 'Submission author not found',
+        code: 'INTERNAL_ERROR',
+      });
+    }
+    const initiator = await em.getRepository(User).findOne({
+      where: { id: initiatedByUserId },
+      select: ['id', 'displayName'],
+    });
+    if (!initiator) {
+      throw new InternalServerErrorException({
+        message: 'Initiator account not found',
+        code: 'INTERNAL_ERROR',
+      });
+    }
+    const siteDefault = this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en');
+    const emailLocale = resolveEmailLocale({
+      recipientPreferred: author.preferredLocale,
+      editorHeaderLocale: editorFolioLocale?.trim() || undefined,
+      siteDefault,
+    });
+    const slug = submission.slug;
+    const cycleIso = submittedCycleAt.toISOString();
+    const idempotencyKey = submissionUnderReviewKey(slug, cycleIso);
+    const payload: SubmissionUnderReviewEvent = {
+      type: 'SubmissionUnderReview',
+      occurredAt: new Date().toISOString(),
+      idempotencyKey,
+      submissionSlug: slug,
+      submissionTitle: submission.title,
+      emailLocale,
+      author: {
+        id: author.id,
+        email: author.email,
+        displayName: author.displayName,
+      },
+      submissionUrl: `${this.appBaseUrl()}/submissions/${slug}`,
+      submittedCycleAt: cycleIso,
+      trigger,
+      initiatedByDisplayName: initiator.displayName,
+    };
+    await this.eventPublisher.enqueue(
+      ROUTING_KEY.submissionUnderReview,
+      payload as unknown as Record<string, unknown>,
+      em,
+    );
+    return this.notifications.createIfAbsent(
+      {
+        userId: author.id,
+        type: NOTIFICATION_TYPE.SUBMISSION_UNDER_REVIEW,
+        params: { submissionTitle: submission.title },
+        href: `/submissions/${slug}`,
+        idempotencyKey,
+      },
+      em,
+    );
+  }
+
+  private async enqueueReviewerResponded(
+    em: EntityManager,
+    input: {
+      assignmentSlug: string;
+      outcome: ReviewerRespondedOutcome;
+      reviewer: Pick<User, 'id' | 'displayName'>;
+    },
+  ): Promise<void> {
+    const occurredAt = new Date().toISOString();
+    const payload: ReviewerRespondedEvent = {
+      type: 'ReviewerResponded',
+      occurredAt,
+      idempotencyKey: reviewerRespondedKey(input.assignmentSlug, input.outcome),
+      assignmentSlug: input.assignmentSlug,
+      outcome: input.outcome,
+      reviewer: {
+        id: input.reviewer.id,
+        displayName: input.reviewer.displayName,
+      },
+    };
+    await this.eventPublisher.enqueue(
+      ROUTING_KEY.reviewerResponded,
+      payload as unknown as Record<string, unknown>,
+      em,
+    );
+  }
+
   private async notifyAllEditors(
     em: EntityManager,
     input: {
+      /** Prefetch before opening a transaction — RBAC uses the global pool. */
+      editorIds: string[];
       type: (typeof NOTIFICATION_TYPE)[keyof typeof NOTIFICATION_TYPE];
       params: Record<string, unknown>;
       href: string;
@@ -2356,15 +2610,17 @@ export class SubmissionsService implements OnModuleInit {
       email?: {
         routingKey: string;
         buildPayload: (ctx: {
-          editor: Pick<User, 'id' | 'email' | 'displayName' | 'preferredLocale'>;
+          editor: Pick<
+            User,
+            'id' | 'email' | 'displayName' | 'preferredLocale'
+          >;
           emailLocale: 'en' | 'ar';
           occurredAt: string;
         }) => Record<string, unknown>;
       };
     },
   ): Promise<Notification[]> {
-    const editorIds =
-      await this.rbacService.listWorkflowNotificationRecipientIds();
+    const editorIds = input.editorIds;
     if (editorIds.length === 0) {
       if (input.email) {
         this.logger.warn(
@@ -2388,7 +2644,11 @@ export class SubmissionsService implements OnModuleInit {
         });
         return {
           routingKey: input.email!.routingKey,
-          payload: input.email!.buildPayload({ editor, emailLocale, occurredAt }),
+          payload: input.email!.buildPayload({
+            editor,
+            emailLocale,
+            occurredAt,
+          }),
         };
       });
       await this.eventPublisher.enqueueMany(outboxEvents, em);
@@ -2432,20 +2692,41 @@ export class SubmissionsService implements OnModuleInit {
       (await this.submissionsRepo.findOne({
         where: { id: assignment.submissionId },
       }));
+    const editorIds =
+      submissionRow?.slug && assignment.slug && reviewer
+        ? await this.rbacService.listWorkflowNotificationRecipientIds()
+        : [];
     const pending: Notification[] = [];
     const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
       const assignmentRepo = em.getRepository(ReviewAssignment);
       assignment.status = AssignmentStatus.ACCEPTED;
       const row = await assignmentRepo.save(assignment);
+      let underReviewNotification: Notification | null = null;
       if (submissionRow?.status === SubmissionStatus.SUBMITTED) {
         await this.assertHasReviewManuscriptPackage(submissionRow.id);
+        const submittedCycleAt = submissionRow.updatedAt;
         submissionRow.status = SubmissionStatus.UNDER_REVIEW;
-        await em.getRepository(Submission).save(submissionRow);
+        const savedSubmission = await em
+          .getRepository(Submission)
+          .save(submissionRow);
+        underReviewNotification = await this.enqueueSubmissionUnderReviewEvent(
+          {
+            submission: savedSubmission,
+            submittedCycleAt,
+            trigger: 'reviewer_accept',
+            initiatedByUserId: reviewerId,
+          },
+          em,
+        );
+      }
+      if (underReviewNotification) {
+        pending.push(underReviewNotification);
       }
       if (submissionRow?.slug && assignment.slug && reviewer) {
         const submissionSlug = submissionRow.slug;
         const assignmentSlug = assignment.slug;
         const created = await this.notifyAllEditors(em, {
+          editorIds,
           type: NOTIFICATION_TYPE.REVIEW_INVITATION_ACCEPTED,
           params: {
             submissionTitle: submissionRow.title,
@@ -2513,15 +2794,27 @@ export class SubmissionsService implements OnModuleInit {
     }
     const submissionRow = assignment.submission;
     const reviewer = assignment.reviewer;
+    const editorIds =
+      submissionRow?.slug && assignment.slug && reviewer
+        ? await this.rbacService.listWorkflowNotificationRecipientIds()
+        : [];
     const pending: Notification[] = [];
     const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
       const assignmentRepo = em.getRepository(ReviewAssignment);
       assignment.status = AssignmentStatus.DECLINED;
       const row = await assignmentRepo.save(assignment);
+      if (assignment.slug && reviewer) {
+        await this.enqueueReviewerResponded(em, {
+          assignmentSlug: assignment.slug,
+          outcome: 'declined',
+          reviewer,
+        });
+      }
       if (submissionRow?.slug && assignment.slug && reviewer) {
         const submissionSlug = submissionRow.slug;
         const assignmentSlug = assignment.slug;
         const created = await this.notifyAllEditors(em, {
+          editorIds,
           type: NOTIFICATION_TYPE.REVIEW_INVITATION_DECLINED,
           params: {
             submissionTitle: submissionRow.title,
@@ -2733,70 +3026,84 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
+    const submission = assignment.submission;
+    const editorIds =
+      submission?.slug && assignment.slug
+        ? await this.rbacService.listWorkflowNotificationRecipientIds()
+        : [];
     const pending: Notification[] = [];
-    const review = await this.assignmentsRepo.manager.transaction(async (em) => {
-      const reviewRepo = em.getRepository(Review);
-      const assignmentRepo = em.getRepository(ReviewAssignment);
-      const row = reviewRepo.create({
-        assignmentId,
-        commentsForAuthor: authorPart,
-        commentsToEditorOnly: editorPart,
-        recommendation,
-        submittedAt: new Date(),
-      });
-      await reviewRepo.save(row);
-      assignment.status = AssignmentStatus.COMPLETED;
-      await assignmentRepo.save(assignment);
-      const submission = assignment.submission;
-      const reviewer = await em.getRepository(User).findOne({
-        where: { id: reviewerId },
-        select: ['id', 'displayName'],
-      });
-      if (submission?.slug && assignment.slug && reviewer) {
-        const submissionSlug = submission.slug;
-        const assignmentSlug = assignment.slug;
-        const created = await this.notifyAllEditors(em, {
-          type: NOTIFICATION_TYPE.REVIEW_SUBMITTED,
-          params: {
-            submissionTitle: submission.title,
-            reviewerDisplayName: reviewer.displayName,
-          },
-          href: `/submissions/${submissionSlug}`,
-          idempotencyKeyForEditor: (editorId) =>
-            `${reviewSubmittedKey(assignmentSlug)}:${editorId}`,
-          email: {
-            routingKey: ROUTING_KEY.reviewSubmitted,
-            buildPayload: ({ editor, emailLocale, occurredAt }) => {
-              const payload: ReviewSubmittedEvent = {
-                type: 'ReviewSubmitted',
-                occurredAt,
-                idempotencyKey: reviewSubmittedEmailKey(
-                  assignmentSlug,
-                  editor.id,
-                ),
-                assignmentSlug,
-                submissionSlug,
-                submissionTitle: submission.title,
-                emailLocale,
-                reviewer: {
-                  id: reviewer.id,
-                  displayName: reviewer.displayName,
-                },
-                editor: {
-                  id: editor.id,
-                  email: editor.email,
-                  displayName: editor.displayName,
-                },
-                submissionUrl: `${this.appBaseUrl()}/submissions/${submissionSlug}`,
-              };
-              return payload as unknown as Record<string, unknown>;
-            },
-          },
+    const review = await this.assignmentsRepo.manager.transaction(
+      async (em) => {
+        const reviewRepo = em.getRepository(Review);
+        const assignmentRepo = em.getRepository(ReviewAssignment);
+        const row = reviewRepo.create({
+          assignmentId,
+          commentsForAuthor: authorPart,
+          commentsToEditorOnly: editorPart,
+          recommendation,
+          submittedAt: new Date(),
         });
-        pending.push(...created);
-      }
-      return row;
-    });
+        await reviewRepo.save(row);
+        assignment.status = AssignmentStatus.COMPLETED;
+        await assignmentRepo.save(assignment);
+        const reviewer = await em.getRepository(User).findOne({
+          where: { id: reviewerId },
+          select: ['id', 'displayName'],
+        });
+        if (assignment.slug && reviewer) {
+          await this.enqueueReviewerResponded(em, {
+            assignmentSlug: assignment.slug,
+            outcome: 'completed',
+            reviewer,
+          });
+        }
+        if (submission?.slug && assignment.slug && reviewer) {
+          const submissionSlug = submission.slug;
+          const assignmentSlug = assignment.slug;
+          const created = await this.notifyAllEditors(em, {
+            editorIds,
+            type: NOTIFICATION_TYPE.REVIEW_SUBMITTED,
+            params: {
+              submissionTitle: submission.title,
+              reviewerDisplayName: reviewer.displayName,
+            },
+            href: `/submissions/${submissionSlug}`,
+            idempotencyKeyForEditor: (editorId) =>
+              `${reviewSubmittedKey(assignmentSlug)}:${editorId}`,
+            email: {
+              routingKey: ROUTING_KEY.reviewSubmitted,
+              buildPayload: ({ editor, emailLocale, occurredAt }) => {
+                const payload: ReviewSubmittedEvent = {
+                  type: 'ReviewSubmitted',
+                  occurredAt,
+                  idempotencyKey: reviewSubmittedEmailKey(
+                    assignmentSlug,
+                    editor.id,
+                  ),
+                  assignmentSlug,
+                  submissionSlug,
+                  submissionTitle: submission.title,
+                  emailLocale,
+                  reviewer: {
+                    id: reviewer.id,
+                    displayName: reviewer.displayName,
+                  },
+                  editor: {
+                    id: editor.id,
+                    email: editor.email,
+                    displayName: editor.displayName,
+                  },
+                  submissionUrl: `${this.appBaseUrl()}/submissions/${submissionSlug}`,
+                };
+                return payload as unknown as Record<string, unknown>;
+              },
+            },
+          });
+          pending.push(...created);
+        }
+        return row;
+      },
+    );
     this.emitPendingNotifications(pending);
     return this.reviewsRepo.findOneOrFail({
       where: { assignmentId: review.assignmentId },
@@ -2985,7 +3292,9 @@ export class SubmissionsService implements OnModuleInit {
     };
   }
 
-  private async nextCopyeditAssignmentSlug(submissionSlug: string): Promise<string> {
+  private async nextCopyeditAssignmentSlug(
+    submissionSlug: string,
+  ): Promise<string> {
     for (let i = 0; i < 32; i++) {
       const suffix = randomBytes(4).toString('hex');
       const candidate = `ce-${submissionSlug}--${suffix}`;
@@ -3000,7 +3309,9 @@ export class SubmissionsService implements OnModuleInit {
     });
   }
 
-  private copyeditNoteCanBeSubmitted(status: CopyeditAssignmentStatus): boolean {
+  private copyeditNoteCanBeSubmitted(
+    status: CopyeditAssignmentStatus,
+  ): boolean {
     return (
       status === CopyeditAssignmentStatus.ACTIVE ||
       status === CopyeditAssignmentStatus.READY_FOR_REVIEW
@@ -3280,7 +3591,9 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    const copyeditor = await this.usersRepo.findOne({ where: { id: copyeditorId } });
+    const copyeditor = await this.usersRepo.findOne({
+      where: { id: copyeditorId },
+    });
     if (!copyeditor) {
       throw new BadRequestException({
         message: 'Copyeditor user not found',
@@ -3409,7 +3722,9 @@ export class SubmissionsService implements OnModuleInit {
         code: 'INTERNAL_ERROR',
       });
     }
-    const copyeditor = await this.usersRepo.findOne({ where: { id: copyeditorId } });
+    const copyeditor = await this.usersRepo.findOne({
+      where: { id: copyeditorId },
+    });
     if (!copyeditor) {
       throw new NotFoundException({
         message: 'Copyeditor not found',
@@ -3484,7 +3799,9 @@ export class SubmissionsService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    const notes = [...(assignment.notes ?? [])].sort((a, b) => b.round - a.round);
+    const notes = [...(assignment.notes ?? [])].sort(
+      (a, b) => b.round - a.round,
+    );
     const latest = notes[0];
     if (!latest) {
       throw new BadRequestException({
@@ -3494,7 +3811,7 @@ export class SubmissionsService implements OnModuleInit {
     }
     await this.assertManuscriptRevisionAfterNote(submission.id, latest);
 
-    const author = submission.author!;
+    const author = submission.author;
     const copyeditor = await this.usersRepo.findOne({
       where: { id: assignment.copyeditorId },
     });
@@ -3571,7 +3888,10 @@ export class SubmissionsService implements OnModuleInit {
       where: { slug: submissionSlug },
     });
     if (!submission) {
-      throw new NotFoundException({ message: 'Submission not found', code: 'NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
     }
     await this.assertCanRead(submission, user);
     const assignments = await this.copyeditAssignmentsRepo.find({
@@ -3580,7 +3900,10 @@ export class SubmissionsService implements OnModuleInit {
     });
     if (assignments.length === 0) return [];
 
-    const isEditor = this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE);
+    const isEditor = this.hasPerm(
+      user,
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    );
     const rows: Array<Record<string, unknown>> = [];
 
     for (const a of assignments) {
@@ -3670,22 +3993,37 @@ export class SubmissionsService implements OnModuleInit {
       const submissionRepo = em.getRepository(Submission);
       s.status = SubmissionStatus.PUBLISHED;
       s.publishedAt = new Date();
-      await em.getRepository(SubmissionFile).update(
-        { submissionId: s.id, kind: 'manuscript' },
-        { isPublic: true },
-      );
+      await em
+        .getRepository(SubmissionFile)
+        .update({ submissionId: s.id, kind: 'manuscript' }, { isPublic: true });
       const row = await submissionRepo.save(s);
-      const n = await this.enqueueSubmissionPublishedEvent({ submission: row }, em);
+      const n = await this.enqueueSubmissionPublishedEvent(
+        { submission: row },
+        em,
+      );
       if (n) pending.push(n);
       return row;
     });
     this.emitPendingNotifications(pending);
-    void this.indexPublishedSubmissionForSimilarity(saved).catch((err) => {
+    void this.enqueuePublishedSubmissionForSimilarity(saved.id).catch((err) => {
       this.logger.warn(
-        'Failed to index publication for similarity: %s',
+        'Failed to enqueue publication similarity index: %s',
         err instanceof Error ? err.message : String(err),
       );
     });
+    if (this.searchService?.isEnabled()) {
+      const author = await this.usersRepo.findOne({
+        where: { id: saved.authorId },
+        select: ['id', 'displayName'],
+      });
+      void this.searchService
+        .upsertDocument(saved, author?.displayName ?? '')
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to index published submission in Typesense: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+    }
     return saved;
   }
 
@@ -3801,12 +4139,21 @@ export class SubmissionsService implements OnModuleInit {
       relations: ['submission'],
     });
     if (!assignment) {
-      throw new NotFoundException({ message: 'Assignment not found', code: 'NOT_FOUND' });
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
     }
     const isCopyeditor = assignment.copyeditorId === user.sub;
-    const isEditor = this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE);
+    const isEditor = this.hasPerm(
+      user,
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    );
     if (!isCopyeditor && !isEditor) {
-      throw new ForbiddenException({ message: 'Access denied', code: 'FORBIDDEN' });
+      throw new ForbiddenException({
+        message: 'Access denied',
+        code: 'FORBIDDEN',
+      });
     }
 
     const submission = await this.submissionsRepo.findOne({

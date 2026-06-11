@@ -11,7 +11,8 @@ describe('EquationRenderService', () => {
   });
 
   it('returns raster dimensions for docx sizing', async () => {
-    const { widthPx, heightPx } = await service.renderLatexToPngWithSize('E=mc^2');
+    const { widthPx, heightPx } =
+      await service.renderLatexToPngWithSize('E=mc^2');
     expect(widthPx).toBeGreaterThan(50);
     expect(heightPx).toBeGreaterThan(10);
   });
@@ -36,7 +37,7 @@ describe('EquationRenderService', () => {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * channels;
-        const lum = (data[i]! + data[i + 1]! + data[i + 2]!) / 3;
+        const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
         if (lum < 200) {
           if (y < mid) darkUpper++;
           else darkLower++;

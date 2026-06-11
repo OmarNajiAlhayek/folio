@@ -4,6 +4,10 @@ import type {
   ConstructorSection,
 } from './constructor-content.types';
 import { stripConstructorHtml } from './constructor-content-utils';
+import {
+  getTableCellText,
+  isTableCellCovered,
+} from './constructor-table-utils';
 
 /** Minimum stripped plain-text length before calling ai-service corpus detect. */
 export const MIN_CORPUS_PLAIN_TEXT_CHARS = 80;
@@ -39,7 +43,10 @@ function sectionPlainParts(section: ConstructorSection): string[] {
     }
     case 'table': {
       const cells = section.rows.flatMap((row) =>
-        row.map((c) => c.trim()).filter(Boolean),
+        row
+          .filter((c) => !isTableCellCovered(c))
+          .map((c) => getTableCellText(c).trim())
+          .filter(Boolean),
       );
       append(cells, section.notes);
       return cells;
@@ -59,7 +66,9 @@ function sectionPlainParts(section: ConstructorSection): string[] {
   }
 }
 
-function fromConstructor(content: ConstructorContent | null | undefined): string {
+function fromConstructor(
+  content: ConstructorContent | null | undefined,
+): string {
   if (!content?.sections?.length) return '';
   const parts: string[] = [];
   for (const section of content.sections) {

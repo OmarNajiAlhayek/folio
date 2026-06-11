@@ -35,12 +35,12 @@ describe('publication-catalog-search.util', () => {
   });
 
   it('normalizePublicationPublishedAt uses UTC day bounds for date-only input', () => {
-    expect(normalizePublicationPublishedAt('2024-06-01', 'from').toISOString()).toBe(
-      '2024-06-01T00:00:00.000Z',
-    );
-    expect(normalizePublicationPublishedAt('2024-06-01', 'to').toISOString()).toBe(
-      '2024-06-01T23:59:59.999Z',
-    );
+    expect(
+      normalizePublicationPublishedAt('2024-06-01', 'from').toISOString(),
+    ).toBe('2024-06-01T00:00:00.000Z');
+    expect(
+      normalizePublicationPublishedAt('2024-06-01', 'to').toISOString(),
+    ).toBe('2024-06-01T23:59:59.999Z');
   });
 
   it('publicationCatalogNeedsAuthorJoin when q or author set', () => {

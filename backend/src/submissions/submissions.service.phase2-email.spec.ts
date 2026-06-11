@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/require-await */
+import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -18,11 +21,12 @@ import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { ROUTING_KEY } from '../messaging/contracts/email-events';
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import {
   submissionDecisionKey,
   submissionSubmittedKey,
-} from '../messaging/shared/idempotency';
+  submissionUnderReviewKey,
+} from '@folio/shared/messaging/idempotency';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import type { RequestUser } from '../common/types/request-user';
 
@@ -69,26 +73,28 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     submissionsRepo = {
       save: jest.fn(async (s: Submission) => s),
       manager: {
-        transaction: jest.fn(async (fn: (em: EntityManager) => Promise<unknown>) => {
-          const mockEm = {
-            getRepository: jest.fn((entity: unknown) => {
-              if (entity === Submission) {
-                return { save: submissionsRepo.save };
-              }
-              if (entity === SubmissionFile) {
-                return { update: jest.fn().mockResolvedValue(undefined) };
-              }
-              if (entity === User) {
-                return {
-                  findOne: usersRepo.findOne,
-                  find: usersRepo.find,
-                };
-              }
-              return {};
-            }),
-          } as unknown as EntityManager;
-          return fn(mockEm);
-        }),
+        transaction: jest.fn(
+          async (fn: (em: EntityManager) => Promise<unknown>) => {
+            const mockEm = {
+              getRepository: jest.fn((entity: unknown) => {
+                if (entity === Submission) {
+                  return { save: submissionsRepo.save };
+                }
+                if (entity === SubmissionFile) {
+                  return { update: jest.fn().mockResolvedValue(undefined) };
+                }
+                if (entity === User) {
+                  return {
+                    findOne: usersRepo.findOne,
+                    find: usersRepo.find,
+                  };
+                }
+                return {};
+              }),
+            } as unknown as EntityManager;
+            return fn(mockEm);
+          },
+        ),
       },
     };
     usersRepo = {
@@ -150,14 +156,21 @@ describe('SubmissionsService phase2 email (outbox)', () => {
           },
         },
         aiClientServiceMock,
+
+        aiJobsServiceMock,
         languageToolServiceMock,
       ],
     }).compile();
 
     service = moduleRef.get(SubmissionsService);
+    submission.status = SubmissionStatus.UNDER_REVIEW;
+    submission.messageForAuthor = null;
     jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submission);
     jest
-      .spyOn(service as unknown as { assertReadyForSubmit: () => Promise<void> }, 'assertReadyForSubmit')
+      .spyOn(
+        service as unknown as { assertReadyForSubmit: () => Promise<void> },
+        'assertReadyForSubmit',
+      )
       .mockResolvedValue(undefined);
   });
 
@@ -183,6 +196,120 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     expect(payload.decision).toBe('accepted');
     expect(payload.idempotencyKey).toBe(
       submissionDecisionKey('paper-one', 'accepted'),
+    );
+    expect(payload.author).toMatchObject({
+      email: author.email,
+      displayName: author.displayName,
+    });
+    expect(payload.messageForAuthor).toBeUndefined();
+  });
+
+  it('persists and enqueues messageForAuthor on editorial decision', async () => {
+    usersRepo.findOne.mockImplementation(
+      async ({ where }: { where: { id: string } }) => {
+        if (where.id === author.id) return author;
+        if (where.id === editorUser.sub) {
+          return { id: editorUser.sub, displayName: 'Ed One' } as User;
+        }
+        return null;
+      },
+    );
+
+    await service.updateStatus(
+      'paper-one',
+      editorUser,
+      SubmissionStatus.REVISIONS_REQUESTED,
+      'en',
+      '  Please revise the methods section.  ',
+    );
+
+    expect(submissionsRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageForAuthor: 'Please revise the methods section.',
+        status: SubmissionStatus.REVISIONS_REQUESTED,
+      }),
+    );
+    const [, payload] = eventPublisher.enqueue.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(payload.messageForAuthor).toBe('Please revise the methods section.');
+  });
+
+  it('rejects messageForAuthor when status is not a decision', async () => {
+    const submitted = {
+      ...submission,
+      status: SubmissionStatus.SUBMITTED,
+    } as Submission;
+    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submitted);
+    jest
+      .spyOn(
+        service as unknown as {
+          assertHasReviewManuscriptPackage: () => Promise<void>;
+        },
+        'assertHasReviewManuscriptPackage',
+      )
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.updateStatus(
+        'paper-one',
+        editorUser,
+        SubmissionStatus.UNDER_REVIEW,
+        'en',
+        'Not allowed here',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(eventPublisher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('enqueues submission.under_review when editor sets under_review from submitted', async () => {
+    const submittedAt = new Date('2026-06-01T12:00:00.000Z');
+    const submitted = {
+      ...submission,
+      status: SubmissionStatus.SUBMITTED,
+      updatedAt: submittedAt,
+    } as Submission;
+    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submitted);
+    jest
+      .spyOn(
+        service as unknown as {
+          assertHasReviewManuscriptPackage: () => Promise<void>;
+        },
+        'assertHasReviewManuscriptPackage',
+      )
+      .mockResolvedValue(undefined);
+    usersRepo.findOne.mockImplementation(
+      async ({ where }: { where: { id: string } }) => {
+        if (where.id === author.id) return author;
+        if (where.id === editorUser.sub) {
+          return {
+            id: editorUser.sub,
+            displayName: 'Ed One',
+          } as User;
+        }
+        return null;
+      },
+    );
+
+    await service.updateStatus(
+      'paper-one',
+      editorUser,
+      SubmissionStatus.UNDER_REVIEW,
+      'en',
+    );
+
+    expect(eventPublisher.enqueue).toHaveBeenCalledTimes(1);
+    const [routingKey, payload] = eventPublisher.enqueue.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(routingKey).toBe(ROUTING_KEY.submissionUnderReview);
+    expect(payload.type).toBe('SubmissionUnderReview');
+    expect(payload.trigger).toBe('editor');
+    expect(payload.submittedCycleAt).toBe(submittedAt.toISOString());
+    expect(payload.idempotencyKey).toBe(
+      submissionUnderReviewKey('paper-one', submittedAt.toISOString()),
     );
     expect(payload.author).toMatchObject({
       email: author.email,
@@ -230,8 +357,8 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     const keys = events.map((e) => e.payload.idempotencyKey);
     expect(keys).toContain(submissionSubmittedKey('paper-one', 'editor-1'));
     expect(keys).toContain(submissionSubmittedKey('paper-one', 'editor-2'));
-    expect(events.every((e) => e.routingKey === ROUTING_KEY.submissionSubmitted)).toBe(
-      true,
-    );
+    expect(
+      events.every((e) => e.routingKey === ROUTING_KEY.submissionSubmitted),
+    ).toBe(true);
   });
 });

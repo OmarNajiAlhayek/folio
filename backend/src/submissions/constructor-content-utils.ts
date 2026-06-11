@@ -7,6 +7,11 @@ import type {
   TitleSection,
 } from './constructor-content.types';
 import { referenceEntryHasContent } from './sanitize-constructor-html';
+import {
+  getTableCellText,
+  isTableCellCovered,
+} from './constructor-table-utils';
+import { collectInlineImageFileIdsFromHtml } from './constructor-rich-text-html';
 
 /** Strip HTML tags from constructor rich-text blocks (shared with corpus plain-text export). */
 export function stripConstructorHtml(html: string): string {
@@ -42,8 +47,12 @@ function sectionHasContent(section: ConstructorSection): boolean {
       return Boolean(section.fileId) || section.caption.trim().length > 0;
     case 'table':
       return (
-        section.rows.some((row) => row.some((c) => c.trim().length > 0)) ||
-        (section.notes?.trim().length ?? 0) > 0
+        section.rows.some((row) =>
+          row.some(
+            (c) =>
+              !isTableCellCovered(c) && getTableCellText(c).trim().length > 0,
+          ),
+        ) || (section.notes?.trim().length ?? 0) > 0
       );
     case 'equation':
       return section.latex.trim().length > 0;
@@ -71,6 +80,19 @@ export function collectReferencedFileIds(
   for (const s of content.sections) {
     if (s.kind === 'image' && s.fileId) {
       ids.add(s.fileId);
+    }
+    if ('html' in s && s.html) {
+      for (const id of collectInlineImageFileIdsFromHtml(s.html)) {
+        ids.add(id);
+      }
+    }
+    if (s.kind === 'references') {
+      for (const item of s.items) {
+        const html = item.html ?? item.text ?? '';
+        for (const id of collectInlineImageFileIdsFromHtml(html)) {
+          ids.add(id);
+        }
+      }
     }
   }
   return ids;
@@ -113,27 +135,46 @@ export function validateConstructorContentForSubmit(
   }
   const sections: ConstructorSection[] = content.sections;
 
-  const titles = sections.filter((s) => s.kind === 'title') as TitleSection[];
+  const titles = sections.filter((s): s is TitleSection => s.kind === 'title');
   const titlesEn = titles.filter((t) => t.lang === 'en' || !t.lang);
   const titlesAr = titles.filter((t) => t.lang === 'ar');
 
   if (titlesEn.length === 0 && titlesAr.length === 0) {
-    errors.push({ code: 'CONSTRUCTOR_TITLE_MISSING', message: 'A title section is required' });
+    errors.push({
+      code: 'CONSTRUCTOR_TITLE_MISSING',
+      message: 'A title section is required',
+    });
   } else {
     if (titlesEn.length > 1) {
-      errors.push({ code: 'CONSTRUCTOR_TITLE_DUPLICATE', message: 'Only one title section of this kind is allowed', sectionId: titlesEn[1].id });
+      errors.push({
+        code: 'CONSTRUCTOR_TITLE_DUPLICATE',
+        message: 'Only one title section of this kind is allowed',
+        sectionId: titlesEn[1].id,
+      });
     }
     const enTitle = titlesEn[0];
     if (enTitle && !enTitle.text?.trim()) {
-      errors.push({ code: 'CONSTRUCTOR_TITLE_EMPTY', message: 'The English title cannot be empty', sectionId: enTitle.id });
+      errors.push({
+        code: 'CONSTRUCTOR_TITLE_EMPTY',
+        message: 'The English title cannot be empty',
+        sectionId: enTitle.id,
+      });
     }
 
     if (titlesAr.length > 1) {
-      errors.push({ code: 'CONSTRUCTOR_TITLE_DUPLICATE', message: 'Only one title section of this kind is allowed', sectionId: titlesAr[1].id });
+      errors.push({
+        code: 'CONSTRUCTOR_TITLE_DUPLICATE',
+        message: 'Only one title section of this kind is allowed',
+        sectionId: titlesAr[1].id,
+      });
     }
     const arTitle = titlesAr[0];
     if (arTitle && !arTitle.text?.trim()) {
-      errors.push({ code: 'CONSTRUCTOR_TITLE_AR_EMPTY', message: 'The Arabic title cannot be empty', sectionId: arTitle.id });
+      errors.push({
+        code: 'CONSTRUCTOR_TITLE_AR_EMPTY',
+        message: 'The Arabic title cannot be empty',
+        sectionId: arTitle.id,
+      });
     }
   }
 

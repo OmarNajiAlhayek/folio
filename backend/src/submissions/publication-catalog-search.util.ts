@@ -15,7 +15,9 @@ export type PublicationCatalogFilters = {
   publishedTo?: Date;
 };
 
-export function trimCatalogFilter(value: string | undefined): string | undefined {
+export function trimCatalogFilter(
+  value: string | undefined,
+): string | undefined {
   const t = value?.trim();
   return t && t.length > 0 ? t : undefined;
 }
@@ -26,11 +28,11 @@ export function publicationCatalogHasTextOrFilters(
 ): boolean {
   return Boolean(
     filters.q ||
-      filters.author ||
-      filters.discipline ||
-      filters.articleType ||
-      filters.publishedFrom ||
-      filters.publishedTo,
+    filters.author ||
+    filters.discipline ||
+    filters.articleType ||
+    filters.publishedFrom ||
+    filters.publishedTo,
   );
 }
 
@@ -121,15 +123,11 @@ export function clampPublicationCatalogPagination(
 ): PublicationCatalogPagination {
   const lim =
     limit != null
-      ? Math.min(
-          PUBLICATION_CATALOG_MAX_LIMIT,
-          Math.max(1, Math.trunc(limit)),
-        )
+      ? Math.min(PUBLICATION_CATALOG_MAX_LIMIT, Math.max(1, Math.trunc(limit)))
       : PUBLICATION_CATALOG_DEFAULT_LIMIT;
-  const off =
-    offset != null ? Math.max(0, Math.trunc(offset)) : 0;
+  const off = offset != null ? Math.max(0, Math.trunc(offset)) : 0;
   return { limit: lim, offset: off };
-};
+}
 
 export type PublishedAuthorSuggestionRow = {
   displayName: string;
@@ -160,7 +158,10 @@ export function applyPublicationCatalogQuery(
       pubAuthorSimMin: PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
     });
     // orderBy(GREATEST(...)) breaks: TypeORM splits on commas inside GREATEST.
-    qb.addSelect(PUBLICATION_QUICK_SEARCH_RANK_SQL, PUBLICATION_QUICK_SEARCH_RANK_ALIAS);
+    qb.addSelect(
+      PUBLICATION_QUICK_SEARCH_RANK_SQL,
+      PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
+    );
     qb.orderBy(PUBLICATION_QUICK_SEARCH_RANK_ALIAS, 'DESC');
     qb.addOrderBy('s.publishedAt', 'DESC');
   } else {

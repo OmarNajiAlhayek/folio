@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -218,7 +214,10 @@ function extractInnerSvg(serialized: string): string {
 }
 
 function prepareEquationSvgForRaster(innerSvg: string): string {
-  const viewBox = innerSvg.match(/viewBox="([^"]+)"/)?.[1]?.split(/\s+/).map(Number);
+  const viewBox = innerSvg
+    .match(/viewBox="([^"]+)"/)?.[1]
+    ?.split(/\s+/)
+    .map(Number);
   if (viewBox?.length !== 4) {
     return innerSvg.replace(
       'stroke="currentColor" fill="currentColor"',
@@ -245,9 +244,8 @@ function prepareEquationSvgForRaster(innerSvg: string): string {
     .replace(/viewBox="[^"]*"/, `viewBox="0 0 ${vbW} ${vbH}"`)
     .replace(/<svg/, `<svg width="${pxW}" height="${pxH}"`);
 
-  return `${openSansEx}<rect x="0" y="0" width="${vbW}" height="${vbH}" fill="#ffffff"/><g transform="translate(${-minX}, ${-minY})">${body}</g></svg>`
-    .replace(
-      'stroke="currentColor" fill="currentColor"',
-      'stroke="#000000" fill="#000000"',
-    );
+  return `${openSansEx}<rect x="0" y="0" width="${vbW}" height="${vbH}" fill="#ffffff"/><g transform="translate(${-minX}, ${-minY})">${body}</g></svg>`.replace(
+    'stroke="currentColor" fill="currentColor"',
+    'stroke="#000000" fill="#000000"',
+  );
 }

@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
 import { AiClientService } from '../ai/ai-client.service';
+import { AiJobsService } from '../ai-jobs/ai-jobs.service';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -22,11 +24,14 @@ import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import type { RequestUser } from '../common/types/request-user';
 import { MIN_CORPUS_PLAIN_TEXT_CHARS } from './submission-corpus-text.util';
 
-describe('SubmissionsService.getCorpusSimilarityReport', () => {
+describe('SubmissionsService.startCorpusSimilarityJob', () => {
   let service: SubmissionsService;
   let aiClient: {
     isCorpusSimilarityEnabled: jest.Mock;
-    detectCorpusSimilarity: jest.Mock;
+  };
+  let aiJobs: {
+    enqueueCorpusSimilarity: jest.Mock;
+    toResponse: jest.Mock;
   };
   let submissionsRepo: { findOne: jest.Mock; find: jest.Mock };
   let assignmentsRepo: { exists: jest.Mock };
@@ -68,7 +73,20 @@ describe('SubmissionsService.getCorpusSimilarityReport', () => {
   beforeEach(async () => {
     aiClient = {
       isCorpusSimilarityEnabled: jest.fn().mockReturnValue(true),
-      detectCorpusSimilarity: jest.fn().mockResolvedValue([]),
+    };
+    aiJobs = {
+      enqueueCorpusSimilarity: jest.fn().mockResolvedValue({
+        id: 'job-1',
+        jobType: 'corpus_similarity',
+        status: 'pending',
+        createdAt: new Date(),
+      }),
+      toResponse: jest.fn().mockReturnValue({
+        jobId: 'job-1',
+        jobType: 'corpus_similarity',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      }),
     };
     submissionsRepo = {
       findOne: jest.fn().mockResolvedValue({ ...baseSubmission }),
@@ -82,6 +100,7 @@ describe('SubmissionsService.getCorpusSimilarityReport', () => {
       providers: [
         SubmissionsService,
         { provide: AiClientService, useValue: aiClient },
+        { provide: AiJobsService, useValue: aiJobs },
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         { provide: getRepositoryToken(SubmissionFile), useValue: {} },
         {
@@ -108,62 +127,38 @@ describe('SubmissionsService.getCorpusSimilarityReport', () => {
 
   it('forbids the author even with editor queue permission', async () => {
     await expect(
-      service.getCorpusSimilarityReport('paper-1', authorEditorUser),
+      service.startCorpusSimilarityJob('paper-1', authorEditorUser),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('allows editor and returns ok when no matches', async () => {
-    const report = await service.getCorpusSimilarityReport('paper-1', editorUser);
-    expect(report).toEqual({
-      status: 'ok',
-      threshold: 0.85,
-      matchCount: 0,
-      sources: [],
+  it('enqueues a job for editor when text is sufficient', async () => {
+    const response = await service.startCorpusSimilarityJob(
+      'paper-1',
+      editorUser,
+    );
+    expect(aiJobs.enqueueCorpusSimilarity).toHaveBeenCalledWith({
+      submissionId: 'sub-1',
+      submissionSlug: 'paper-1',
+      requestedByUserId: 'editor-1',
+    });
+    expect(response).toEqual({
+      jobId: 'job-1',
+      jobType: 'corpus_similarity',
+      status: 'pending',
+      createdAt: expect.any(String),
     });
   });
 
-  it('allows assigned reviewer', async () => {
+  it('allows assigned reviewer to enqueue', async () => {
     assignmentsRepo.exists.mockResolvedValue(true);
-    const report = await service.getCorpusSimilarityReport(
-      'paper-1',
-      reviewerUser,
-    );
-    expect(report.status).toBe('ok');
+    await service.startCorpusSimilarityJob('paper-1', reviewerUser);
+    expect(aiJobs.enqueueCorpusSimilarity).toHaveBeenCalled();
   });
 
   it('forbids unassigned reviewer', async () => {
     await expect(
-      service.getCorpusSimilarityReport('paper-1', reviewerUser),
+      service.startCorpusSimilarityJob('paper-1', reviewerUser),
     ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('excludes self-matches from sources', async () => {
-    aiClient.detectCorpusSimilarity.mockResolvedValue([
-      {
-        submissionChunkIndex: 0,
-        submissionSnippet: 'overlap',
-        sourceArticleId: 'sub-1',
-        sourceChunkIndex: 0,
-        matchedSnippet: 'overlap',
-        similarity: 0.99,
-      },
-      {
-        submissionChunkIndex: 0,
-        submissionSnippet: 'other',
-        sourceArticleId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-        sourceChunkIndex: 0,
-        matchedSnippet: 'other',
-        similarity: 0.9,
-      },
-    ]);
-    const report = await service.getCorpusSimilarityReport('paper-1', editorUser);
-    expect(report.status).toBe('ok');
-    if (report.status === 'ok') {
-      expect(report.sources).toHaveLength(1);
-      expect(report.sources[0].articleId).toBe(
-        'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-      );
-    }
   });
 
   it('returns no_text when plain text is too short', async () => {
@@ -172,13 +167,21 @@ describe('SubmissionsService.getCorpusSimilarityReport', () => {
       abstract: 'short',
       title: '',
     });
-    const report = await service.getCorpusSimilarityReport('paper-1', editorUser);
+    const report = await service.startCorpusSimilarityJob(
+      'paper-1',
+      editorUser,
+    );
     expect(report).toEqual({ status: 'no_text' });
+    expect(aiJobs.enqueueCorpusSimilarity).not.toHaveBeenCalled();
   });
 
-  it('returns unavailable when gRPC returns null', async () => {
-    aiClient.detectCorpusSimilarity.mockResolvedValue(null);
-    const report = await service.getCorpusSimilarityReport('paper-1', editorUser);
+  it('returns unavailable when feature is disabled', async () => {
+    aiClient.isCorpusSimilarityEnabled.mockReturnValue(false);
+    const report = await service.startCorpusSimilarityJob(
+      'paper-1',
+      editorUser,
+    );
     expect(report).toEqual({ status: 'unavailable' });
+    expect(aiJobs.enqueueCorpusSimilarity).not.toHaveBeenCalled();
   });
 });

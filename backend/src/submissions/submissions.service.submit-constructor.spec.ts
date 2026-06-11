@@ -1,16 +1,16 @@
+/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-call */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
+import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionFile } from '../entities/submission-file.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
-import {
-  ReviewAssignment,
-} from '../entities/review-assignment.entity';
+import { ReviewAssignment } from '../entities/review-assignment.entity';
 import { Review } from '../entities/review.entity';
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
@@ -73,30 +73,30 @@ describe('SubmissionsService.submit (constructor files)', () => {
 
   function draftConstructorRow(): Submission {
     return {
-    id: 'sub-c',
-    slug: 'constructor-paper',
-    authorId: authorUser.sub,
-    status: SubmissionStatus.DRAFT,
-    constructorContent: minimalConstructorContent,
-    articleType: 'research_article',
-    keywords: 'one, two, three',
-    keywordsAr: 'واحد, اثنان, ثلاثة',
-    titleAr: 'عنوان',
-    contributors: [
-      {
-        fullName: 'Author One',
-        affiliation: 'University',
-        sortOrder: 0,
-        isCorresponding: true,
-      },
-    ],
-    originalityConfirmed: true,
-    conflictOfInterestStatement: 'None',
-    ethicalApprovalReference: 'N/A',
-    aiUsageStatement: 'None used',
-    abstract: 'English abstract text.',
-    abstractAr: 'ملخص.',
-  } as Submission;
+      id: 'sub-c',
+      slug: 'constructor-paper',
+      authorId: authorUser.sub,
+      status: SubmissionStatus.DRAFT,
+      constructorContent: minimalConstructorContent,
+      articleType: 'research_article',
+      keywords: 'one, two, three',
+      keywordsAr: 'واحد, اثنان, ثلاثة',
+      titleAr: 'عنوان',
+      contributors: [
+        {
+          fullName: 'Author One',
+          affiliation: 'University',
+          sortOrder: 0,
+          isCorresponding: true,
+        },
+      ],
+      originalityConfirmed: true,
+      conflictOfInterestStatement: 'None',
+      ethicalApprovalReference: 'N/A',
+      aiUsageStatement: 'None used',
+      abstract: 'English abstract text.',
+      abstractAr: 'ملخص.',
+    } as Submission;
   }
 
   beforeEach(async () => {
@@ -144,7 +144,9 @@ describe('SubmissionsService.submit (constructor files)', () => {
         },
         {
           provide: DocxGeneratorService,
-          useValue: { generate: jest.fn().mockResolvedValue(Buffer.from('docx')) },
+          useValue: {
+            generate: jest.fn().mockResolvedValue(Buffer.from('docx')),
+          },
         },
         {
           provide: ManuscriptStyleRegistryService,
@@ -161,6 +163,8 @@ describe('SubmissionsService.submit (constructor files)', () => {
           useValue: { get: jest.fn((_k: string, def?: string) => def) },
         },
         aiClientServiceMock,
+
+        aiJobsServiceMock,
         languageToolServiceMock,
       ],
     }).compile();
@@ -169,12 +173,10 @@ describe('SubmissionsService.submit (constructor files)', () => {
     jest
       .spyOn(service, 'getBySlugOrThrow')
       .mockImplementation(async () => draftConstructorRow());
-    generateDocx = jest
-      .spyOn(service, 'generateDocx')
-      .mockResolvedValue({
-        kind: 'attached',
-        file: { id: 'file-m', kind: 'manuscript' } as SubmissionFile,
-      });
+    generateDocx = jest.spyOn(service, 'generateDocx').mockResolvedValue({
+      kind: 'attached',
+      file: { id: 'file-m', kind: 'manuscript' } as SubmissionFile,
+    });
     jest
       .spyOn(service, 'enqueueSubmissionSubmittedForEditors')
       .mockResolvedValue([]);
@@ -225,9 +227,9 @@ describe('SubmissionsService.submit (constructor files)', () => {
       { kind: 'manuscript' },
     ] as SubmissionFile[]);
 
-    await expect(service.submit('constructor-paper', authorUser)).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(
+      service.submit('constructor-paper', authorUser),
+    ).rejects.toThrow(BadRequestException);
     expect(generateDocx).not.toHaveBeenCalled();
   });
 });

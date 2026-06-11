@@ -1,17 +1,29 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
-import { resolveSectionDir } from "@/lib/constructor-direction";
-import { referenceEntrySortKey, resolveReferenceEntryHtml } from "@/lib/constructor-rich-text";
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { resolveSectionDir } from '@/lib/constructor-direction';
+import {
+  referenceEntrySortKey,
+  resolveReferenceEntryHtml,
+} from '@/lib/constructor-rich-text';
 import {
   sanitizeConstructorTipTapHtml,
   sanitizeKatexPreviewHtml,
-} from "@/lib/sanitize-constructor-html";
-import { apiBlob } from "@/lib/api";
-import { parseKeywordsFromStorage } from "@/lib/keywords";
-import { KeywordTagsDisplay } from "@/components/ui/keyword-tags-input";
-import type { ManuscriptPreviewTheme } from "@/lib/manuscript-styles-catalog";
+} from '@/lib/sanitize-constructor-html';
+import { apiBlob } from '@/lib/api';
+import { parseKeywordsFromStorage } from '@/lib/keywords';
+import { KeywordTagsDisplay } from '@/components/ui/keyword-tags-input';
+import {
+  ConstructorRichHtmlPreview,
+  PreviewFootnotesBlock,
+} from '@/components/constructor/ConstructorRichHtmlPreview';
+import {
+  getTableCellText,
+  isTableCellCovered,
+  normalizeTableRows,
+} from '@/lib/constructor-table-utils';
+import type { ManuscriptPreviewTheme } from '@/lib/manuscript-styles-catalog';
 import type {
   AbstractSection,
   AuthorsSection,
@@ -26,7 +38,7 @@ import type {
   RichTextBlockSection,
   TableSection,
   TitleSection,
-} from "@/lib/constructor-content.types";
+} from '@/lib/constructor-content.types';
 
 interface LivePreviewProps {
   content: ConstructorContent;
@@ -47,7 +59,7 @@ export function LivePreview({
   slug,
   debounceMs = 300,
 }: LivePreviewProps) {
-  const t = useTranslations("ConstructorPreview");
+  const t = useTranslations('ConstructorPreview');
 
   const [debouncedContent, setDebouncedContent] = useState(content);
   useEffect(() => {
@@ -61,13 +73,13 @@ export function LivePreview({
     let table = 0;
     let equation = 0;
     for (const s of debouncedContent.sections) {
-      if (s.kind === "image") {
+      if (s.kind === 'image') {
         figure += 1;
         map.set(s.id, figure);
-      } else if (s.kind === "table") {
+      } else if (s.kind === 'table') {
         table += 1;
         map.set(s.id, table);
-      } else if (s.kind === "equation") {
+      } else if (s.kind === 'equation') {
         equation += 1;
         map.set(s.id, equation);
       }
@@ -77,24 +89,40 @@ export function LivePreview({
 
   const defaultDir = content.defaultDir;
   const rootFont =
-    defaultDir === "rtl"
+    defaultDir === 'rtl'
       ? previewTheme.fontFamilyArabicStack
       : previewTheme.fontFamilyLatinStack;
 
   return (
     <aside
       className="rounded-2xl border border-ink/10 bg-surface/50 p-4 shadow-sm backdrop-blur-[2px] transition hover:border-ink/15 hover:shadow-md flex flex-col justify-stretch min-h-[600px]"
-      aria-label={t("ariaLabel")}
+      aria-label={t('ariaLabel')}
     >
       <header className="border-b border-ink/10 pb-3 mb-4 text-xs font-medium uppercase tracking-wide text-ink/60">
         <div className="flex items-center gap-1.5 text-ink font-extrabold text-sm">
-          <svg className="size-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg
+            className="size-4 text-accent"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+            />
           </svg>
-          {t("header")}
+          {t('header')}
         </div>
-        <p className="mt-1 normal-case font-normal text-ink/50 text-[10px] tracking-normal leading-relaxed">{t("approximateNotice")}</p>
+        <p className="mt-1 normal-case font-normal text-ink/50 text-[10px] tracking-normal leading-relaxed">
+          {t('approximateNotice')}
+        </p>
       </header>
 
       {/* Simulated physical publication paper layout canvas */}
@@ -103,12 +131,26 @@ export function LivePreview({
           <div className="flex-1 flex items-center justify-center py-16 px-4 text-center select-none animate-pulse">
             <div className="flex flex-col items-center">
               <div className="rounded-2xl bg-accent/5 dark:bg-accent/10 p-4 text-accent mb-4 border border-accent/10 shadow-xs">
-                <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                <svg
+                  className="size-8"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+                  />
                 </svg>
               </div>
-              <h3 className="text-sm font-extrabold text-ink/80 mb-1">No sections committed yet</h3>
-              <p className="text-xs text-ink/45 max-w-xs leading-relaxed">{t("empty")}</p>
+              <h3 className="text-sm font-extrabold text-ink/80 mb-1">
+                No sections committed yet
+              </h3>
+              <p className="text-xs text-ink/45 max-w-xs leading-relaxed">
+                {t('empty')}
+              </p>
             </div>
           </div>
         ) : (
@@ -130,11 +172,18 @@ export function LivePreview({
                     section={section}
                     defaultDir={defaultDir}
                     slug={slug}
+                    footnotes={debouncedContent.footnotes}
                     figureOrTableNumber={numbering.get(section.id)}
                     previewTheme={previewTheme}
                   />
                 </div>
               ))}
+              {debouncedContent.footnotes?.length ? (
+                <PreviewFootnotesBlock
+                  footnotes={debouncedContent.footnotes}
+                  style={{ fontFamily: rootFont }}
+                />
+              ) : null}
             </div>
           </div>
         )}
@@ -147,45 +196,51 @@ function PreviewSection({
   section,
   defaultDir,
   slug,
+  footnotes,
   figureOrTableNumber,
   previewTheme,
 }: {
   section: ConstructorSection;
   defaultDir: ConstructorDir;
   slug?: string;
+  footnotes?: ConstructorContent['footnotes'];
   figureOrTableNumber?: number;
   previewTheme: ManuscriptPreviewTheme;
 }) {
   const dir = resolveSectionDir(section, defaultDir);
   const fontFamily =
-    dir === "rtl"
+    dir === 'rtl'
       ? previewTheme.fontFamilyArabicStack
       : previewTheme.fontFamilyLatinStack;
 
   const wrapperStyle = { fontFamily };
 
   switch (section.kind) {
-    case "title":
+    case 'title':
       return <PreviewTitle section={section} dir={dir} style={wrapperStyle} />;
-    case "authors":
+    case 'authors':
       return (
         <PreviewAuthors section={section} dir={dir} style={wrapperStyle} />
       );
-    case "abstract":
-      return (
-        <PreviewAbstract section={section} previewTheme={previewTheme} />
-      );
-    case "heading1":
-    case "heading2":
-    case "heading3":
+    case 'abstract':
+      return <PreviewAbstract section={section} previewTheme={previewTheme} />;
+    case 'heading1':
+    case 'heading2':
+    case 'heading3':
       return (
         <PreviewHeading section={section} dir={dir} style={wrapperStyle} />
       );
-    case "paragraph":
+    case 'paragraph':
       return (
-        <PreviewParagraph section={section} dir={dir} style={wrapperStyle} />
+        <PreviewParagraph
+          section={section}
+          dir={dir}
+          style={wrapperStyle}
+          slug={slug}
+          footnotes={footnotes}
+        />
       );
-    case "image":
+    case 'image':
       return (
         <PreviewImage
           section={section}
@@ -196,7 +251,7 @@ function PreviewSection({
           previewTheme={previewTheme}
         />
       );
-    case "table":
+    case 'table':
       return (
         <PreviewTable
           section={section}
@@ -206,25 +261,24 @@ function PreviewSection({
           previewTheme={previewTheme}
         />
       );
-    case "acknowledgments":
-    case "funding":
-    case "conflictOfInterest":
-    case "dataAvailability":
+    case 'acknowledgments':
+    case 'funding':
+    case 'conflictOfInterest':
+    case 'dataAvailability':
       return (
         <PreviewRichTextBlock
           section={section as RichTextBlockSection}
           dir={dir}
           style={wrapperStyle}
+          slug={slug}
+          footnotes={footnotes}
         />
       );
-    case "equation":
+    case 'equation':
       return (
-        <PreviewEquation
-          section={section}
-          number={figureOrTableNumber ?? 0}
-        />
+        <PreviewEquation section={section} number={figureOrTableNumber ?? 0} />
       );
-    case "references":
+    case 'references':
       return (
         <PreviewReferences section={section} previewTheme={previewTheme} />
       );
@@ -245,13 +299,13 @@ function PreviewTitle({
       dir={dir}
       style={{
         ...style,
-        fontSize: "16pt",
+        fontSize: '16pt',
         fontWeight: 700,
-        textAlign: "center",
-        margin: "0 0 0.75rem",
+        textAlign: 'center',
+        margin: '0 0 0.75rem',
       }}
     >
-      {section.text || "\u00a0"}
+      {section.text || '\u00a0'}
     </h1>
   );
 }
@@ -271,17 +325,17 @@ function PreviewAuthors({
   return (
     <div
       dir={dir}
-      style={{ ...style, textAlign: "center", marginBottom: "1rem" }}
+      style={{ ...style, textAlign: 'center', marginBottom: '1rem' }}
     >
       {section.authors.map((a, i) => (
-        <p key={i} style={{ margin: "0.25rem 0", fontSize: "11pt" }}>
+        <p key={i} style={{ margin: '0.25rem 0', fontSize: '11pt' }}>
           <strong>
             {a.fullName}
-            {a.isCorresponding ? "*" : ""}
+            {a.isCorresponding ? '*' : ''}
           </strong>
-          {a.title ? `, ${a.title}` : ""}
-          {a.affiliation ? ` — ${a.affiliation}` : ""}
-          {a.email ? ` (${a.email})` : ""}
+          {a.title ? `, ${a.title}` : ''}
+          {a.affiliation ? ` — ${a.affiliation}` : ''}
+          {a.email ? ` (${a.email})` : ''}
         </p>
       ))}
     </div>
@@ -295,34 +349,39 @@ function PreviewAbstract({
   section: AbstractSection;
   previewTheme: ManuscriptPreviewTheme;
 }) {
-  const dir: ConstructorDir = section.lang === "ar" ? "rtl" : "ltr";
+  const dir: ConstructorDir = section.lang === 'ar' ? 'rtl' : 'ltr';
   const fontFamily =
-    dir === "rtl"
+    dir === 'rtl'
       ? previewTheme.fontFamilyArabicStack
       : previewTheme.fontFamilyLatinStack;
   const keywordTags = parseKeywordsFromStorage(section.keywords);
   return (
-    <section dir={dir} style={{ fontFamily, marginBottom: "1rem" }}>
-      <h2 style={{ fontSize: "14pt", fontWeight: 700, margin: "0 0 0.25rem" }}>
-        {section.lang === "ar" ? "الملخص" : "Abstract"}
+    <section dir={dir} style={{ fontFamily, marginBottom: '1rem' }}>
+      <h2 style={{ fontSize: '14pt', fontWeight: 700, margin: '0 0 0.25rem' }}>
+        {section.lang === 'ar' ? 'الملخص' : 'Abstract'}
       </h2>
-      <p style={{ fontSize: dir === "rtl" ? "12pt" : "11pt", margin: "0 0 0.5rem" }}>
-        {section.text || "\u00a0"}
+      <p
+        style={{
+          fontSize: dir === 'rtl' ? '12pt' : '11pt',
+          margin: '0 0 0.5rem',
+        }}
+      >
+        {section.text || '\u00a0'}
       </p>
       {keywordTags.length > 0 ? (
         <p
           style={{
-            fontSize: dir === "rtl" ? "12pt" : "11pt",
+            fontSize: dir === 'rtl' ? '12pt' : '11pt',
             margin: 0,
-            fontStyle: "italic",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "baseline",
-            gap: "0.35rem",
+            fontStyle: 'italic',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'baseline',
+            gap: '0.35rem',
           }}
         >
           <strong>
-            {section.lang === "ar" ? "الكلمات المفتاحية: " : "Keywords: "}
+            {section.lang === 'ar' ? 'الكلمات المفتاحية: ' : 'Keywords: '}
           </strong>
           <KeywordTagsDisplay tags={keywordTags} />
         </p>
@@ -340,12 +399,13 @@ function PreviewHeading({
   dir: ConstructorDir;
   style: React.CSSProperties;
 }) {
-  const sizeMap = { heading1: "14pt", heading2: "13pt", heading3: "12pt" };
-  const Tag = section.kind === "heading1"
-    ? "h2"
-    : section.kind === "heading2"
-      ? "h3"
-      : "h4";
+  const sizeMap = { heading1: '14pt', heading2: '13pt', heading3: '12pt' };
+  const Tag =
+    section.kind === 'heading1'
+      ? 'h2'
+      : section.kind === 'heading2'
+        ? 'h3'
+        : 'h4';
   return (
     <Tag
       dir={dir}
@@ -353,10 +413,10 @@ function PreviewHeading({
         ...style,
         fontSize: sizeMap[section.kind],
         fontWeight: 700,
-        margin: "0.75rem 0 0.5rem",
+        margin: '0.75rem 0 0.5rem',
       }}
     >
-      {section.text || "\u00a0"}
+      {section.text || '\u00a0'}
     </Tag>
   );
 }
@@ -365,25 +425,28 @@ function PreviewParagraph({
   section,
   dir,
   style,
+  slug,
+  footnotes,
 }: {
   section: ParagraphSection;
   dir: ConstructorDir;
   style: React.CSSProperties;
+  slug?: string;
+  footnotes?: ConstructorContent['footnotes'];
 }) {
-  const safeHtml = useMemo(
-    () => sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
-    [section.html],
-  );
   return (
-    <div
+    <ConstructorRichHtmlPreview
+      html={section.html || '<p></p>'}
+      slug={slug}
+      footnotes={footnotes}
       dir={dir}
+      className="constructor-preview-html"
       style={{
         ...style,
-        fontSize: dir === "rtl" ? "12pt" : "11pt",
+        fontSize: dir === 'rtl' ? '12pt' : '11pt',
         lineHeight: 1.4,
-        margin: "0 0 0.5rem",
+        margin: '0 0 0.5rem',
       }}
-      dangerouslySetInnerHTML={{ __html: safeHtml }}
     />
   );
 }
@@ -407,31 +470,38 @@ function PreviewImage({
   const captionBlock = (
     <figcaption
       style={{
-        fontSize: "10pt",
+        fontSize: '10pt',
         fontWeight: 700,
-        marginTop: previewTheme.figureCaptionBelowImage ? "0.25rem" : 0,
-        marginBottom: previewTheme.figureCaptionBelowImage ? 0 : "0.25rem",
+        marginTop: previewTheme.figureCaptionBelowImage ? '0.25rem' : 0,
+        marginBottom: previewTheme.figureCaptionBelowImage ? 0 : '0.25rem',
       }}
     >
       {captionLabel}
-      {section.caption ? `: ${section.caption}` : ""}
+      {section.caption ? `: ${section.caption}` : ''}
     </figcaption>
   );
 
   const imgBlock =
     section.fileId && slug ? (
-      <ProtectedImage slug={slug} fileId={section.fileId} alt={section.altText} />
+      <ProtectedImage
+        slug={slug}
+        fileId={section.fileId}
+        alt={section.altText}
+      />
     ) : (
       <div
         aria-hidden
         className="mx-auto flex h-32 w-full max-w-md items-center justify-center rounded border border-dashed border-ink/20 bg-paper/40 text-xs text-ink/45"
       >
-        {section.altText || "(no image)"}
+        {section.altText || '(no image)'}
       </div>
     );
 
   return (
-    <figure dir={dir} style={{ ...style, margin: "0.75rem 0", textAlign: "center" }}>
+    <figure
+      dir={dir}
+      style={{ ...style, margin: '0.75rem 0', textAlign: 'center' }}
+    >
       {previewTheme.figureCaptionBelowImage ? (
         <>
           {imgBlock}
@@ -460,10 +530,9 @@ function ProtectedImage({
   useEffect(() => {
     let objectUrl: string | null = null;
     const controller = new AbortController();
-    apiBlob(
-      `/submissions/${encodeURIComponent(slug)}/files/${fileId}`,
-      { signal: controller.signal },
-    )
+    apiBlob(`/submissions/${encodeURIComponent(slug)}/files/${fileId}`, {
+      signal: controller.signal,
+    })
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
@@ -480,7 +549,7 @@ function ProtectedImage({
     <img
       src={src}
       alt={alt}
-      style={{ maxWidth: "100%", maxHeight: "16rem", display: "inline-block" }}
+      style={{ maxWidth: '100%', maxHeight: '16rem', display: 'inline-block' }}
     />
   );
 }
@@ -502,42 +571,50 @@ function PreviewTable({
   const captionEl = (
     <p
       style={{
-        fontSize: "10pt",
+        fontSize: '10pt',
         fontWeight: 700,
-        textAlign: "center",
-        margin: previewTheme.tableCaptionAboveTable ? "0 0 0.25rem" : "0.25rem 0 0",
+        textAlign: 'center',
+        margin: previewTheme.tableCaptionAboveTable
+          ? '0 0 0.25rem'
+          : '0.25rem 0 0',
       }}
     >
       {captionLabel}
-      {section.caption ? `: ${section.caption}` : ""}
+      {section.caption ? `: ${section.caption}` : ''}
     </p>
   );
 
+  const normalizedRows = normalizeTableRows(section.rows);
   const tableEl = (
     <table
       style={{
-        borderCollapse: "collapse",
-        width: "100%",
-        fontSize: dir === "rtl" ? "12pt" : "11pt",
+        borderCollapse: 'collapse',
+        width: '100%',
+        fontSize: dir === 'rtl' ? '12pt' : '11pt',
       }}
     >
       <tbody>
-        {section.rows.map((row, r) => (
+        {normalizedRows.map((row, r) => (
           <tr key={r}>
             {row.map((cell, c) => {
+              if (isTableCellCovered(cell)) return null;
               const isHeader = section.hasHeaderRow && r === 0;
-              const Tag = isHeader ? "th" : "td";
+              const Tag = isHeader ? 'th' : 'td';
+              const rowSpan = cell.rowSpan ?? 1;
+              const colSpan = cell.colSpan ?? 1;
               return (
                 <Tag
                   key={c}
+                  rowSpan={rowSpan > 1 ? rowSpan : undefined}
+                  colSpan={colSpan > 1 ? colSpan : undefined}
                   style={{
-                    border: "1px solid #999",
-                    padding: "4px 8px",
+                    border: '1px solid #999',
+                    padding: '4px 8px',
                     fontWeight: isHeader ? 700 : 400,
-                    textAlign: "start",
+                    textAlign: 'start',
                   }}
                 >
-                  {cell || "\u00a0"}
+                  {getTableCellText(cell) || '\u00a0'}
                 </Tag>
               );
             })}
@@ -548,7 +625,7 @@ function PreviewTable({
   );
 
   return (
-    <div dir={dir} style={{ ...style, margin: "0.75rem 0" }}>
+    <div dir={dir} style={{ ...style, margin: '0.75rem 0' }}>
       {previewTheme.tableCaptionAboveTable ? (
         <>
           {captionEl}
@@ -564,9 +641,9 @@ function PreviewTable({
         <p
           dir={dir}
           style={{
-            fontSize: "10pt",
-            marginTop: "0.35rem",
-            textAlign: dir === "rtl" ? "right" : "left",
+            fontSize: '10pt',
+            marginTop: '0.35rem',
+            textAlign: dir === 'rtl' ? 'right' : 'left',
           }}
         >
           {section.notes}
@@ -580,21 +657,23 @@ function PreviewRichTextBlock({
   section,
   dir,
   style,
+  slug,
+  footnotes,
 }: {
   section: RichTextBlockSection;
   dir: ConstructorDir;
   style: React.CSSProperties;
+  slug?: string;
+  footnotes?: ConstructorContent['footnotes'];
 }) {
-  const safeHtml = useMemo(
-    () => sanitizeConstructorTipTapHtml(section.html || "<p></p>"),
-    [section.html],
-  );
   return (
-    <div
+    <ConstructorRichHtmlPreview
+      html={section.html || '<p></p>'}
+      slug={slug}
+      footnotes={footnotes}
       dir={dir}
-      style={{ ...style, margin: "0.75rem 0", fontSize: "11pt" }}
       className="constructor-preview-html"
-      dangerouslySetInnerHTML={{ __html: safeHtml }}
+      style={{ ...style, margin: '0.75rem 0', fontSize: '11pt' }}
     />
   );
 }
@@ -606,7 +685,7 @@ function PreviewEquation({
   section: EquationSection;
   number: number;
 }) {
-  const t = useTranslations("ConstructorPreview");
+  const t = useTranslations('ConstructorPreview');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState(false);
 
@@ -620,8 +699,8 @@ function PreviewEquation({
         return;
       }
       try {
-        const katex = await import("katex");
-        await import("katex/dist/katex.min.css");
+        const katex = await import('katex');
+        await import('katex/dist/katex.min.css');
         const html = katex.default.renderToString(latex, {
           throwOnError: true,
           displayMode: true,
@@ -642,14 +721,13 @@ function PreviewEquation({
     };
   }, [section.latex]);
 
-  const label =
-    section.numbered && number > 0 ? ` (${number})` : "";
+  const label = section.numbered && number > 0 ? ` (${number})` : '';
 
   return (
-    <div style={{ margin: "0.75rem 0", textAlign: "center" }}>
+    <div style={{ margin: '0.75rem 0', textAlign: 'center' }}>
       {previewError ? (
         <p className="text-xs text-amber-800 dark:text-amber-200">
-          {t("equationPreviewError")}
+          {t('equationPreviewError')}
         </p>
       ) : previewHtml ? (
         <div
@@ -659,7 +737,7 @@ function PreviewEquation({
           }}
         />
       ) : section.latex.trim() ? null : (
-        <span className="text-ink/45">{t("equationEmpty")}</span>
+        <span className="text-ink/45">{t('equationEmpty')}</span>
       )}
       {label ? <span>{label}</span> : null}
     </div>
@@ -675,36 +753,36 @@ function PreviewReferences({
 }) {
   const sorted = useMemo(() => {
     const ar = section.items
-      .filter((i) => i.lang === "ar")
+      .filter((i) => i.lang === 'ar')
       .slice()
       .sort((a, b) =>
-        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), "ar"),
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'ar'),
       );
     const en = section.items
-      .filter((i) => i.lang === "en")
+      .filter((i) => i.lang === 'en')
       .slice()
       .sort((a, b) =>
-        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), "en"),
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'en'),
       );
     return previewTheme.referencesArabicFirst ? [...ar, ...en] : [...en, ...ar];
   }, [section.items, previewTheme.referencesArabicFirst]);
 
   return (
-    <section style={{ margin: "1rem 0 0" }}>
+    <section style={{ margin: '1rem 0 0' }}>
       <h2
         style={{
-          fontSize: "14pt",
+          fontSize: '14pt',
           fontWeight: 700,
-          margin: "0 0 0.5rem",
+          margin: '0 0 0.5rem',
         }}
       >
         {previewTheme.referencesHeading}
       </h2>
-      <ol style={{ paddingInlineStart: "1.25rem", margin: 0 }}>
+      <ol style={{ paddingInlineStart: '1.25rem', margin: 0 }}>
         {sorted.map((item, i) => {
-          const dir: ConstructorDir = item.lang === "ar" ? "rtl" : "ltr";
+          const dir: ConstructorDir = item.lang === 'ar' ? 'rtl' : 'ltr';
           const fontFamily =
-            dir === "rtl"
+            dir === 'rtl'
               ? previewTheme.fontFamilyArabicStack
               : previewTheme.fontFamilyLatinStack;
           return (
@@ -713,8 +791,8 @@ function PreviewReferences({
               dir={dir}
               style={{
                 fontFamily,
-                fontSize: dir === "rtl" ? "12pt" : "11pt",
-                margin: "0.25rem 0",
+                fontSize: dir === 'rtl' ? '12pt' : '11pt',
+                margin: '0.25rem 0',
               }}
             >
               <span
@@ -724,7 +802,7 @@ function PreviewReferences({
                   ),
                 }}
               />
-              {item.doi ? ` https://doi.org/${item.doi}` : ""}
+              {item.doi ? ` https://doi.org/${item.doi}` : ''}
             </li>
           );
         })}

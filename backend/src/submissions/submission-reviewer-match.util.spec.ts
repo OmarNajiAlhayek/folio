@@ -1,4 +1,7 @@
-import { buildReviewerMatchQueryText, isReviewerMatchQuerySufficient } from './submission-reviewer-match.util';
+import {
+  buildReviewerMatchQueryText,
+  isReviewerMatchQuerySufficient,
+} from './submission-reviewer-match.util';
 import type { Submission } from '../entities/submission.entity';
 
 describe('submission-reviewer-match.util', () => {

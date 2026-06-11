@@ -1,1 +1,5 @@
-export type SubmissionViewerRole = 'editor' | 'author' | 'reviewer' | 'copyeditor';
+export type SubmissionViewerRole =
+  | 'editor'
+  | 'author'
+  | 'reviewer'
+  | 'copyeditor';

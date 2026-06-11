@@ -4,6 +4,10 @@ import type {
   ConstructorSection,
 } from './constructor-content.types';
 import { stripConstructorHtml } from './constructor-content-utils';
+import {
+  getTableCellText,
+  isTableCellCovered,
+} from './constructor-table-utils';
 
 /**
  * Extracts plain-text body (excluding references section) for LanguageTool grammar analysis.
@@ -20,9 +24,9 @@ export const MAX_GRAMMAR_TEXT_CHARS = 20_000;
  *   - Multiple: (Smith, 2020; Jones, 2019)
  */
 const CITATION_PATTERNS = [
-  /\([^\)]{1,120},\s*\d{4}[a-z]?(?:;\s*[^\)]{1,120},\s*\d{4}[a-z]?)*\)/gu,
+  /\([^)]{1,120},\s*\d{4}[a-z]?(?:;\s*[^)]{1,120},\s*\d{4}[a-z]?)*\)/gu,
   /\([\u0600-\u06FF\s]{2,60}[،,]\s*\d{4}[;\u061B]?[^)]*\)/gu,
-  /\[\d+(?:[,،–\-]\d+)*\]/gu,
+  /\[\d+(?:[,،–-]\d+)*\]/gu,
 ] as const;
 
 function extractInlineCitationsFromText(text: string): string[] {
@@ -51,7 +55,10 @@ function bodyPlainPart(section: ConstructorSection): string {
     }
     case 'table': {
       const cells = section.rows.flatMap((row) =>
-        row.map((c) => c.trim()).filter(Boolean),
+        row
+          .filter((c) => !isTableCellCovered(c))
+          .map((c) => getTableCellText(c).trim())
+          .filter(Boolean),
       );
       if (section.notes) cells.push(section.notes.trim());
       return cells.join(' ');
@@ -69,7 +76,9 @@ function bodyPlainPart(section: ConstructorSection): string {
  * Extracts plain text of the manuscript body (no title, no references section)
  * for grammar/spelling analysis via LanguageTool.
  */
-export function buildBodyPlainText(content: ConstructorContent | null | undefined): string {
+export function buildBodyPlainText(
+  content: ConstructorContent | null | undefined,
+): string {
   if (!content?.sections?.length) return '';
   const parts: string[] = [];
   for (const section of content.sections) {
@@ -87,7 +96,9 @@ export function buildBodyPlainText(content: ConstructorContent | null | undefine
  * Extracts the plain-text entries from the References section of the constructor.
  * Strips HTML from each entry's `html` field, falls back to `text` for legacy items.
  */
-export function extractReferenceList(content: ConstructorContent | null | undefined): string[] {
+export function extractReferenceList(
+  content: ConstructorContent | null | undefined,
+): string[] {
   if (!content?.sections?.length) return [];
   const refs: ConstructorReferenceEntry[] = [];
   for (const section of content.sections) {
@@ -97,7 +108,9 @@ export function extractReferenceList(content: ConstructorContent | null | undefi
   }
   return refs
     .map((r) => {
-      const plain = r.html ? stripConstructorHtml(r.html).trim() : (r.text?.trim() ?? '');
+      const plain = r.html
+        ? stripConstructorHtml(r.html).trim()
+        : (r.text?.trim() ?? '');
       return plain;
     })
     .filter((t) => t.length > 0);
@@ -187,9 +200,12 @@ export function checkDamascusStructure(
     ) {
       const t = section.text.toLowerCase();
       if (/introduction|مقدمة/.test(t)) result.hasIntroduction = true;
-      if (/literature|review|الأدب|السابق|الدراسات/.test(t)) result.hasLiteratureReview = true;
-      if (/material|method|منهج|مواد/.test(t)) result.hasMaterialsAndMethods = true;
-      if (/result|discussion|نتائج|مناقشة/.test(t)) result.hasResultsAndDiscussion = true;
+      if (/literature|review|الأدب|السابق|الدراسات/.test(t))
+        result.hasLiteratureReview = true;
+      if (/material|method|منهج|مواد/.test(t))
+        result.hasMaterialsAndMethods = true;
+      if (/result|discussion|نتائج|مناقشة/.test(t))
+        result.hasResultsAndDiscussion = true;
       if (/conclusion|استنتاج|خاتمة/.test(t)) result.hasConclusions = true;
     }
 
@@ -229,10 +245,8 @@ export function checkDamascusStructure(
 export function damascusFormatIssues(check: DamascusStructureCheck): string[] {
   const issues: string[] = [];
 
-  if (!check.hasAbstractEn)
-    issues.push('Missing English abstract.');
-  if (!check.hasAbstractAr)
-    issues.push('Missing Arabic abstract.');
+  if (!check.hasAbstractEn) issues.push('Missing English abstract.');
+  if (!check.hasAbstractAr) issues.push('Missing Arabic abstract.');
   if (check.abstractEnWordCount > 300)
     issues.push(
       `English abstract exceeds 300 words (found ${check.abstractEnWordCount}).`,
