@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@/i18n/navigation";
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@/i18n/navigation';
 
-const AUTH_CHANNEL = "folio-auth";
+const AUTH_CHANNEL = 'folio-auth';
 
-/** Sync logout across tabs when another tab signs out. */
+/** Sync logout across tabs when another tab signs out or session ends. */
 export function AuthStorageSync() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -14,9 +14,9 @@ export function AuthStorageSync() {
   useEffect(() => {
     const bc = new BroadcastChannel(AUTH_CHANNEL);
     bc.onmessage = (event: MessageEvent<string>) => {
-      if (event.data !== "logout") return;
+      if (event.data !== 'logout' && event.data !== 'session-revoked') return;
       queryClient.clear();
-      router.push("/login");
+      router.push('/login');
       router.refresh();
     };
     return () => bc.close();
@@ -26,6 +26,11 @@ export function AuthStorageSync() {
 }
 
 export function broadcastAuthLogout(): void {
-  if (typeof BroadcastChannel === "undefined") return;
-  new BroadcastChannel(AUTH_CHANNEL).postMessage("logout");
+  if (typeof BroadcastChannel === 'undefined') return;
+  new BroadcastChannel(AUTH_CHANNEL).postMessage('logout');
+}
+
+export function broadcastSessionRevoked(): void {
+  if (typeof BroadcastChannel === 'undefined') return;
+  new BroadcastChannel(AUTH_CHANNEL).postMessage('session-revoked');
 }

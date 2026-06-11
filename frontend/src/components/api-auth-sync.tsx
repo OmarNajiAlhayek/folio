@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { usePathname, useRouter } from "@/i18n/navigation";
-import { setApiUnauthorizedHandler } from "@/lib/api";
-import { isPublicPathname, redirectToLogin } from "@/lib/auth-redirect";
+import { useEffect } from 'react';
+import { usePathname, useRouter } from '@/i18n/navigation';
+import { setApiUnauthorizedHandler } from '@/lib/api';
+import { isPublicPathname, redirectToLogin } from '@/lib/auth-redirect';
+import { broadcastSessionRevoked } from '@/components/auth-storage-sync';
 
 /**
  * Registers a global 401 handler so API helpers can redirect to login
@@ -16,6 +17,7 @@ export function ApiAuthSync() {
   useEffect(() => {
     setApiUnauthorizedHandler(() => {
       if (isPublicPathname(pathname)) return;
+      broadcastSessionRevoked();
       redirectToLogin(router, pathname);
     });
     return () => setApiUnauthorizedHandler(null);

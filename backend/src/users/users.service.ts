@@ -9,6 +9,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import {
+  OAuthIdentity,
+  OAUTH_PROVIDER_ORCID,
+} from '../entities/oauth-identity.entity';
+import {
   RoleInvitation,
   RoleInvitationStatus,
 } from '../entities/role-invitation.entity';
@@ -18,9 +22,9 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_TYPE } from '../notifications/notification-types';
 import { roleInvitationCreatedKey } from '../notifications/notification-idempotency';
 import { EventPublisherService } from '../messaging/event-publisher.service';
-import { ROUTING_KEY } from '../messaging/contracts/email-events';
-import type { RoleInvitationCreatedEvent } from '../messaging/contracts/email-events';
-import { roleInvitationEmailKey } from '../messaging/shared/idempotency';
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
+import type { RoleInvitationCreatedEvent } from '@folio/shared/contracts/email-events';
+import { roleInvitationEmailKey } from '@folio/shared/messaging/idempotency';
 import { resolveEmailLocale } from '../common/email-locale';
 
 export type ReviewerCandidate = {
@@ -45,6 +49,11 @@ export type PublicUserProfile = {
   willingToReview: boolean;
   /** `en` | `ar` when set — controls outbound email language resolution. */
   preferredLocale: string | null;
+  emailVerified: boolean;
+  /** False for ORCID-only accounts until a password is set. */
+  hasPassword: boolean;
+  orcidLinked: boolean;
+  profileComplete: boolean;
   roles: string[];
   permissions: string[];
 };
@@ -81,6 +90,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
+    @InjectRepository(OAuthIdentity)
+    private readonly oauthRepo: Repository<OAuthIdentity>,
     @InjectRepository(RoleInvitation)
     private readonly roleInvRepo: Repository<RoleInvitation>,
     private readonly rbacService: RbacService,
@@ -90,10 +101,9 @@ export class UsersService {
   ) {}
 
   private appBaseUrl(): string {
-    return (this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240').replace(
-      /\/+$/,
-      '',
-    );
+    return (
+      this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5240'
+    ).replace(/\/+$/, '');
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -129,6 +139,38 @@ export class UsersService {
     const saved = await this.usersRepo.save(user);
     await this.rbacService.addAuthorRoleIfNone(saved.id);
     return saved;
+  }
+
+  async createOAuthUser(data: {
+    email: string;
+    displayName: string;
+    affiliation?: string | null;
+    orcid: string;
+    emailVerified: boolean;
+  }): Promise<User> {
+    const user = this.usersRepo.create({
+      email: data.email.toLowerCase(),
+      passwordHash: null,
+      displayName: data.displayName,
+      affiliation: data.affiliation ?? null,
+      orcid: data.orcid,
+      reviewKeywords: null,
+      willingToReview: false,
+      emailVerifiedAt: data.emailVerified ? new Date() : null,
+    });
+    const saved = await this.usersRepo.save(user);
+    await this.rbacService.addAuthorRoleIfNone(saved.id);
+    return saved;
+  }
+
+  needsProfileCompletionForUser(user: User): boolean {
+    return /^ORCID \d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(user.displayName);
+  }
+
+  async needsProfileCompletion(userId: string): Promise<boolean> {
+    const user = await this.findById(userId);
+    if (!user) return false;
+    return this.needsProfileCompletionForUser(user);
   }
 
   /**
@@ -291,6 +333,10 @@ export class UsersService {
     if (!user) return null;
     const { roleSlugs, permissionSlugs } =
       await this.rbacService.getEffectiveForUser(userId);
+    const orcidLinked = await this.oauthRepo.exists({
+      where: { userId, provider: OAUTH_PROVIDER_ORCID },
+    });
+    const profileComplete = !this.needsProfileCompletionForUser(user);
     return {
       id: user.id,
       email: user.email,
@@ -300,9 +346,80 @@ export class UsersService {
       reviewKeywords: user.reviewKeywords,
       willingToReview: user.willingToReview,
       preferredLocale: user.preferredLocale,
+      emailVerified: user.emailVerifiedAt != null,
+      hasPassword: user.passwordHash != null,
+      orcidLinked,
+      profileComplete,
       roles: roleSlugs,
       permissions: permissionSlugs,
     };
+  }
+
+  async patchMyResearcherProfile(
+    userId: string,
+    data: {
+      displayName?: string;
+      affiliation?: string | null;
+      reviewKeywords?: string | null;
+      willingToReview?: boolean;
+    },
+  ): Promise<PublicUserProfile> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException({
+        message: 'User not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    const patch: Partial<User> = {};
+    if (data.displayName !== undefined) {
+      const name = data.displayName.trim();
+      if (name.length < 1) {
+        throw new BadRequestException({
+          message: 'Display name is required',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+      patch.displayName = name;
+    }
+    if (data.affiliation !== undefined) patch.affiliation = data.affiliation;
+    if (data.reviewKeywords !== undefined)
+      patch.reviewKeywords = data.reviewKeywords;
+    if (data.willingToReview !== undefined)
+      patch.willingToReview = data.willingToReview;
+    if (Object.keys(patch).length > 0) {
+      await this.usersRepo.update({ id: userId }, patch);
+    }
+    const profile = await this.toPublicProfile(userId);
+    if (!profile) {
+      throw new NotFoundException({
+        message: 'User not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    return profile;
+  }
+
+  async markEmailVerified(userId: string): Promise<void> {
+    await this.usersRepo.update(
+      { id: userId },
+      { emailVerifiedAt: new Date() },
+    );
+  }
+
+  async clearEmailVerified(userId: string): Promise<void> {
+    await this.usersRepo.update({ id: userId }, { emailVerifiedAt: null });
+  }
+
+  async updatePasswordHash(
+    userId: string,
+    passwordHash: string,
+  ): Promise<void> {
+    await this.usersRepo.update({ id: userId }, { passwordHash });
+  }
+
+  isEmailVerified(user: User): boolean {
+    return user.emailVerifiedAt != null;
   }
 
   async setRolesForUser(

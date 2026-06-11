@@ -1,13 +1,17 @@
 import { randomBytes } from 'crypto';
 import type { Response } from 'express';
 import type { ConfigService } from '@nestjs/config';
+import { parseDurationMs } from './parse-duration.util';
 
 export const FOLIO_ACCESS_COOKIE = 'folio_access';
+export const FOLIO_REFRESH_COOKIE = 'folio_refresh';
 export const FOLIO_CSRF_COOKIE = 'folio_csrf';
 export const CSRF_HEADER = 'x-csrf-token';
 
 /** JWT cookie: scoped to API routes only. */
 const ACCESS_COOKIE_PATH = '/api/v1';
+/** Refresh cookie: scoped to auth routes only. */
+const REFRESH_COOKIE_PATH = '/api/v1/auth';
 /** CSRF cookie: root path so SPA pages can read it for X-CSRF-Token. */
 const CSRF_COOKIE_PATH = '/';
 
@@ -19,10 +23,21 @@ function cookieSecure(config: ConfigService): boolean {
   return config.get<string>('AUTH_COOKIE_SECURE') === 'true';
 }
 
+function accessMaxAgeMs(config: ConfigService): number {
+  const raw = config.get<string>('JWT_EXPIRES_IN') ?? '15m';
+  return parseDurationMs(raw);
+}
+
+function refreshMaxAgeMs(config: ConfigService): number {
+  const raw = config.get<string>('REFRESH_EXPIRES_IN') ?? '30d';
+  return parseDurationMs(raw);
+}
+
 export function setAuthCookies(
   res: Response,
   config: ConfigService,
   accessToken: string,
+  refreshToken: string,
   csrfToken: string,
 ): void {
   const secure = cookieSecure(config);
@@ -34,7 +49,13 @@ export function setAuthCookies(
     ...common,
     path: ACCESS_COOKIE_PATH,
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: accessMaxAgeMs(config),
+  });
+  res.cookie(FOLIO_REFRESH_COOKIE, refreshToken, {
+    ...common,
+    path: REFRESH_COOKIE_PATH,
+    httpOnly: true,
+    maxAge: refreshMaxAgeMs(config),
   });
   setCsrfCookie(res, config, csrfToken);
 }
@@ -50,7 +71,7 @@ export function setCsrfCookie(
     secure: cookieSecure(config),
     path: CSRF_COOKIE_PATH,
     httpOnly: false,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: refreshMaxAgeMs(config),
   });
 }
 
@@ -63,6 +84,11 @@ export function clearAuthCookies(res: Response, config: ConfigService): void {
   res.clearCookie(FOLIO_ACCESS_COOKIE, {
     ...common,
     path: ACCESS_COOKIE_PATH,
+    httpOnly: true,
+  });
+  res.clearCookie(FOLIO_REFRESH_COOKIE, {
+    ...common,
+    path: REFRESH_COOKIE_PATH,
     httpOnly: true,
   });
   res.clearCookie(FOLIO_CSRF_COOKIE, {

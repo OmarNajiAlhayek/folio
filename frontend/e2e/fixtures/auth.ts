@@ -1,10 +1,11 @@
-import { test as base } from "@playwright/test";
+import { test as base } from '@playwright/test';
 import {
   ensureUserExists,
   loginAndGetToken,
+  loginStorageState,
   withApiContext,
   workerCredentials,
-} from "../helpers/e2e-api";
+} from '../helpers/e2e-api';
 
 type AuthFixtures = {
   authToken: string;
@@ -20,14 +21,14 @@ export const test = base.extend<object, AuthFixtures>({
       });
       await use(token);
     },
-    { scope: "worker" },
+    { scope: 'worker' },
   ],
-  page: async ({ page, authToken }, runWithPage) => {
-    await page.addInitScript((token: string) => {
-      window.localStorage.setItem("folio_token", token);
-    }, authToken);
+  page: async ({ page }, runWithPage, testInfo) => {
+    const creds = workerCredentials(testInfo.parallelIndex);
+    const state = await loginStorageState(creds);
+    await page.context().addCookies(state.cookies);
     await runWithPage(page);
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect } from '@playwright/test';

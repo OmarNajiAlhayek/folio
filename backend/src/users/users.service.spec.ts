@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from './users.service';
 import { User } from '../entities/user.entity';
+import { OAuthIdentity } from '../entities/oauth-identity.entity';
 import {
   RoleInvitation,
   RoleInvitationStatus,
@@ -41,6 +42,10 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: getRepositoryToken(User), useValue: usersRepo },
+        {
+          provide: getRepositoryToken(OAuthIdentity),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
         {
           provide: getRepositoryToken(RoleInvitation),
           useValue: { find: roleInvFind },
@@ -113,13 +118,13 @@ describe('UsersService', () => {
       email: 'a@folio.local',
       willingToReview: true,
       roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.REVIEWER],
-      pendingRoleInvitations: [
-        { id: 'inv-1', roleSlug: ROLE_SLUGS.EDITOR },
-      ],
+      pendingRoleInvitations: [{ id: 'inv-1', roleSlug: ROLE_SLUGS.EDITOR }],
     });
     expect(getEffectiveForUser).toHaveBeenCalledWith('user-1');
     expect(roleInvFind).toHaveBeenCalledWith(
       expect.objectContaining({
+        // jest matchers are typed as any for nested where clauses
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         where: expect.objectContaining({
           status: RoleInvitationStatus.INVITED,
         }),

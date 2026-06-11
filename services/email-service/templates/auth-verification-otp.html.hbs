@@ -1,0 +1,14 @@
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{displayName}},</p>
+<p style="margin:0 0 16px;">
+  Use this verification code to confirm your email address on Folio:
+</p>
+<p style="margin:0 0 24px;font-size:28px;font-weight:700;letter-spacing:0.2em;font-family:ui-monospace,monospace;">
+  {{otpCode}}
+</p>
+<p style="margin:0 0 16px;color:#64748b;font-size:14px;">
+  This code expires in 15 minutes. If you did not create a Folio account, you can ignore this email.
+</p>
+{{> folio-email-button href=verifyUrl label="Enter code in Folio" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio team</p>
+{{/folio-email-layout}}

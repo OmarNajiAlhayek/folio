@@ -10,6 +10,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/types/request-user';
 import { UsersService } from './users.service';
+import { EmailVerifiedGuard } from './email-verified.guard';
 
 @ApiTags('role-invitations')
 @Controller('role-invitations')
@@ -19,6 +20,7 @@ export class RoleInvitationsController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post(':id/accept')
+  @UseGuards(EmailVerifiedGuard)
   accept(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,

@@ -1,0 +1,22 @@
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{displayName}},</p>
+<p style="margin:0 0 16px;">
+  Your email is verified and your Folio account is ready. Folio is where authors submit manuscripts
+  and reviewers, editors, and copyeditors manage the peer-review workflow.
+</p>
+<p style="margin:0 0 16px;">Here are a few ways to get started:</p>
+<ul style="margin:0 0 16px;padding-left:20px;color:#334155;">
+  <li style="margin-bottom:8px;">Open your dashboard to see assignments and notifications.</li>
+  <li style="margin-bottom:8px;">Start a new submission when you are ready to send a manuscript.</li>
+</ul>
+{{#if willingToReview}}
+<p style="margin:0 0 16px;color:#64748b;font-size:14px;">
+  You indicated you are willing to review manuscripts. We will email you when an editor invites you to a review.
+</p>
+{{/if}}
+{{> folio-email-button href=dashboardUrl label="Open dashboard" align="left"}}
+<p style="margin:16px 0 0;">
+  <a href="{{newSubmissionUrl}}" style="color:#2563eb;text-decoration:underline;">Start a new submission</a>
+</p>
+<p style="margin:24px 0 0;">Thank you,<br />Folio team</p>
+{{/folio-email-layout}}

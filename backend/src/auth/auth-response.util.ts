@@ -1,8 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
 
 export type AuthResponseBody = {
-  user: unknown;
+  user?: unknown;
   accessToken?: string;
+  refreshToken?: string;
   /** Same value as `folio_csrf` cookie — SPA uses this for `X-CSRF-Token`. */
   csrfToken: string;
 };
@@ -11,10 +12,16 @@ export function buildAuthResponseBody(
   config: ConfigService,
   user: unknown,
   accessToken: string,
+  refreshToken: string,
   csrfToken: string,
 ): AuthResponseBody {
-  if (config.get<string>('AUTH_RETURN_BEARER') === 'true') {
-    return { user, accessToken, csrfToken };
+  const base: AuthResponseBody = { csrfToken };
+  if (user !== undefined) {
+    base.user = user;
   }
-  return { user, csrfToken };
+  if (config.get<string>('AUTH_RETURN_BEARER') === 'true') {
+    base.accessToken = accessToken;
+    base.refreshToken = refreshToken;
+  }
+  return base;
 }
