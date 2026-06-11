@@ -16,6 +16,9 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const CSRF_SKIP_PATH_PREFIXES = [
   '/auth/login',
   '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
   '/health',
   '/public/',
 ];

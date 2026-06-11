@@ -296,10 +296,12 @@ async function promoteManuscriptsToReviewPackage(
   dataSource: DataSource,
   submissionId: string,
 ): Promise<void> {
-  await dataSource.getRepository(SubmissionFile).update(
-    { submissionId, kind: 'manuscript' },
-    { fileStage: SubmissionFileStage.REVIEW },
-  );
+  await dataSource
+    .getRepository(SubmissionFile)
+    .update(
+      { submissionId, kind: 'manuscript' },
+      { fileStage: SubmissionFileStage.REVIEW },
+    );
 }
 
 async function attachStandardFilePackage(
@@ -415,6 +417,8 @@ async function seedPublishedSample(options: {
     sampleMulterFile(revisionFilename, pdfBytes),
     'manuscript',
   );
+  // Revision file must have createdAt strictly after the copyedit note timestamp.
+  await new Promise((r) => setTimeout(r, 5));
   await submissionsService.markCopyeditAuthorReady(
     ceAssignment.slug!,
     author.id,
@@ -473,8 +477,273 @@ async function ensureUser(
   } else if (def.profile) {
     await usersService.patchResearcherProfile(user.id, def.profile);
   }
+  await usersService.markEmailVerified(user.id);
   await rbacService.assignRoles(user.id, def.roleSlugs);
   return user;
+}
+
+const PERF_TITLE_PREFIX = '[Perf]';
+
+function perfSubmissionMetadata(
+  titleAr: string,
+  abstractAr: string,
+  keywords: string,
+  keywordsAr: string,
+): Omit<CreateSubmissionDto, 'title' | 'abstract'> {
+  return {
+    ...sampleJournalMetadata(),
+    titleAr,
+    abstractAr,
+    keywords,
+    keywordsAr,
+  };
+}
+const PERF_EDITOR_EMAIL = 'editor@perf.local';
+const PERF_EDITOR_PASSWORD = 'PerfEditor123!';
+const PERF_AUTHOR_EMAIL = 'author@perf.local';
+const PERF_AUTHOR_PASSWORD = 'PerfAuthor123!';
+const PERF_MANAGER_EMAIL = 'manager@perf.local';
+const PERF_MANAGER_PASSWORD = 'PerfManager123!';
+const PERF_REVIEWER_PASSWORD = 'PerfReview123!';
+
+type PerfFixturesFile = {
+  editor: { email: string; password: string };
+  manager: { email: string; password: string };
+  author: { email: string; password: string };
+  reviewSubmit: Array<{
+    reviewerEmail: string;
+    password: string;
+    assignmentSlug: string;
+  }>;
+  emailPipeline: {
+    invites: Array<{ submissionSlug: string; reviewerId: string }>;
+  };
+  corpusSimilarity: { submissionSlug: string };
+  aiGrpcHost: string;
+};
+
+async function resetPerfSubmissions(dataSource: DataSource): Promise<void> {
+  const subRepo = dataSource.getRepository(Submission);
+  const perfRows = await subRepo.find({
+    where: { title: Like(`${PERF_TITLE_PREFIX}%`) },
+    select: ['id'],
+  });
+  if (perfRows.length === 0) return;
+  const ids = perfRows.map((r) => r.id);
+
+  const assignmentRepo = dataSource.getRepository(ReviewAssignment);
+  const assignments = await assignmentRepo.find({
+    where: { submissionId: In(ids) },
+    select: ['id'],
+  });
+  const assignmentIds = assignments.map((a) => a.id);
+  if (assignmentIds.length > 0) {
+    await dataSource.getRepository(Review).delete({
+      assignmentId: In(assignmentIds),
+    });
+  }
+  await assignmentRepo.delete({ submissionId: In(ids) });
+  await dataSource.getRepository(SubmissionFile).delete({
+    submissionId: In(ids),
+  });
+  await subRepo.delete(ids);
+  console.log(`SEED_PERF: removed ${ids.length} prior [Perf] submission(s)`);
+}
+
+async function seedPerfFixtures(options: {
+  dataSource: DataSource;
+  usersService: UsersService;
+  rbacService: RbacService;
+  submissionsService: SubmissionsService;
+}): Promise<void> {
+  const { dataSource, usersService, rbacService, submissionsService } = options;
+  await resetPerfSubmissions(dataSource);
+  const reviewCount = Math.max(
+    1,
+    parseInt(process.env.SEED_PERF_REVIEW_COUNT ?? '20', 10),
+  );
+  const emailCount = Math.max(
+    1,
+    parseInt(process.env.SEED_PERF_EMAIL_COUNT ?? '50', 10),
+  );
+
+  const perfAuthor = await ensureUser(usersService, rbacService, {
+    email: PERF_AUTHOR_EMAIL,
+    password: PERF_AUTHOR_PASSWORD,
+    displayName: 'Perf Author',
+    roleSlugs: [ROLE_SLUGS.AUTHOR],
+    profile: { willingToReview: false },
+  });
+  const perfEditor = await ensureUser(usersService, rbacService, {
+    email: PERF_EDITOR_EMAIL,
+    password: PERF_EDITOR_PASSWORD,
+    displayName: 'Perf Editor',
+    roleSlugs: [ROLE_SLUGS.EDITOR, ROLE_SLUGS.JOURNAL_MANAGER],
+    profile: { willingToReview: false },
+  });
+  await ensureUser(usersService, rbacService, {
+    email: PERF_MANAGER_EMAIL,
+    password: PERF_MANAGER_PASSWORD,
+    displayName: 'Perf Manager',
+    roleSlugs: [ROLE_SLUGS.JOURNAL_MANAGER],
+  });
+
+  const authorReq = await toRequestUser(
+    usersService,
+    rbacService,
+    perfAuthor.id,
+  );
+  const editorReq = await toRequestUser(
+    usersService,
+    rbacService,
+    perfEditor.id,
+  );
+  const pdfBytes = Buffer.from('%PDF-1.4 perf fixture placeholder\n');
+
+  const reviewSubmit: PerfFixturesFile['reviewSubmit'] = [];
+  const emailInvites: PerfFixturesFile['emailPipeline']['invites'] = [];
+  const reviewerUsers: User[] = [];
+
+  const totalReviewers = Math.max(reviewCount, emailCount);
+  for (let i = 0; i < totalReviewers; i += 1) {
+    const email = `reviewer-${i}@perf.local`;
+    const reviewer = await ensureUser(usersService, rbacService, {
+      email,
+      password: PERF_REVIEWER_PASSWORD,
+      displayName: `Perf Reviewer ${i}`,
+      roleSlugs: [ROLE_SLUGS.REVIEWER],
+      profile: { willingToReview: true },
+    });
+    reviewerUsers.push(reviewer);
+  }
+
+  for (let i = 0; i < reviewCount; i += 1) {
+    const title = `${PERF_TITLE_PREFIX} Review submit load ${i}`;
+    const created = await submissionsService.create(perfAuthor.id, {
+      title,
+      abstract:
+        'Perf fixture submission for concurrent review-submit benchmarks. '.repeat(
+          3,
+        ),
+      ...perfSubmissionMetadata(
+        `عنوان اختبار الأداء ${i}`,
+        'ملخص عربي لاختبار تقديم المراجعات المتزامنة. '.repeat(4),
+        'perf, load-test, peer-review',
+        'أداء, اختبار, مراجعة, مجلة, بحث, نشر',
+      ),
+    });
+    await attachStandardFilePackage(
+      submissionsService,
+      created.slug!,
+      authorReq,
+      pdfBytes,
+      `perf-review-${i}.pdf`,
+    );
+    await submissionsService.submit(created.slug!, authorReq);
+    await promoteManuscriptsToReviewPackage(dataSource, created.id);
+    const slug = created.slug!;
+    const reviewer = reviewerUsers[i % reviewerUsers.length];
+    const assignmentSlug = `perf-review-submit-${String(i).padStart(2, '0')}`;
+    const assignment = await submissionsService.assignReviewer(
+      slug,
+      reviewer.id,
+      editorReq,
+      undefined,
+      {
+        assignmentSlug,
+        emitReviewerInvited: false,
+      },
+    );
+    await submissionsService.acceptReviewInvitation(
+      assignment.slug!,
+      reviewer.id,
+    );
+    reviewSubmit.push({
+      reviewerEmail: reviewer.email,
+      password: PERF_REVIEWER_PASSWORD,
+      assignmentSlug: assignment.slug!,
+    });
+  }
+
+  for (let i = 0; i < emailCount; i += 1) {
+    const title = `${PERF_TITLE_PREFIX} Email pipeline load ${i}`;
+    const created = await submissionsService.create(perfAuthor.id, {
+      title,
+      abstract:
+        'Perf fixture submission for email pipeline throughput benchmarks. '.repeat(
+          3,
+        ),
+      ...perfSubmissionMetadata(
+        `عنوان اختبار البريد ${i}`,
+        'ملخص عربي لاختبار خط أنابيب البريد. '.repeat(4),
+        'perf, email, pipeline',
+        'أداء, بريد, دعوة, مراجعة, مجلة, نشر',
+      ),
+    });
+    await attachStandardFilePackage(
+      submissionsService,
+      created.slug!,
+      authorReq,
+      pdfBytes,
+      `perf-email-${i}.pdf`,
+    );
+    await submissionsService.submit(created.slug!, authorReq);
+    await promoteManuscriptsToReviewPackage(dataSource, created.id);
+    const reviewer = reviewerUsers[i % reviewerUsers.length];
+    emailInvites.push({
+      submissionSlug: created.slug!,
+      reviewerId: reviewer.id,
+    });
+  }
+
+  const corpusTitle = `${PERF_TITLE_PREFIX} Corpus similarity load`;
+  const corpusSubmission = await submissionsService.create(perfAuthor.id, {
+    title: corpusTitle,
+    abstract:
+      'Perf fixture submission for corpus similarity job benchmarks. '.repeat(
+        3,
+      ),
+    ...perfSubmissionMetadata(
+      'عنوان اختبار تشابه المؤلفات',
+      'ملخص عربي لاختبار تشابه المؤلفات. '.repeat(4),
+      'perf, corpus, similarity',
+      'أداء, مؤلفات, تشابه, مجلة, بحث, نشر',
+    ),
+  });
+  await attachStandardFilePackage(
+    submissionsService,
+    corpusSubmission.slug!,
+    authorReq,
+    pdfBytes,
+    'perf-corpus.pdf',
+  );
+  await submissionsService.submit(corpusSubmission.slug!, authorReq);
+
+  const fixtures: PerfFixturesFile = {
+    editor: { email: PERF_EDITOR_EMAIL, password: PERF_EDITOR_PASSWORD },
+    manager: { email: PERF_MANAGER_EMAIL, password: PERF_MANAGER_PASSWORD },
+    author: { email: PERF_AUTHOR_EMAIL, password: PERF_AUTHOR_PASSWORD },
+    reviewSubmit,
+    emailPipeline: { invites: emailInvites },
+    corpusSimilarity: { submissionSlug: corpusSubmission.slug! },
+    aiGrpcHost: (() => {
+      const host = process.env.AI_SERVICE_GRPC_HOST ?? 'localhost';
+      const port = process.env.AI_SERVICE_GRPC_PORT ?? '5246';
+      return host.includes(':') ? host : `${host}:${port}`;
+    })(),
+  };
+
+  const perfDir = existsSync(join(process.cwd(), '..', 'perf'))
+    ? join(process.cwd(), '..', 'perf')
+    : join(__dirname, '..', '..', 'perf');
+  const outPath = join(perfDir, 'fixtures.json');
+  if (!existsSync(perfDir)) {
+    mkdirSync(perfDir, { recursive: true });
+  }
+  writeFileSync(outPath, JSON.stringify(fixtures, null, 2));
+  console.log(
+    `Perf fixtures: wrote ${outPath} (${reviewCount} review-submit, ${emailCount} email invites)`,
+  );
 }
 
 function clearUploadFiles(): void {
@@ -783,7 +1052,11 @@ async function run() {
 
   const authorReq = await toRequestUser(usersService, rbacService, author.id);
   const editorReq = await toRequestUser(usersService, rbacService, editor.id);
-  const copyeditorReq = await toRequestUser(usersService, rbacService, copyeditor.id);
+  const copyeditorReq = await toRequestUser(
+    usersService,
+    rbacService,
+    copyeditor.id,
+  );
 
   const pdfBytes = Buffer.from('%PDF-1.4 sample manuscript placeholder\n');
 
@@ -963,6 +1236,8 @@ async function run() {
       s.slug!,
       editorReq,
       SubmissionStatus.REVISIONS_REQUESTED,
+      undefined,
+      'Please address the reviewers’ comments on methodology and expand the discussion before resubmitting.',
     );
     await submissionsService.addFile(
       s.slug!,
@@ -1120,76 +1395,86 @@ async function run() {
   const tPub2 = `${SAMPLE_TITLE_PREFIX} Open-Access Policies and Knowledge Economics in Arabic Peer-Reviewed Journals`;
   const tPub3 = `${SAMPLE_TITLE_PREFIX} Research Ethics in Small-Sample Clinical Studies`;
 
-  await seedPublishedSample({
-    dataSource,
-    submissionsService,
-    author,
-    authorReq,
-    editorReq,
-    copyeditor,
-    copyeditorReq,
-    pdfBytes,
-    title: tPub,
-    abstract:
-      'This study examines the impact of digital publishing policies on knowledge economics in Arabic journals, comparing open-access funding models and article processing charges across peer-reviewed Arabic and international outlets from 2020 to 2024.',
-    publicationMeta: SAMPLE_PUB1_META,
-    manuscriptFilename: 'published.pdf',
-    revisionFilename: 'published-revision.pdf',
-    discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 90 },
-    logLabel: 'published',
-  });
+  const skipPublishedForPerf = process.env.SEED_PERF_FIXTURES === '1';
 
-  await seedPublishedSample({
-    dataSource,
-    submissionsService,
-    author,
-    authorReq,
-    editorReq,
-    copyeditor,
-    copyeditorReq,
-    pdfBytes,
-    title: tPub2,
-    abstract:
-      'This study analyses open-access policies and their effect on knowledge economics in Arabic peer-reviewed journals, applying documentary analysis to publishing policies of ten journals over 2020–2024, with recommendations for expanding access without compromising the sustainability of academic publishing.',
-    publicationMeta: SAMPLE_PUB2_META,
-    manuscriptFilename: 'published-peer.pdf',
-    revisionFilename: 'published-peer-revision.pdf',
-    discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 88 },
-    logLabel: 'published, related-articles peer',
-  });
+  if (!skipPublishedForPerf)
+    await seedPublishedSample({
+      dataSource,
+      submissionsService,
+      author,
+      authorReq,
+      editorReq,
+      copyeditor,
+      copyeditorReq,
+      pdfBytes,
+      title: tPub,
+      abstract:
+        'This study examines the impact of digital publishing policies on knowledge economics in Arabic journals, comparing open-access funding models and article processing charges across peer-reviewed Arabic and international outlets from 2020 to 2024.',
+      publicationMeta: SAMPLE_PUB1_META,
+      manuscriptFilename: 'published.pdf',
+      revisionFilename: 'published-revision.pdf',
+      discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 90 },
+      logLabel: 'published',
+    });
 
-  await seedPublishedSample({
-    dataSource,
-    submissionsService,
-    author,
-    authorReq,
-    editorReq,
-    copyeditor,
-    copyeditorReq,
-    pdfBytes,
-    title: tPub3,
-    abstract:
-      'This case report discusses the challenges of informed consent and confidentiality in small-sample clinical studies, with a focus on teaching-hospital contexts and practical recommendations for institutional ethics review boards when statistical power is limited.',
-    publicationMeta: SAMPLE_PUB3_META,
-    manuscriptFilename: 'published-medical.pdf',
-    revisionFilename: 'published-medical-revision.pdf',
-    discipline: { topLabel: SAMPLE_DISCIPLINE_MEDICAL, confidence: 85 },
-    logLabel: 'published, related-articles distant peer',
-  });
+  if (!skipPublishedForPerf)
+    await seedPublishedSample({
+      dataSource,
+      submissionsService,
+      author,
+      authorReq,
+      editorReq,
+      copyeditor,
+      copyeditorReq,
+      pdfBytes,
+      title: tPub2,
+      abstract:
+        'This study analyses open-access policies and their effect on knowledge economics in Arabic peer-reviewed journals, applying documentary analysis to publishing policies of ten journals over 2020–2024, with recommendations for expanding access without compromising the sustainability of academic publishing.',
+      publicationMeta: SAMPLE_PUB2_META,
+      manuscriptFilename: 'published-peer.pdf',
+      revisionFilename: 'published-peer-revision.pdf',
+      discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 88 },
+      logLabel: 'published, related-articles peer',
+    });
 
-  if (aiClient.isSimilarityEnabled()) {
-    await submissionsService.backfillPublishedSimilarityIndex();
+  if (!skipPublishedForPerf)
+    await seedPublishedSample({
+      dataSource,
+      submissionsService,
+      author,
+      authorReq,
+      editorReq,
+      copyeditor,
+      copyeditorReq,
+      pdfBytes,
+      title: tPub3,
+      abstract:
+        'This case report discusses the challenges of informed consent and confidentiality in small-sample clinical studies, with a focus on teaching-hospital contexts and practical recommendations for institutional ethics review boards when statistical power is limited.',
+      publicationMeta: SAMPLE_PUB3_META,
+      manuscriptFilename: 'published-medical.pdf',
+      revisionFilename: 'published-medical-revision.pdf',
+      discipline: { topLabel: SAMPLE_DISCIPLINE_MEDICAL, confidence: 85 },
+      logLabel: 'published, related-articles distant peer',
+    });
+
+  if (!skipPublishedForPerf && aiClient.isSimilarityEnabled()) {
+    const indexJobs =
+      await submissionsService.enqueueMissingSimilarityIndexJobs();
     console.log(
-      'Indexed published [Demo] articles for similarity, corpus search, and related articles.',
+      `Enqueued ${indexJobs} similarity index job(s) for published [Demo] articles (processed async via RabbitMQ).`,
     );
   }
 
   console.log('\n--- Sample accounts (change passwords in production) ---');
   console.log('author@folio.dev            / Author123!      roles: author');
-  console.log('manager@folio.local         / Manager123!     roles: journal_manager');
+  console.log(
+    'manager@folio.local         / Manager123!     roles: journal_manager',
+  );
   console.log('editor@folio.dev            / Editor123!      roles: editor');
   console.log('reviewer@folio.dev          / Reviewer123!    roles: reviewer');
-  console.log('copyeditor@folio.local      / Copyeditor123!  roles: copyeditor');
+  console.log(
+    'copyeditor@folio.local      / Copyeditor123!  roles: copyeditor',
+  );
   console.log('\n--- Demo submissions (title prefix [Demo]) ---');
   console.log(`${tDraft} — author: draft with file`);
   console.log(`${tQueue} — editor queue: submitted`);
@@ -1203,21 +1488,37 @@ async function run() {
   );
   console.log(`${tCopyedit} — copyediting: assigned + note submitted`);
   console.log(`${tPub} — public catalog: published (open-access policy)`);
-  console.log(`${tPub2} — public catalog: published (near-duplicate of ${tPub} for similarity)`);
-  console.log(`${tPub3} — public catalog: published (medical ethics, distant peer)`);
+  console.log(
+    `${tPub2} — public catalog: published (near-duplicate of ${tPub} for similarity)`,
+  );
+  console.log(
+    `${tPub3} — public catalog: published (medical ethics, distant peer)`,
+  );
   console.log('\n--- Demo paths by role ---');
-  console.log(`Author (${author.email}): ${tDraft} — edit metadata, files, optional AI suggest; ${tRev} — resubmit flow`);
-  console.log(`Editor (${editor.email}): ${tQueue} — queue + assign reviewer; ${tCompleted} — read finished review; ${tRev} — revisions decision`);
+  console.log(
+    `Author (${author.email}): ${tDraft} — edit metadata, files, optional AI suggest; ${tRev} — resubmit flow`,
+  );
+  console.log(
+    `Editor (${editor.email}): ${tQueue} — queue + assign reviewer; ${tCompleted} — read finished review; ${tRev} — revisions decision`,
+  );
   console.log(
     `Reviewer (${reviewer.email} / Reviewer123!): ${tInvitePending} — invited (email accept link works); ${tReview} — active review; ${tRev} — round-2 invite if still pending`,
   );
   console.log(
     `Reviewer-invited email: log in as ${reviewer.email} (not author/editor). After seed:fresh, the TOP inbox message should be "Review invitation: ${tInvitePending}" — or visit /en/assignments/${SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG}/invite`,
   );
-  console.log(`Copyeditor (${copyeditor.email}): ${tCopyedit} — notes; published rows show full accept→publish path`);
-  console.log('Public catalog: search "open access", "metadata", or Arabic terms from published abstracts (keyword FTS)');
-  console.log(`Email pipeline scripts: similarity title contains keywords from "${tQueue}" or "${tInvitePending}"`);
-  console.log('\n--- AI features (optional; enable flags in backend + ai-service .env) ---');
+  console.log(
+    `Copyeditor (${copyeditor.email}): ${tCopyedit} — notes; published rows show full accept→publish path`,
+  );
+  console.log(
+    'Public catalog: search "open access", "metadata", or Arabic terms from published abstracts (keyword FTS)',
+  );
+  console.log(
+    `Email pipeline scripts: similarity title contains keywords from "${tQueue}" or "${tInvitePending}"`,
+  );
+  console.log(
+    '\n--- AI features (optional; enable flags in backend + ai-service .env) ---',
+  );
   if (aiEnabled) {
     console.log(
       'Discipline: submit() classifies from Arabic abstract; fallbacks apply only when classification did not persist.',
@@ -1227,11 +1528,21 @@ async function run() {
       'Discipline: seeded disciplineSuggested on each sample (no ai-service). Enable AI_SERVICE_ENABLED + gRPC, then npm run seed:reset.',
     );
   }
-  console.log(`Keywords suggest: author draft ${tDraft} (AI_KEYWORDS_ENABLED + OpenAI on ai-service)`);
-  console.log(`Corpus similarity: editor/reviewer on ${tQueue} or ${tReview} (AI_SIMILARITY_ENABLED; overlaps ${tPub})`);
-  console.log(`Suggested reviewers: editor on ${tQueue} or ${tReview} (AI_REVIEWER_MATCHING_ENABLED)`);
-  console.log(`Related articles: open ${tPub} or ${tPub2} — expect the other with high similarity; ${tPub3} stays distant`);
-  console.log('Semantic catalog: searchMode=semantic with q e.g. وصول مفتوح or نشر رقمي مجلات عربية');
+  console.log(
+    `Keywords suggest: author draft ${tDraft} (AI_KEYWORDS_ENABLED + OpenAI on ai-service)`,
+  );
+  console.log(
+    `Corpus similarity: editor/reviewer on ${tQueue} or ${tReview} (AI_SIMILARITY_ENABLED; overlaps ${tPub})`,
+  );
+  console.log(
+    `Suggested reviewers: editor on ${tQueue} or ${tReview} (AI_REVIEWER_MATCHING_ENABLED)`,
+  );
+  console.log(
+    `Related articles: open ${tPub} or ${tPub2} — expect the other with high similarity; ${tPub3} stays distant`,
+  );
+  console.log(
+    'Semantic catalog: searchMode=semantic with q e.g. وصول مفتوح or نشر رقمي مجلات عربية',
+  );
   console.log(
     'JOURNAL_ALLOWED_DISCIPLINES (pipe-separated Arabic labels): out-of-scope badge on queue sample when medical label is outside scope.',
   );
@@ -1245,6 +1556,18 @@ async function run() {
   console.log(
     '  SEED_RESET_SAMPLE=1    — remove only [Demo] / [SAMPLE] / [DEMO] submissions, then re-seed (npm run seed:reset)',
   );
+
+  if (process.env.SEED_PERF_FIXTURES === '1') {
+    await seedPerfFixtures({
+      dataSource,
+      usersService,
+      rbacService,
+      submissionsService,
+    });
+    console.log(
+      '  SEED_PERF_FIXTURES=1   — perf/fixtures.json written (npm run seed:perf)',
+    );
+  }
 
   await app.close();
 }

@@ -2,6 +2,7 @@ export const NOTIFICATION_TYPE = {
   REVIEWER_INVITED: 'reviewer_invited',
   SUBMISSION_SUBMITTED: 'submission_submitted',
   SUBMISSION_DECISION: 'submission_decision',
+  SUBMISSION_UNDER_REVIEW: 'submission_under_review',
   COPYEDIT_ASSIGNED: 'copyedit_assigned',
   COPYEDIT_QUERIES_SENT: 'copyedit_queries_sent',
   COPYEDIT_AUTHOR_READY: 'copyedit_author_ready',
@@ -30,6 +31,10 @@ export const NOTIFICATION_I18N: Record<
   [NOTIFICATION_TYPE.SUBMISSION_DECISION]: {
     titleKey: 'Notifications.submissionDecision.title',
     bodyKey: 'Notifications.submissionDecision.body',
+  },
+  [NOTIFICATION_TYPE.SUBMISSION_UNDER_REVIEW]: {
+    titleKey: 'Notifications.submissionUnderReview.title',
+    bodyKey: 'Notifications.submissionUnderReview.body',
   },
   [NOTIFICATION_TYPE.COPYEDIT_ASSIGNED]: {
     titleKey: 'Notifications.copyeditAssigned.title',

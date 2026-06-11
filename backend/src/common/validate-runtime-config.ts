@@ -37,7 +37,12 @@ export class RuntimeConfigError extends Error {
 }
 
 const LOCAL_DEV_NODE_ENVS = new Set(['development', 'test']);
-const LOCAL_DB_HOSTS = new Set(['', 'localhost', '127.0.0.1', 'host.docker.internal']);
+const LOCAL_DB_HOSTS = new Set([
+  '',
+  'localhost',
+  '127.0.0.1',
+  'host.docker.internal',
+]);
 
 function nodeEnv(config?: ConfigService): string {
   return (
@@ -106,7 +111,10 @@ export function isLocalDevSandbox(config: ConfigService): boolean {
     return false;
   }
 
-  const dbHost = config.get<string>('DB_HOST', 'localhost').trim().toLowerCase();
+  const dbHost = config
+    .get<string>('DB_HOST', 'localhost')
+    .trim()
+    .toLowerCase();
   if (!LOCAL_DB_HOSTS.has(dbHost)) {
     return false;
   }
@@ -173,7 +181,29 @@ export function validateBackendRuntimeConfig(config: ConfigService): void {
     );
   }
 
-  if (config.get<string>('AI_SERVICE_ENABLED', 'false').toLowerCase() === 'true') {
+  const emailServiceUrl = config
+    .get<string>('EMAIL_SERVICE_URL', 'http://127.0.0.1:5244')
+    .trim();
+  const emailServiceToken = config
+    .get<string>('EMAIL_SERVICE_TOKEN', '')
+    .trim();
+  const emailUrlIsLoopback = /\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(
+    emailServiceUrl,
+  );
+  if (!emailUrlIsLoopback && !emailServiceToken) {
+    throw new RuntimeConfigError(
+      'EMAIL_SERVICE_TOKEN must be set when EMAIL_SERVICE_URL is not loopback in production.',
+    );
+  }
+  if (!emailServiceToken) {
+    throw new RuntimeConfigError(
+      'EMAIL_SERVICE_TOKEN must be set in production. Nest must authenticate email-service internal API calls.',
+    );
+  }
+
+  if (
+    config.get<string>('AI_SERVICE_ENABLED', 'false').toLowerCase() === 'true'
+  ) {
     const grpcHost = config.get<string>('AI_SERVICE_GRPC_HOST', '').trim();
     if (!grpcHost) {
       throw new RuntimeConfigError(
@@ -189,12 +219,30 @@ export function validateBackendRuntimeConfig(config: ConfigService): void {
   }
 
   if (
-    config.get<string>('AI_SIMILARITY_ENABLED', 'false').toLowerCase() === 'true'
+    config.get<string>('AI_SIMILARITY_ENABLED', 'false').toLowerCase() ===
+    'true'
   ) {
     const grpcHost = config.get<string>('AI_SERVICE_GRPC_HOST', '').trim();
     if (!grpcHost) {
       throw new RuntimeConfigError(
         'AI_SERVICE_GRPC_HOST must be set when AI_SIMILARITY_ENABLED=true in production.',
+      );
+    }
+  }
+
+  if (
+    config.get<string>('TYPESENSE_ENABLED', 'false').toLowerCase() === 'true'
+  ) {
+    const apiKey = config.get<string>('TYPESENSE_API_KEY', '').trim();
+    if (!apiKey || apiKey === 'xyz') {
+      throw new RuntimeConfigError(
+        'TYPESENSE_API_KEY must be set to a secure key when TYPESENSE_ENABLED=true in production.',
+      );
+    }
+    const host = config.get<string>('TYPESENSE_HOST', '').trim();
+    if (!host) {
+      throw new RuntimeConfigError(
+        'TYPESENSE_HOST must be set when TYPESENSE_ENABLED=true in production.',
       );
     }
   }

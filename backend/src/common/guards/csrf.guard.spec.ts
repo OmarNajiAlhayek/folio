@@ -15,7 +15,11 @@ describe('CsrfGuard', () => {
   it('allows GET without CSRF', () => {
     expect(
       guard.canActivate(
-        mockContext({ method: 'GET', path: '/api/v1/submissions', headers: {} }),
+        mockContext({
+          method: 'GET',
+          path: '/api/v1/submissions',
+          headers: {},
+        }),
       ),
     ).toBe(true);
   });
@@ -53,6 +57,19 @@ describe('CsrfGuard', () => {
           path: '/api/v1/submissions',
           headers: { 'x-csrf-token': 'tok' },
           cookies: { folio_csrf: 'tok', folio_access: 'jwt' },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('allows POST /auth/refresh without CSRF', () => {
+    expect(
+      guard.canActivate(
+        mockContext({
+          method: 'POST',
+          path: '/api/v1/auth/refresh',
+          headers: {},
+          cookies: {},
         }),
       ),
     ).toBe(true);

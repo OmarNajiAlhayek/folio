@@ -85,6 +85,10 @@ export class RbacService implements OnModuleInit {
         slug: PERMISSION_SLUGS.COPYEDIT_PUBLISH,
         description: 'Publish a submission after copyediting',
       },
+      {
+        slug: PERMISSION_SLUGS.AUDIT_LOG_VIEW,
+        description: 'View the full audit log of all user actions',
+      },
     ];
 
     for (const p of permissionDefs) {
@@ -119,6 +123,7 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.USERS_MANAGE_ROLES,
       PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
       PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+      PERMISSION_SLUGS.AUDIT_LOG_VIEW,
     ];
     const reviewerPerms = [
       PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
@@ -255,9 +260,7 @@ export class RbacService implements OnModuleInit {
    */
   async listWorkflowNotificationRecipientIds(): Promise<string[]> {
     const [editorIds, journalManagerIds] = await Promise.all([
-      this.listUserIdsWithPermission(
-        PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
-      ),
+      this.listUserIdsWithPermission(PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS),
       this.listUserIdsWithPermission(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS),
     ]);
     return [...new Set([...editorIds, ...journalManagerIds])];

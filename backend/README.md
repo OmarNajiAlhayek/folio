@@ -19,14 +19,14 @@ npm run start:dev
 
 Monorepo overview, all services, and sample accounts: [`../README.md`](../README.md).
 
-| Topic | Doc |
-|-------|-----|
-| REST contract | [`../docs/API-NOTES.md`](../docs/API-NOTES.md) |
-| Data model | [`../docs/DATA-MODEL.md`](../docs/DATA-MODEL.md) |
-| Email pipeline | [`../docs/testing-email-pipeline.md`](../docs/testing-email-pipeline.md) |
-| AI integration | [`../docs/plans/ai-service.md`](../docs/plans/ai-service.md) |
-| Documentation index | [`../docs/README.md`](../docs/README.md) |
-| Copyedit workflow | [`../docs/API-NOTES.md`](../docs/API-NOTES.md#copyediting) |
+| Topic               | Doc                                                                      |
+| ------------------- | ------------------------------------------------------------------------ |
+| REST contract       | [`../docs/API-NOTES.md`](../docs/API-NOTES.md)                           |
+| Data model          | [`../docs/DATA-MODEL.md`](../docs/DATA-MODEL.md)                         |
+| Email pipeline      | [`../docs/testing-email-pipeline.md`](../docs/testing-email-pipeline.md) |
+| AI integration      | [`../docs/plans/ai-service.md`](../docs/plans/ai-service.md)             |
+| Documentation index | [`../docs/README.md`](../docs/README.md)                                 |
+| Copyedit workflow   | [`../docs/API-NOTES.md`](../docs/API-NOTES.md#copyediting)               |
 
 ## Tests
 
@@ -34,6 +34,7 @@ Monorepo overview, all services, and sample accounts: [`../README.md`](../README
 npm test
 npm run test:e2e
 npm run test:pipeline   # opt-in: assign → outbox → RabbitMQ (see docs/testing-email-pipeline.md)
+npm run test:ai-jobs    # opt-in: AI job → outbox → RabbitMQ → worker (needs Postgres + RabbitMQ + ai-service)
 ```
 
 ### Optional: copyedit gRPC smoke

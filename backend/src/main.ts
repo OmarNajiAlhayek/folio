@@ -1,5 +1,9 @@
-import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
+import { initTelemetry, shutdownTelemetry } from '@folio/nest-observability';
+import { FOLIO_OBSERVABILITY_HEADERS } from '@folio/shared/observability';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
@@ -26,13 +30,19 @@ function corsOriginsFromEnv(raw: string | undefined): string | string[] {
   if (parts.length === 0) {
     return DEFAULT_DEV_FRONTEND_ORIGINS;
   }
-  return parts.length === 1 ? parts[0]! : parts;
+  return parts.length === 1 ? parts[0] : parts;
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  initTelemetry({
+    serviceName: process.env.OTEL_SERVICE_NAME ?? 'folio-backend',
+  });
+
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
+  app.useWebSocketAdapter(new WsAdapter(app));
   const config = app.get(ConfigService);
-  const logger = new Logger('Bootstrap');
+  const logger = app.get(Logger);
 
   try {
     validateBackendRuntimeConfig(config);
@@ -76,6 +86,7 @@ async function bootstrap() {
       'Authorization',
       'X-Folio-Locale',
       'X-CSRF-Token',
+      ...FOLIO_OBSERVABILITY_HEADERS,
     ],
   });
 
@@ -123,5 +134,13 @@ async function bootstrap() {
   logger.log(
     `Application is listening on port ${port} — API base: ${baseUrl}/api/v1`,
   );
+
+  const shutdown = async () => {
+    await app.close();
+    await shutdownTelemetry();
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => void shutdown());
+  process.on('SIGINT', () => void shutdown());
 }
 void bootstrap();

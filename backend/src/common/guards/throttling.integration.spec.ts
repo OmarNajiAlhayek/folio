@@ -1,11 +1,19 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 import { Controller, Get, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ApiExceptionFilter } from '../filters/api-exception.filter';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { LoggerModule } from 'nestjs-pino';
+import { ClsModule, ClsService } from 'nestjs-cls';
+import {
+  folioClsRootOptions,
+  folioLoggerUseFactory,
+} from '@folio/nest-observability';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Throttle, ThrottlerModule, SkipThrottle } from '@nestjs/throttler';
 import request from 'supertest';
 import { FolioThrottlerGuard } from './folio-throttler.guard';
 import { skipAllThrottles } from '../throttle-profiles';
+import { ApiExceptionFilter } from '../filters/api-exception.filter';
 
 @Controller('health')
 @SkipThrottle(skipAllThrottles())
@@ -27,6 +35,12 @@ class TestPublicController {
 
 @Module({
   imports: [
+    ClsModule.forRoot(folioClsRootOptions),
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule, ClsModule],
+      inject: [ConfigService, ClsService],
+      useFactory: folioLoggerUseFactory('folio-backend-test'),
+    }),
     ThrottlerModule.forRoot([
       { name: 'default', ttl: 60_000, limit: 100 },
       { name: 'public', ttl: 60_000, limit: 2 },

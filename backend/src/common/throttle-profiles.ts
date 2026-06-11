@@ -6,6 +6,9 @@ export const THROTTLE_PROFILE_NAMES = [
   'sse',
   'login',
   'register',
+  'refresh',
+  'authOtp',
+  'authPasswordReset',
 ] as const;
 
 export type ThrottleProfileName = (typeof THROTTLE_PROFILE_NAMES)[number];

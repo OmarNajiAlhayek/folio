@@ -17,6 +17,7 @@ export const PERMISSION_SLUGS = {
   COPYEDIT_VIEW_QUEUE: 'copyedit.view_queue',
   COPYEDIT_SUBMIT_NOTE: 'copyedit.submit_note',
   COPYEDIT_PUBLISH: 'copyedit.publish',
+  AUDIT_LOG_VIEW: 'audit_log.view',
 } as const;
 
 export type PermissionSlug =

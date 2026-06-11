@@ -4,8 +4,12 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Injectable,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { ClsService } from 'nestjs-cls';
+import { Request, Response } from 'express';
+import { LOG_FIELDS } from '@folio/shared/observability';
 
 function statusToCode(status: number): string {
   if (status === 400) return 'VALIDATION_ERROR';
@@ -16,11 +20,20 @@ function statusToCode(status: number): string {
   return 'HTTP_ERROR';
 }
 
+@Injectable()
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  constructor(
+    @InjectPinoLogger(ApiExceptionFilter.name)
+    private readonly logger: PinoLogger,
+    private readonly cls: ClsService,
+  ) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
+    const req = ctx.getRequest<Request>();
     const res = ctx.getResponse<Response>();
+    const requestId = this.cls.get<string>('requestId');
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -46,13 +59,23 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return res.status(status).json({
         message,
         code: statusToCode(status),
+        ...(requestId ? { requestId } : {}),
       });
     }
 
-    console.error(exception);
+    this.logger.error(
+      {
+        err: exception,
+        [LOG_FIELDS.requestId]: requestId,
+        method: req.method,
+        path: req.url,
+      },
+      'unhandled exception',
+    );
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       message: 'Internal server error',
       code: 'INTERNAL_ERROR',
+      ...(requestId ? { requestId } : {}),
     });
   }
 }

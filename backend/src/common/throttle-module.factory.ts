@@ -4,7 +4,11 @@ import type { ThrottleProfileName } from './throttle-profiles';
 export function buildThrottlerModuleOptions(config: ConfigService) {
   const ttl = parseInt(config.get<string>('THROTTLE_TTL_MS', '60000'), 10);
 
-  const profile = (name: ThrottleProfileName, envKey: string, defaultLimit: number) => ({
+  const profile = (
+    name: ThrottleProfileName,
+    envKey: string,
+    defaultLimit: number,
+  ) => ({
     name,
     ttl,
     limit: parseInt(config.get<string>(envKey, String(defaultLimit)), 10),
@@ -18,5 +22,8 @@ export function buildThrottlerModuleOptions(config: ConfigService) {
     profile('sse', 'THROTTLE_SSE_LIMIT', 10),
     profile('login', 'THROTTLE_LOGIN_LIMIT', 10),
     profile('register', 'THROTTLE_REGISTER_LIMIT', 5),
+    profile('refresh', 'THROTTLE_REFRESH_LIMIT', 30),
+    profile('authOtp', 'THROTTLE_AUTH_OTP_LIMIT', 10),
+    profile('authPasswordReset', 'THROTTLE_AUTH_PASSWORD_RESET_LIMIT', 5),
   ];
 }

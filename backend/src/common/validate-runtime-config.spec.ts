@@ -6,9 +6,7 @@ import {
   validateBackendRuntimeConfig,
 } from './validate-runtime-config';
 
-function configFromEnv(
-  env: Record<string, string | undefined>,
-): ConfigService {
+function configFromEnv(env: Record<string, string | undefined>): ConfigService {
   return new ConfigService(env);
 }
 
@@ -21,7 +19,9 @@ describe('validateBackendRuntimeConfig', () => {
 
   it('rejects mail-related env on the backend in any environment', () => {
     process.env.SMTP_HOST = 'smtp.example.com';
-    expect(() => assertBackendDoesNotConfigureMail()).toThrow(RuntimeConfigError);
+    expect(() => assertBackendDoesNotConfigureMail()).toThrow(
+      RuntimeConfigError,
+    );
     delete process.env.SMTP_HOST;
   });
 
@@ -41,7 +41,9 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'real-prod-password-not-in-blocklist',
       RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
     });
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('rejects production with short JWT_SECRET', () => {
@@ -51,7 +53,9 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'real-prod-password-not-in-blocklist',
       RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
     });
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('rejects production with example DB_PASSWORD', () => {
@@ -61,7 +65,9 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'changeme',
       RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
     });
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('rejects production with guest RabbitMQ credentials', () => {
@@ -71,7 +77,9 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'real-prod-password-not-in-blocklist',
       RABBITMQ_URL: 'amqp://guest:guest@localhost:5672',
     });
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('rejects staging with example secrets even when NODE_ENV is not production', () => {
@@ -83,7 +91,9 @@ describe('validateBackendRuntimeConfig', () => {
       AUTH_COOKIE_SECURE: 'true',
     });
     expect(isLocalDevSandbox(config)).toBe(false);
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('rejects deploy-shaped config when NODE_ENV is omitted but secrets are still examples', () => {
@@ -97,7 +107,9 @@ describe('validateBackendRuntimeConfig', () => {
       AUTH_COOKIE_SECURE: 'true',
     });
     expect(isLocalDevSandbox(config)).toBe(false);
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('rejects when AUTH_COOKIE_SECURE is true but NODE_ENV is still development', () => {
@@ -108,7 +120,9 @@ describe('validateBackendRuntimeConfig', () => {
       AUTH_COOKIE_SECURE: 'true',
     });
     expect(isLocalDevSandbox(config)).toBe(false);
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
   });
 
   it('honors RUNTIME_CONFIG_STRICT to force checks in local-looking env', () => {
@@ -119,7 +133,24 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'changeme',
     });
     expect(isLocalDevSandbox(config)).toBe(false);
-    expect(() => validateBackendRuntimeConfig(config)).toThrow(RuntimeConfigError);
+    expect(() => validateBackendRuntimeConfig(config)).toThrow(
+      RuntimeConfigError,
+    );
+  });
+
+  it('requires EMAIL_SERVICE_TOKEN in production', () => {
+    expect(() =>
+      validateBackendRuntimeConfig(
+        configFromEnv({
+          NODE_ENV: 'production',
+          JWT_SECRET: 'a'.repeat(32),
+          DB_PASSWORD: 'real-prod-password-not-in-blocklist',
+          RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
+          AUTH_COOKIE_SECURE: 'true',
+          EMAIL_SERVICE_TOKEN: '',
+        }),
+      ),
+    ).toThrow(/EMAIL_SERVICE_TOKEN/);
   });
 
   it('requires gRPC host and token when AI is enabled in production', () => {
@@ -129,11 +160,16 @@ describe('validateBackendRuntimeConfig', () => {
       DB_PASSWORD: 'real-prod-password-not-in-blocklist',
       RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
       AUTH_COOKIE_SECURE: 'true',
+      EMAIL_SERVICE_TOKEN: 'email-internal-token',
       AI_SERVICE_ENABLED: 'true',
     };
     expect(() =>
       validateBackendRuntimeConfig(
-        configFromEnv({ ...base, AI_SERVICE_GRPC_HOST: '', AI_SERVICE_TOKEN: '' }),
+        configFromEnv({
+          ...base,
+          AI_SERVICE_GRPC_HOST: '',
+          AI_SERVICE_TOKEN: '',
+        }),
       ),
     ).toThrow(/AI_SERVICE_GRPC_HOST/);
 
@@ -157,6 +193,7 @@ describe('validateBackendRuntimeConfig', () => {
           DB_PASSWORD: 'real-prod-password-not-in-blocklist',
           RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
           AUTH_COOKIE_SECURE: 'true',
+          EMAIL_SERVICE_TOKEN: 'email-internal-token',
           AI_SIMILARITY_ENABLED: 'true',
           AI_SERVICE_GRPC_HOST: '',
         }),
