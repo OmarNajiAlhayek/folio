@@ -5,12 +5,14 @@
  *
  * Rules are documented in the plan §7a:
  *   - ReviewerInvited -> "reviewer_invited:" + assignmentSlug
+ *   - ReviewerResponded -> "reviewer_responded:" + assignmentSlug + ":" + outcome
  *   - ReminderDue     -> "reminder_due:"     + reminderId
  *   - CopyeditAssigned -> "copyedit_assigned:" + assignmentSlug
  *   - CopyeditQueriesSent -> "copyedit_queries:" + assignmentSlug + ":" + round
  *   - CopyeditAuthorReady -> "copyedit_author_ready:" + assignmentSlug + ":" + round
  *   - SubmissionSubmitted -> "submission_submitted:" + submissionSlug + ":" + editorUserId
  *   - SubmissionDecision   -> "submission_decision:" + submissionSlug + ":" + decision
+ *   - SubmissionUnderReview -> "submission_under_review:" + submissionSlug + ":" + submittedCycleAt
  *   - ReviewSubmitted      -> "review_submitted:" + assignmentSlug + ":" + editorUserId
  *   - ReviewInvitationAccepted -> "review_invitation_accepted:" + assignmentSlug + ":" + editorUserId
  *   - ReviewInvitationDeclined -> "review_invitation_declined:" + assignmentSlug + ":" + editorUserId
@@ -23,6 +25,19 @@ export function reviewerInvitedKey(assignmentSlug: string): string {
     throw new Error('reviewerInvitedKey: assignmentSlug is required');
   }
   return `reviewer_invited:${assignmentSlug}`;
+}
+
+export function reviewerRespondedKey(
+  assignmentSlug: string,
+  outcome: string,
+): string {
+  if (!assignmentSlug) {
+    throw new Error('reviewerRespondedKey: assignmentSlug is required');
+  }
+  if (!outcome) {
+    throw new Error('reviewerRespondedKey: outcome is required');
+  }
+  return `reviewer_responded:${assignmentSlug}:${outcome}`;
 }
 
 export function reminderDueKey(reminderId: string): string {
@@ -132,6 +147,23 @@ export function reviewInvitationDeclinedEmailKey(
   return `review_invitation_declined:${assignmentSlug}:${editorUserId}`;
 }
 
+export function submissionUnderReviewKey(
+  submissionSlug: string,
+  submittedCycleAt: string | Date,
+): string {
+  if (!submissionSlug) {
+    throw new Error('submissionUnderReviewKey: submissionSlug is required');
+  }
+  const cycle =
+    submittedCycleAt instanceof Date
+      ? submittedCycleAt.toISOString()
+      : String(submittedCycleAt).trim();
+  if (!cycle) {
+    throw new Error('submissionUnderReviewKey: submittedCycleAt is required');
+  }
+  return `submission_under_review:${submissionSlug}:${cycle}`;
+}
+
 export function submissionPublishedKey(submissionSlug: string): string {
   if (!submissionSlug) {
     throw new Error('submissionPublishedKey: submissionSlug is required');
@@ -144,4 +176,41 @@ export function roleInvitationEmailKey(invitationId: string): string {
     throw new Error('roleInvitationEmailKey: invitationId is required');
   }
   return `role_invitation:${invitationId}`;
+}
+
+export function authVerificationOtpKey(challengeId: string): string {
+  if (!challengeId) {
+    throw new Error('authVerificationOtpKey: challengeId is required');
+  }
+  return `auth_verification_otp:${challengeId}`;
+}
+
+export function authPasswordResetKey(challengeId: string): string {
+  if (!challengeId) {
+    throw new Error('authPasswordResetKey: challengeId is required');
+  }
+  return `auth_password_reset:${challengeId}`;
+}
+
+export function authRegistrationWelcomeKey(userId: string): string {
+  if (!userId) {
+    throw new Error('authRegistrationWelcomeKey: userId is required');
+  }
+  return `auth_registration_welcome:${userId}`;
+}
+
+/** One active similarity-index job per published submission. */
+export function similarityIndexKey(submissionId: string): string {
+  if (!submissionId) {
+    throw new Error('similarityIndexKey: submissionId is required');
+  }
+  return `similarity_index:${submissionId}`;
+}
+
+/** Corpus similarity report job (unique per request). */
+export function corpusSimilarityKey(jobId: string): string {
+  if (!jobId) {
+    throw new Error('corpusSimilarityKey: jobId is required');
+  }
+  return `corpus_similarity:${jobId}`;
 }

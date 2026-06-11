@@ -1,0 +1,71 @@
+{
+  "name": "@folio/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical messaging contracts and helpers for Folio Nest apps",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./contracts/email-events": {
+      "types": "./dist/contracts/email-events.d.ts",
+      "default": "./dist/contracts/email-events.js"
+    },
+    "./contracts/ai-events": {
+      "types": "./dist/contracts/ai-events.d.ts",
+      "default": "./dist/contracts/ai-events.js"
+    },
+    "./messaging/topology": {
+      "types": "./dist/messaging/topology.d.ts",
+      "default": "./dist/messaging/topology.js"
+    },
+    "./messaging/idempotency": {
+      "types": "./dist/messaging/idempotency.d.ts",
+      "default": "./dist/messaging/idempotency.js"
+    },
+    "./messaging/redactor": {
+      "types": "./dist/messaging/redactor.d.ts",
+      "default": "./dist/messaging/redactor.js"
+    },
+    "./observability": {
+      "types": "./dist/observability/index.d.ts",
+      "default": "./dist/observability/index.js"
+    },
+    "./observability/log-schema.fixture.json": "./observability/log-schema.fixture.json",
+    "./email/register-folio-email-partials": {
+      "types": "./dist/email/register-folio-email-partials.d.ts",
+      "default": "./dist/email/register-folio-email-partials.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "peerDependencies": {
+    "handlebars": "^4.7.8"
+  },
+  "devDependencies": {
+    "@opentelemetry/context-async-hooks": "^2.0.0",
+    "@opentelemetry/core": "^2.0.0",
+    "@opentelemetry/sdk-trace-base": "^2.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "handlebars": "^4.7.8",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.3"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "rootDir": ".",
+    "testRegex": "observability/.*\\.spec\\.ts$"
+  }
+}

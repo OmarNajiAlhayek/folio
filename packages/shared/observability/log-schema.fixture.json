@@ -1,0 +1,15 @@
+{
+  "requiredKeys": ["time", "level", "service", "msg"],
+  "optionalKeys": ["trace_id", "span_id", "request_id", "context", "err"],
+  "fieldTypes": {
+    "time": "string",
+    "level": "string",
+    "service": "string",
+    "msg": "string",
+    "trace_id": "string",
+    "span_id": "string",
+    "request_id": "string",
+    "context": "string",
+    "err": "object"
+  }
+}

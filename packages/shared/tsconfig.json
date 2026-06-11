@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "index.ts",
+    "contracts/**/*.ts",
+    "messaging/**/*.ts",
+    "email/**/*.ts",
+    "observability/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+}

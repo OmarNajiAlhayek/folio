@@ -16,7 +16,7 @@ export type RedactedPayload = {
   [key: string]: unknown;
 };
 
-const PII_FIELDS = new Set(['reviewer', 'invitedBy']);
+const PII_FIELDS = new Set(['reviewer', 'invitedBy', 'messageForAuthor']);
 const KEEP_FIELDS = new Set([
   'type',
   'idempotencyKey',

@@ -1,40 +1,37 @@
-## @folio/shared (canonical messaging contracts)
+## @folio/shared
 
-Shared TypeScript used by the Nest **backend** (publisher) and **email-service** (consumer).
+Canonical TypeScript contracts and messaging helpers for the Nest **backend** (publisher) and **email-service** (consumer).
 
 | Path | Role |
 |------|------|
-| `contracts/` | Event payload types and routing keys (no runtime) |
+| `contracts/` | Event payload types and routing keys |
 | `messaging/topology.ts` | RabbitMQ exchange / queue / binding asserts |
 | `messaging/idempotency.ts` | Idempotency key builders (must match on both sides) |
 | `messaging/redactor.ts` | PII stripping for logs and DLQ inspection |
+| `email/register-folio-email-partials.ts` | Shared Handlebars email layout partials |
 
 ### Editing workflow
 
 1. Change files **only** under `packages/shared/`.
-2. From the **repo root**, run:
+2. Rebuild the package (runs automatically on `npm install` via `prepare`):
 
    ```bash
-   npm run sync:shared
+   npm run build:shared   # from repo root
    ```
 
-   That copies each canonical file byte-for-byte into:
+3. Both Nest apps depend on `@folio/shared` through a `file:` workspace link — no mirror copies.
 
-   - `backend/src/messaging/contracts/` and `backend/src/messaging/shared/`
-   - `services/email-service/src/contracts/` and `services/email-service/src/shared/`
+### Consumers
 
-3. Commit canonical + mirrors together.
+- `backend/package.json` → `"@folio/shared": "file:../packages/shared"`
+- `services/email-service/package.json` → `"@folio/shared": "file:../../packages/shared"`
 
-### CI / pre-merge check
+Import examples:
 
-```bash
-npm run check:shared
+```ts
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
+import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
+import { DEFAULT_TOPOLOGY } from '@folio/shared/messaging/topology';
 ```
 
-Exits non-zero if any mirror differs from `packages/shared`. No separate build step.
-
-### Why mirrors exist
-
-Each Nest app compiles with `rootDir` under its own `src/`. Mirrors avoid pulling `../../packages/shared` into `tsc` output layout. Long term, a workspace package (`@folio/shared`) can replace copies; until then, **sync + check** prevents drift.
-
-Email design: [`docs/plans/email-service.md`](../../docs/plans/email-service.md) (canonical). Optional walkthrough: [`email-details.md`](../../email-details.md) at repo root.
+Email design: [`docs/plans/email-service.md`](../../docs/plans/email-service.md).

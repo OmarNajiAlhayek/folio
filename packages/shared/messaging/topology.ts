@@ -35,17 +35,24 @@ export type TopologyNames = {
   dlx: string;
   dlq: string;
   reviewerInvitedQueue: string;
+  reviewerRespondedQueue: string;
   reminderDueQueue: string;
   copyeditAssignedQueue: string;
   copyeditQueriesSentQueue: string;
   copyeditAuthorReadyQueue: string;
   submissionSubmittedQueue: string;
   submissionDecisionQueue: string;
+  submissionUnderReviewQueue: string;
   submissionPublishedQueue: string;
   reviewSubmittedQueue: string;
   reviewInvitationAcceptedQueue: string;
   reviewInvitationDeclinedQueue: string;
   roleInvitationQueue: string;
+  authVerificationOtpQueue: string;
+  authPasswordResetQueue: string;
+  authRegistrationWelcomeQueue: string;
+  aiSimilarityIndexQueue: string;
+  aiCorpusSimilarityQueue: string;
 };
 
 export const DEFAULT_TOPOLOGY: TopologyNames = {
@@ -53,17 +60,24 @@ export const DEFAULT_TOPOLOGY: TopologyNames = {
   dlx: 'folio.events.dlx',
   dlq: 'folio.events.dlq',
   reviewerInvitedQueue: 'email.reviewer_invited',
+  reviewerRespondedQueue: 'email.reviewer_responded',
   reminderDueQueue: 'email.reminder_due',
   copyeditAssignedQueue: 'email.copyedit_assigned',
   copyeditQueriesSentQueue: 'email.copyedit_queries_sent',
   copyeditAuthorReadyQueue: 'email.copyedit_author_ready',
   submissionSubmittedQueue: 'email.submission_submitted',
   submissionDecisionQueue: 'email.submission_decision',
+  submissionUnderReviewQueue: 'email.submission_under_review',
   submissionPublishedQueue: 'email.submission_published',
   reviewSubmittedQueue: 'email.review_submitted',
   reviewInvitationAcceptedQueue: 'email.review_invitation_accepted',
   reviewInvitationDeclinedQueue: 'email.review_invitation_declined',
   roleInvitationQueue: 'email.role_invitation',
+  authVerificationOtpQueue: 'email.auth_verification_otp',
+  authPasswordResetQueue: 'email.auth_password_reset',
+  authRegistrationWelcomeQueue: 'email.auth_registration_welcome',
+  aiSimilarityIndexQueue: 'ai.similarity_index',
+  aiCorpusSimilarityQueue: 'ai.corpus_similarity',
 };
 
 export async function assertTopology(
@@ -87,6 +101,19 @@ export async function assertTopology(
     names.reviewerInvitedQueue,
     names.exchange,
     'reviewer.invited',
+  );
+
+  await channel.assertQueue(names.reviewerRespondedQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'reviewer.responded.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.reviewerRespondedQueue,
+    names.exchange,
+    'reviewer.responded',
   );
 
   await channel.assertQueue(names.reminderDueQueue, {
@@ -167,6 +194,19 @@ export async function assertTopology(
     'submission.decision',
   );
 
+  await channel.assertQueue(names.submissionUnderReviewQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'submission.under_review.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.submissionUnderReviewQueue,
+    names.exchange,
+    'submission.under_review',
+  );
+
   await channel.assertQueue(names.submissionPublishedQueue, {
     durable: true,
     arguments: {
@@ -230,5 +270,70 @@ export async function assertTopology(
     names.roleInvitationQueue,
     names.exchange,
     'role.invitation',
+  );
+
+  await channel.assertQueue(names.authVerificationOtpQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'auth.verification_otp.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.authVerificationOtpQueue,
+    names.exchange,
+    'auth.verification_otp',
+  );
+
+  await channel.assertQueue(names.authPasswordResetQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'auth.password_reset.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.authPasswordResetQueue,
+    names.exchange,
+    'auth.password_reset',
+  );
+
+  await channel.assertQueue(names.authRegistrationWelcomeQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'auth.registration_welcome.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.authRegistrationWelcomeQueue,
+    names.exchange,
+    'auth.registration_welcome',
+  );
+
+  await channel.assertQueue(names.aiSimilarityIndexQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'ai.similarity_index.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.aiSimilarityIndexQueue,
+    names.exchange,
+    'ai.similarity_index.requested',
+  );
+
+  await channel.assertQueue(names.aiCorpusSimilarityQueue, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': names.dlx,
+      'x-dead-letter-routing-key': 'ai.corpus_similarity.dead',
+    },
+  });
+  await channel.bindQueue(
+    names.aiCorpusSimilarityQueue,
+    names.exchange,
+    'ai.corpus_similarity.requested',
   );
 }
