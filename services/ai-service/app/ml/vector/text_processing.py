@@ -84,10 +84,10 @@ def chunk_text(
 
 
 def chunk_id(article_id: str, chunk_index: int) -> str:
-    """Stable Chroma document id for a full-text chunk."""
+    """Legacy stable chunk key (article_id + chunk_index)."""
     return f"{article_id}::chunk::{chunk_index}"
 
 
 def reviewer_history_id(reviewer_id: str, submission_id: str) -> str:
-    """Stable Chroma document id for a reviewer history summary row."""
+    """Legacy stable key for reviewer history rows (pre-pgvector)."""
     return f"{reviewer_id}::{submission_id}"

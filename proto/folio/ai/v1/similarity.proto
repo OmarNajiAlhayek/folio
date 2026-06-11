@@ -68,6 +68,7 @@ message SemanticSearchResponse {
 
 message SimilarityStatus {
   bool enabled = 1;
+  // Wire name kept for compatibility; value is the vector backend id (e.g. "pgvector").
   string chroma_path = 2;
   string model_name = 3;
   double default_threshold = 4;

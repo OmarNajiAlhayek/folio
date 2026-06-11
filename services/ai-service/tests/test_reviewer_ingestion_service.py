@@ -11,18 +11,15 @@ from app.ml.vector.reviewer_ingestion_service import ReviewerIngestionService
 
 
 @pytest.fixture
-def mock_engine() -> MagicMock:
+def mock_store() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def mock_engine(mock_store: MagicMock) -> MagicMock:
     engine = MagicMock()
     engine.embed.return_value = [[0.1, 0.2, 0.3]]
-    reviewers = MagicMock()
-    history = MagicMock()
-    summary = MagicMock()
-    reviewers.get.return_value = {"ids": []}
-    history.get.return_value = {"ids": []}
-    summary.get.return_value = {"ids": []}
-    engine.reviewers_collection = reviewers
-    engine.reviewer_history_collection = history
-    engine.summary_collection = summary
+    engine.store = mock_store
     return engine
 
 
@@ -33,9 +30,9 @@ def mock_articles() -> MagicMock:
 
 def test_upsert_reviewer_empty_bio_deletes_existing(
     mock_engine: MagicMock,
+    mock_store: MagicMock,
     mock_articles: MagicMock,
 ) -> None:
-    mock_engine.reviewers_collection.get.return_value = {"ids": ["r1"]}
     svc = ReviewerIngestionService(
         engine=mock_engine,
         config=VectorConfig(),
@@ -44,12 +41,13 @@ def test_upsert_reviewer_empty_bio_deletes_existing(
 
     svc.upsert_reviewer("r1", "   ")
 
-    mock_engine.reviewers_collection.delete.assert_called_once_with(ids=["r1"])
-    mock_engine.reviewers_collection.add.assert_not_called()
+    mock_store.delete_reviewer_bio.assert_called_once_with("r1")
+    mock_store.upsert_reviewer_bio.assert_not_called()
 
 
 def test_upsert_reviewer_indexes_bio(
     mock_engine: MagicMock,
+    mock_store: MagicMock,
     mock_articles: MagicMock,
 ) -> None:
     svc = ReviewerIngestionService(
@@ -60,10 +58,10 @@ def test_upsert_reviewer_indexes_bio(
 
     svc.upsert_reviewer("r1", "machine learning", display_name="Ada")
 
-    mock_engine.reviewers_collection.add.assert_called_once()
-    call = mock_engine.reviewers_collection.add.call_args
-    assert call.kwargs["ids"] == ["r1"]
-    assert call.kwargs["metadatas"] == [{"display_name": "Ada"}]
+    mock_store.upsert_reviewer_bio.assert_called_once()
+    row = mock_store.upsert_reviewer_bio.call_args.args[0]
+    assert row.reviewer_id == "r1"
+    assert row.display_name == "Ada"
 
 
 def test_upsert_review_history_delegates_to_summary(
@@ -84,7 +82,6 @@ def test_upsert_review_history_delegates_to_summary(
         "kw1, kw2",
         category="",
     )
-    mock_engine.reviewer_history_collection.add.assert_not_called()
 
 
 def test_upsert_review_history_requires_content(
@@ -104,8 +101,9 @@ def test_upsert_review_history_requires_content(
         svc.upsert_review_history("r1", "s1", "", "")
 
 
-def test_remove_reviewer_clears_bio_and_legacy_history(
+def test_remove_reviewer_clears_bio(
     mock_engine: MagicMock,
+    mock_store: MagicMock,
     mock_articles: MagicMock,
 ) -> None:
     svc = ReviewerIngestionService(
@@ -116,7 +114,4 @@ def test_remove_reviewer_clears_bio_and_legacy_history(
 
     svc.remove_reviewer("r1")
 
-    mock_engine.reviewers_collection.delete.assert_called_once_with(ids=["r1"])
-    mock_engine.reviewer_history_collection.delete.assert_called_once_with(
-        where={"reviewer_id": {"$eq": "r1"}},
-    )
+    mock_store.delete_reviewer_bio.assert_called_once_with("r1")

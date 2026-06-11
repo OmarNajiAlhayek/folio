@@ -1,4 +1,4 @@
-"""Ingest published articles into summary and chunk Chroma collections."""
+"""Ingest published articles into summary and chunk pgvector tables."""
 
 from __future__ import annotations
 
@@ -6,19 +6,15 @@ import logging
 
 from app.ml.vector.ai_engine import AIEngine
 from app.ml.vector.config import VectorConfig
-from app.ml.vector.text_processing import (
-    chunk_id,
-    chunk_text,
-    clean_text,
-    combine_summary_text,
-)
+from app.ml.vector.text_processing import chunk_text, clean_text, combine_summary_text
 from app.ml.vector.types import IngestResult
+from app.ml.vector.vector_store import ChunkRow, SummaryRow
 
 logger = logging.getLogger(__name__)
 
 
 class ArticleIngestionService:
-    """Add or remove published articles from both vector collections."""
+    """Add or remove published articles from both vector tables."""
 
     def __init__(
         self,
@@ -38,9 +34,9 @@ class ArticleIngestionService:
         category: str = "",
     ) -> IngestResult:
         """
-        Index abstract+keywords in the summary collection and full text as chunks.
+        Index abstract+keywords in the summary table and full text as chunks.
 
-        Existing rows for ``article_id`` are replaced atomically per collection.
+        Existing rows for ``article_id`` are replaced atomically per table.
         """
         article_id = article_id.strip()
         if not article_id:
@@ -81,10 +77,10 @@ class ArticleIngestionService:
         category: str = "",
     ) -> None:
         """
-        Index abstract+keywords in the shared summary collection (submission id).
+        Index abstract+keywords in the shared summary table (submission id).
 
         Used for published articles and reviewer-match history without duplicating
-        embeddings in a separate collection.
+        embeddings in a separate table.
         """
         submission_id = submission_id.strip()
         if not submission_id:
@@ -96,9 +92,9 @@ class ArticleIngestionService:
         if not summary_text:
             raise ValueError("abstract or keywords required to index summary")
 
-        collection = self._engine.summary_collection
-        existing = collection.get(ids=[submission_id], include=["documents"])
-        if existing["ids"] and (existing["documents"][0] or "") == summary_text:
+        store = self._engine.store
+        existing = store.get_summary(submission_id)
+        if existing is not None and existing.summary_text == summary_text:
             logger.debug("Summary unchanged for %s; skip re-embed", submission_id)
             return
 
@@ -112,16 +108,14 @@ class ArticleIngestionService:
         logger.info("Upserted submission summary %s", submission_id)
 
     def remove_article(self, article_id: str) -> None:
-        """Delete an article from both collections."""
+        """Delete an article from both vector tables."""
         article_id = article_id.strip()
         if not article_id:
             raise ValueError("article_id is required")
 
-        summary = self._engine.summary_collection
-        chunks = self._engine.chunks_collection
-
-        summary.delete(ids=[article_id])
-        chunks.delete(where={"article_id": {"$eq": article_id}})
+        store = self._engine.store
+        store.delete_summary(article_id)
+        store.delete_chunks(article_id)
         logger.info("Removed article %s from vector index", article_id)
 
     def _upsert_summary(
@@ -133,23 +127,16 @@ class ArticleIngestionService:
         keywords: str,
         category: str,
     ) -> None:
-        collection = self._engine.summary_collection
-        existing = collection.get(ids=[article_id])
-        if existing["ids"]:
-            collection.delete(ids=[article_id])
-
         embedding = self._engine.embed([summary_text])[0]
-        metadata = {
-            "article_id": article_id,
-            "abstract": abstract,
-            "keywords": keywords,
-            "category": category,
-        }
-        collection.add(
-            ids=[article_id],
-            embeddings=[embedding],
-            documents=[summary_text],
-            metadatas=[metadata],
+        self._engine.store.upsert_summary(
+            SummaryRow(
+                submission_id=article_id,
+                embedding=embedding,
+                summary_text=summary_text,
+                abstract=abstract,
+                keywords=keywords,
+                category=category,
+            ),
         )
 
     def _replace_chunks(
@@ -159,25 +146,19 @@ class ArticleIngestionService:
         chunks: list[str],
         category: str = "",
     ) -> None:
-        collection = self._engine.chunks_collection
-        collection.delete(where={"article_id": {"$eq": article_id}})
-
         if not chunks:
+            self._engine.store.replace_chunks(article_id, [])
             return
 
-        ids = [chunk_id(article_id, i) for i in range(len(chunks))]
         embeddings = self._engine.embed(chunks)
-        metadatas = [
-            {
-                "article_id": article_id,
-                "chunk_index": i,
-                "category": category,
-            }
+        rows = [
+            ChunkRow(
+                article_id=article_id,
+                chunk_index=i,
+                embedding=embeddings[i],
+                chunk_text=chunks[i],
+                category=category,
+            )
             for i in range(len(chunks))
         ]
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=chunks,
-            metadatas=metadatas,
-        )
+        self._engine.store.replace_chunks(article_id, rows)

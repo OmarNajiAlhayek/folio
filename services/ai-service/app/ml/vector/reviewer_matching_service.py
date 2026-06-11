@@ -20,7 +20,6 @@ from app.ml.vector.types import ReviewerSuggestionHit
 
 logger = logging.getLogger(__name__)
 
-# Stage 1 uses collection.get (not query) for custom bio+history scoring; paginate if pool grows.
 _HISTORY_IN_BATCH_SIZE = 500
 
 
@@ -157,12 +156,11 @@ class ReviewerMatchingService:
         candidate_ids: Sequence[str] | None,
         exclude_reviewer_ids: Sequence[str] | None,
     ) -> set[str]:
-        collection = self._engine.reviewers_collection
+        store = self._engine.store
         if candidate_ids is not None:
             ids = {str(rid).strip() for rid in candidate_ids if str(rid).strip()}
         else:
-            result = collection.get(include=[])
-            ids = set(result["ids"])
+            ids = set(store.list_reviewer_ids())
 
         if exclude_reviewer_ids:
             exclude = {
@@ -174,18 +172,12 @@ class ReviewerMatchingService:
     def _load_bio_rows(self, reviewer_ids: set[str]) -> dict[str, dict[str, Any]]:
         if not reviewer_ids:
             return {}
-        result = self._engine.reviewers_collection.get(
-            ids=sorted(reviewer_ids),
-            include=["embeddings", "documents"],
-        )
+        bios = self._engine.store.get_reviewer_bios(sorted(reviewer_ids))
         rows: dict[str, dict[str, Any]] = {}
-        for i, rid in enumerate(result["ids"]):
-            embedding = result["embeddings"][i]
-            if embedding is None:
-                continue
-            rows[rid] = {
-                "embedding": embedding,
-                "document": result["documents"][i] or "",
+        for bio in bios:
+            rows[bio.reviewer_id] = {
+                "embedding": bio.embedding,
+                "document": bio.bio_text,
             }
         return rows
 
@@ -210,20 +202,12 @@ class ReviewerMatchingService:
 
         by_submission: dict[str, tuple[list[float], str]] = {}
         id_list = sorted(submission_ids)
+        store = self._engine.store
         for offset in range(0, len(id_list), _HISTORY_IN_BATCH_SIZE):
             batch = id_list[offset : offset + _HISTORY_IN_BATCH_SIZE]
-            result = self._engine.summary_collection.get(
-                ids=batch,
-                include=["embeddings", "documents"],
-            )
-            for i, sid in enumerate(result["ids"]):
-                embedding = result["embeddings"][i]
-                if embedding is None:
-                    continue
-                by_submission[sid] = (
-                    _as_vector(embedding),
-                    result["documents"][i] or "",
-                )
+            summaries = store.get_submission_summaries_by_ids(batch)
+            for row in summaries:
+                by_submission[row.submission_id] = (row.embedding, row.summary_text)
 
         for rid in reviewer_ids:
             row = grouped[rid]

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class SimilarityStatusResponse(BaseModel):
     enabled: bool
-    chroma_path: str
+    vector_backend: str = "pgvector"
     model_name: str
     default_threshold: float
     same_category_only: bool

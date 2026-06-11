@@ -4,33 +4,30 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
-from app.ml.vector.chroma_client import (
-    create_persistent_client,
-    get_or_create_collections,
-    get_or_create_reviewer_collections,
-)
 from app.ml.vector.config import VectorConfig
+from app.ml.vector.pg_pool import VectorDbConfig, close_pool
+from app.ml.vector.pgvector_store import PgVectorStore
+from app.ml.vector.scoring import similarity_from_pgvector_distance
 from app.ml.vector.types import VectorDependenciesError
+from app.ml.vector.vector_store import VectorStore
 
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder, SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
-
-def similarity_from_distance(distance: float) -> float:
-    """Convert Chroma cosine distance to similarity in [0, 1]."""
-    return max(0.0, min(1.0, 1.0 - distance))
+# Backward-compatible alias for services that imported similarity_from_distance.
+similarity_from_distance = similarity_from_pgvector_distance
 
 
 class AIEngine:
     """
-    Thread-safe singleton that owns Chroma collections and both encoders.
+    Thread-safe singleton that owns the vector store and both encoders.
 
-    Chroma and the bi-encoder load on first embed/query. The cross-encoder loads
-    only when reranking (semantic search), not for similar-articles or ingest.
+    The pgvector pool and bi-encoder load on first embed/query. The cross-encoder
+    loads only when reranking (reviewer matching), not for similar-articles or ingest.
     """
 
     _instance: ClassVar[AIEngine | None] = None
@@ -38,11 +35,7 @@ class AIEngine:
 
     def __init__(self, config: VectorConfig) -> None:
         self._config = config
-        self._client: Any = None
-        self._summary_collection: Any = None
-        self._chunks_collection: Any = None
-        self._reviewers_collection: Any = None
-        self._reviewer_history_collection: Any = None
+        self._store: VectorStore | None = None
         self._bi_encoder: SentenceTransformer | None = None
         self._cross_encoder: CrossEncoder | None = None
         self._init_lock = threading.Lock()
@@ -60,22 +53,33 @@ class AIEngine:
 
     @classmethod
     def reset_instance(cls) -> None:
-        """Clear singleton (for tests)."""
+        """Clear singleton and close the vector DB pool (for tests)."""
         with cls._lock:
+            if cls._instance is not None:
+                cls._instance._store = None
+            close_pool()
             cls._instance = None
 
+    @classmethod
+    def shutdown(cls) -> None:
+        """Close pool on process shutdown."""
+        cls.reset_instance()
+
     def _initialize(self) -> None:
-        """Load Chroma and bi-encoder (cross-encoder is lazy)."""
+        """Open pgvector pool and load bi-encoder (cross-encoder is lazy)."""
         with self._init_lock:
-            if self._client is not None:
+            if self._store is not None:
                 return
-            self._client = create_persistent_client(self._config)
-            self._summary_collection, self._chunks_collection = get_or_create_collections(
-                self._client,
+            db_config = VectorDbConfig(
+                host=self._config.vector_db_host,
+                port=self._config.vector_db_port,
+                user=self._config.vector_db_user,
+                password=self._config.vector_db_password,
+                database=self._config.vector_db_database,
+                ssl=self._config.vector_db_ssl,
+                hnsw_ef_search=self._config.vector_db_hnsw_ef_search,
             )
-            self._reviewers_collection, self._reviewer_history_collection = (
-                get_or_create_reviewer_collections(self._client)
-            )
+            self._store = PgVectorStore.open(db_config)
             self._load_bi_encoder()
 
     def _ensure_cross_encoder(self) -> None:
@@ -129,29 +133,10 @@ class AIEngine:
         return self._config
 
     @property
-    def client(self) -> Any:
+    def store(self) -> VectorStore:
         self._ensure_ready()
-        return self._client
-
-    @property
-    def summary_collection(self) -> Any:
-        self._ensure_ready()
-        return self._summary_collection
-
-    @property
-    def chunks_collection(self) -> Any:
-        self._ensure_ready()
-        return self._chunks_collection
-
-    @property
-    def reviewers_collection(self) -> Any:
-        self._ensure_ready()
-        return self._reviewers_collection
-
-    @property
-    def reviewer_history_collection(self) -> Any:
-        self._ensure_ready()
-        return self._reviewer_history_collection
+        assert self._store is not None
+        return self._store
 
     @property
     def bi_encoder(self) -> SentenceTransformer:
@@ -166,7 +151,7 @@ class AIEngine:
         return self._cross_encoder
 
     def _ensure_ready(self) -> None:
-        if self._client is None:
+        if self._store is None:
             self._initialize()
 
     def embed(self, texts: list[str]) -> list[list[float]]:

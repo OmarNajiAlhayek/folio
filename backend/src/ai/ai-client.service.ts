@@ -1,10 +1,8 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ClsService } from 'nestjs-cls';
 import { Metadata, status as GrpcStatus } from '@grpc/grpc-js';
+import { FOLIO_REQUEST_ID_HEADER } from '@folio/shared/observability';
 import type {
   ClassifyArticleResponse,
   CorpusSimilarityMatch,
@@ -12,7 +10,6 @@ import type {
   SimilarArticleHit,
   SuggestKeywordsInput,
   SuggestKeywordsOutcome,
-  SuggestKeywordsResponse,
   SuggestReviewersInput,
   SuggestReviewersOutcome,
   ReviewerSuggestionHit,
@@ -35,7 +32,10 @@ import { redactAiServiceLogMessage } from '../common/ai-log-redaction';
 export class AiClientService implements OnModuleDestroy {
   private readonly logger = new Logger(AiClientService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly cls: ClsService,
+  ) {}
 
   onModuleDestroy(): void {
     closeAiGrpcClients();
@@ -82,9 +82,8 @@ export class AiClientService implements OnModuleDestroy {
 
   isCopyeditEnabled(): boolean {
     if (
-      this.config
-        .get<string>('AI_COPYEDIT_ENABLED', 'false')
-        .toLowerCase() !== 'true'
+      this.config.get<string>('AI_COPYEDIT_ENABLED', 'false').toLowerCase() !==
+      'true'
     ) {
       return false;
     }
@@ -93,8 +92,9 @@ export class AiClientService implements OnModuleDestroy {
 
   private isAiSimilarityFeatureEnabled(): boolean {
     if (
-      this.config.get<string>('AI_SIMILARITY_ENABLED', 'false').toLowerCase() !==
-      'true'
+      this.config
+        .get<string>('AI_SIMILARITY_ENABLED', 'false')
+        .toLowerCase() !== 'true'
     ) {
       return false;
     }
@@ -127,10 +127,16 @@ export class AiClientService implements OnModuleDestroy {
     if (token) {
       metadata.set('x-folio-service-token', token);
     }
+    const requestId = this.cls.get<string>('requestId');
+    if (requestId) {
+      metadata.set(FOLIO_REQUEST_ID_HEADER, requestId);
+    }
     return metadata;
   }
 
-  private mapClassifyResponse(response: ClassifyResponse): ClassifyArticleResponse {
+  private mapClassifyResponse(
+    response: ClassifyResponse,
+  ): ClassifyArticleResponse {
     return {
       top_label: response.topLabel,
       top_confidence: response.topConfidence,
@@ -138,12 +144,8 @@ export class AiClientService implements OnModuleDestroy {
     };
   }
 
-  private logGrpcFailure(
-    rpc: string,
-    code: number,
-    message: string,
-  ): void {
-    if (code === GrpcStatus.UNAUTHENTICATED) {
+  private logGrpcFailure(rpc: string, code: number, message: string): void {
+    if (code === Number(GrpcStatus.UNAUTHENTICATED)) {
       this.logger.warn(
         'ai-service %s gRPC UNAUTHENTICATED — check AI_SERVICE_TOKEN matches ai-service',
         rpc,
@@ -357,7 +359,11 @@ export class AiClientService implements OnModuleDestroy {
         { deadline },
         (err, response) => {
           if (err) {
-            this.logGrpcFailure('DetectCorpusSimilarity', err.code, err.message);
+            this.logGrpcFailure(
+              'DetectCorpusSimilarity',
+              err.code,
+              err.message,
+            );
             resolve(null);
             return;
           }

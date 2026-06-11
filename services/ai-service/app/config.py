@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     grpc_port: int = Field(default=5246, validation_alias="GRPC_PORT")
     grpc_bind_host: str = Field(default="127.0.0.1", validation_alias="GRPC_BIND_HOST")
     log_level: str = Field(default="info", validation_alias="LOG_LEVEL")
+    log_format: str = Field(default="pretty", validation_alias="LOG_FORMAT")
+    otel_service_name: str = Field(
+        default="folio-ai-service",
+        validation_alias="OTEL_SERVICE_NAME",
+    )
     ai_service_token: str = Field(default="", validation_alias="AI_SERVICE_TOKEN")
     ai_provider: AiProviderKind = Field(
         default=AiProviderKind.NOOP,
@@ -84,13 +89,18 @@ class Settings(BaseSettings):
     )
 
     similarity_enabled: bool = Field(default=False, validation_alias="SIMILARITY_ENABLED")
-    similarity_chroma_path: str = Field(
-        default="./data/chroma_similarity",
-        validation_alias="SIMILARITY_CHROMA_PATH",
+    vector_db_host: str = Field(default="localhost", validation_alias="VECTOR_DB_HOST")
+    vector_db_port: int = Field(default=5432, validation_alias="VECTOR_DB_PORT")
+    vector_db_user: str = Field(default="postgres", validation_alias="VECTOR_DB_USER")
+    vector_db_password: str = Field(default="", validation_alias="VECTOR_DB_PASSWORD")
+    vector_db_database: str = Field(
+        default="folio_review",
+        validation_alias="VECTOR_DB_DATABASE",
     )
-    similarity_collection_name: str = Field(
-        default="folio_published_articles",
-        validation_alias="SIMILARITY_COLLECTION_NAME",
+    vector_db_ssl: bool = Field(default=False, validation_alias="VECTOR_DB_SSL")
+    vector_db_hnsw_ef_search: int = Field(
+        default=64,
+        validation_alias="VECTOR_DB_HNSW_EF_SEARCH",
     )
     similarity_model_name: str = Field(
         default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",

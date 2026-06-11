@@ -1,4 +1,3 @@
-import logging
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -8,6 +7,8 @@ from fastapi import FastAPI
 
 from app.api import health, v1
 from app.config import RuntimeConfigError, get_settings
+from app.observability import configure_logging, get_logger, init_telemetry, shutdown_telemetry
+from app.observability.telemetry import instrument_fastapi
 from app.grpc.server import fail_startup, start_grpc_server, stop_grpc_server
 from app.providers import create_provider
 from app.services.classifier_service import ClassifierService
@@ -20,17 +21,16 @@ from app.services.similarity_service import SimilarityService
 load_dotenv()
 
 
-def _configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    _configure_logging(settings.log_level)
+    init_telemetry(settings.otel_service_name, settings.app_env)
+    configure_logging(
+        service_name=settings.otel_service_name,
+        log_level=settings.log_level,
+        log_format=settings.log_format,
+    )
+    logger = get_logger(__name__)
     app.state.settings = settings
     app.state.ai_provider = create_provider(settings)
     app.state.classifier_service = ClassifierService(settings)
@@ -38,15 +38,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.reviewer_matching_service = ReviewerMatchingGrpcService(settings)
     app.state.keyword_suggestion_service = KeywordSuggestionService(settings)
     app.state.copyedit_analysis_service = CopyeditAnalysisService(settings)
-    logging.getLogger(__name__).info(
-        "ai-service ready (provider=%s, arabert=%s, similarity=%s, reviewer_matching=%s, keywords=%s, copyedit=%s, env=%s)",
-        app.state.ai_provider.name,
-        settings.arabert_enabled,
-        settings.similarity_enabled,
-        settings.reviewer_matching_enabled,
-        settings.keywords_suggestion_enabled,
-        settings.copyedit_analysis_enabled,
-        settings.app_env,
+    logger.info(
+        "ai-service ready",
+        provider=app.state.ai_provider.name,
+        arabert=settings.arabert_enabled,
+        similarity=settings.similarity_enabled,
+        reviewer_matching=settings.reviewer_matching_enabled,
+        keywords=settings.keywords_suggestion_enabled,
+        copyedit=settings.copyedit_analysis_enabled,
+        env=settings.app_env,
     )
     grpc_server = None
     try:
@@ -68,6 +68,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await stop_grpc_server(grpc_server)
+        from app.ml.vector.ai_engine import AIEngine
+
+        AIEngine.shutdown()
+        shutdown_telemetry()
 
 
 def create_app() -> FastAPI:
@@ -84,6 +88,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(v1.router)
+    instrument_fastapi(app)
     return app
 
 

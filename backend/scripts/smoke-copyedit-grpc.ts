@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { ClsService } from 'nestjs-cls';
 import { AiClientService } from '../src/ai/ai-client.service';
 
 async function main(): Promise<void> {
@@ -12,7 +13,8 @@ async function main(): Promise<void> {
       '_gbHN0Z7AsZHaj9PhrPatt85F5Tukfxwjkj5s3yRvA4',
     AI_SERVICE_TIMEOUT_MS: '120000',
   });
-  const ai = new AiClientService(config);
+  const cls = { get: () => undefined } as unknown as ClsService;
+  const ai = new AiClientService(config, cls);
   console.log('copyedit enabled:', ai.isCopyeditEnabled());
   const out = await ai.checkReferences({
     referenceList: ['Smith J. Example study. 2020.'],

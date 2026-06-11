@@ -20,7 +20,7 @@ from folio.ai.v1 import (
 )
 
 from app.config import Settings
-from app.grpc.interceptors import ServiceTokenInterceptor
+from app.grpc.interceptors import LoggingInterceptor, ServiceTokenInterceptor
 from app.grpc.copyedit_servicer import CopyeditGrpcServicer
 from app.grpc.keyword_servicer import KeywordGrpcServicer
 from app.grpc.plagiarism_servicer import PlagiarismGrpcServicer
@@ -44,7 +44,9 @@ async def start_grpc_server(
     copyedit_service: CopyeditAnalysisService,
     settings: Settings,
 ) -> tuple[grpc.aio.Server, int]:
-    interceptors: list[grpc.aio.ServerInterceptor] = []
+    interceptors: list[grpc.aio.ServerInterceptor] = [
+        LoggingInterceptor(),
+    ]
     if settings.ai_service_token:
         interceptors.append(ServiceTokenInterceptor(settings.ai_service_token))
 

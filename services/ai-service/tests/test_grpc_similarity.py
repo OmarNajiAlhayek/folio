@@ -41,7 +41,7 @@ def mock_similarity_service() -> SimilarityService:
     )
     service.status = lambda: {  # type: ignore[method-assign, assignment]
         "enabled": True,
-        "chroma_path": "/tmp/chroma",
+        "vector_backend": "pgvector",
         "model_name": "test-model",
         "default_threshold": 0.7,
         "same_category_only": False,

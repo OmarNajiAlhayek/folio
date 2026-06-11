@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-SUMMARY_COLLECTION_NAME = "articles_summary_collection"
-CHUNKS_COLLECTION_NAME = "articles_chunks_collection"
-REVIEWERS_COLLECTION_NAME = "reviewers_collection"
-# Legacy collection (pre-unified summary index); cleaned up on reviewer removal.
-REVIEWER_HISTORY_COLLECTION_NAME = "reviewer_history_summary_collection"
+# paraphrase-multilingual-mpnet-base-v2 output dimension; must match migration vector(n).
+EMBEDDING_DIM = 768
 
 
 def _detect_device() -> str:
@@ -26,9 +23,15 @@ def _detect_device() -> str:
 
 @dataclass(frozen=True)
 class VectorConfig:
-    """Runtime configuration for Chroma, encoders, and chunking."""
+    """Runtime configuration for pgvector storage, encoders, and chunking."""
 
-    chroma_path: str = "./data/chroma_articles"
+    vector_db_host: str = "localhost"
+    vector_db_port: int = 5432
+    vector_db_user: str = "postgres"
+    vector_db_password: str = ""
+    vector_db_database: str = "folio_review"
+    vector_db_ssl: bool = False
+    vector_db_hnsw_ef_search: int = 64
     bi_encoder_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
     cross_encoder_model: str = "cross-encoder/stsb-distilroberta-base"
     device: str | None = None

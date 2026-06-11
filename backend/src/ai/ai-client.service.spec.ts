@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { ClsService } from 'nestjs-cls';
 import { status as GrpcStatus, type ServiceError } from '@grpc/grpc-js';
 import { AiClientService } from './ai-client.service';
 import {
@@ -32,8 +33,14 @@ describe('AiClientService', () => {
     closeAiGrpcClients();
   });
 
-  function serviceFromEnv(env: Record<string, string | undefined>): AiClientService {
-    return new AiClientService(new ConfigService(env));
+  const cls = {
+    get: jest.fn().mockReturnValue(undefined),
+  } as unknown as ClsService;
+
+  function serviceFromEnv(
+    env: Record<string, string | undefined>,
+  ): AiClientService {
+    return new AiClientService(new ConfigService(env), cls);
   }
 
   it('isEnabled when gRPC host is set', () => {

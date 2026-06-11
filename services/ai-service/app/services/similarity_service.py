@@ -28,7 +28,13 @@ class SimilarityUnavailableError(RuntimeError):
 def vector_config_from_settings(settings: Settings) -> VectorConfig:
     """Map ai-service Settings to the vector package config."""
     return VectorConfig(
-        chroma_path=settings.similarity_chroma_path,
+        vector_db_host=settings.vector_db_host,
+        vector_db_port=settings.vector_db_port,
+        vector_db_user=settings.vector_db_user,
+        vector_db_password=settings.vector_db_password,
+        vector_db_database=settings.vector_db_database,
+        vector_db_ssl=settings.vector_db_ssl,
+        vector_db_hnsw_ef_search=settings.vector_db_hnsw_ef_search,
         bi_encoder_model=settings.similarity_model_name,
         device=settings.similarity_device,
         batch_size=settings.similarity_batch_size,
@@ -115,7 +121,7 @@ class SimilarityService:
     def status(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
-            "chroma_path": self._settings.similarity_chroma_path,
+            "vector_backend": "pgvector",
             "model_name": self._settings.similarity_model_name,
             "default_threshold": self._settings.similarity_default_threshold,
             "same_category_only": self._settings.similarity_same_category_only,

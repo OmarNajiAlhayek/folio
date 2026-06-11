@@ -27,7 +27,7 @@ def reviewer_matching_grpc_service():
 
 @pytest.fixture(autouse=True)
 def reset_vector_engine() -> None:
-    """Isolate Chroma / encoder singleton between tests."""
+    """Isolate vector engine / encoder singleton between tests."""
     from app.ml.vector.ai_engine import AIEngine
 
     AIEngine.reset_instance()

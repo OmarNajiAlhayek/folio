@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 
 class VectorDependenciesError(ImportError):
-    """Raised when chromadb, sentence-transformers, or pyarabic are missing."""
+    """Raised when pgvector, psycopg, sentence-transformers, or pyarabic are missing."""
 
 
 class ArticleNotIndexedError(ValueError):
-    """Raised when an article_id is not present in the summary collection."""
+    """Raised when an article_id is not present in the summary embeddings table."""
 
 
 @dataclass(frozen=True)

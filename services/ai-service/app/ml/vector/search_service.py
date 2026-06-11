@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from app.ml.vector.ai_engine import AIEngine, similarity_from_distance
+from app.ml.vector.ai_engine import AIEngine
 from app.ml.vector.config import VectorConfig
 from app.ml.vector.text_processing import clean_text
 from app.ml.vector.types import SearchHit
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class SearchService:
-    """Semantic Search: user query against the chunks collection."""
+    """Semantic Search: user query against the chunks table."""
 
     def __init__(
         self,
@@ -44,34 +44,20 @@ class SearchService:
             limit_articles,
         )
 
-        collection = self._engine.chunks_collection
-        query_res = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            include=["metadatas", "documents", "distances"],
+        batch = self._engine.store.query_similar_chunks(
+            [query_embedding],
+            limit_per_query=n_results,
         )
+        chunk_hits = batch[0] if batch else []
 
         best_by_article: dict[str, SearchHit] = {}
-        ids_row = query_res["ids"][0]
-        distances_row = query_res["distances"][0]
-        docs_row = query_res["documents"][0]
-        metas_row = query_res["metadatas"][0]
-
-        for i, _chunk_doc_id in enumerate(ids_row):
-            meta = metas_row[i] or {}
-            aid = str(meta.get("article_id", ""))
-            if not aid:
-                continue
-
-            score = similarity_from_distance(distances_row[i])
-            snippet = docs_row[i] or ""
-
-            existing = best_by_article.get(aid)
-            if existing is None or score > existing.score:
-                best_by_article[aid] = SearchHit(
-                    article_id=aid,
-                    snippet=snippet,
-                    score=score,
+        for hit in chunk_hits:
+            existing = best_by_article.get(hit.article_id)
+            if existing is None or hit.similarity > existing.score:
+                best_by_article[hit.article_id] = SearchHit(
+                    article_id=hit.article_id,
+                    snippet=hit.chunk_text,
+                    score=hit.similarity,
                 )
 
         ranked = sorted(best_by_article.values(), key=lambda h: h.score, reverse=True)

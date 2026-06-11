@@ -135,7 +135,7 @@ class SimilarityGrpcServicer(similarity_pb2_grpc.SimilarityServiceServicer):
             status = self._similarity.status()
             return similarity_pb2.SimilarityStatus(
                 enabled=bool(status["enabled"]),
-                chroma_path=str(status["chroma_path"]),
+                chroma_path=str(status.get("vector_backend", "pgvector")),
                 model_name=str(status["model_name"]),
                 default_threshold=float(status["default_threshold"]),
                 same_category_only=bool(status["same_category_only"]),

@@ -1,10 +1,10 @@
-"""Find similar published articles via the summary collection."""
+"""Find similar published articles via the summary embeddings table."""
 
 from __future__ import annotations
 
 import logging
 
-from app.ml.vector.ai_engine import AIEngine, similarity_from_distance
+from app.ml.vector.ai_engine import AIEngine
 from app.ml.vector.config import VectorConfig
 from app.ml.vector.types import ArticleNotIndexedError, SimilarArticleHit
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class SimilarArticlesService:
-    """Similar Articles feature: abstract+keywords embedding vs summary collection."""
+    """Similar Articles feature: abstract+keywords embedding vs summary table."""
 
     def __init__(
         self,
@@ -37,57 +37,38 @@ class SimilarArticlesService:
         Uses the stored summary embedding for ``article_id``.
         """
         article_id = article_id.strip()
-        collection = self._engine.summary_collection
+        store = self._engine.store
 
-        result = collection.get(
-            ids=[article_id],
-            include=["embeddings", "metadatas"],
-        )
-        if not result["ids"]:
+        source = store.get_summary(article_id)
+        if source is None:
             raise ArticleNotIndexedError(f"Article {article_id!r} is not indexed")
 
-        query_emb = result["embeddings"][0]
-        source_meta = result["metadatas"][0] or {}
-        category = str(source_meta.get("category", ""))
-        where = (
-            {"category": {"$eq": category}}
-            if same_category_only and category
-            else None
-        )
-
+        category = source.category if same_category_only and source.category else None
         n_results = limit + (1 if exclude_self else 0)
         n_results = max(n_results, limit)
 
-        query_res = collection.query(
-            query_embeddings=[query_emb],
-            n_results=n_results,
-            where=where,
-            include=["metadatas", "distances"],
+        hits_raw = store.query_similar_summaries(
+            source.embedding,
+            limit=n_results,
+            category=category,
+            exclude_submission_id=article_id if exclude_self else None,
         )
 
         hits: list[SimilarArticleHit] = []
-        ids_row = query_res["ids"][0]
-        distances_row = query_res["distances"][0]
-        metas_row = query_res["metadatas"][0]
-
-        for i, cid in enumerate(ids_row):
-            if exclude_self and cid == article_id:
+        for row in hits_raw:
+            if exclude_self and row.submission_id == article_id:
                 continue
             if len(hits) >= limit:
                 break
-
-            sim = similarity_from_distance(distances_row[i])
-            if sim < similarity_threshold:
+            if row.similarity < similarity_threshold:
                 continue
-
-            meta = metas_row[i] or {}
             hits.append(
                 SimilarArticleHit(
-                    article_id=cid,
-                    abstract=str(meta.get("abstract", "")),
-                    keywords=str(meta.get("keywords", "")),
-                    category=str(meta.get("category", "")),
-                    similarity=sim,
+                    article_id=row.submission_id,
+                    abstract=row.abstract,
+                    keywords=row.keywords,
+                    category=row.category,
+                    similarity=row.similarity,
                 ),
             )
 

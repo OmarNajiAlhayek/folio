@@ -46,7 +46,7 @@ class ReviewerMatchingGrpcService:
     def status(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
-            "chroma_path": self._settings.similarity_chroma_path,
+            "vector_backend": "pgvector",
             "model_name": self._settings.similarity_model_name,
         }
 

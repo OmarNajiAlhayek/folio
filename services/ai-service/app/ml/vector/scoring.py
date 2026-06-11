@@ -6,6 +6,11 @@ import math
 from collections import defaultdict
 
 
+def similarity_from_pgvector_distance(distance: float) -> float:
+    """Convert pgvector cosine distance (<=> with vector_cosine_ops) to [0, 1]."""
+    return max(0.0, min(1.0, 1.0 - distance))
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Cosine similarity between two vectors, clamped to [0, 1]."""
     if len(a) != len(b):
