@@ -22,9 +22,12 @@ This document defines the **next** transactional emails after v1 (reviewer invit
 - Editor / journal manager role invitation email (`role.invitation`)
 - In-app notifications (REST inbox + SSE) for editorial, review, and copyedit events
 
+**Also shipped (v2.1):**
+
+- `under_review` transition email to author (`submission.under_review`) — editor `PATCH …/status` or reviewer accept auto-transition
+
 **Still deferred:**
 
-- `under_review` transition email to author (often set automatically when a reviewer accepts)
 - Password reset / registration welcome
 
 ---
@@ -163,9 +166,9 @@ export type SubmissionDecisionEvent = {
 
 **Template key:** `submission-decision` (single template; branch on `decision` like `reminder-due` / `isOverdue`)
 
-**Variables:** `authorDisplayName`, `submissionTitle`, `decision`, `submissionUrl`, `decidedByDisplayName`
+**Variables:** `authorDisplayName`, `submissionTitle`, `decision`, `submissionUrl`, `decidedByDisplayName`, `messageForAuthor`, `hasMessageForAuthor`
 
-**v2.0 limitation:** `updateStatus` does not accept editor comments. Templates cannot include decision rationale until the API carries an optional `messageForAuthor` (v2.1).
+**v2.1:** `PATCH …/status` accepts optional `messageForAuthor` on decision transitions; persisted on the submission and passed through the event for template rendering.
 
 ---
 
@@ -266,7 +269,7 @@ flowchart TD
 |---|----------|----------------|
 | 1 | Editor queue link in email? | `{APP_BASE_URL}/submissions/{slug}` (editor can open from queue) |
 | 2 | Separate templates for resubmission vs first submit? | Single template + `isResubmission` flag |
-| 3 | Email on `under_review`? | Defer (v2.1) — avoids noise when reviewer accept auto-transitions |
+| 3 | Email on `under_review`? | **Shipped (v2.1)** — neutral author notification on `submitted` → `under_review` |
 | 4 | Decision email when editor sets `accepted` then author never sees copyedit? | Still send on `accepted`; copyedit is a later status |
 | 5 | Rate limit / max editors? | v2.0: no cap (expect small editor pool). Revisit for multi-tenant |
 

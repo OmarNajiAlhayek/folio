@@ -9,6 +9,20 @@ Use this before running Folio locally. Full run instructions are in the reposito
 - **Docker** — Optional; `docker-compose.dev.yml` provides RabbitMQ (email pipeline) and LanguageTool (copyedit grammar checks).
 - **Python 3.12+** — Optional; needed if you run the ai-service for AI-assisted features.
 
+### Repo root (optional but recommended)
+
+```bash
+npm install   # enables Husky pre-commit (Prettier + ESLint via lint-staged)
+```
+
+### Shared package
+
+After editing `packages/shared/`, rebuild before running Nest apps or tests:
+
+```bash
+npm run build:shared
+```
+
 ## Configuration (copy examples; never commit secrets)
 
 | Location | Copy from |
@@ -25,7 +39,7 @@ Set `DB_*`, `JWT_SECRET`, API URL / CORS as needed. **Mail:** only `services/ema
 ## Run order (typical)
 
 1. Optional: `docker compose -f docker-compose.dev.yml up -d` (RabbitMQ; add `languagetool` service when using copyedit grammar checks — see `backend/.env.example`).
-2. `cd backend` → `npm install` → `npm run seed` (if you use the seed) → `npm run start:dev`.
+2. `cd backend` → `npm install` → `npm run migrate` → `npm run seed` (if you use the seed) → `npm run start:dev`.
 3. `cd frontend` → `npm install` → `npm run dev`.
 4. Optional: `cd services/email-service` → `npm install` → `npm run start:dev`.
 5. Optional: `cd services/ai-service` → venv → `pip install -e ".[dev]"` → `uvicorn app.main:app --reload --port 5245` (gRPC on **5246**). Enable matching flags in `backend/.env` (`AI_SERVICE_ENABLED`, etc.). See [`services/ai-service/README.md`](../services/ai-service/README.md).

@@ -11,7 +11,7 @@ For architecture flags and ports, see [`plans/ai-service.md`](./plans/ai-service
 1. [Shared platform](#1-shared-platform)
 2. [Arabic discipline classifier (AraBERT)](#2-arabic-discipline-classifier-arabert)
 3. [Keyword suggestions (LLM)](#3-keyword-suggestions-llm)
-4. [Published-article vector index (Chroma)](#4-published-article-vector-index-chroma)
+4. [Published-article vector index (pgvector)](#4-published-article-vector-index-pgvector)
 5. [Related published articles](#5-related-published-articles)
 6. [Public semantic catalog search](#6-public-semantic-catalog-search)
 7. [Corpus similarity report (editor / reviewer)](#7-corpus-similarity-report-editor--reviewer)
@@ -39,7 +39,7 @@ flowchart TB
 |-------|------|
 | **Next.js** | UI buttons and panels call Nest REST routes only. |
 | **Nest (`AiClientService`)** | Feature flags, auth, throttling, manuscript extraction, DB persistence, aggregation of AI results. |
-| **ai-service** | gRPC microservice: ML models, embeddings, Chroma, OpenAI-compatible LLM calls. |
+| **ai-service** | gRPC microservice: ML models, embeddings, pgvector, OpenAI-compatible LLM calls. |
 | **LanguageTool** | Self-hosted grammar/spelling; Nest calls it over HTTP. **Not** part of ai-service. |
 
 ### gRPC contracts
@@ -184,31 +184,31 @@ Partial lists (1–2 keywords) are allowed in the UI; **submit** still enforces 
 
 ---
 
-## 4. Published-article vector index (Chroma)
+## 4. Published-article vector index (pgvector)
 
-Several features share one **embedding stack** in ai-service (`app/ml/vector/`).
+Several features share one **embedding stack** in ai-service (`app/ml/vector/`). Embeddings are stored in **Postgres `folio_review`** via the pgvector extension (HNSW + `vector_cosine_ops`); ai-service reads/writes with psycopg3.
 
 ### Components
 
 | Component | Role |
 |-----------|------|
-| **AIEngine** (singleton) | Chroma persistent client + bi-encoder + lazy cross-encoder |
-| **Bi-encoder** | `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` — embeds text for retrieval |
+| **AIEngine** (singleton) | pgvector `VectorStore` + bi-encoder + lazy cross-encoder |
+| **Bi-encoder** | `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` — 768-dim embeddings (not L2-normalized; cosine ops handle this) |
 | **Cross-encoder** | `cross-encoder/stsb-distilroberta-base` — reranks query–document pairs (reviewer matching stage 2; not used for “similar articles” only) |
-| **Chroma collections** | `articles_summary_collection`, `articles_chunks_collection`, `reviewers_collection` (+ legacy reviewer history collection) |
+| **Postgres tables** | `article_summary_embeddings`, `article_chunk_embeddings`, `reviewer_bio_embeddings` |
 
 ### Text pipeline
 
 1. **`clean_text()`** — Arabic normalization (pyarabic), strip punctuation.  
-2. **Summary** — `combine_summary_text(abstract, keywords)` → one embedding per article/submission id in **summary** collection. Metadata: `abstract`, `keywords`, `category` (discipline).  
-3. **Chunks** — Full published text split into **200-word windows, 50-word overlap**; each chunk stored in **chunks** collection with `article_id`, `chunk_index`, `category`.
+2. **Summary** — `combine_summary_text(abstract, keywords)` → one row per submission id in `article_summary_embeddings` (`abstract`, `keywords`, `category`).  
+3. **Chunks** — Full published text split into **200-word windows, 50-word overlap**; rows in `article_chunk_embeddings` keyed by `(article_id, chunk_index)`.
 
 ### Indexing from Nest
 
 When `AI_SIMILARITY_ENABLED=true`:
 
-- On **publish**, `indexPublishedSubmissionForSimilarity()` calls gRPC `UpsertArticle` with submission id, abstract, keywords, discipline as category, and plain full text from constructor/DOCX pipeline.  
-- **`backfillPublishedSimilarityIndex()`** re-indexes all `PUBLISHED` rows (used before related-articles and semantic catalog queries so older publications are included).
+- On **publish**, `enqueuePublishedSubmissionForSimilarity()` creates an `ai_jobs` row and enqueues `ai.similarity_index.requested` via the transactional outbox → RabbitMQ. The worker calls gRPC `UpsertArticle` and sets `submissions.similarity_indexed_at`.  
+- **`enqueueMissingSimilarityIndexJobs()`** queues index jobs only for published rows where `similarity_indexed_at` is null (triggered lazily from related-articles / semantic catalog, and from seed).
 
 Only rows that pass `publicationSimilarityIndexPayload()` are indexed (published catalog corpus rules).
 
@@ -226,7 +226,7 @@ On a **public publication detail** page, show other published papers with simila
 
 1. Nest `findRelatedPublications(slug)` ensures index backfill.  
 2. gRPC `FindSimilarArticles` with `article_id = submission.id`.  
-3. ai-service loads the article’s **summary embedding**, queries the summary collection (optional same-category filter from config), converts cosine distance to similarity, filters by threshold (default ~0.7).  
+3. ai-service loads the article’s **summary embedding**, KNN-queries `article_summary_embeddings` (optional same-category filter from config), converts cosine distance to similarity, filters by threshold (default ~0.7).  
 4. Nest joins hits to PostgreSQL published rows and returns slug, titles, abstracts, similarity score.
 
 ### Access
@@ -264,11 +264,12 @@ Show editors and **assigned reviewers** where the **current manuscript text** ov
 
 ### Flow
 
-1. `GET /submissions/:slug/corpus-similarity` — **not** available to authors or copyeditors-only roles.  
-2. Nest builds plain text via `buildSubmissionCorpusPlainText()`; if insufficient text → `{ status: 'no_text' }`.  
-3. gRPC `DetectCorpusSimilarity` with default threshold **0.85** (Nest constant) and optional `category` = submission discipline to limit Chroma `where` filter.  
-4. ai-service: clean → chunk submission → embed all chunks → batched nearest-neighbor search in **chunks** collection (batch size 200) → matches above threshold.  
-5. Nest `aggregateCorpusSimilarityMatches()` groups by source article, top snippets per source, attaches published metadata (slug, title) when the source id is a known published submission.
+1. `POST /submissions/:slug/corpus-similarity/jobs` — starts an async job (or returns immediate `no_text` / `unavailable` without a job). **Not** available to authors or copyeditors-only roles.  
+2. `GET /submissions/:slug/corpus-similarity/jobs/:jobId` — poll job status; `completed` includes the report in `result`.  
+3. `GET /submissions/:slug/corpus-similarity/jobs/latest` — resume the active or most recent completed job (tab-switch safe).  
+4. Worker: gRPC `DetectCorpusSimilarity` with default threshold **0.85** and optional `category` = submission discipline.  
+5. ai-service: clean → chunk submission → embed all chunks → batched nearest-neighbor search in **chunks** collection (batch size 200) → matches above threshold.  
+6. Nest `aggregateCorpusSimilarityMatches()` groups by source article, top snippets per source, attaches published metadata (slug, title) when the source id is a known published submission.
 
 ### Response shapes
 
@@ -427,7 +428,7 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 |------|----------------|
 | Discipline only | AraBERT weights, `ARABERT_ENABLED`, Nest `AI_SERVICE_ENABLED` |
 | Keywords + references | LM Studio or OpenAI, `AI_PROVIDER=openai`, both keyword/copyedit flags |
-| Similarity + reviewers | `[similarity]`, Chroma path, both similarity flags |
+| Similarity + reviewers | `[similarity]`, `VECTOR_DB_*`, both similarity flags |
 | Full copyedit panel | Above + LanguageTool in Docker Compose |
 
 ---
@@ -449,7 +450,7 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 | Copyedit analysis | `backend/src/submissions/submissions.service.ts` (`runCopyeditAnalysis`), `submission-copyedit-text.util.ts` |
 | Discipline helpers | `backend/src/submissions/submission-discipline.util.ts`, `backend/src/ai/discipline-labels.ts` |
 | ai-service entry | `services/ai-service/app/main.py`, `app/grpc/server.py` |
-| Vector / Chroma | `services/ai-service/app/ml/vector/` |
+| Vector / pgvector | `services/ai-service/app/ml/vector/` |
 | Classifier | `services/ai-service/app/ml/arabic_classifier.py` |
 | LLM features | `keyword_suggestion_service.py`, `copyedit_analysis_service.py` |
 
@@ -461,9 +462,9 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 |---------|---------|-----------|-----------|
 | Discipline suggestion | Author | Nest → gRPC | AraBERT classifier |
 | Keywords | Author | Nest → gRPC | OpenAI-compatible LLM |
-| Related publications | Public | Nest → gRPC | Chroma + bi-encoder |
-| Semantic catalog search | Public | Nest → gRPC | Chroma chunks + bi-encoder |
-| Corpus similarity | Editor, reviewer | Nest → gRPC | Chroma chunks + bi-encoder |
+| Related publications | Public | Nest → gRPC | pgvector summary + bi-encoder |
+| Semantic catalog search | Public | Nest → gRPC | pgvector chunks + bi-encoder |
+| Corpus similarity | Editor, reviewer | Nest → gRPC | pgvector chunks + bi-encoder |
 | Suggested reviewers | Editor | Nest → gRPC | Bi-encoder + cross-encoder |
 | Copyedit format | Copyeditor, editor | Nest only | Rule-based |
 | Copyedit grammar | Copyeditor, editor | Nest → LanguageTool | LanguageTool |

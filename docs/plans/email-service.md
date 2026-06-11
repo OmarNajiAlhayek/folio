@@ -138,6 +138,7 @@ Canonical types and routing keys: [`packages/shared/contracts/email-events.ts`](
 | `copyedit.author_ready` | backend | copyeditor | `copyedit-author-ready` |
 | `submission.submitted` | backend | each editor **and** journal manager | `submission-submitted` |
 | `submission.decision` | backend | author | `submission-decision` |
+| `submission.under_review` | backend | author | `submission-under-review` |
 | `submission.published` | backend | author | `submission-published` |
 | `review.submitted` | backend | each editor and journal manager | `review-submitted` |
 | `review.invitation_accepted` | backend | each editor and journal manager | `review-invitation-accepted` |
@@ -248,16 +249,21 @@ where `status='pending' AND sendAt <= now()`, and publishes a
 above) processes both immediate sends and scheduled reminders — one
 place to debug.
 
-v1 stale-reminder fallback: the `reminder.due` handler refuses to send
-if the corresponding `Reminder` row is no longer `pending`. (A v2
-`ReviewerResponded` event will mark these `cancelled` proactively
-when an assignment is accepted/declined/completed; v1 simply drops
-them at handler time.)
+**Proactive cancellation:** when a reviewer **declines** or **submits**
+a review, the backend enqueues `reviewer.responded` in the same
+transaction as the assignment status change. The email-service consumer
+marks all **pending** reminders for that `assignmentSlug` as
+`cancelled`. **Accept** does not cancel — due-soon/overdue reminders
+remain for in-progress reviews.
 
-## Migrations & schema isolation
+**Safety net:** the `reminder.due` handler still refuses to send if the
+`Reminder` row is no longer `pending` (e.g. race with the scheduler).
 
-The email-service owns its own TypeORM datasource pinned to the
-`email` Postgres schema (see
+## Migrations & database isolation
+
+Email-service uses a **dedicated Postgres database** (`folio_email` by default;
+see `postgres-email` in `docker-compose.dev.yml`). TypeORM is pinned to schema
+`email` within that database (see
 [`services/email-service/src/db/data-source.ts`](../../services/email-service/src/db/data-source.ts)).
 
 - `email-service` migrations: `npm run migrate` (uses TypeORM CLI).
@@ -265,16 +271,11 @@ The email-service owns its own TypeORM datasource pinned to the
   database becomes usable without any manual step. Migrations create
   `email.email_template` and `email.email_reminder_policy` (with seeds from
   the default files). **Deploy order:** run **email-service migrations first**
-  (or start email-service once) so these tables exist before the backend
-  or workers rely on them.
-- Backend datasource is unchanged (`synchronize: true` against
-  `public`). The backend **reads** `email.*` admin tables via raw SQL
-  for editor APIs; it does not run email-service migrations.
-
-If the backend connects as a **restricted** Postgres role (not the table owner),
-run [`backend/scripts/grant-email-reminder-admin.sql`](../../backend/scripts/grant-email-reminder-admin.sql)
-after email-service migrations so `SELECT`/`UPDATE` on `email.reminder`,
-`email.email_template`, and `email.email_reminder_policy` succeed for `DB_USERNAME`.
+  (or start email-service once) so these tables exist before admin APIs are used.
+- Backend datasource is unchanged (`synchronize: true` against `folio_review`
+  / `public`). Admin template, reminder, and pipeline-slice operations go
+  through the backend BFF, which calls email-service **`/internal/*`** HTTP
+  with `x-folio-service-token` (`EMAIL_SERVICE_URL`, `EMAIL_SERVICE_TOKEN`).
 
 The backend's `outbound_event_outbox` table lives in `public` because
 it must commit atomically with `review_assignments`.
@@ -339,14 +340,12 @@ Used to build accept/decline links inside `ReviewerInvitedEvent`
 ## Out of scope (v1)
 
 - Concrete email vendor selection (kept abstract).
-- `ReviewerResponded` event for proactive reminder cancellation
-  (handler currently re-checks `Reminder.status` before sending).
 - Multi-replica reminder scheduler (single instance assumed; switch to
   `SELECT ... FOR UPDATE SKIP LOCKED` when sharding).
 - Email log retention pruning job.
 
 ## Phase 2+ status
 
-**Shipped:** reviewer invite + reminders (v1); copyedit emails; submission submitted/decision (phase 2); review submitted, review accept/decline, submission published, role invitation (phase 3); in-app notifications (REST + SSE). See [`docs/API-NOTES.md`](../API-NOTES.md) for the live event table and notification routes.
+**Shipped:** reviewer invite + reminders (v1); copyedit emails; submission submitted/decision (phase 2); review submitted, review accept/decline, submission published, role invitation (phase 3); in-app notifications (REST + SSE); proactive `reviewer.responded` reminder cancellation on decline/complete. See [`docs/API-NOTES.md`](../API-NOTES.md) for the live event table and notification routes.
 
-**Still deferred:** auth/welcome mail, password reset, refresh tokens, OAuth, ORCID, proactive `ReviewerResponded` reminder cancellation event.
+**Still deferred:** auth/welcome mail, password reset, refresh tokens, OAuth, ORCID.

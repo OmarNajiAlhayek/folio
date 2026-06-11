@@ -70,8 +70,13 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 |--------|------|-----|--------|
 | POST | `/auth/register` | Public | Create user; default role author. Body: email, password, displayName; optional affiliation, orcid (0000-0000-0000-000X), reviewKeywords, willingToReview. |
 | POST | `/auth/login` | Public | Sets auth cookies; JSON `{ user }` only (adds `accessToken` when `AUTH_RETURN_BEARER=true`). |
+| POST | `/auth/verify-email/send` | Authenticated | Resend 6-digit verification OTP (throttled). No-op if already verified. |
+| POST | `/auth/verify-email` | Authenticated | Body `{ code }` — confirms email ownership; sets `emailVerified` on profile. |
+| POST | `/auth/forgot-password` | Public | Body `{ email }` — always returns `{ ok: true }`; enqueues reset email when account exists. |
+| GET | `/auth/reset-password/validate?token=` | Public | Returns `{ valid: true }` or 400 when token invalid/expired. |
+| POST | `/auth/reset-password` | Public | Body `{ token, password }` — updates password and revokes all refresh sessions. |
 | POST | `/auth/logout` | Authenticated | Clears cookies and revokes the current JWT session id (`jti`) server-side; other devices/sessions stay signed in until their tokens expire. Requires CSRF when using cookie session (not when using `Authorization: Bearer`). |
-| GET | `/auth/me` | Authenticated | Current user + roles. |
+| GET | `/auth/me` | Authenticated | Current user + roles + `emailVerified`. |
 
 ### Users (minimal)
 
@@ -97,7 +102,7 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | PATCH | `/submissions/:slug` | Author | Full metadata when `draft` or `revisions_requested` (title, abstract, article type, keywords, contributors, declarations, reviewer preferences). |
 | PATCH | `/submissions/:slug/review-method` | Editor | Body: `{ "reviewMethod": "open" \| "anonymous" \| "double_anonymous" }`. Requires `submission.change_status` **or** `submission.assign_reviewer`. |
 | POST | `/submissions/:slug/submit` | Author | `draft` → `submitted` (or resubmit from `revisions_requested`). Validates journal-style checklist; new author uploads default `file_stage = submission`. |
-| PATCH | `/submissions/:slug/status` | Editor | Transitions with validation; `under_review` requires a review-package manuscript (see policy). |
+| PATCH | `/submissions/:slug/status` | Editor | Body: `{ "status": "…", "messageForAuthor"?: string }`. Optional `messageForAuthor` (max 4000 chars) when setting `accepted`, `rejected`, or `revisions_requested`; persisted on the submission and included in the author decision email. `under_review` requires a review-package manuscript (see policy). |
 | GET | `/submissions/discipline-labels` | Author / Editor | Arabic discipline label list; optional journal scope via `JOURNAL_ALLOWED_DISCIPLINES`. |
 | POST | `/submissions/:slug/suggest-discipline` | Author (draft) | Calls ai-service `ClassifierService`; stores `disciplineSuggested*` on submission. Requires `AI_SERVICE_ENABLED` + classifier enabled on ai-service. |
 | POST | `/submissions/:slug/suggest-keywords` | Author (draft) | Returns suggested EN/AR keyword lists (not persisted). Requires `AI_KEYWORDS_ENABLED`. |
@@ -182,7 +187,7 @@ Legacy alias `GET /publications` may redirect or mirror catalog list depending o
   same [`email-service`](./plans/email-service.md) pipeline as reviewer/copyedit mail.
 - **Shipped (phase 3):** review-submitted, reviewer accept/decline → editors;
   submission-published → author; role-invitation → invitee.
-- **Still deferred:** auth/welcome mail, password reset.
+- **Shipped (auth):** email verification OTP (`auth.verification_otp`) on register/resend; password reset magic link (`auth.password_reset`) via `POST /auth/forgot-password`; registration welcome (`auth.registration_welcome`) after successful `POST /auth/verify-email`. Unverified users may log in but cannot submit manuscripts, accept/decline reviews, submit reviews, or accept role invitations until `POST /auth/verify-email`.
 - **Shipped:** in-app notifications (REST inbox, SSE live updates, header bell). See `GET /notifications`, `GET /notifications/stream`.
 - Refresh tokens, OAuth, ORCID.
 
@@ -196,17 +201,22 @@ in [`docs/plans/email-service.md`](./plans/email-service.md).
 | Routing key | Producer | Consumer | Effect |
 |-------------|----------|----------|--------|
 | `reviewer.invited` | Backend (`assignReviewer`) | email-service | Sends invitation email + schedules due-soon / overdue reminders |
+| `reviewer.responded` | Backend (`declineReviewInvitation`, `submitReview`) | email-service | Cancels pending reminders for the assignment (decline or review complete; accept does not cancel) |
 | `reminder.due` | email-service cron | email-service | Sends a reminder email; same template/provider path as immediate sends |
 | `copyedit.assigned` | Backend (`assignCopyeditor`) | email-service | Notifies copyeditor of assignment |
 | `copyedit.queries_sent` | Backend (`submitCopyeditNote`) | email-service | Notifies author of copyedit queries |
 | `copyedit.author_ready` | Backend (`markCopyeditAuthorReady`) | email-service | Notifies copyeditor author is ready |
 | `submission.submitted` | Backend (`submit`) | email-service | Notifies each editor and journal manager (one outbox row per recipient) |
 | `submission.decision` | Backend (`updateStatus` → accepted/rejected/revisions_requested) | email-service | Notifies author of editorial decision |
+| `submission.under_review` | Backend (`updateStatus` → under_review from submitted, or reviewer accept auto-transition) | email-service | Notifies author that peer review has started |
 | `submission.published` | Backend (`publishSubmission`) | email-service | Notifies author when copyeditor publishes |
 | `review.submitted` | Backend (`submitReview`) | email-service | Notifies each editor and journal manager |
 | `review.invitation_accepted` | Backend (`acceptReviewInvitation`) | email-service | Notifies each editor and journal manager |
 | `review.invitation_declined` | Backend (`declineReviewInvitation`) | email-service | Notifies each editor and journal manager |
 | `role.invitation` | Backend (`POST …/role-invitations`) | email-service | Notifies invitee of privileged role invite |
+| `auth.verification_otp` | Backend (`register`, `POST /auth/verify-email/send`) | email-service | Sends 6-digit email verification code |
+| `auth.password_reset` | Backend (`POST /auth/forgot-password`) | email-service | Sends password reset magic link |
+| `auth.registration_welcome` | Backend (`POST /auth/verify-email`) | email-service | Sends welcome/onboarding mail after first successful verification |
 
 Operational view (counts only, no PII):
 `GET /health/outbox` returns the backend outbox state (`pending`,

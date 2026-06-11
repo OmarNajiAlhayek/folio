@@ -9,10 +9,11 @@ RabbitMQ is **not** required for these commands: unit tests mock RabbitMQ and DB
 | Command | What it covers |
 |--------|----------------|
 | `cd services/email-service && npm test` | Handlers, templates, idempotency, redactor, reminder scheduler (mocked RabbitMQ / DB). |
-| `curl http://127.0.0.1:5244/health` | email-service liveness (`HEALTH_PORT`, checks DB + AMQP). |
-| `cd backend && npm test` | Outbox drainer, event publisher enqueue, `SubmissionsService.assignReviewer` outbox contract (mocked DB), **`RemindersService`** (mocked `DataSource`; no `email` schema required), **pipeline observability** (mocked repositories + queue metrics). |
-| `cd backend && npm run test:e2e` | HTTP app + database: `GET /api/v1/health` and `GET /api/v1/health/outbox`; [`admin-email.e2e-spec.ts`](../backend/test/admin-email.e2e-spec.ts) (401/403/422 always; policy/template/preview/**pipeline-status**/409 when schema **`email`** and seed rows exist — otherwise DB-backed `it` blocks no-op with a console warning). Needs the same **`DB_*`** vars as `backend/.env`. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB user cannot read/update `email.*` (includes **`SELECT` on `email.email_log`** for pipeline status). |
+| `curl http://127.0.0.1:5244/health` | email-service liveness (`HTTP_PORT`, checks DB + AMQP). |
+| `cd backend && npm test` | Outbox drainer, event publisher enqueue, `SubmissionsService.assignReviewer` outbox contract (mocked DB), **`RemindersService`** (mocked `EmailServiceClient`), **pipeline observability** (mocked repositories + email client + queue metrics). |
+| `cd backend && npm run test:e2e` | HTTP app + database: `GET /api/v1/health` and `GET /api/v1/health/outbox`; [`admin-email.e2e-spec.ts`](../backend/test/admin-email.e2e-spec.ts) (401/403/422 always; policy/template/preview/**pipeline-status**/409 when **email-service** is running with migrations — otherwise email-backed `it` blocks no-op with a console warning). Needs backend **`DB_*`** and reachable **`EMAIL_SERVICE_URL`**. |
 | `cd backend && npm run test:pipeline` | **Opt-in** real broker test: [`email-pipeline.integration.spec.ts`](../backend/test/email-pipeline.integration.spec.ts) — assign reviewer → outbox `published` → message on a test-bound `reviewer.invited` queue. Needs Postgres + RabbitMQ; sets `EMAIL_PIPELINE_INTEGRATION=1` and `AUTH_RETURN_BEARER=true`. From repo root: `npm run test:pipeline`. |
+| `npm run test:perf` | **Load / throughput** (full stack): burst reviewer invites and measure outbox + `email_log` drain — see [`testing-performance.md`](testing-performance.md). |
 
 ## Journal email admin API (templates & policy)
 
@@ -30,11 +31,11 @@ Journal managers with JWT + **`email.manage_reminders`** can manage the singleto
 | `GET` | `/api/v1/admin/email/templates/submission-submitted`, `submission-decision`, `review-submitted`, `review-invitation-accepted`, `review-invitation-declined`, `submission-published`, `role-invitation` |
 | `PATCH` | `/api/v1/admin/email/templates/:templateKey` — full template fields + `expectedUpdatedAt`; mismatch → **409** |
 | `POST` | `/api/v1/admin/email/templates/:templateKey/preview` — optional `{ "isOverdue": true }` for reminder-due branch; **does not send mail** |
-| `GET` | `/api/v1/admin/email/pipeline-status` — outbox + `email_log` + `email.reminder` + cached RabbitMQ queue depths (redacted samples; requires **`SELECT` on `email.email_log`**) |
+| `GET` | `/api/v1/admin/email/pipeline-status` — outbox (backend DB) + `email_log` / `reminder` slice (email-service HTTP) + cached RabbitMQ queue depths |
 | `POST` | `/api/v1/admin/email/outbox/:id/requeue` — reset a **`dead`** outbox row to `pending` (fix broker, then requeue; drainer republishes within ~10s). **404** if missing, **409** if not `dead`. |
 | `POST` | `/api/v1/admin/email/dlq/replay` — body optional `{ "limit": 1..25 }`; pulls from **`folio.events.dlq`**, republishes to `folio.events` with the original routing key. |
 
-**DB:** tables live in schema **`email`** (same database as backend). Run email-service migrations first. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) if the backend DB role cannot read/update `email.*`.
+**Prerequisites:** email-service running at `EMAIL_SERVICE_URL` with migrations applied (`folio_email` database, schema `email`).
 
 **UI:** Folio frontend — **`/journal-manager/email-settings`** (nav link when the permission is present).
 
@@ -51,7 +52,7 @@ Users with JWT + **`email.manage_reminders`** or **`email.manage_assignment_remi
 - `PATCH /api/v1/submissions/:submissionSlug/assignments/:assignmentSlug/reminders/:reminderId` (body `{ "sendAt": "<ISO-8601>" }` — must be **> now + 2 minutes** or the API returns **422**)
 - `POST /api/v1/submissions/:submissionSlug/assignments/:assignmentSlug/reminders/:reminderId/cancel`
 
-**DB:** run email-service migrations so schema `email` exists, then apply [`backend/scripts/grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) (edit the `TO` role if `DB_USERNAME` is not `postgres`). Without `USAGE`/`SELECT`/`UPDATE`, list/patch/cancel will fail at query time.
+**Prerequisites:** email-service running; backend proxies reminder admin to `/internal/reminders`.
 
 **Races:** rescheduling does not dequeue an already-published `reminder.due` Rabbit message; **cancel** plus the email-service **re-fetch before `provider.send`** prevents a send after cancel. PATCH returns **422** when the row is not `pending` or `sendAt` is too soon.
 
@@ -60,9 +61,9 @@ Users with JWT + **`email.manage_reminders`** or **`email.manage_assignment_remi
 For an end-to-end check with real RabbitMQ, Postgres, backend, and email-service:
 
 1. **RabbitMQ** — e.g. `docker compose -f docker-compose.dev.yml up -d` (AMQP **`5672`**). Management UI: **`http://localhost:15672`** (default login **`guest` / `guest`** — change in production). Use it to confirm exchanges, queues (`email.reviewer_invited`, `email.reminder_due`), and message flow.
-2. **Postgres** — same database name for backend and email-service; backend uses `public`, email-service uses schema `email` (migrations run on email-service startup).
-3. **Env** — set `RABBITMQ_URL`, `DB_*`, `APP_BASE_URL`, and for email-service `EMAIL_PROVIDER=noop` (or SMTP) and `DB_SCHEMA=email` per `backend/.env.example` and `services/email-service/.env.example`.
-4. **Processes** — start **RabbitMQ first**, then the Nest backend, then the email-service worker (no HTTP port on the worker). If RabbitMQ is down, **already-committed** outbox rows stay `pending` until the drainer can publish; the HTTP `POST …/assignments` path still needs Postgres to commit **both** the assignment and the outbox row together — a DB/outbox failure returns an error and **no** assignment is stored.
+2. **Postgres** — backend uses `folio_review` (port 5432); email-service uses `folio_email` (port 5433 via `postgres-email` in docker-compose).
+3. **Env** — set `RABBITMQ_URL`, backend `DB_*`, `EMAIL_SERVICE_URL` / `EMAIL_SERVICE_TOKEN`, `APP_BASE_URL`, and for email-service `EMAIL_PROVIDER=noop` (or SMTP) per `backend/.env.example` and `services/email-service/.env.example`.
+4. **Processes** — start **RabbitMQ** and **both Postgres instances**, then the Nest backend, then email-service (HTTP **5244** + consumers). If RabbitMQ is down, **already-committed** outbox rows stay `pending` until the drainer can publish; the HTTP `POST …/assignments` path still needs Postgres to commit **both** the assignment and the outbox row together — a DB/outbox failure returns an error and **no** assignment is stored.
 5. **Trigger** — `POST /api/v1/submissions/:slug/assignments` with a valid editor JWT and `reviewerId`. On **2xx**, treat the assignment as created (outbox row committed in the same transaction). On **non-2xx**, the assignment was not created; retries are safe because duplicate active assignments return **400**. Confirm:
    - **`public.outbound_event_outbox`**: new row with `routing_key = 'reviewer.invited'`, then `status` moves to `published` after the drainer runs (≤ ~10s).
    - **RabbitMQ**: message leaves `email.reviewer_invited` after the consumer acks.
@@ -75,6 +76,7 @@ For an end-to-end check with real RabbitMQ, Postgres, backend, and email-service
    FROM public.outbound_event_outbox
    ORDER BY created_at DESC LIMIT 5;
 
+   -- Connect to folio_email database:
    SELECT id, idempotency_key, status, template, created_at
    FROM email.email_log
    ORDER BY created_at DESC LIMIT 5;
@@ -124,7 +126,7 @@ The opt-in **`npm run test:pipeline`** script automates the publisher half (outb
 **Where to look**
 
 - **Public probe:** `GET /api/v1/health/outbox` — pending / published / dead counts (no payloads).
-- **Authenticated snapshot:** `GET /api/v1/admin/email/pipeline-status` (JWT + `email.manage_reminders`) — outbox + `email.email_log` + `email.reminder` + **cached** RabbitMQ queue depths. Apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) so the backend role has **`SELECT` on `email.email_log`** (and existing `email.*` grants).
+- **Authenticated snapshot:** `GET /api/v1/admin/email/pipeline-status` (JWT + `email.manage_reminders`) — outbox (backend) + email-service pipeline slice + **cached** RabbitMQ queue depths. Requires email-service reachable at `EMAIL_SERVICE_URL`.
 
 **Growing `pending` outbox or high `dueNow`**
 
@@ -154,13 +156,13 @@ The opt-in **`npm run test:pipeline`** script automates the publisher half (outb
 
 Use this for a release or staging sign-off (copy into a PR if you prefer not to version it here):
 
-1. Run **email-service** migrations so schema `email` exists, including policy + template tables/rows (e.g. migration `1714600000001-email-templates-and-policy.ts` in `services/email-service`).
-2. If the backend DB user is not a superuser, apply [`grant-email-reminder-admin.sql`](../backend/scripts/grant-email-reminder-admin.sql) (adjust `TO` to match `DB_USERNAME`).
+1. Start **postgres-email** and run **email-service** migrations so schema `email` exists, including policy + template tables/rows (e.g. migration `1714600000001-email-templates-and-policy.ts` in `services/email-service`).
+2. Set matching `EMAIL_SERVICE_TOKEN` on backend and email-service when not using loopback bind.
 3. **App RBAC:** log in as a **journal manager** (`manager@folio.local` after seed) or any user with `email.manage_reminders`. Confirm the nav link and **`/[locale]/journal-manager/email-settings`** load policy and templates without error.
 4. **Optimistic lock:** open two tabs, change reminder policy in both, save the stale tab second → expect **409** (`EMAIL_POLICY_CONFLICT` / refresh message).
 5. **Preview:** use **POST** `…/preview` (or the UI preview buttons) for `reminder-due` with and without overdue; response is rendered HTML/text only (no mail).
 6. **Submission reminders:** as the same editor, open a submission with assignments; confirm the per-assignment reminder table and reschedule/cancel actions hit `/api/v1/submissions/.../reminders` as expected (network tab or backend logs).
-7. **Pipeline status:** on **Email settings**, confirm the pipeline card loads (or shows a clear DB/permission error). With RabbitMQ down, DB sections should still populate; broker line should show unavailable.
+7. **Pipeline status:** on **Email settings**, confirm the pipeline card loads (or shows a clear email-service unavailable error). With RabbitMQ down, outbox + email DB sections should still populate when email-service is up; broker line should show unavailable.
 
 ## One-liner (bash) for all automated tests in this doc
 

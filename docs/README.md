@@ -6,6 +6,7 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 
 | Document | Purpose |
 |----------|---------|
+| [`PRODUCT-SPECIFICATION.md`](./PRODUCT-SPECIFICATION.md) | **As-built product spec** — vision, roles, workflows, features (verified against codebase) |
 | [`PROJECT-CONTEXT.md`](./PROJECT-CONTEXT.md) | Product scope, stack, optional OJS reference |
 | [`feature-report.md`](./feature-report.md) | Features and workflows by role |
 | [`DATA-MODEL.md`](./DATA-MODEL.md) | Entities, submission lifecycle, ERD |
@@ -27,6 +28,7 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 
 | Document | Purpose |
 |----------|---------|
+| [`OBSERVABILITY.md`](./OBSERVABILITY.md) | Structured JSON logs, trace/request correlation, OTLP export |
 | [`testing-email-pipeline.md`](./testing-email-pipeline.md) | Email admin API, pipeline smoke tests, DLQ/requeue runbooks |
 | [`../email-details.md`](../email-details.md) | Informal email walkthrough (may drift — prefer `plans/email-service.md`) |
 
