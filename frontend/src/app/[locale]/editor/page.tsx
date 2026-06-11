@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "@/i18n/navigation";
-import { apiJson, ApiError } from "@/lib/api";
-import { ApiErrorState } from "@/components/api-error-state";
-import { getApiErrorKind } from "@/lib/api-error-message";
-import { redirectToLogin } from "@/lib/auth-redirect";
-import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import { MultiSelect } from "@/components/ui/multi-select";
+import { useLocale, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { apiJson, ApiError } from '@/lib/api';
+import { ApiErrorState } from '@/components/api-error-state';
+import { getApiErrorKind } from '@/lib/api-error-message';
+import { redirectToLogin } from '@/lib/auth-redirect';
+import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
   EMPTY_STATE_CLS,
   SubmissionListSkeleton,
   SubmissionQueueRow,
   submissionQueueShellCls,
   submissionStatusLabel,
-} from "@/lib/submission-list-ui";
+} from '@/lib/submission-list-ui';
 
 type Submission = {
   id: string;
@@ -27,19 +27,19 @@ type Submission = {
 };
 
 const EDITOR_FILTER_STATUSES = [
-  "submitted",
-  "under_review",
-  "revisions_requested",
-  "accepted",
-  "rejected",
-  "copyediting",
-  "published",
+  'submitted',
+  'under_review',
+  'revisions_requested',
+  'accepted',
+  'rejected',
+  'copyediting',
+  'published',
 ] as const;
 
 export default function EditorPage() {
-  const t = useTranslations("Editor");
-  const tSub = useTranslations("Submissions");
-  const tUi = useTranslations("UI");
+  const t = useTranslations('Editor');
+  const tSub = useTranslations('Submissions');
+  const tUi = useTranslations('UI');
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -49,7 +49,7 @@ export default function EditorPage() {
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const { resolve: resolveApiError } = useApiErrorMessages();
-  const tApi = useTranslations("ApiErrors");
+  const tApi = useTranslations('ApiErrors');
 
   const loadList = useCallback(() => {
     setLoadError(null);
@@ -57,7 +57,7 @@ export default function EditorPage() {
     void (async () => {
       setLoading(true);
       try {
-        const data = await apiJson<Submission[]>("/submissions");
+        const data = await apiJson<Submission[]>('/submissions');
         setItems(data);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -65,7 +65,7 @@ export default function EditorPage() {
           return;
         }
         setLoadErrorCause(err);
-        setLoadError(resolveApiError(err, t("loadFailed")));
+        setLoadError(resolveApiError(err, t('loadFailed')));
       } finally {
         setLoading(false);
       }
@@ -97,12 +97,12 @@ export default function EditorPage() {
         message={loadError}
         error={loadErrorCause}
         hint={
-          loadErrorCause && getApiErrorKind(loadErrorCause) === "rateLimit"
-            ? tApi("rateLimitHint")
+          loadErrorCause && getApiErrorKind(loadErrorCause) === 'rateLimit'
+            ? tApi('rateLimitHint')
             : undefined
         }
         onRetry={() => loadList()}
-        retryLabel={tApi("retry")}
+        retryLabel={tApi('retry')}
       />
     );
   }
@@ -112,23 +112,46 @@ export default function EditorPage() {
       <header className="border-s-4 border-s-accent/35 ps-5">
         <div>
           <h1 className="font-serif text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            {t("title")}
+            {t('title')}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink/70">
-            {t("hint")}
+            {t('hint')}
           </p>
         </div>
       </header>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3">
+      {/* Tool links */}
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link
+          href="/editor/search"
+          className="inline-flex items-center gap-2 rounded-xl border border-ink/15 dark:border-white/15 bg-surface/80 px-4 py-2.5 text-sm font-semibold text-ink/80 transition-all duration-200 hover:border-accent/30 hover:text-accent hover:bg-accent/5"
+        >
+          <svg
+            className="size-4 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z"
+            />
+          </svg>
+          {t('searchCuration')}
+        </Link>
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap items-center gap-2 text-sm text-ink/80">
-          <span id="editor-status-filter-label">{t("statusFilter")}</span>
+          <span id="editor-status-filter-label">{t('statusFilter')}</span>
           <MultiSelect
             options={statusOptions}
             value={selectedStatuses}
             onChange={setSelectedStatuses}
-            emptyLabel={tUi("allStatuses")}
-            manySelectedLabel={(c) => tUi("nSelected", { count: c })}
+            emptyLabel={tUi('allStatuses')}
+            manySelectedLabel={(c) => tUi('nSelected', { count: c })}
             className="min-w-[14rem] max-w-[min(100%,20rem)]"
             aria-labelledby="editor-status-filter-label"
           />
@@ -139,9 +162,9 @@ export default function EditorPage() {
         <SubmissionListSkeleton />
       ) : items.length === 0 || visibleItems.length === 0 ? (
         <div className={EMPTY_STATE_CLS}>
-          <p className="font-serif text-base text-ink">{t("empty")}</p>
+          <p className="font-serif text-base text-ink">{t('empty')}</p>
           {items.length > 0 && visibleItems.length === 0 && (
-            <p className="text-sm text-ink/60">{t("statusFilter")}</p>
+            <p className="text-sm text-ink/60">{t('statusFilter')}</p>
           )}
         </div>
       ) : (

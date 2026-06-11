@@ -1,44 +1,46 @@
-import { ApiError } from "@/lib/api-response";
+import { ApiError } from '@/lib/api-response';
 
 /** Keys under the `ApiErrors` next-intl namespace. */
 export const API_ERROR_MESSAGE_KEYS = [
-  "tooManyRequests",
-  "notFound",
-  "unauthorized",
-  "invalidCredentials",
-  "forbidden",
-  "badRequest",
-  "serverError",
-  "networkError",
+  'tooManyRequests',
+  'notFound',
+  'unauthorized',
+  'invalidCredentials',
+  'orcidSignInRequired',
+  'forbidden',
+  'badRequest',
+  'serverError',
+  'networkError',
 ] as const;
 
 export type ApiErrorMessageKey = (typeof API_ERROR_MESSAGE_KEYS)[number];
 export type ApiErrorMessageBundle = Record<ApiErrorMessageKey, string>;
 
 export const DEFAULT_API_ERROR_MESSAGES: ApiErrorMessageBundle = {
-  tooManyRequests:
-    "Too many requests. Please wait a minute and try again.",
-  notFound: "The requested resource was not found.",
-  unauthorized: "Please sign in to continue.",
-  invalidCredentials: "Invalid email or password.",
-  forbidden: "You do not have permission to do that.",
-  badRequest: "The request could not be processed. Check your input and try again.",
-  serverError: "Something went wrong on our side. Please try again later.",
+  tooManyRequests: 'Too many requests. Please wait a minute and try again.',
+  notFound: 'The requested resource was not found.',
+  unauthorized: 'Please sign in to continue.',
+  invalidCredentials: 'Invalid email or password.',
+  orcidSignInRequired:
+    'This account uses ORCID sign-in. Use Continue with ORCID or link a password from your dashboard.',
+  forbidden: 'You do not have permission to do that.',
+  badRequest:
+    'The request could not be processed. Check your input and try again.',
+  serverError: 'Something went wrong on our side. Please try again later.',
   networkError:
-    "Could not reach the server. Check your connection and try again.",
+    'Could not reach the server. Check your connection and try again.',
 };
 
 export type ApiErrorKind =
-  | "rateLimit"
-  | "notFound"
-  | "unauthorized"
-  | "forbidden"
-  | "badRequest"
-  | "serverError"
-  | "generic";
+  | 'rateLimit'
+  | 'notFound'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'badRequest'
+  | 'serverError'
+  | 'generic';
 
-const THROTTLE_MESSAGE_RE =
-  /throttlerexception|too many requests/i;
+const THROTTLE_MESSAGE_RE = /throttlerexception|too many requests/i;
 
 /** Passport/Nest default — use translated unauthorized copy instead. */
 const GENERIC_UNAUTHORIZED_MESSAGE_RE = /^unauthorized$/i;
@@ -48,12 +50,10 @@ const INVALID_CREDENTIALS_MESSAGE_RE = /^invalid email or password\.?$/i;
 
 const CSRF_MESSAGE_RE = /invalid or missing csrf token/i;
 
-const STATUS_TRANSITION_MESSAGE_RE =
-  /^cannot transition from \S+ to \S+$/i;
+const STATUS_TRANSITION_MESSAGE_RE = /^cannot transition from \S+ to \S+$/i;
 
 /** Nest English copy for AI features — always map via `code` + localized fallback. */
-const AI_FEATURE_MESSAGE_RE =
-  /^AI .+ service is not configured\.?$/i;
+const AI_FEATURE_MESSAGE_RE = /^AI .+ service is not configured\.?$/i;
 
 const AI_SUGGESTION_FAILURE_RE =
   /^Could not (suggest keywords|classify submission)/i;
@@ -75,33 +75,34 @@ export function isUserFacingApiMessage(message: string): boolean {
 
 /** API `code` values that should use the caller's localized `fallback`, not `message`. */
 const FALLBACK_BY_CODE = new Set([
-  "AI_SERVICE_UNAVAILABLE",
-  "AI_KEYWORDS_SUGGESTION_FAILED",
-  "AI_CLASSIFICATION_FAILED",
+  'AI_SERVICE_UNAVAILABLE',
+  'AI_KEYWORDS_SUGGESTION_FAILED',
+  'AI_CLASSIFICATION_FAILED',
 ]);
 
 export function isCsrfApiError(err: unknown): boolean {
   return (
     err instanceof ApiError &&
-    (err.code === "CSRF_TOKEN_INVALID" || CSRF_MESSAGE_RE.test(err.message))
+    (err.code === 'CSRF_TOKEN_INVALID' || CSRF_MESSAGE_RE.test(err.message))
   );
 }
 
 export function getApiErrorKind(err: unknown): ApiErrorKind {
-  if (!(err instanceof ApiError)) return "generic";
-  if (err.status === 429 || err.code === "TOO_MANY_REQUESTS") return "rateLimit";
-  if (err.status === 404 || err.code === "NOT_FOUND") return "notFound";
-  if (err.status === 401 || err.code === "UNAUTHORIZED") return "unauthorized";
-  if (err.status === 403 || err.code === "FORBIDDEN") return "forbidden";
+  if (!(err instanceof ApiError)) return 'generic';
+  if (err.status === 429 || err.code === 'TOO_MANY_REQUESTS')
+    return 'rateLimit';
+  if (err.status === 404 || err.code === 'NOT_FOUND') return 'notFound';
+  if (err.status === 401 || err.code === 'UNAUTHORIZED') return 'unauthorized';
+  if (err.status === 403 || err.code === 'FORBIDDEN') return 'forbidden';
   if (
     err.status === 400 ||
-    err.code === "VALIDATION_ERROR" ||
-    err.code === "CONSTRUCTOR_VALIDATION_FAILED"
+    err.code === 'VALIDATION_ERROR' ||
+    err.code === 'CONSTRUCTOR_VALIDATION_FAILED'
   ) {
-    return "badRequest";
+    return 'badRequest';
   }
-  if (err.status != null && err.status >= 500) return "serverError";
-  return "generic";
+  if (err.status != null && err.status >= 500) return 'serverError';
+  return 'generic';
 }
 
 function messageForKind(
@@ -109,20 +110,20 @@ function messageForKind(
   messages: ApiErrorMessageBundle,
 ): string {
   switch (kind) {
-    case "rateLimit":
+    case 'rateLimit':
       return messages.tooManyRequests;
-    case "notFound":
+    case 'notFound':
       return messages.notFound;
-    case "unauthorized":
+    case 'unauthorized':
       return messages.unauthorized;
-    case "forbidden":
+    case 'forbidden':
       return messages.forbidden;
-    case "badRequest":
+    case 'badRequest':
       return messages.badRequest;
-    case "serverError":
+    case 'serverError':
       return messages.serverError;
     default:
-      return "";
+      return '';
   }
 }
 
@@ -151,7 +152,7 @@ export function resolveApiErrorMessage(
     return fallback;
   }
 
-  if (err.code === "CONSTRUCTOR_IMPORT_NO_CONTENT") {
+  if (err.code === 'CONSTRUCTOR_IMPORT_NO_CONTENT') {
     return fallback;
   }
 
@@ -160,17 +161,20 @@ export function resolveApiErrorMessage(
   }
 
   const kind = getApiErrorKind(err);
+  if (err.code === 'ORCID_SIGN_IN_REQUIRED') {
+    return messages.orcidSignInRequired;
+  }
   if (
-    kind === "unauthorized" &&
+    kind === 'unauthorized' &&
     INVALID_CREDENTIALS_MESSAGE_RE.test(err.message.trim())
   ) {
     return messages.invalidCredentials;
   }
   if (isUserFacingApiMessage(err.message)) {
-    if (kind === "badRequest") return err.message;
-    if (kind === "unauthorized" || kind === "forbidden") return err.message;
+    if (kind === 'badRequest') return err.message;
+    if (kind === 'unauthorized' || kind === 'forbidden') return err.message;
   }
-  if (kind !== "generic") {
+  if (kind !== 'generic') {
     return messageForKind(kind, messages);
   }
 
@@ -185,13 +189,14 @@ export function apiErrorBundleFromTranslations(
   t: (key: ApiErrorMessageKey) => string,
 ): ApiErrorMessageBundle {
   return {
-    tooManyRequests: t("tooManyRequests"),
-    notFound: t("notFound"),
-    unauthorized: t("unauthorized"),
-    invalidCredentials: t("invalidCredentials"),
-    forbidden: t("forbidden"),
-    badRequest: t("badRequest"),
-    serverError: t("serverError"),
-    networkError: t("networkError"),
+    tooManyRequests: t('tooManyRequests'),
+    notFound: t('notFound'),
+    unauthorized: t('unauthorized'),
+    invalidCredentials: t('invalidCredentials'),
+    orcidSignInRequired: t('orcidSignInRequired'),
+    forbidden: t('forbidden'),
+    badRequest: t('badRequest'),
+    serverError: t('serverError'),
+    networkError: t('networkError'),
   };
 }

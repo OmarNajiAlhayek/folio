@@ -1,26 +1,27 @@
-"use client";
+'use client';
 
-import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useId, useState } from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { useParams } from "next/navigation";
-import { apiBlob, apiJson, ApiError } from "@/lib/api";
-import { redirectToLogin } from "@/lib/auth-redirect";
-import { ApiErrorState } from "@/components/api-error-state";
-import { toast } from "@/lib/toast";
-import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import { useToastApiError } from "@/lib/use-toast-api-error";
-import { PAGE_SHELL } from "@/lib/page-shell";
-import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/spinner";
+import { useTranslations } from 'next-intl';
+import { useCallback, useEffect, useId, useState } from 'react';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { useParams } from 'next/navigation';
+import { apiBlob, apiJson, ApiError } from '@/lib/api';
+import { redirectToLogin } from '@/lib/auth-redirect';
+import { ApiErrorState } from '@/components/api-error-state';
+import { toast } from '@/lib/toast';
+import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { useToastApiError } from '@/lib/use-toast-api-error';
+import { PAGE_SHELL } from '@/lib/page-shell';
+import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import {
   createReviewSchema,
   formatZodIssues,
   joinValidationBulletList,
   safeParseResult,
-} from "@/lib/validation";
+} from '@/lib/validation';
 
-const recs = ["accept", "reject", "revisions"] as const;
+const recs = ['accept', 'reject', 'revisions'] as const;
 type Rec = (typeof recs)[number];
 
 const ABSTRACT_PREVIEW_LEN = 420;
@@ -50,23 +51,23 @@ type AssignmentRow = {
 };
 
 type SubmissionStatusMsg =
-  | "stDraft"
-  | "stSubmitted"
-  | "stUnderReview"
-  | "stRevisions"
-  | "stAccepted"
-  | "stRejected"
-  | "stPublished";
+  | 'stDraft'
+  | 'stSubmitted'
+  | 'stUnderReview'
+  | 'stRevisions'
+  | 'stAccepted'
+  | 'stRejected'
+  | 'stPublished';
 
 function submissionStatusKey(status: string): SubmissionStatusMsg | null {
   const map: Record<string, SubmissionStatusMsg> = {
-    draft: "stDraft",
-    submitted: "stSubmitted",
-    under_review: "stUnderReview",
-    revisions_requested: "stRevisions",
-    accepted: "stAccepted",
-    rejected: "stRejected",
-    published: "stPublished",
+    draft: 'stDraft',
+    submitted: 'stSubmitted',
+    under_review: 'stUnderReview',
+    revisions_requested: 'stRevisions',
+    accepted: 'stAccepted',
+    rejected: 'stRejected',
+    published: 'stPublished',
   };
   return map[status] ?? null;
 }
@@ -103,21 +104,21 @@ function ReviewSkeleton() {
 }
 
 export default function ReviewFormPage() {
-  const t = useTranslations("AssignmentsReview");
-  const tv = useTranslations("Validation");
-  const tCommon = useTranslations("Common");
-  const tSub = useTranslations("Submissions");
-  const tAssignments = useTranslations("Assignments");
-  const tWf = useTranslations("SubmissionWorkflow");
+  const t = useTranslations('AssignmentsReview');
+  const tv = useTranslations('Validation');
+  const tCommon = useTranslations('Common');
+  const tSub = useTranslations('Submissions');
+  const tAssignments = useTranslations('Assignments');
+  const tWf = useTranslations('SubmissionWorkflow');
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
   const router = useRouter();
   const recGroupId = useId();
 
-  const [commentsForAuthor, setCommentsForAuthor] = useState("");
-  const [commentsToEditorOnly, setCommentsToEditorOnly] = useState("");
-  const [recommendation, setRecommendation] = useState<Rec>("accept");
+  const [commentsForAuthor, setCommentsForAuthor] = useState('');
+  const [commentsToEditorOnly, setCommentsToEditorOnly] = useState('');
+  const [recommendation, setRecommendation] = useState<Rec>('accept');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [abstractExpandedEn, setAbstractExpandedEn] = useState(false);
@@ -127,11 +128,11 @@ export default function ReviewFormPage() {
   const [contextError, setContextError] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<AssignmentRow | null>(null);
   const [contextMissing, setContextMissing] = useState<
-    "notFound" | "invited" | "notOpen" | null
+    'notFound' | 'invited' | 'notOpen' | null
   >(null);
   const [contextErrorCause, setContextErrorCause] = useState<unknown>(null);
   const { resolve: resolveApiError } = useApiErrorMessages();
-  const tApi = useTranslations("ApiErrors");
+  const tApi = useTranslations('ApiErrors');
   const showApiError = useToastApiError();
 
   const loadContext = useCallback(async () => {
@@ -141,20 +142,20 @@ export default function ReviewFormPage() {
     setContextMissing(null);
     setAssignment(null);
     try {
-      const items = await apiJson<AssignmentRow[]>("/assignments/me");
+      const items = await apiJson<AssignmentRow[]>('/assignments/me');
       const row = items.find((a) => a.slug === slug);
       if (!row) {
-        setContextMissing("notFound");
+        setContextMissing('notFound');
         return;
       }
-      if (row.status === "invited") {
+      if (row.status === 'invited') {
         setAssignment(row);
-        setContextMissing("invited");
+        setContextMissing('invited');
         return;
       }
-      if (row.status !== "accepted") {
+      if (row.status !== 'accepted') {
         setAssignment(row);
-        setContextMissing("notOpen");
+        setContextMissing('notOpen');
         return;
       }
       setAssignment(row);
@@ -164,11 +165,11 @@ export default function ReviewFormPage() {
         return;
       }
       if (err instanceof ApiError && err.status === 403) {
-        setContextError(tAssignments("needReviewerRole"));
+        setContextError(tAssignments('needReviewerRole'));
         return;
       }
       setContextErrorCause(err);
-      setContextError(resolveApiError(err, t("loadFailed")));
+      setContextError(resolveApiError(err, t('loadFailed')));
     } finally {
       setPageLoading(false);
     }
@@ -176,7 +177,7 @@ export default function ReviewFormPage() {
 
   useEffect(() => {
     loadContext().catch(() => {
-      setContextError(t("loadFailed"));
+      setContextError(t('loadFailed'));
       setPageLoading(false);
     });
   }, [loadContext, router, pathname, t]);
@@ -198,21 +199,23 @@ export default function ReviewFormPage() {
     setSubmitting(true);
     try {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/reviews`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(parsed.data),
       });
-      toast.success(t("submitSuccess"), { id: "assignment-review-submit-success" });
-      router.push("/assignments");
+      toast.success(t('submitSuccess'), {
+        id: 'assignment-review-submit-success',
+      });
+      router.push('/assignments');
     } catch (err) {
-      showApiError(err, t("submitFailed"), { id: "assignment-review-submit" });
+      showApiError(err, t('submitFailed'), { id: 'assignment-review-submit' });
     } finally {
       setSubmitting(false);
     }
   }
 
   const sub = assignment?.submission;
-  const abstractEn = sub?.abstract?.trim() ?? "";
-  const abstractArText = sub?.abstractAr?.trim() ?? "";
+  const abstractEn = sub?.abstract?.trim() ?? '';
+  const abstractArText = sub?.abstractAr?.trim() ?? '';
   const enLong = abstractEn.length > ABSTRACT_PREVIEW_LEN;
   const abstractEnShown =
     abstractExpandedEn || !enLong
@@ -227,14 +230,14 @@ export default function ReviewFormPage() {
 
   const statusKey = sub ? submissionStatusKey(sub.status) : null;
   const statusLabel =
-    statusKey != null ? tSub(statusKey) : sub?.status ?? "—";
+    statusKey != null ? tSub(statusKey) : (sub?.status ?? '—');
 
   const recHint = (r: Rec) =>
-    r === "accept"
-      ? t("recHintAccept")
-      : r === "reject"
-        ? t("recHintReject")
-        : t("recHintRevisions");
+    r === 'accept'
+      ? t('recHintAccept')
+      : r === 'reject'
+        ? t('recHintReject')
+        : t('recHintRevisions');
 
   async function downloadReviewFile(file: ReviewFileRow) {
     const slug = sub?.slug;
@@ -244,18 +247,18 @@ export default function ReviewFormPage() {
         `/submissions/${encodeURIComponent(slug)}/files/${file.id}`,
       );
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
       a.download = file.originalName;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error(t("downloadFailed"), { id: "assignment-review-download" });
+      toast.error(t('downloadFailed'), { id: 'assignment-review-download' });
     }
   }
 
   const showForm =
-    assignment && assignment.status === "accepted" && !contextMissing;
+    assignment && assignment.status === 'accepted' && !contextMissing;
 
   return (
     <main className={PAGE_SHELL}>
@@ -263,7 +266,7 @@ export default function ReviewFormPage() {
         href="/assignments"
         className="text-sm font-medium text-accent hover:underline"
       >
-        {t("back")}
+        {t('back')}
       </Link>
 
       {pageLoading && (
@@ -279,66 +282,76 @@ export default function ReviewFormPage() {
             message={contextError}
             error={contextErrorCause}
             onRetry={() => void loadContext()}
-            retryLabel={tApi("retry")}
+            retryLabel={tApi('retry')}
             backHref="/assignments"
-            backLabel={t("backToAssignments")}
+            backLabel={t('backToAssignments')}
           />
         </div>
       )}
 
-      {!pageLoading && !contextError && contextMissing === "notFound" && (
+      {!pageLoading && !contextError && contextMissing === 'notFound' && (
         <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 text-center shadow-sm">
-          <p className="text-ink/80">{t("notFound")}</p>
+          <p className="text-ink/80">{t('notFound')}</p>
           <Link
             href="/assignments"
             className="mt-6 inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-95"
           >
-            {t("backToAssignments")}
+            {t('backToAssignments')}
           </Link>
         </div>
       )}
 
-      {!pageLoading && !contextError && contextMissing === "invited" && assignment && (
-        <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 shadow-sm">
-          <p className="font-serif text-lg text-ink">
-            {sub?.title ?? tAssignments("submissionFallback")}
-          </p>
-          <p className="mt-4 text-sm text-ink/75">{t("acceptInvitationFirst")}</p>
-          <Link
-            href={`/assignments/${encodeURIComponent(slug)}/invite`}
-            className="mt-6 inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-95"
-          >
-            {t("goToInvitation")}
-          </Link>
-          <Link
-            href="/assignments"
-            className="mt-4 ms-4 inline-block text-sm font-medium text-accent hover:underline"
-          >
-            {t("backToAssignments")}
-          </Link>
-        </div>
-      )}
+      {!pageLoading &&
+        !contextError &&
+        contextMissing === 'invited' &&
+        assignment && (
+          <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 shadow-sm">
+            <p className="font-serif text-lg text-ink">
+              {sub?.title ?? tAssignments('submissionFallback')}
+            </p>
+            <p className="mt-4 text-sm text-ink/75">
+              {t('acceptInvitationFirst')}
+            </p>
+            <Link
+              href={`/assignments/${encodeURIComponent(slug)}/invite`}
+              className="mt-6 inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-95"
+            >
+              {t('goToInvitation')}
+            </Link>
+            <Link
+              href="/assignments"
+              className="mt-4 ms-4 inline-block text-sm font-medium text-accent hover:underline"
+            >
+              {t('backToAssignments')}
+            </Link>
+          </div>
+        )}
 
-      {!pageLoading && !contextError && contextMissing === "notOpen" && assignment && (
-        <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 shadow-sm">
-          <p className="font-serif text-lg text-ink">{sub?.title ?? tAssignments("submissionFallback")}</p>
-          <p className="mt-4 text-sm text-ink/75">{t("notPending")}</p>
-          <Link
-            href="/assignments"
-            className="mt-6 inline-block text-sm font-medium text-accent hover:underline"
-          >
-            {t("backToAssignments")}
-          </Link>
-        </div>
-      )}
+      {!pageLoading &&
+        !contextError &&
+        contextMissing === 'notOpen' &&
+        assignment && (
+          <div className="mt-8 rounded-xl border border-ink/10 bg-surface p-8 shadow-sm">
+            <p className="font-serif text-lg text-ink">
+              {sub?.title ?? tAssignments('submissionFallback')}
+            </p>
+            <p className="mt-4 text-sm text-ink/75">{t('notPending')}</p>
+            <Link
+              href="/assignments"
+              className="mt-6 inline-block text-sm font-medium text-accent hover:underline"
+            >
+              {t('backToAssignments')}
+            </Link>
+          </div>
+        )}
 
       {!pageLoading && !contextError && showForm && (
         <>
           <p className="mt-6 font-sans text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            {t("eyebrow")}
+            {t('eyebrow')}
           </p>
           <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            {t("title")}
+            {t('title')}
           </h1>
 
           <div className="mt-10 flex flex-col gap-8">
@@ -350,11 +363,11 @@ export default function ReviewFormPage() {
                 id="manuscript-heading"
                 className="font-sans text-xs font-semibold uppercase tracking-wider text-ink/50"
               >
-                {t("manuscriptSection")}
+                {t('manuscriptSection')}
               </h2>
               <div className="mt-4">
                 <p className="font-serif text-xl font-semibold leading-snug text-ink sm:text-2xl">
-                  {sub?.title ?? tAssignments("submissionFallback")}
+                  {sub?.title ?? tAssignments('submissionFallback')}
                 </p>
                 {sub?.titleAr?.trim() ? (
                   <p
@@ -367,7 +380,7 @@ export default function ReviewFormPage() {
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium text-ink/50">
-                  {t("submissionStatus")}
+                  {t('submissionStatus')}
                 </span>
                 <span className="rounded-full border border-ink/15 bg-paper px-2.5 py-0.5 text-xs font-medium text-ink">
                   {statusLabel}
@@ -378,7 +391,7 @@ export default function ReviewFormPage() {
                   {abstractEn ? (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-                        {tWf("abstractLabelEn")}
+                        {tWf('abstractLabelEn')}
                       </p>
                       <p
                         dir="ltr"
@@ -393,8 +406,8 @@ export default function ReviewFormPage() {
                           className="mt-2 text-sm font-medium text-accent hover:underline"
                         >
                           {abstractExpandedEn
-                            ? t("showLessAbstract")
-                            : t("showMoreAbstract")}
+                            ? t('showLessAbstract')
+                            : t('showMoreAbstract')}
                         </button>
                       ) : null}
                     </div>
@@ -402,7 +415,7 @@ export default function ReviewFormPage() {
                   {abstractArText ? (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-                        {tWf("abstractLabelAr")}
+                        {tWf('abstractLabelAr')}
                       </p>
                       <p
                         dir="rtl"
@@ -417,8 +430,8 @@ export default function ReviewFormPage() {
                           className="mt-2 text-sm font-medium text-accent hover:underline"
                         >
                           {abstractExpandedAr
-                            ? t("showLessAbstract")
-                            : t("showMoreAbstract")}
+                            ? t('showLessAbstract')
+                            : t('showMoreAbstract')}
                         </button>
                       ) : null}
                     </div>
@@ -430,7 +443,7 @@ export default function ReviewFormPage() {
               {sub?.files && sub.files.length > 0 ? (
                 <div className="mt-8">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-                    {t("reviewPackageFiles")}
+                    {t('reviewPackageFiles')}
                   </h3>
                   <ul className="mt-3 space-y-2">
                     {sub.files.map((file) => (
@@ -438,16 +451,19 @@ export default function ReviewFormPage() {
                         key={file.id}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink/10 bg-paper/50 px-3 py-2 text-sm"
                       >
-                        <span className="min-w-0 truncate text-ink" title={file.originalName}>
+                        <span
+                          className="min-w-0 truncate text-ink"
+                          title={file.originalName}
+                        >
                           {file.originalName}
                         </span>
-                        <button
-                          type="button"
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => void downloadReviewFile(file)}
-                          className="shrink-0 rounded-md border border-ink/15 bg-paper px-3 py-1.5 text-xs font-medium text-ink hover:border-accent/40"
                         >
-                          {t("downloadFile")}
-                        </button>
+                          {t('downloadFile')}
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -458,7 +474,7 @@ export default function ReviewFormPage() {
                   href={`/submissions/${encodeURIComponent(sub.slug)}`}
                   className="mt-8 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
                 >
-                  {t("viewFullManuscript")}
+                  {t('viewFullManuscript')}
                   <span aria-hidden>→</span>
                 </Link>
               ) : null}
@@ -472,12 +488,12 @@ export default function ReviewFormPage() {
                 id="review-form-heading"
                 className="font-serif text-xl font-semibold text-ink"
               >
-                {t("formSection")}
+                {t('formSection')}
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-ink/65">
-                {recommendation === "accept"
-                  ? t("commentsOptionalOnAccept")
-                  : t("commentsRequiredOnRejectOrRevisions")}
+                {recommendation === 'accept'
+                  ? t('commentsOptionalOnAccept')
+                  : t('commentsRequiredOnRejectOrRevisions')}
               </p>
 
               <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-8">
@@ -487,7 +503,11 @@ export default function ReviewFormPage() {
                     role="alert"
                   >
                     <span className="mt-0.5 shrink-0 text-red-600" aria-hidden>
-                      <svg className="size-5" fill="currentColor" viewBox="0 0 20 20">
+                      <svg
+                        className="size-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
                         <path
                           fillRule="evenodd"
                           d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
@@ -501,30 +521,30 @@ export default function ReviewFormPage() {
 
                 <fieldset className="min-w-0 border-0 p-0">
                   <legend className="text-sm font-semibold text-ink">
-                    {t("recommendation")}
+                    {t('recommendation')}
                   </legend>
                   <div
                     className="mt-3 flex flex-col gap-3"
                     role="radiogroup"
-                    aria-label={t("recommendation")}
+                    aria-label={t('recommendation')}
                   >
                     {recs.map((r) => {
                       const label =
-                        r === "accept"
-                          ? tCommon("recAccept")
-                          : r === "reject"
-                            ? tCommon("recReject")
-                            : tCommon("recRevisions");
+                        r === 'accept'
+                          ? tCommon('recAccept')
+                          : r === 'reject'
+                            ? tCommon('recReject')
+                            : tCommon('recRevisions');
                       const id = `${recGroupId}-${r}`;
                       return (
                         <label
                           key={r}
                           htmlFor={id}
                           className={cn(
-                            "relative cursor-pointer rounded-lg border border-ink/12 bg-paper/80 p-4 transition-colors",
-                            "has-focus-visible:ring-2 has-focus-visible:ring-accent/35 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-white",
+                            'relative cursor-pointer rounded-lg border border-ink/12 bg-paper/80 p-4 transition-colors',
+                            'has-focus-visible:ring-2 has-focus-visible:ring-accent/35 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-white',
                             recommendation === r &&
-                              "border-accent/35 bg-accent/5 ring-2 ring-accent/25",
+                              'border-accent/35 bg-accent/5 ring-2 ring-accent/25',
                           )}
                         >
                           <div className="flex items-start gap-3">
@@ -554,51 +574,53 @@ export default function ReviewFormPage() {
 
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-semibold text-ink">
-                    {t("commentsForAuthor")}
+                    {t('commentsForAuthor')}
                   </span>
-                  <span className="text-xs text-ink/60">{t("commentsForAuthorHint")}</span>
+                  <span className="text-xs text-ink/60">
+                    {t('commentsForAuthorHint')}
+                  </span>
                   <textarea
                     rows={8}
                     value={commentsForAuthor}
                     onChange={(e) => setCommentsForAuthor(e.target.value)}
                     className={cn(
-                      "resize-y rounded-lg border border-ink/15 bg-surface px-3 py-3 text-sm leading-relaxed text-ink",
-                      "outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                      'resize-y rounded-lg border border-ink/15 bg-surface px-3 py-3 text-sm leading-relaxed text-ink',
+                      'outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
                     )}
                   />
                 </label>
 
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-semibold text-ink">
-                    {t("commentsToEditorOnly")}
+                    {t('commentsToEditorOnly')}
                   </span>
-                  <span className="text-xs text-ink/60">{t("commentsToEditorOnlyHint")}</span>
+                  <span className="text-xs text-ink/60">
+                    {t('commentsToEditorOnlyHint')}
+                  </span>
                   <textarea
                     rows={6}
                     value={commentsToEditorOnly}
                     onChange={(e) => setCommentsToEditorOnly(e.target.value)}
                     className={cn(
-                      "resize-y rounded-lg border border-ink/15 bg-surface px-3 py-3 text-sm leading-relaxed text-ink",
-                      "outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                      'resize-y rounded-lg border border-ink/15 bg-surface px-3 py-3 text-sm leading-relaxed text-ink',
+                      'outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
                     )}
                   />
                 </label>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={submitting}
-                  aria-busy={submitting}
-                  aria-label={submitting ? t("sending") : undefined}
-                  className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  loading={submitting}
+                  aria-label={submitting ? t('sending') : undefined}
+                  className="min-w-[7rem] py-3"
                 >
-                  {submitting ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("submit")}
-                </button>
+                  {t('submit')}
+                </Button>
               </form>
             </section>
           </div>
         </>
       )}
-
     </main>
   );
 }

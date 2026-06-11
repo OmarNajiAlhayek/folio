@@ -1,23 +1,26 @@
-"use client";
+'use client';
 
-import { useTheme } from "next-themes";
-import { useTranslations } from "next-intl";
-import { useSyncExternalStore } from "react";
-import { cn } from "@/lib/utils";
+import { useTheme } from 'next-themes';
+import { useTranslations } from 'next-intl';
+import { useSyncExternalStore } from 'react';
+import { SimpleTooltip } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 const noOpSubscribe = () => () => {};
 
 /** True on client, false on server — avoids setState in an effect (react-hooks/set-state-in-effect). */
 function useClientMounted() {
-  return useSyncExternalStore(noOpSubscribe, () => true, () => false);
+  return useSyncExternalStore(
+    noOpSubscribe,
+    () => true,
+    () => false,
+  );
 }
 
-const ORDER = ["light", "dark", "system"] as const;
+const ORDER = ['light', 'dark', 'system'] as const;
 
-function cycleTheme(
-  current: string | undefined,
-): (typeof ORDER)[number] {
-  const c = (current ?? "system") as (typeof ORDER)[number];
+function cycleTheme(current: string | undefined): (typeof ORDER)[number] {
+  const c = (current ?? 'system') as (typeof ORDER)[number];
   const i = ORDER.includes(c) ? ORDER.indexOf(c) : 2;
   return ORDER[(i + 1) % ORDER.length];
 }
@@ -78,40 +81,43 @@ function SystemIcon({ className }: { className?: string }) {
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const t = useTranslations("Nav");
+  const t = useTranslations('Nav');
   const { theme, setTheme } = useTheme();
   const mounted = useClientMounted();
 
-  const activeTheme = mounted ? (theme ?? "system") : "system";
+  const activeTheme = mounted ? (theme ?? 'system') : 'system';
   const currentLabel =
-    activeTheme === "light"
-      ? t("themeLight")
-      : activeTheme === "dark"
-        ? t("themeDark")
-        : t("themeSystem");
+    activeTheme === 'light'
+      ? t('themeLight')
+      : activeTheme === 'dark'
+        ? t('themeDark')
+        : t('themeSystem');
+
+  const tooltipLabel = t('themeToggleTitle', { current: currentLabel });
 
   return (
-    <button
-      type="button"
-      onClick={() => setTheme(cycleTheme(theme))}
-      className={cn(
-        "inline-flex items-center justify-center rounded-md border border-ink/15 bg-surface px-2 py-1 text-ink transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface theme-icon-container",
-        className,
-      )}
-      title={t("themeToggleTitle", { current: currentLabel })}
-      aria-label={t("themeToggleAria", { current: currentLabel })}
-    >
-      <span className="size-4">
-        {!mounted ? (
-          <SystemIcon className="size-4 opacity-40" />
-        ) : activeTheme === "light" ? (
-          <SunIcon className="size-4" />
-        ) : activeTheme === "dark" ? (
-          <MoonIcon className="size-4" />
-        ) : (
-          <SystemIcon className="size-4" />
+    <SimpleTooltip content={tooltipLabel}>
+      <button
+        type="button"
+        onClick={() => setTheme(cycleTheme(theme))}
+        className={cn(
+          'inline-flex items-center justify-center rounded-md border border-ink/15 bg-surface px-2 py-1 text-ink transition-colors hover:bg-ink/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface theme-icon-container',
+          className,
         )}
-      </span>
-    </button>
+        aria-label={t('themeToggleAria', { current: currentLabel })}
+      >
+        <span className="size-4">
+          {!mounted ? (
+            <SystemIcon className="size-4 opacity-40" />
+          ) : activeTheme === 'light' ? (
+            <SunIcon className="size-4" />
+          ) : activeTheme === 'dark' ? (
+            <MoonIcon className="size-4" />
+          ) : (
+            <SystemIcon className="size-4" />
+          )}
+        </span>
+      </button>
+    </SimpleTooltip>
   );
 }

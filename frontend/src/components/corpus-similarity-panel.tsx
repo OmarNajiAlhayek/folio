@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useState } from "react";
-import { Link } from "@/i18n/navigation";
-import { apiJson } from "@/lib/api";
-import { Spinner } from "@/components/ui/spinner";
+import { useLocale, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from '@/i18n/navigation';
+import { apiJson } from '@/lib/api';
+import { Spinner } from '@/components/ui/spinner';
 
 export type CorpusSimilarityReport =
-  | { status: "unavailable" }
-  | { status: "no_text" }
+  | { status: 'unavailable' }
+  | { status: 'no_text' }
   | {
-      status: "ok";
+      status: 'ok';
       threshold: number;
       matchCount: number;
       sources: Array<{
@@ -26,32 +26,118 @@ export type CorpusSimilarityReport =
       }>;
     };
 
+type AiJobResponse = {
+  jobId: string;
+  jobType: string;
+  status: 'pending' | 'queued' | 'running' | 'completed' | 'failed';
+  result?: CorpusSimilarityReport;
+  errorMessage?: string | null;
+};
+
 type Props = {
   slug: string;
 };
 
+const POLL_MS = 1_500;
+const POLL_MAX_MS = 180_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isImmediateReport(
+  body: AiJobResponse | CorpusSimilarityReport,
+): body is CorpusSimilarityReport {
+  return 'status' in body && !('jobId' in body);
+}
+
 export function CorpusSimilarityPanel({ slug }: Props) {
-  const t = useTranslations("SubmissionDetail");
+  const t = useTranslations('SubmissionDetail');
   const locale = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<CorpusSimilarityReport | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  const applyReport = useCallback((data: CorpusSimilarityReport | null) => {
+    setReport(data);
+  }, []);
+
+  const pollJobUntilDone = useCallback(
+    async (jobId: string, signal: AbortSignal) => {
+      const started = Date.now();
+      while (!signal.aborted && Date.now() - started < POLL_MAX_MS) {
+        const job = await apiJson<AiJobResponse>(
+          `/submissions/${encodeURIComponent(slug)}/corpus-similarity/jobs/${encodeURIComponent(jobId)}`,
+          { signal },
+        );
+        if (job.status === 'completed' && job.result) {
+          applyReport(job.result);
+          return;
+        }
+        if (job.status === 'failed') {
+          throw new Error(job.errorMessage ?? 'job_failed');
+        }
+        await sleep(POLL_MS);
+      }
+      if (!signal.aborted) {
+        throw new Error('timeout');
+      }
+    },
+    [slug, applyReport],
+  );
 
   const load = useCallback(async () => {
+    pollAbortRef.current?.abort();
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
+
     setLoading(true);
-    setError("");
+    setError('');
     try {
-      const data = await apiJson<CorpusSimilarityReport>(
-        `/submissions/${encodeURIComponent(slug)}/corpus-similarity`,
+      const latest = await apiJson<AiJobResponse | null>(
+        `/submissions/${encodeURIComponent(slug)}/corpus-similarity/jobs/latest`,
+        { signal: controller.signal },
       );
-      setReport(data);
-    } catch {
-      setError(t("corpusSimilarityLoadFailed"));
+      if (
+        latest &&
+        (latest.status === 'pending' ||
+          latest.status === 'queued' ||
+          latest.status === 'running')
+      ) {
+        await pollJobUntilDone(latest.jobId, controller.signal);
+        return;
+      }
+      if (latest?.status === 'completed' && latest.result) {
+        applyReport(latest.result);
+        return;
+      }
+
+      const started = await apiJson<AiJobResponse | CorpusSimilarityReport>(
+        `/submissions/${encodeURIComponent(slug)}/corpus-similarity/jobs`,
+        { method: 'POST', signal: controller.signal },
+      );
+      if (isImmediateReport(started)) {
+        applyReport(started);
+        return;
+      }
+      await pollJobUntilDone(started.jobId, controller.signal);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setError(t('corpusSimilarityLoadFailed'));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  }, [slug, t]);
+  }, [slug, t, applyReport, pollJobUntilDone]);
+
+  useEffect(() => {
+    return () => {
+      pollAbortRef.current?.abort();
+    };
+  }, []);
 
   const onToggle = () => {
     const next = !expanded;
@@ -72,92 +158,104 @@ export function CorpusSimilarityPanel({ slug }: Props) {
         aria-expanded={expanded}
       >
         <span className="text-sm font-semibold text-ink">
-          {t("corpusSimilarityTitle")}
+          {t('corpusSimilarityTitle')}
         </span>
-        <span className="text-xs text-ink/50">{expanded ? "−" : "+"}</span>
+        <span className="text-xs text-ink/50">{expanded ? '−' : '+'}</span>
       </button>
 
       {expanded && (
         <div className="mt-3 space-y-3">
           <p className="text-xs leading-relaxed text-ink/60">
-            {t("corpusSimilarityDisclaimer")}
+            {t('corpusSimilarityDisclaimer')}
           </p>
 
           {loading && (
             <div className="flex items-center gap-2 text-sm text-ink/60">
               <Spinner className="size-4" />
-              {t("corpusSimilarityLoading")}
+              {t('corpusSimilarityLoading')}
             </div>
           )}
 
           {error && <p className="text-sm text-red-700">{error}</p>}
 
-          {!loading && !error && report?.status === "unavailable" && (
-            <p className="text-sm text-ink/65">{t("corpusSimilarityUnavailable")}</p>
+          {!loading && !error && report?.status === 'unavailable' && (
+            <p className="text-sm text-ink/65">
+              {t('corpusSimilarityUnavailable')}
+            </p>
           )}
 
-          {!loading && !error && report?.status === "no_text" && (
-            <p className="text-sm text-ink/65">{t("corpusSimilarityNoText")}</p>
+          {!loading && !error && report?.status === 'no_text' && (
+            <p className="text-sm text-ink/65">{t('corpusSimilarityNoText')}</p>
           )}
 
-          {!loading && !error && report?.status === "ok" && report.sources.length === 0 && (
-            <p className="text-sm text-ink/65">{t("corpusSimilarityClear")}</p>
-          )}
+          {!loading &&
+            !error &&
+            report?.status === 'ok' &&
+            report.sources.length === 0 && (
+              <p className="text-sm text-ink/65">
+                {t('corpusSimilarityClear')}
+              </p>
+            )}
 
-          {!loading && !error && report?.status === "ok" && report.sources.length > 0 && (
-            <ul className="space-y-4">
-              {report.sources.map((src) => {
-                const title =
-                  locale === "ar" && src.publication?.titleAr
-                    ? src.publication.titleAr
-                    : src.publication?.title;
-                return (
-                  <li
-                    key={src.articleId}
-                    className="rounded-md border border-ink/10 bg-surface/80 p-3 dark:border-white/10"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      {src.publication?.slug ? (
-                        <Link
-                          href={`/publications/${src.publication.slug}`}
-                          className="text-sm font-semibold text-accent hover:underline"
-                        >
-                          {title ?? src.publication.slug}
-                        </Link>
-                      ) : (
-                        <span className="text-sm font-semibold text-ink">
-                          {src.indexedOnly
-                            ? t("corpusSimilarityIndexedOnly")
-                            : src.articleId}
+          {!loading &&
+            !error &&
+            report?.status === 'ok' &&
+            report.sources.length > 0 && (
+              <ul className="space-y-4">
+                {report.sources.map((src) => {
+                  const title =
+                    locale === 'ar' && src.publication?.titleAr
+                      ? src.publication.titleAr
+                      : src.publication?.title;
+                  return (
+                    <li
+                      key={src.articleId}
+                      className="rounded-md border border-ink/10 bg-surface/80 p-3 dark:border-white/10"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        {src.publication?.slug ? (
+                          <Link
+                            href={`/publications/${src.publication.slug}`}
+                            className="text-sm font-semibold text-accent hover:underline"
+                          >
+                            {title ?? src.publication.slug}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-semibold text-ink">
+                            {src.indexedOnly
+                              ? t('corpusSimilarityIndexedOnly')
+                              : src.articleId}
+                          </span>
+                        )}
+                        <span className="text-xs font-mono text-ink/55">
+                          {t('corpusSimilarityMax', {
+                            percent: pct(src.maxSimilarity),
+                          })}
                         </span>
-                      )}
-                      <span className="text-xs font-mono text-ink/55">
-                        {t("corpusSimilarityMax", { percent: pct(src.maxSimilarity) })}
-                      </span>
-                    </div>
-                    <ul className="mt-2 space-y-2">
-                      {src.snippets.map((sn, i) => (
-                        <li key={i} className="text-xs text-ink/70">
-                          <p dir="auto" className="line-clamp-2">
-                            <span className="font-medium text-ink/50">
-                              {t("corpusSimilaritySubmissionBit")}:{" "}
-                            </span>
-                            {sn.submissionSnippet}
-                          </p>
-                          <p dir="auto" className="mt-1 line-clamp-2">
-                            <span className="font-medium text-ink/50">
-                              {t("corpusSimilarityCorpusBit")}:{" "}
-                            </span>
-                            {sn.matchedSnippet}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                      </div>
+                      <ul className="mt-2 space-y-2">
+                        {src.snippets.map((sn, i) => (
+                          <li key={i} className="text-xs text-ink/70">
+                            <p dir="auto" className="line-clamp-2">
+                              <span className="font-medium text-ink/50">
+                                {t('corpusSimilaritySubmissionBit')}:{' '}
+                              </span>
+                              {sn.submissionSnippet}
+                            </p>
+                            <p dir="auto" className="mt-1 line-clamp-2">
+                              <span className="font-medium text-ink/50">
+                                {t('corpusSimilarityCorpusBit')}:{' '}
+                              </span>
+                              {sn.matchedSnippet}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
         </div>
       )}
     </div>

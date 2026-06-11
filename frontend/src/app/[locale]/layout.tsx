@@ -1,17 +1,23 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { hasLocale, NextIntlClientProvider } from "next-intl";
-import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
-import { AppToaster } from "@/components/app-toaster";
-import { ApiAuthSync } from "@/components/api-auth-sync";
-import { DocumentLocaleSync } from "@/components/document-locale-sync";
-import { AuthStorageSync } from "@/components/auth-storage-sync";
-import { QueryProvider } from "@/components/query-provider";
-import { LocaleDirectionProvider } from "@/components/locale-direction-provider";
-import { Nav } from "@/components/Nav";
-import { ProtectedShell } from "@/components/protected-shell";
-import { NotificationStreamSync } from "@/components/notification-stream-sync";
-import { routing } from "@/i18n/routing";
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { hasLocale, NextIntlClientProvider } from 'next-intl';
+import {
+  getMessages,
+  getTranslations,
+  setRequestLocale,
+} from 'next-intl/server';
+import { AppToaster } from '@/components/app-toaster';
+import { ApiAuthSync } from '@/components/api-auth-sync';
+import { DocumentLocaleSync } from '@/components/document-locale-sync';
+import { AuthStorageSync } from '@/components/auth-storage-sync';
+import { QueryProvider } from '@/components/query-provider';
+import { LocaleDirectionProvider } from '@/components/locale-direction-provider';
+import { Nav } from '@/components/Nav';
+import { EmailVerificationBanner } from '@/components/email-verification-banner';
+import { ProtectedShell } from '@/components/protected-shell';
+import { NotificationStreamSync } from '@/components/notification-stream-sync';
+import { TooltipProviderShell } from '@/components/tooltip-provider-shell';
+import { routing } from '@/i18n/routing';
 
 type Props = {
   children: React.ReactNode;
@@ -24,10 +30,10 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "Metadata" });
+  const t = await getTranslations({ locale, namespace: 'Metadata' });
   return {
-    title: t("title"),
-    description: t("description"),
+    title: t('title'),
+    description: t('description'),
   };
 }
 
@@ -48,11 +54,14 @@ export default async function LocaleLayout({ children, params }: Props) {
         <NotificationStreamSync />
         <AuthStorageSync />
         <LocaleDirectionProvider locale={locale}>
-          <AppToaster locale={locale} />
-          <Nav />
-          <div className="bg-page flex min-h-0 flex-1 flex-col pb-8">
-            <ProtectedShell>{children}</ProtectedShell>
-          </div>
+          <TooltipProviderShell>
+            <AppToaster locale={locale} />
+            <Nav />
+            <EmailVerificationBanner />
+            <div className="bg-page flex min-h-0 flex-1 flex-col pb-8">
+              <ProtectedShell>{children}</ProtectedShell>
+            </div>
+          </TooltipProviderShell>
         </LocaleDirectionProvider>
       </QueryProvider>
     </NextIntlClientProvider>

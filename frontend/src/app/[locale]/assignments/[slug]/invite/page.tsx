@@ -1,17 +1,18 @@
-"use client";
+'use client';
 
-import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { useParams } from "next/navigation";
-import { apiJson, ApiError } from "@/lib/api";
-import { ApiErrorState } from "@/components/api-error-state";
-import { redirectToLogin } from "@/lib/auth-redirect";
-import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import { toast } from "@/lib/toast";
-import { useToastApiError } from "@/lib/use-toast-api-error";
-import { PAGE_SHELL } from "@/lib/page-shell";
-import { Spinner } from "@/components/ui/spinner";
+import { useTranslations } from 'next-intl';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { useParams } from 'next/navigation';
+import { apiJson, ApiError } from '@/lib/api';
+import { ApiErrorState } from '@/components/api-error-state';
+import { redirectToLogin } from '@/lib/auth-redirect';
+import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { toast } from '@/lib/toast';
+import { useToastApiError } from '@/lib/use-toast-api-error';
+import { PAGE_SHELL } from '@/lib/page-shell';
+import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 type AssignmentRow = {
   id: string;
@@ -30,9 +31,9 @@ type AssignmentRow = {
 const ABSTRACT_PREVIEW_LEN = 420;
 
 export default function AssignmentInvitePage() {
-  const t = useTranslations("AssignmentsInvite");
-  const tAssignments = useTranslations("Assignments");
-  const tWf = useTranslations("SubmissionWorkflow");
+  const t = useTranslations('AssignmentsInvite');
+  const tAssignments = useTranslations('Assignments');
+  const tWf = useTranslations('SubmissionWorkflow');
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
@@ -45,7 +46,7 @@ export default function AssignmentInvitePage() {
   const [acting, setActing] = useState(false);
   const [errorCause, setErrorCause] = useState<unknown>(null);
   const { resolve: resolveApiError } = useApiErrorMessages();
-  const tApi = useTranslations("ApiErrors");
+  const tApi = useTranslations('ApiErrors');
   const showApiError = useToastApiError();
 
   const load = useCallback(async () => {
@@ -57,8 +58,8 @@ export default function AssignmentInvitePage() {
       const row = await apiJson<AssignmentRow>(
         `/assignments/${encodeURIComponent(slug)}`,
       );
-      if (row.status !== "invited") {
-        setError(t("notInvited"));
+      if (row.status !== 'invited') {
+        setError(t('notInvited'));
         return;
       }
       setAssignment(row);
@@ -69,25 +70,25 @@ export default function AssignmentInvitePage() {
       }
       if (err instanceof ApiError && err.status === 403) {
         setError(
-          err.code === "FORBIDDEN"
-            ? t("wrongReviewerAccount")
-            : tAssignments("needReviewerRole"),
+          err.code === 'FORBIDDEN'
+            ? t('wrongReviewerAccount')
+            : tAssignments('needReviewerRole'),
         );
         setErrorCause(err);
         return;
       }
       if (err instanceof ApiError && err.status === 404) {
         try {
-          const items = await apiJson<AssignmentRow[]>("/assignments/me");
+          const items = await apiJson<AssignmentRow[]>('/assignments/me');
           const invited = items.filter(
             (a) =>
-              a.status === "invited" &&
-              typeof a.slug === "string" &&
+              a.status === 'invited' &&
+              typeof a.slug === 'string' &&
               a.slug.length > 0,
           );
           if (invited.length === 1 && invited[0].slug !== slug) {
-            toast.info(t("staleLinkRedirect"), {
-              id: "assignment-invite-stale-link",
+            toast.info(t('staleLinkRedirect'), {
+              id: 'assignment-invite-stale-link',
             });
             router.replace(
               `/assignments/${encodeURIComponent(invited[0].slug!)}/invite`,
@@ -95,24 +96,24 @@ export default function AssignmentInvitePage() {
             return;
           }
           if (invited.length === 0) {
-            setError(t("notFoundReLogin"));
+            setError(t('notFoundReLogin'));
             setErrorCause(err);
             return;
           }
           if (invited.length > 1) {
-            setError(t("notFoundManyInvites"));
+            setError(t('notFoundManyInvites'));
             setErrorCause(err);
             return;
           }
         } catch {
           /* fall through */
         }
-        setError(t("notFound"));
+        setError(t('notFound'));
         setErrorCause(err);
         return;
       }
       setErrorCause(err);
-      setError(resolveApiError(err, t("loadFailed")));
+      setError(resolveApiError(err, t('loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -126,12 +127,14 @@ export default function AssignmentInvitePage() {
     setActing(true);
     try {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/accept`, {
-        method: "POST",
+        method: 'POST',
       });
-      toast.success(t("acceptSuccess"), { id: "assignment-invite-accept-success" });
+      toast.success(t('acceptSuccess'), {
+        id: 'assignment-invite-accept-success',
+      });
       router.push(`/assignments/${encodeURIComponent(slug)}/review`);
     } catch (err) {
-      showApiError(err, t("actionFailed"), { id: "assignment-invite-accept" });
+      showApiError(err, t('actionFailed'), { id: 'assignment-invite-accept' });
     } finally {
       setActing(false);
     }
@@ -141,20 +144,22 @@ export default function AssignmentInvitePage() {
     setActing(true);
     try {
       await apiJson(`/assignments/${encodeURIComponent(slug)}/decline`, {
-        method: "POST",
+        method: 'POST',
       });
-      toast.success(t("declineSuccess"), { id: "assignment-invite-decline-success" });
-      router.push("/assignments");
+      toast.success(t('declineSuccess'), {
+        id: 'assignment-invite-decline-success',
+      });
+      router.push('/assignments');
     } catch (err) {
-      showApiError(err, t("actionFailed"), { id: "assignment-invite-decline" });
+      showApiError(err, t('actionFailed'), { id: 'assignment-invite-decline' });
     } finally {
       setActing(false);
     }
   }
 
   const sub = assignment?.submission;
-  const abstractEn = sub?.abstract?.trim() ?? "";
-  const abstractArText = sub?.abstractAr?.trim() ?? "";
+  const abstractEn = sub?.abstract?.trim() ?? '';
+  const abstractArText = sub?.abstractAr?.trim() ?? '';
   const enLong = abstractEn.length > ABSTRACT_PREVIEW_LEN;
   const abstractEnShown =
     abstractExpandedEn || !enLong
@@ -173,7 +178,7 @@ export default function AssignmentInvitePage() {
         href="/assignments"
         className="text-sm font-medium text-accent hover:underline"
       >
-        {t("back")}
+        {t('back')}
       </Link>
 
       {loading && (
@@ -190,9 +195,9 @@ export default function AssignmentInvitePage() {
             message={error}
             error={errorCause}
             onRetry={() => void load()}
-            retryLabel={tApi("retry")}
+            retryLabel={tApi('retry')}
             backHref="/assignments"
-            backLabel={t("backToAssignments")}
+            backLabel={t('backToAssignments')}
           />
         </div>
       )}
@@ -200,22 +205,22 @@ export default function AssignmentInvitePage() {
       {!loading && !error && assignment && (
         <>
           <p className="mt-6 font-sans text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            {t("eyebrow")}
+            {t('eyebrow')}
           </p>
           <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            {t("title")}
+            {t('title')}
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink/70">
-            {t("hint")}
+            {t('hint')}
           </p>
 
           <section className="mt-10 rounded-xl border border-ink/10 bg-surface p-6 shadow-sm sm:p-8">
             <h2 className="font-sans text-xs font-semibold uppercase tracking-wider text-ink/50">
-              {t("manuscriptSection")}
+              {t('manuscriptSection')}
             </h2>
             <div className="mt-4">
               <p className="font-serif text-xl font-semibold leading-snug text-ink sm:text-2xl">
-                {sub?.title ?? tAssignments("submissionFallback")}
+                {sub?.title ?? tAssignments('submissionFallback')}
               </p>
               {sub?.titleAr?.trim() ? (
                 <p
@@ -231,7 +236,7 @@ export default function AssignmentInvitePage() {
                 {abstractEn ? (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-                      {tWf("abstractLabelEn")}
+                      {tWf('abstractLabelEn')}
                     </p>
                     <p
                       dir="ltr"
@@ -246,8 +251,8 @@ export default function AssignmentInvitePage() {
                         className="mt-2 text-sm font-medium text-accent hover:underline"
                       >
                         {abstractExpandedEn
-                          ? t("showLessAbstract")
-                          : t("showMoreAbstract")}
+                          ? t('showLessAbstract')
+                          : t('showMoreAbstract')}
                       </button>
                     ) : null}
                   </div>
@@ -255,7 +260,7 @@ export default function AssignmentInvitePage() {
                 {abstractArText ? (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
-                      {tWf("abstractLabelAr")}
+                      {tWf('abstractLabelAr')}
                     </p>
                     <p
                       dir="rtl"
@@ -270,40 +275,37 @@ export default function AssignmentInvitePage() {
                         className="mt-2 text-sm font-medium text-accent hover:underline"
                       >
                         {abstractExpandedAr
-                          ? t("showLessAbstract")
-                          : t("showMoreAbstract")}
+                          ? t('showLessAbstract')
+                          : t('showMoreAbstract')}
                       </button>
                     ) : null}
                   </div>
                 ) : null}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-ink/55">{t("noAbstract")}</p>
+              <p className="mt-4 text-sm text-ink/55">{t('noAbstract')}</p>
             )}
             <p className="mt-6 text-xs text-ink/50">
-              {t("fullManuscriptAfterAccept")}
+              {t('fullManuscriptAfterAccept')}
             </p>
           </section>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <button
-              type="button"
-              disabled={acting}
-              aria-busy={acting}
-              aria-label={acting ? t("working") : undefined}
+            <Button
+              loading={acting}
+              aria-label={acting ? t('working') : undefined}
               onClick={() => void accept()}
-              className="inline-flex min-w-[7rem] items-center justify-center rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+              className="min-w-[7rem]"
             >
-              {acting ? <Spinner size="sm" className="border-ink/30 border-t-white" /> : t("accept")}
-            </button>
-            <button
-              type="button"
+              {t('accept')}
+            </Button>
+            <Button
+              variant="secondary"
               disabled={acting}
               onClick={() => void decline()}
-              className="rounded-lg border border-ink/20 bg-paper px-5 py-2.5 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
             >
-              {t("decline")}
-            </button>
+              {t('decline')}
+            </Button>
           </div>
         </>
       )}

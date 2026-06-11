@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { request, type APIRequestContext } from "@playwright/test";
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { request, type APIRequestContext } from '@playwright/test';
+import { latestVerificationOtp } from './e2e-outbox';
 
 export interface E2EUserCredentials {
   email: string;
@@ -15,10 +16,10 @@ export interface E2EUserCredentials {
  * entire path per RFC 3986 and drop `api/v1`, producing 404 on Nest.
  */
 export function getApiV1Base(): string {
-  const fallback = "http://127.0.0.1:5243/api/v1/";
+  const fallback = 'http://127.0.0.1:5243/api/v1/';
   const raw = process.env.E2E_API_URL?.trim();
   if (!raw) return fallback;
-  let base = raw.replace(/\/+$/, "");
+  let base = raw.replace(/\/+$/, '');
   if (!/\/api\/v1$/i.test(base)) {
     base = `${base}/api/v1`;
   }
@@ -27,14 +28,14 @@ export function getApiV1Base(): string {
 
 /** Absolute Nest URL; `path` must be like `auth/register` or `submissions` (no leading `/`). */
 export function apiV1Absolute(path: string): string {
-  const rel = path.replace(/^\/+/, "");
+  const rel = path.replace(/^\/+/, '');
   return new URL(rel, getApiV1Base()).href;
 }
 
 export function workerCredentials(workerIndex: number): E2EUserCredentials {
   return {
     email: `e2e-worker-${workerIndex}@test.local`,
-    password: "WorkerPass123!",
+    password: 'WorkerPass123!',
     displayName: `E2E Worker ${workerIndex}`,
   };
 }
@@ -45,7 +46,7 @@ export async function withApiContext<T>(
 ): Promise<T> {
   const api = await request.newContext({
     extraHTTPHeaders: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
   });
   try {
@@ -55,11 +56,58 @@ export async function withApiContext<T>(
   }
 }
 
+async function verifyUserEmailIfNeeded(
+  api: APIRequestContext,
+  creds: E2EUserCredentials,
+): Promise<void> {
+  const { accessToken } = await loginAndGetTokens(api, creds);
+  const meRes = await api.get(apiV1Absolute('auth/me'), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!meRes.ok()) {
+    throw new Error(
+      `Failed to read profile for ${creds.email}: ${meRes.status()} ${await meRes.text()}`,
+    );
+  }
+  const me = (await meRes.json()) as { emailVerified?: boolean };
+  if (me.emailVerified === true) {
+    return;
+  }
+
+  let otp: string | undefined;
+  try {
+    otp = await latestVerificationOtp(creds.email);
+  } catch {
+    otp = undefined;
+  }
+
+  if (!otp) {
+    const sendRes = await api.post(apiV1Absolute('auth/verify-email/send'), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!sendRes.ok() && sendRes.status() !== 429) {
+      throw new Error(
+        `Failed to send verification for ${creds.email}: ${sendRes.status()} ${await sendRes.text()}`,
+      );
+    }
+    otp = await latestVerificationOtp(creds.email);
+  }
+  const verifyRes = await api.post(apiV1Absolute('auth/verify-email'), {
+    data: { code: otp },
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!verifyRes.ok()) {
+    throw new Error(
+      `Failed to verify email for ${creds.email}: ${verifyRes.status()} ${await verifyRes.text()}`,
+    );
+  }
+}
+
 export async function ensureUserExists(
   api: APIRequestContext,
   creds: E2EUserCredentials,
 ): Promise<void> {
-  const res = await api.post(apiV1Absolute("auth/register"), {
+  const res = await api.post(apiV1Absolute('auth/register'), {
     data: {
       email: creds.email,
       password: creds.password,
@@ -67,19 +115,25 @@ export async function ensureUserExists(
       willingToReview: false,
     },
   });
-  if (res.ok()) return;
-  if (res.status() !== 409) {
-    throw new Error(
-      `Failed to ensure test user ${creds.email}: ${res.status()} ${await res.text()}`,
-    );
+  if (res.ok() || res.status() === 409 || res.status() === 429) {
+    await verifyUserEmailIfNeeded(api, creds);
+    return;
   }
+  throw new Error(
+    `Failed to ensure test user ${creds.email}: ${res.status()} ${await res.text()}`,
+  );
 }
 
-export async function loginAndGetToken(
+export type AuthTokens = {
+  accessToken: string;
+  refreshToken: string;
+};
+
+export async function loginAndGetTokens(
   api: APIRequestContext,
   creds: E2EUserCredentials,
-): Promise<string> {
-  const res = await api.post(apiV1Absolute("auth/login"), {
+): Promise<AuthTokens> {
+  const res = await api.post(apiV1Absolute('auth/login'), {
     data: { email: creds.email, password: creds.password },
   });
   if (!res.ok()) {
@@ -87,16 +141,50 @@ export async function loginAndGetToken(
       `Failed login for ${creds.email}: ${res.status()} ${await res.text()}`,
     );
   }
-  const body = (await res.json()) as { accessToken?: string };
-  if (!body.accessToken) {
-    throw new Error(`Missing accessToken in login response for ${creds.email}`);
+  const body = (await res.json()) as {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+  if (!body.accessToken || !body.refreshToken) {
+    throw new Error(
+      `Missing accessToken/refreshToken in login response for ${creds.email} (set AUTH_RETURN_BEARER=true on backend for E2E)`,
+    );
   }
-  return body.accessToken;
+  return { accessToken: body.accessToken, refreshToken: body.refreshToken };
+}
+
+export async function loginAndGetToken(
+  api: APIRequestContext,
+  creds: E2EUserCredentials,
+): Promise<string> {
+  const tokens = await loginAndGetTokens(api, creds);
+  return tokens.accessToken;
+}
+
+/** Cookie jar after login — inject into a browser context via `addCookies`. */
+export async function loginStorageState(creds: E2EUserCredentials) {
+  const api = await request.newContext({
+    extraHTTPHeaders: { 'Content-Type': 'application/json' },
+  });
+  try {
+    await ensureUserExists(api, creds);
+    const res = await api.post(apiV1Absolute('auth/login'), {
+      data: { email: creds.email, password: creds.password },
+    });
+    if (!res.ok()) {
+      throw new Error(
+        `Failed login for ${creds.email}: ${res.status()} ${await res.text()}`,
+      );
+    }
+    return api.storageState();
+  } finally {
+    await api.dispose();
+  }
 }
 
 export function uniqueSubmissionTitle(prefix: string): string {
   const u =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return `${prefix} ${u}`;
@@ -107,7 +195,7 @@ export async function createSubmission(
   token: string,
   payload: { title: string; abstract: string },
 ): Promise<{ slug: string }> {
-  const res = await api.post(apiV1Absolute("submissions"), {
+  const res = await api.post(apiV1Absolute('submissions'), {
     data: payload,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -115,9 +203,7 @@ export async function createSubmission(
   });
   const text = await res.text();
   if (!res.ok()) {
-    throw new Error(
-      `Failed create submission: ${res.status()} ${text}`,
-    );
+    throw new Error(`Failed create submission: ${res.status()} ${text}`);
   }
   try {
     return JSON.parse(text) as { slug: string };
@@ -130,9 +216,9 @@ export async function createSubmission(
 
 const E2E_FIXTURE_DOCX = join(
   process.cwd(),
-  "e2e",
-  "fixtures",
-  "minimal-import.docx",
+  'e2e',
+  'fixtures',
+  'minimal-import.docx',
 );
 
 export async function uploadManuscriptFile(
@@ -148,12 +234,12 @@ export async function uploadManuscriptFile(
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
         file: {
-          name: "minimal-import.docx",
+          name: 'minimal-import.docx',
           mimeType:
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           buffer,
         },
-        kind: "manuscript",
+        kind: 'manuscript',
       },
     },
   );

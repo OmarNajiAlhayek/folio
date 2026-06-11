@@ -1,38 +1,49 @@
-"use client";
+'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { useParams } from "next/navigation";
-import { Link } from "@/i18n/navigation";
-import { apiPostJsonOrBlob } from "@/lib/api";
-import { ApiErrorState } from "@/components/api-error-state";
-import { getApiErrorKind } from "@/lib/api-error-message";
-import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import { useMe } from "@/lib/queries/auth";
-import { canManageOwnSubmissions } from "@/lib/permissions";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
+import { Link } from '@/i18n/navigation';
+import { apiPostJsonOrBlob } from '@/lib/api';
+import { ApiErrorState } from '@/components/api-error-state';
+import { getApiErrorKind } from '@/lib/api-error-message';
+import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { useMe } from '@/lib/queries/auth';
+import { canManageOwnSubmissions } from '@/lib/permissions';
 import {
   useInvalidateSubmission,
   useInvalidateSubmissionDetail,
   usePatchSubmission,
   useSubmission,
   type SubmissionSummary,
-} from "@/lib/queries/submissions";
-import { takeConstructorSubmitErrors } from "@/lib/constructor-submit-errors";
-import { toast } from "@/lib/toast";
-import { useToastApiError } from "@/lib/use-toast-api-error";
-import { PAGE_SHELL } from "@/lib/page-shell";
-import { ConstructorWorkspace } from "@/components/constructor/ConstructorWorkspace";
+} from '@/lib/queries/submissions';
+import { takeConstructorSubmitErrors } from '@/lib/constructor-submit-errors';
+import { toast } from '@/lib/toast';
+import { useToastApiError } from '@/lib/use-toast-api-error';
+import { PAGE_SHELL } from '@/lib/page-shell';
+import { ConstructorWorkspace } from '@/components/constructor/ConstructorWorkspace';
 import type {
   ConstructorContent,
   ConstructorValidationError,
-} from "@/lib/constructor-content.types";
-import { ensureMandatoryConstructorSections } from "@/lib/constructor-mandatory-sections";
-import { sanitizeConstructorContent } from "@/lib/sanitize-constructor-html";
-import type { SubmissionArticleType } from "@/lib/constructor-section-presets";
-import { constructorDraftHasMeaningfulContent } from "@/lib/constructor-import-merge";
-import { useConstructorDocxImport } from "@/lib/use-constructor-docx-import";
-import { useConstructorStyleGuidance } from "@/lib/use-constructor-style-guidance";
-import { LoadingCenter, Spinner } from "@/components/ui/spinner";
+} from '@/lib/constructor-content.types';
+import { ensureMandatoryConstructorSections } from '@/lib/constructor-mandatory-sections';
+import { sanitizeConstructorContent } from '@/lib/sanitize-constructor-html';
+import type { SubmissionArticleType } from '@/lib/constructor-section-presets';
+import { constructorDraftHasMeaningfulContent } from '@/lib/constructor-import-merge';
+import { useConstructorDocxImport } from '@/lib/use-constructor-docx-import';
+import { useConstructorAttachedReimport } from '@/lib/use-constructor-attached-reimport';
+import { useConstructorCollab } from '@/lib/use-constructor-collab';
+import { normalizeConstructorContent } from '@/lib/constructor-content-normalize';
+import { useConstructorStyleGuidance } from '@/lib/use-constructor-style-guidance';
+import { LoadingCenter, Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 /** Autosave surface: toast-after-3 — show one error toast only after this many consecutive failures. */
@@ -44,9 +55,9 @@ const AUTOSAVE_FAILURES_BEFORE_TOAST = 3;
  * submit for review lives on the submission detail page.
  */
 export default function SubmissionConstructorPage() {
-  const t = useTranslations("ConstructorPage");
-  const tCommon = useTranslations("ConstructorWorkspace");
-  const tApi = useTranslations("ApiErrors");
+  const t = useTranslations('ConstructorPage');
+  const tCommon = useTranslations('ConstructorWorkspace');
+  const tApi = useTranslations('ApiErrors');
   const locale = useLocale();
   const { resolve: resolveApiError } = useApiErrorMessages();
   const params = useParams();
@@ -63,9 +74,11 @@ export default function SubmissionConstructorPage() {
     : null;
   const sub = subQuery.data as SubmissionSummary | undefined;
   const [content, setContentState] = useState<ConstructorContent>(() =>
-    ensureMandatoryConstructorSections({ defaultDir: "ltr", sections: [] }),
+    ensureMandatoryConstructorSections({ defaultDir: 'ltr', sections: [] }),
   );
-  const [submitBlockBanner, setSubmitBlockBanner] = useState<string | null>(null);
+  const [submitBlockBanner, setSubmitBlockBanner] = useState<string | null>(
+    null,
+  );
   const loading = meQuery.isPending || subQuery.isPending;
   const loadErrorCause = meQuery.isError
     ? meQuery.error
@@ -74,7 +87,7 @@ export default function SubmissionConstructorPage() {
       : null;
   const loadError =
     loadErrorCause != null
-      ? resolveApiError(loadErrorCause, t("loadFailed"))
+      ? resolveApiError(loadErrorCause, t('loadFailed'))
       : null;
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -85,7 +98,7 @@ export default function SubmissionConstructorPage() {
   >([]);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedJsonRef = useRef<string>("");
+  const lastSavedJsonRef = useRef<string>('');
   const autosaveFailCountRef = useRef(0);
   const hydratedSlugRef = useRef<string | null>(null);
   const [savedFingerprint, setSavedFingerprint] = useState<string | null>(null);
@@ -94,7 +107,7 @@ export default function SubmissionConstructorPage() {
     const stashed = takeConstructorSubmitErrors();
     if (stashed?.length) {
       setBlockingErrors(stashed);
-      setSubmitBlockBanner(t("submitBlockedByValidation"));
+      setSubmitBlockBanner(t('submitBlockedByValidation'));
     }
   }, [t]);
 
@@ -104,11 +117,10 @@ export default function SubmissionConstructorPage() {
     if (!data || data.slug !== slug) return;
     if (hydratedSlugRef.current === slug) return;
     hydratedSlugRef.current = slug;
-    const raw =
-      (data.constructorContent as ConstructorContent | null) ?? {
-        defaultDir: "ltr",
-        sections: [],
-      };
+    const raw = (data.constructorContent as ConstructorContent | null) ?? {
+      defaultDir: 'ltr',
+      sections: [],
+    };
     const initial = sanitizeConstructorContent(
       ensureMandatoryConstructorSections(raw),
     );
@@ -121,7 +133,7 @@ export default function SubmissionConstructorPage() {
   const isAuthor = !!(sub && me && sub.authorId === me.id);
   const canManageOwn = me ? canManageOwnSubmissions(me.permissions) : false;
   const isEditableStatus =
-    sub && (sub.status === "draft" || sub.status === "revisions_requested");
+    sub && (sub.status === 'draft' || sub.status === 'revisions_requested');
   const canEdit = canManageOwn && isAuthor && !!isEditableStatus;
   const isUploadMode =
     sub != null &&
@@ -147,8 +159,8 @@ export default function SubmissionConstructorPage() {
         } catch (e) {
           autosaveFailCountRef.current += 1;
           if (autosaveFailCountRef.current >= AUTOSAVE_FAILURES_BEFORE_TOAST) {
-            showApiError(e, t("autosaveFailed"), {
-              id: "constructor-autosave",
+            showApiError(e, t('autosaveFailed'), {
+              id: 'constructor-autosave',
             });
             autosaveFailCountRef.current = 0;
           }
@@ -170,14 +182,30 @@ export default function SubmissionConstructorPage() {
 
   const handleChange = useCallback(
     (next: ConstructorContent) => {
-      const normalized = sanitizeConstructorContent(
-        ensureMandatoryConstructorSections(next, guidance),
+      const normalized = normalizeConstructorContent(
+        sanitizeConstructorContent(
+          ensureMandatoryConstructorSections(next, guidance),
+        ),
       );
       setContentState(normalized);
       scheduleSave(normalized);
     },
     [scheduleSave, guidance],
   );
+
+  useConstructorCollab({
+    slug,
+    enabled: canEdit,
+    content,
+    onRemoteContent: (remote, lastModified) => {
+      if (lastModified <= lastSavedJsonRef.current) return;
+      const normalized = normalizeConstructorContent(
+        ensureMandatoryConstructorSections(remote, guidance),
+      );
+      setContentState(normalized);
+      lastSavedJsonRef.current = JSON.stringify(normalized);
+    },
+  });
 
   const flushSave = useCallback(async () => {
     if (!canEdit || !sub) return;
@@ -200,6 +228,10 @@ export default function SubmissionConstructorPage() {
     }
   }, [canEdit, sub, content, patchSubmission]);
 
+  const hasAttachedConstructorDocx = (sub?.files ?? []).some(
+    (f) => f.kind === 'manuscript_constructor',
+  );
+
   const {
     importButton,
     importWarningsNotice,
@@ -220,6 +252,26 @@ export default function SubmissionConstructorPage() {
     actionsDisabled: generating || attaching,
   });
 
+  const {
+    reimportButton,
+    reimportWarningsNotice,
+    confirmDialog: reimportConfirmDialog,
+    reimporting,
+  } = useConstructorAttachedReimport({
+    slug,
+    content,
+    onContentChange: (merged) => {
+      const normalized = ensureMandatoryConstructorSections(merged, guidance);
+      setContentState(normalized);
+      scheduleSave(normalized);
+    },
+    canReimport: canEdit,
+    hasAttachedConstructorDocx,
+    t,
+    guidance,
+    actionsDisabled: generating || attaching || importingDocx,
+  });
+
   const generate = useCallback(
     async (attach: boolean) => {
       if (!sub) return;
@@ -230,31 +282,31 @@ export default function SubmissionConstructorPage() {
         if (attach) await flushSave();
         const enc = encodeURIComponent(sub.slug);
         const hasUploadedManuscript = (sub.files ?? []).some(
-          (f) => f.kind === "manuscript",
+          (f) => f.kind === 'manuscript',
         );
         const attachKind =
           attach && hasUploadedManuscript
-            ? "manuscript_constructor"
-            : "manuscript";
+            ? 'manuscript_constructor'
+            : 'manuscript';
         const path = `/submissions/${enc}/generate-docx${
-          attach ? "?attach=true" : ""
+          attach ? '?attach=true' : ''
         }`;
         const result = await apiPostJsonOrBlob(path, {
           content,
           attach,
           ...(attach ? { attachKind } : {}),
         });
-        if (result.kind === "json") {
+        if (result.kind === 'json') {
           setSavedAt(new Date());
           invalidateDetail(sub.slug);
           invalidateSubmission(sub.slug);
-          toast.success(t("attachManuscriptSuccess"), {
-            id: "constructor-attach-success",
+          toast.success(t('attachManuscriptSuccess'), {
+            id: 'constructor-attach-success',
           });
         } else {
           const blob = result.data;
           const dlUrl = URL.createObjectURL(blob);
-          const a = document.createElement("a");
+          const a = document.createElement('a');
           a.href = dlUrl;
           a.download = `${sub.slug}.docx`;
           document.body.appendChild(a);
@@ -265,8 +317,8 @@ export default function SubmissionConstructorPage() {
       } catch (e) {
         showApiError(
           e,
-          attach ? t("attachManuscriptFailed") : t("generateFailed"),
-          { id: attach ? "constructor-attach" : "constructor-generate" },
+          attach ? t('attachManuscriptFailed') : t('generateFailed'),
+          { id: attach ? 'constructor-attach' : 'constructor-generate' },
         );
       } finally {
         if (attach) setAttaching(false);
@@ -283,43 +335,48 @@ export default function SubmissionConstructorPage() {
         {saving ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-ink/55">
             <Spinner size="sm" />
-            <span className="sr-only">{tCommon("autosaving")}</span>
+            <span className="sr-only">{tCommon('autosaving')}</span>
           </span>
         ) : savedAt ? (
           <span className="text-xs text-ink/55">
-            {tCommon("savedAt", {
+            {tCommon('savedAt', {
               time: savedAt.toLocaleTimeString(),
             })}
           </span>
         ) : null}
         {importButton}
-        <button
-          type="button"
+        {reimportButton}
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => void generate(false)}
-          disabled={generating || attaching || !canEdit || importingDocx}
-          aria-busy={generating}
-          aria-label={generating ? tCommon("generating") : undefined}
+          disabled={
+            generating || attaching || !canEdit || importingDocx || reimporting
+          }
+          loading={generating}
+          aria-label={generating ? tCommon('generating') : undefined}
           data-testid="constructor-generate-docx"
-          className="inline-flex min-w-[7rem] items-center justify-center rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
         >
-          {generating ? <Spinner size="sm" /> : tCommon("downloadDocx")}
-        </button>
-        <button
-          type="button"
+          {tCommon('downloadDocx')}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => void generate(true)}
-          disabled={generating || attaching || !canEdit || importingDocx}
-          aria-busy={attaching}
-          aria-label={attaching ? t("attachingManuscript") : undefined}
+          disabled={
+            generating || attaching || !canEdit || importingDocx || reimporting
+          }
+          loading={attaching}
+          aria-label={attaching ? t('attachingManuscript') : undefined}
           data-testid="constructor-attach-manuscript"
-          className="inline-flex min-w-[7rem] items-center justify-center rounded-md border border-ink/20 bg-paper px-3 py-1.5 text-sm font-medium text-ink hover:border-accent/40 disabled:opacity-50"
         >
-          {attaching ? <Spinner size="sm" /> : t("attachManuscript")}
-        </button>
+          {t('attachManuscript')}
+        </Button>
         <Link
           href={`/submissions/${encodeURIComponent(sub.slug)}`}
           className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90"
         >
-          {t("backToSubmission")}
+          {t('backToSubmission')}
         </Link>
       </div>
     );
@@ -332,19 +389,20 @@ export default function SubmissionConstructorPage() {
     canEdit,
     generate,
     importButton,
+    reimportButton,
     importingDocx,
+    reimporting,
     t,
     tCommon,
   ]);
 
   const hasUnsavedChanges =
-    savedFingerprint !== null &&
-    JSON.stringify(content) !== savedFingerprint;
+    savedFingerprint !== null && JSON.stringify(content) !== savedFingerprint;
 
   if (loading) {
     return (
       <main className={PAGE_SHELL}>
-        <LoadingCenter label={t("loading")} className="text-ink/60" compact />
+        <LoadingCenter label={t('loading')} className="text-ink/60" compact />
       </main>
     );
   }
@@ -357,27 +415,27 @@ export default function SubmissionConstructorPage() {
             message={loadError}
             error={loadErrorCause}
             hint={
-              loadErrorCause && getApiErrorKind(loadErrorCause) === "rateLimit"
-                ? tApi("rateLimitHint")
+              loadErrorCause && getApiErrorKind(loadErrorCause) === 'rateLimit'
+                ? tApi('rateLimitHint')
                 : undefined
             }
             onRetry={() => {
               void meQuery.refetch();
               void subQuery.refetch();
             }}
-            retryLabel={tApi("retry")}
+            retryLabel={tApi('retry')}
             backHref={`/submissions/${encodeURIComponent(slug)}`}
-            backLabel={t("backToSubmission")}
+            backLabel={t('backToSubmission')}
           />
         ) : (
-          <p className="text-sm text-ink/60">{t("notFound")}</p>
+          <p className="text-sm text-ink/60">{t('notFound')}</p>
         )}
         <p className="mt-2">
           <Link
             href="/submissions"
             className="text-sm text-accent hover:underline"
           >
-            {t("backToList")}
+            {t('backToList')}
           </Link>
         </p>
       </main>
@@ -387,18 +445,19 @@ export default function SubmissionConstructorPage() {
   return (
     <main className={PAGE_SHELL}>
       {confirmDialog}
+      {reimportConfirmDialog}
       <Link
         href={`/submissions/${encodeURIComponent(sub.slug)}`}
         className="text-sm text-accent hover:underline"
       >
-        {t("backToSubmission")}
+        {t('backToSubmission')}
       </Link>
       <header className="mt-4 flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl font-semibold text-ink sm:text-3xl">
-            {t("titleEdit")}
+            {t('titleEdit')}
           </h1>
-          <p className="mt-1 text-sm text-ink/65">{t("subtitleEdit")}</p>
+          <p className="mt-1 text-sm text-ink/65">{t('subtitleEdit')}</p>
         </div>
       </header>
 
@@ -414,21 +473,25 @@ export default function SubmissionConstructorPage() {
       {!canEdit && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {!isAuthor
-            ? t("readOnlyNotOwner")
-            : t("readOnlyStatus", { status: sub.status })}
+            ? t('readOnlyNotOwner')
+            : t('readOnlyStatus', { status: sub.status })}
         </div>
       )}
 
       {isUploadMode && sub.constructorContent == null ? (
         <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          {t("uploadModeWarning")}
+          {t('uploadModeWarning')}
         </div>
       ) : null}
 
       <section className="mt-6">
         <Suspense
           fallback={
-            <LoadingCenter label={t("loading")} className="text-ink/60" compact />
+            <LoadingCenter
+              label={t('loading')}
+              className="text-ink/60"
+              compact
+            />
           }
         >
           <ConstructorWorkspace
@@ -437,7 +500,14 @@ export default function SubmissionConstructorPage() {
             slug={sub.slug}
             readOnly={!canEdit}
             blockingErrors={blockingErrors}
-            notice={importWarningsNotice}
+            notice={
+              importWarningsNotice || reimportWarningsNotice ? (
+                <div className="space-y-2">
+                  {importWarningsNotice}
+                  {reimportWarningsNotice}
+                </div>
+              ) : null
+            }
             actions={headerActions}
             hasUnsavedChanges={hasUnsavedChanges}
             articleType={(sub.articleType as SubmissionArticleType) ?? null}

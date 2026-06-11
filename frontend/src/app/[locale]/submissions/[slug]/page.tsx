@@ -1,50 +1,47 @@
-"use client";
+'use client';
 
-import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useEffect, useRef, useState, useId } from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { useParams } from "next/navigation";
-import {
-  apiBlob,
-  apiJson,
-  apiUpload,
-  ApiError,
-} from "@/lib/api";
+import { useLocale, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useRef, useState, useId } from 'react';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { useParams } from 'next/navigation';
+import { apiBlob, apiJson, apiUpload, ApiError } from '@/lib/api';
 import {
   ACCEPT_FIGURE,
   ACCEPT_MANUSCRIPT,
   ACCEPT_SUPPLEMENTARY,
-} from "@/lib/upload-accept";
-import { ApiErrorState } from "@/components/api-error-state";
-import { LoadingCenter, Spinner } from "@/components/ui/spinner";
-import { toast } from "@/lib/toast";
-import { getApiErrorKind } from "@/lib/api-error-message";
-import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import { useDisciplineLabel } from "@/lib/use-discipline-label";
-import { useToastApiError } from "@/lib/use-toast-api-error";
+} from '@/lib/upload-accept';
+import { ApiErrorState } from '@/components/api-error-state';
+import { LoadingCenter, Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { toast } from '@/lib/toast';
+import { getApiErrorKind } from '@/lib/api-error-message';
+import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { useDisciplineLabel } from '@/lib/use-discipline-label';
+import { useToastApiError } from '@/lib/use-toast-api-error';
 import {
   canManageAssignmentReminders,
   canManageOwnSubmissions,
   PERMISSION_SLUGS,
-} from "@/lib/permissions";
+} from '@/lib/permissions';
 import {
   minReminderRescheduleDatetimeLocal,
   reminderRescheduleInputValue,
-} from "@/lib/reminder-datetime-local";
+} from '@/lib/reminder-datetime-local';
 import {
   useSubmissionDetail,
   type SubmissionDetailPayload,
-} from "@/lib/queries/submissions";
-import { SearchableSelect } from "@/components/ui/searchable-select";
-import { SimpleSelect } from "@/components/ui/select";
+} from '@/lib/queries/submissions';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { SimpleSelect } from '@/components/ui/select';
 import {
   assignmentStatusLabel,
   assignmentStatusPillClass,
   statusPillClass,
   submissionStatusLabel,
   submissionQueueShellCls,
-} from "@/lib/submission-list-ui";
-import { PAGE_SHELL_NARROW } from "@/lib/page-shell";
+} from '@/lib/submission-list-ui';
+import { PAGE_SHELL_NARROW } from '@/lib/page-shell';
 import {
   assignReviewerSchema,
   fileExceedsUploadLimit,
@@ -53,7 +50,7 @@ import {
   MAX_UPLOAD_MB,
   safeParseResult,
   updateSubmissionStatusSchema,
-} from "@/lib/validation";
+} from '@/lib/validation';
 import {
   fileKindsForSubmissionDetail,
   SubmissionMetadataDisplay,
@@ -61,12 +58,12 @@ import {
   type ContributorRow,
   type MetadataDisplayInitial,
   type SubmissionMetadataFormHandle,
-} from "./submission-workflow-forms";
-import { ConstructorManuscriptRow } from "@/components/constructor/ConstructorManuscriptRow";
-import { ReviewManuscriptPresentationPicker } from "@/components/constructor/ReviewManuscriptPresentationPicker";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { constructorDraftHasMeaningfulContent } from "@/lib/constructor-import-merge";
-import { resolveConstructorDocxFileName } from "@/lib/constructor-docx-filename";
+} from './submission-workflow-forms';
+import { ConstructorManuscriptRow } from '@/components/constructor/ConstructorManuscriptRow';
+import { ReviewManuscriptPresentationPicker } from '@/components/constructor/ReviewManuscriptPresentationPicker';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { constructorDraftHasMeaningfulContent } from '@/lib/constructor-import-merge';
+import { resolveConstructorDocxFileName } from '@/lib/constructor-docx-filename';
 import {
   type ReviewManuscriptPresentation,
   detectManuscriptSources,
@@ -74,23 +71,24 @@ import {
   resolveDefaultReviewManuscriptPresentation,
   presentationIsValid,
   writeReviewManuscriptPresentation,
-} from "@/lib/review-manuscript-presentation";
+} from '@/lib/review-manuscript-presentation';
 import {
   useInvalidateSubmissionDetail,
   usePatchSubmission,
-} from "@/lib/queries/submissions";
-import { CopyeditSection } from "@/components/copyedit/CopyeditSection";
-import { SubmissionDisciplinePanel } from "@/components/submission-discipline-panel";
-import { CorpusSimilarityPanel } from "@/components/corpus-similarity-panel";
-import { ReviewerSuggestionsPanel } from "@/components/reviewer-suggestions-panel";
+} from '@/lib/queries/submissions';
+import { CopyeditSection } from '@/components/copyedit/CopyeditSection';
+import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
+import { CorpusSimilarityPanel } from '@/components/corpus-similarity-panel';
+import { ReviewerSuggestionsPanel } from '@/components/reviewer-suggestions-panel';
 import type {
   ConstructorContent,
   ConstructorValidationError,
-} from "@/lib/constructor-content.types";
-import { submitSubmissionForReview } from "@/lib/constructor-manuscript";
-import { stashConstructorSubmitErrors } from "@/lib/constructor-submit-errors";
-import { editorStatusOptions } from "@/lib/editor-status-transitions";
-import { submissionAllowsReviewConfiguration } from "@/lib/submission-review-phase";
+} from '@/lib/constructor-content.types';
+import { submitSubmissionForReview } from '@/lib/constructor-manuscript';
+import { stashConstructorSubmitErrors } from '@/lib/constructor-submit-errors';
+import { editorStatusOptions } from '@/lib/editor-status-transitions';
+import { isEditorDecisionStatus } from '@/lib/editor-decision-statuses';
+import { submissionAllowsReviewConfiguration } from '@/lib/submission-review-phase';
 import {
   apiCodeToFieldErrors,
   collectSubmitReadinessErrors,
@@ -99,8 +97,8 @@ import {
   hasFieldError,
   scrollToFirstFieldError,
   type SubmitReadinessContributor,
-} from "@/lib/submission-field-errors";
-import { SUBMISSION_API_ERROR_CODES } from "@/lib/submission-api-error-codes";
+} from '@/lib/submission-field-errors';
+import { SUBMISSION_API_ERROR_CODES } from '@/lib/submission-api-error-codes';
 
 type FileRow = {
   id: string;
@@ -132,6 +130,7 @@ type SubmissionDetail = {
   ethicalApprovalReference?: string | null;
   originalityConfirmed?: boolean;
   aiUsageStatement?: string | null;
+  messageForAuthor?: string | null;
   files?: FileRow[];
   /**
    * When non-null, the submission was authored using the Word Constructor.
@@ -151,12 +150,12 @@ type SubmissionDetail = {
   disciplineScopeWarning?: string | null;
 };
 
-type ReviewerCandidate = SubmissionDetailPayload["reviewerCandidates"][number];
+type ReviewerCandidate = SubmissionDetailPayload['reviewerCandidates'][number];
 
-type AssignmentRow = SubmissionDetailPayload["editorAssignmentRows"][number];
+type AssignmentRow = SubmissionDetailPayload['editorAssignmentRows'][number];
 
 type ReminderAdminRow =
-  SubmissionDetailPayload["assignmentReminders"][string][number];
+  SubmissionDetailPayload['assignmentReminders'][string][number];
 
 type ReviewForEditor = {
   id: string;
@@ -176,30 +175,70 @@ type ReviewForAuthor = {
 };
 
 function getFileIcon(kind: string) {
-  if (kind === "table") {
+  if (kind === 'table') {
     return (
-      <svg className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+      <svg
+        className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"
+        />
       </svg>
     );
   }
-  if (kind === "figure") {
+  if (kind === 'figure') {
     return (
-      <svg className="size-5 shrink-0 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375 0 11-.75 0 .375 0 01.75 0z" />
+      <svg
+        className="size-5 shrink-0 text-blue-600 dark:text-blue-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375 0 11-.75 0 .375 0 01.75 0z"
+        />
       </svg>
     );
   }
-  if (kind === "supplementary") {
+  if (kind === 'supplementary') {
     return (
-      <svg className="size-5 shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+      <svg
+        className="size-5 shrink-0 text-amber-600 dark:text-amber-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+        />
       </svg>
     );
   }
   return (
-    <svg className="size-5 shrink-0 text-accent/80 dark:text-accent/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    <svg
+      className="size-5 shrink-0 text-accent/80 dark:text-accent/60"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+      />
     </svg>
   );
 }
@@ -232,20 +271,20 @@ function SubmissionFileRow({
   onTogglePackage?: (f: FileRow) => void;
 }) {
   const tk = tWf as unknown as (k: string) => string;
-  const stage = f.fileStage === "review" ? "review" : "submission";
+  const stage = f.fileStage === 'review' ? 'review' : 'submission';
   const rowCls = softRows
-    ? "group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-paper/60 p-4 shadow-2xs hover:border-accent-2/20 hover:bg-paper/80 transition-all duration-200"
-    : "group flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 py-4 last:border-b-0 hover:bg-ink/[0.01] px-2 rounded-lg transition-colors";
+    ? 'group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-paper/60 p-4 shadow-2xs hover:border-accent-2/20 hover:bg-paper/80 transition-all duration-200'
+    : 'group flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 py-4 last:border-b-0 hover:bg-ink/[0.01] px-2 rounded-lg transition-colors';
   return (
     <li className={rowCls}>
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex size-9 items-center justify-center rounded-xl bg-ink/5 dark:bg-white/5 transition-colors group-hover:bg-accent/5 dark:group-hover:bg-accent/10">
-          {getFileIcon(f.kind || "manuscript")}
+          {getFileIcon(f.kind || 'manuscript')}
         </div>
         <div className="min-w-0 flex-1 text-start">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-ink/70 font-semibold">
-              {tk(`fileKind_${f.kind || "manuscript"}`)}
+              {tk(`fileKind_${f.kind || 'manuscript'}`)}
             </span>
             {showWorkflowStageBadge ? (
               <span className="rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent font-semibold">
@@ -254,11 +293,11 @@ function SubmissionFileRow({
             ) : null}
             {showPublicBadge && f.isPublic ? (
               <span className="rounded bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-900/90 dark:text-emerald-300 font-semibold">
-                {t("filePublicBadge")}
+                {t('filePublicBadge')}
               </span>
             ) : null}
           </div>
-          <p 
+          <p
             className="mt-1 truncate text-sm font-medium text-ink transition-colors group-hover:text-accent"
             title={f.originalName}
           >
@@ -267,14 +306,14 @@ function SubmissionFileRow({
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={busy}
           onClick={() => onDownload(f)}
-          className="inline-flex items-center justify-center rounded-xl border border-ink/15 dark:border-white/15 bg-paper px-3 py-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-accent/40 active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
         >
-          {t("download")}
-        </button>
+          {t('download')}
+        </Button>
         {editorCanTogglePackage && onTogglePackage ? (
           <button
             type="button"
@@ -282,21 +321,21 @@ function SubmissionFileRow({
             onClick={() => onTogglePackage(f)}
             className="inline-flex items-center justify-center rounded-xl border border-accent/20 bg-accent/[0.04] px-3 py-1.5 text-xs font-semibold text-accent shadow-2xs hover:bg-accent/[0.08] active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
           >
-            {stage === "review"
-              ? t("toggleReviewPackageExclude")
-              : t("toggleReviewPackageInclude")}
+            {stage === 'review'
+              ? t('toggleReviewPackageExclude')
+              : t('toggleReviewPackageInclude')}
           </button>
         ) : null}
         {showRemove && (
-          <button
-            type="button"
+          <Button
+            variant="danger-soft"
+            size="sm"
             disabled={busy}
             onClick={() => onRemove?.(f.id)}
-            className="inline-flex items-center justify-center rounded-xl border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20 px-3 py-1.5 text-xs font-semibold text-red-800 dark:text-red-400 shadow-2xs hover:bg-red-100 dark:hover:bg-red-950/40 active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
-            title={t("removeFile")}
+            title={t('removeFile')}
           >
-            × {t("removeFile")}
-          </button>
+            × {t('removeFile')}
+          </Button>
         )}
       </div>
     </li>
@@ -307,17 +346,17 @@ function recommendationLabel(
   r: string,
   tCommon: (key: string) => string,
 ): string {
-  if (r === "accept") return tCommon("recAccept");
-  if (r === "reject") return tCommon("recReject");
-  return tCommon("recRevisions");
+  if (r === 'accept') return tCommon('recAccept');
+  if (r === 'reject') return tCommon('recReject');
+  return tCommon('recRevisions');
 }
 
 function parseInvalidStatusTransition(
   err: ApiError,
 ): { from: string; to: string } | null {
-  if (err.code === "INVALID_STATUS_TRANSITION") {
-    const from = String(err.details?.fromStatus ?? "");
-    const to = String(err.details?.toStatus ?? "");
+  if (err.code === 'INVALID_STATUS_TRANSITION') {
+    const from = String(err.details?.fromStatus ?? '');
+    const to = String(err.details?.toStatus ?? '');
     if (from && to) return { from, to };
   }
   const match = err.message.match(/^Cannot transition from (\S+) to (\S+)$/);
@@ -328,16 +367,16 @@ function parseInvalidStatusTransition(
 const REMINDER_MIN_LEAD_MS = 120_000;
 
 export default function SubmissionDetailPage() {
-  const t = useTranslations("SubmissionDetail");
-  const tManuscript = useTranslations("ConstructorManuscript");
-  const tWf = useTranslations("SubmissionWorkflow");
-  const tSub = useTranslations("Submissions");
-  const tCommon = useTranslations("Common");
-  const tUi = useTranslations("UI");
-  const tAssign = useTranslations("Assignments");
-  const tv = useTranslations("Validation");
+  const t = useTranslations('SubmissionDetail');
+  const tManuscript = useTranslations('ConstructorManuscript');
+  const tWf = useTranslations('SubmissionWorkflow');
+  const tSub = useTranslations('Submissions');
+  const tCommon = useTranslations('Common');
+  const tUi = useTranslations('UI');
+  const tAssign = useTranslations('Assignments');
+  const tv = useTranslations('Validation');
   const locale = useLocale();
-  const isAr = locale === "ar";
+  const isAr = locale === 'ar';
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
@@ -348,23 +387,23 @@ export default function SubmissionDetailPage() {
   const patchSubmission = usePatchSubmission(slug);
   const { resolve: resolveApiError, codeMessages } = useApiErrorMessages();
   const { format: formatDiscipline } = useDisciplineLabel();
-  const tApi = useTranslations("ApiErrors");
+  const tApi = useTranslations('ApiErrors');
   const showApiError = useToastApiError();
   const detailQuery = useSubmissionDetail(slug, true);
   const detail = detailQuery.data;
   const me = detail?.me ?? null;
-  const sub = detail
-    ? (detail.sub as unknown as SubmissionDetail)
-    : null;
+  const sub = detail ? (detail.sub as unknown as SubmissionDetail) : null;
   const reviewerCandidates = detail?.reviewerCandidates ?? [];
   const reviewersLoadError = detail
-    ? detail.reviewersLoadError === "reviewers_load_failed"
-      ? t("reviewersLoadFailed")
+    ? detail.reviewersLoadError === 'reviewers_load_failed'
+      ? t('reviewersLoadFailed')
       : detail.reviewersLoadError
     : null;
   const editorReviews = (detail?.editorReviews ?? []) as ReviewForEditor[];
   const authorReviews = (detail?.authorReviews ?? []) as ReviewForAuthor[];
-  const reviewsError = detail?.reviewsLoadFailed ? t("reviewsLoadFailed") : null;
+  const reviewsError = detail?.reviewsLoadFailed
+    ? t('reviewsLoadFailed')
+    : null;
   const editorAssignmentRows = detail?.editorAssignmentRows ?? [];
   const assignmentReminders = detail?.assignmentReminders ?? {};
   const reminderLoadFailedByAssignment =
@@ -373,7 +412,7 @@ export default function SubmissionDetailPage() {
     ? canManageAssignmentReminders(me.permissions)
     : false;
   const loadError = detailQuery.isError
-    ? resolveApiError(detailQuery.error, t("loadFailed"))
+    ? resolveApiError(detailQuery.error, t('loadFailed'))
     : null;
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitFieldErrors, setSubmitFieldErrors] = useState<Set<string>>(
@@ -388,8 +427,9 @@ export default function SubmissionDetailPage() {
       return next;
     });
   }, []);
-  const [reviewerPick, setReviewerPick] = useState("");
-  const [statusPick, setStatusPick] = useState("");
+  const [reviewerPick, setReviewerPick] = useState('');
+  const [statusPick, setStatusPick] = useState('');
+  const [messageForAuthor, setMessageForAuthor] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploadingName, setUploadingName] = useState<string | null>(null);
   const [reminderRescheduleAt, setReminderRescheduleAt] = useState<
@@ -406,7 +446,7 @@ export default function SubmissionDetailPage() {
     });
   const metadataFormRef = useRef<SubmissionMetadataFormHandle>(null);
 
-  const serverStatus = sub?.status ?? "";
+  const serverStatus = sub?.status ?? '';
   useEffect(() => {
     if (serverStatus) setStatusPick(String(serverStatus));
   }, [serverStatus]);
@@ -419,7 +459,7 @@ export default function SubmissionDetailPage() {
     }
     if (toastedReviewersRef.current) return;
     toastedReviewersRef.current = true;
-    toast.error(reviewersLoadError, { id: "submission-reviewers-load" });
+    toast.error(reviewersLoadError, { id: 'submission-reviewers-load' });
   }, [reviewersLoadError]);
 
   const toastedReviewsRef = useRef(false);
@@ -430,7 +470,7 @@ export default function SubmissionDetailPage() {
     }
     if (toastedReviewsRef.current) return;
     toastedReviewsRef.current = true;
-    toast.error(reviewsError, { id: "submission-reviews-load" });
+    toast.error(reviewsError, { id: 'submission-reviews-load' });
   }, [reviewsError]);
 
   useEffect(() => {
@@ -445,14 +485,19 @@ export default function SubmissionDetailPage() {
       | null
       | undefined;
     const next =
-      (fromServer &&
-      presentationIsValid(fromServer, sources)
+      (fromServer && presentationIsValid(fromServer, sources)
         ? fromServer
         : null) ??
       stored ??
       resolveDefaultReviewManuscriptPresentation(sources);
     setReviewPresentation(next);
-  }, [sub?.slug, sub?.updatedAt, sub?.constructorContent, sub?.files, sub?.reviewManuscriptPresentation]);
+  }, [
+    sub?.slug,
+    sub?.updatedAt,
+    sub?.constructorContent,
+    sub?.files,
+    sub?.reviewManuscriptPresentation,
+  ]);
 
   async function uploadFile(f: File, kind: string) {
     if (!sub) return;
@@ -460,8 +505,8 @@ export default function SubmissionDetailPage() {
     setUploadingName(f.name);
     setValidationError(null);
     if (fileExceedsUploadLimit(f)) {
-      toast.error(tv("fileTooLarge", { maxMb: MAX_UPLOAD_MB }), {
-        id: "submission-file-too-large",
+      toast.error(tv('fileTooLarge', { maxMb: MAX_UPLOAD_MB }), {
+        id: 'submission-file-too-large',
       });
       setBusy(false);
       setUploadingName(null);
@@ -471,11 +516,11 @@ export default function SubmissionDetailPage() {
       await apiUpload(`/submissions/${encodeURIComponent(sub.slug)}/files`, f, {
         kind,
       });
-      toast.success(t("uploadSuccess"), { id: "submission-upload-success" });
+      toast.success(t('uploadSuccess'), { id: 'submission-upload-success' });
       clearSubmitFieldError(fileFieldKey(kind));
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("uploadFailed"), { id: "submission-upload" });
+      showApiError(err, t('uploadFailed'), { id: 'submission-upload' });
     } finally {
       setBusy(false);
       setUploadingName(null);
@@ -490,13 +535,13 @@ export default function SubmissionDetailPage() {
         `/submissions/${encodeURIComponent(sub.slug)}/files/${f.id}`,
       );
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
       a.download = f.originalName;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error(t("downloadFailed"), { id: "submission-download" });
+      toast.error(t('downloadFailed'), { id: 'submission-download' });
     } finally {
       setBusy(false);
     }
@@ -505,7 +550,7 @@ export default function SubmissionDetailPage() {
   function requestRemoveSubmissionFile(fileId: string) {
     if (
       !sub ||
-      (sub.status !== "draft" && sub.status !== "revisions_requested")
+      (sub.status !== 'draft' && sub.status !== 'revisions_requested')
     )
       return;
     setPendingRemoveFileId(fileId);
@@ -521,13 +566,15 @@ export default function SubmissionDetailPage() {
       await apiJson(
         `/submissions/${encodeURIComponent(sub.slug)}/files/${fileId}`,
         {
-          method: "DELETE",
+          method: 'DELETE',
         },
       );
-      toast.success(t("fileRemovedSuccess"), { id: "submission-delete-file-success" });
+      toast.success(t('fileRemovedSuccess'), {
+        id: 'submission-delete-file-success',
+      });
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("deleteFailed"), { id: "submission-delete-file" });
+      showApiError(err, t('deleteFailed'), { id: 'submission-delete-file' });
     } finally {
       setBusy(false);
     }
@@ -540,12 +587,14 @@ export default function SubmissionDetailPage() {
     setValidationError(null);
     try {
       await patchSubmission.mutateAsync({ constructorContent: null });
-      toast.success(t("constructorCleared"), {
-        id: "submission-constructor-clear-success",
+      toast.success(t('constructorCleared'), {
+        id: 'submission-constructor-clear-success',
       });
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("deleteFailed"), { id: "submission-constructor-clear" });
+      showApiError(err, t('deleteFailed'), {
+        id: 'submission-constructor-clear',
+      });
     } finally {
       setBusy(false);
     }
@@ -564,16 +613,19 @@ export default function SubmissionDetailPage() {
 
       const enc = encodeURIComponent(sub.slug);
       const fresh = await apiJson<SubmissionDetail>(`/submissions/${enc}`);
-      const cc = fresh.constructorContent as ConstructorContent | null | undefined;
+      const cc = fresh.constructorContent as
+        | ConstructorContent
+        | null
+        | undefined;
       const sources = detectManuscriptSources({
         files: fresh.files,
         constructorContent: cc,
       });
       if (!presentationIsValid(reviewPresentation, sources)) {
-        const presentationErrors = new Set<string>(["presentation"]);
+        const presentationErrors = new Set<string>(['presentation']);
         setSubmitFieldErrors(presentationErrors);
-        toast.error(tManuscript("presentationAtLeastOne"), {
-          id: "submission-presentation-required",
+        toast.error(tManuscript('presentationAtLeastOne'), {
+          id: 'submission-presentation-required',
         });
         scrollToFirstFieldError(presentationErrors);
         return;
@@ -587,7 +639,9 @@ export default function SubmissionDetailPage() {
           abstractAr: fresh.abstractAr,
           keywords: fresh.keywords,
           keywordsAr: fresh.keywordsAr,
-          contributors: fresh.contributors as SubmitReadinessContributor[] | null,
+          contributors: fresh.contributors as
+            | SubmitReadinessContributor[]
+            | null,
           originalityConfirmed: fresh.originalityConfirmed,
           conflictOfInterestStatement: fresh.conflictOfInterestStatement,
           ethicalApprovalReference: fresh.ethicalApprovalReference,
@@ -601,7 +655,9 @@ export default function SubmissionDetailPage() {
       if (readiness.errors.size > 0) {
         setSubmitFieldErrors(readiness.errors);
         if (readiness.message) {
-          toast.error(readiness.message, { id: "submission-submit-validation" });
+          toast.error(readiness.message, {
+            id: 'submission-submit-validation',
+          });
         }
         scrollToFirstFieldError(readiness.errors);
         return;
@@ -615,13 +671,13 @@ export default function SubmissionDetailPage() {
             ? cc
             : null,
       });
-      toast.success(t("submitSuccess"), { id: "submission-submit-success" });
+      toast.success(t('submitSuccess'), { id: 'submission-submit-success' });
       setSubmitFieldErrors(new Set());
       invalidateDetail(slug);
     } catch (err) {
       if (
         err instanceof ApiError &&
-        err.code === "CONSTRUCTOR_VALIDATION_FAILED" &&
+        err.code === 'CONSTRUCTOR_VALIDATION_FAILED' &&
         Array.isArray(err.details?.errors)
       ) {
         stashConstructorSubmitErrors(
@@ -641,14 +697,15 @@ export default function SubmissionDetailPage() {
         const apiErrors = apiCodeToFieldErrors(err.code, {
           presentation: reviewPresentation,
           fileKinds,
-          contributors: (sub.contributors as SubmitReadinessContributor[]) ?? [],
+          contributors:
+            (sub.contributors as SubmitReadinessContributor[]) ?? [],
         });
         setSubmitFieldErrors(apiErrors);
         scrollToFirstFieldError(apiErrors);
-        showApiError(err, t("submitFailed"), { id: "submission-submit" });
+        showApiError(err, t('submitFailed'), { id: 'submission-submit' });
         return;
       }
-      showApiError(err, t("submitFailed"), { id: "submission-submit" });
+      showApiError(err, t('submitFailed'), { id: 'submission-submit' });
     } finally {
       setBusy(false);
     }
@@ -671,16 +728,16 @@ export default function SubmissionDetailPage() {
       await apiJson(
         `/submissions/${encodeURIComponent(sub.slug)}/assignments`,
         {
-          method: "POST",
-          headers: { "X-Folio-Locale": locale },
+          method: 'POST',
+          headers: { 'X-Folio-Locale': locale },
           body: JSON.stringify(parsed.data),
         },
       );
-      toast.success(t("assignSuccess"), { id: "submission-assign-success" });
-      setReviewerPick("");
+      toast.success(t('assignSuccess'), { id: 'submission-assign-success' });
+      setReviewerPick('');
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("assignFailed"), { id: "submission-assign" });
+      showApiError(err, t('assignFailed'), { id: 'submission-assign' });
     } finally {
       setBusy(false);
     }
@@ -688,9 +745,15 @@ export default function SubmissionDetailPage() {
 
   async function updateStatus() {
     if (!sub) return;
-    const parsed = safeParseResult(updateSubmissionStatusSchema, {
-      status: statusPick,
-    });
+    const body: {
+      status: string;
+      messageForAuthor?: string;
+    } = { status: statusPick };
+    const trimmedMessage = messageForAuthor.trim();
+    if (isEditorDecisionStatus(statusPick) && trimmedMessage) {
+      body.messageForAuthor = trimmedMessage;
+    }
+    const parsed = safeParseResult(updateSubmissionStatusSchema, body);
     if (!parsed.ok) {
       setValidationError(
         joinValidationBulletList(formatZodIssues(tv, parsed.error.issues)),
@@ -701,30 +764,32 @@ export default function SubmissionDetailPage() {
     setValidationError(null);
     try {
       await apiJson(`/submissions/${encodeURIComponent(sub.slug)}/status`, {
-        method: "PATCH",
+        method: 'PATCH',
+        headers: { 'X-Folio-Locale': locale },
         body: JSON.stringify(parsed.data),
       });
-      toast.success(t("statusUpdated"));
+      toast.success(t('statusUpdated'));
+      setMessageForAuthor('');
       invalidateDetail(slug);
     } catch (err) {
-      if (err instanceof ApiError && err.code === "REVIEW_PACKAGE_INCOMPLETE") {
-        toast.error(t("reviewPackageIncomplete"), { id: "submission-status" });
+      if (err instanceof ApiError && err.code === 'REVIEW_PACKAGE_INCOMPLETE') {
+        toast.error(t('reviewPackageIncomplete'), { id: 'submission-status' });
         return;
       }
       if (err instanceof ApiError) {
         const transition = parseInvalidStatusTransition(err);
         if (transition) {
           toast.error(
-            t("invalidStatusTransition", {
+            t('invalidStatusTransition', {
               from: submissionStatusLabel(transition.from, tSub),
               to: submissionStatusLabel(transition.to, tSub),
             }),
-            { id: "submission-status" },
+            { id: 'submission-status' },
           );
           return;
         }
       }
-      showApiError(err, t("statusFailed"), { id: "submission-status" });
+      showApiError(err, t('statusFailed'), { id: 'submission-status' });
     } finally {
       setBusy(false);
     }
@@ -747,16 +812,16 @@ export default function SubmissionDetailPage() {
       : reminderRescheduleAt[reminderId]?.trim();
     const toastId = `submission-reminder-patch-${reminderId}`;
     if (!raw) {
-      toast.error(t("reminderRescheduleRequired"), { id: toastId });
+      toast.error(t('reminderRescheduleRequired'), { id: toastId });
       return;
     }
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) {
-      toast.error(t("reminderRescheduleRequired"), { id: toastId });
+      toast.error(t('reminderRescheduleRequired'), { id: toastId });
       return;
     }
     if (d.getTime() <= Date.now() + REMINDER_MIN_LEAD_MS) {
-      toast.error(t("reminderSendAtTooSoon"), { id: toastId });
+      toast.error(t('reminderSendAtTooSoon'), { id: toastId });
       return;
     }
     setBusy(true);
@@ -766,11 +831,11 @@ export default function SubmissionDetailPage() {
       await apiJson(
         `/submissions/${enc}/assignments/${encodeURIComponent(assignmentSlug)}/reminders/${reminderId}`,
         {
-          method: "PATCH",
+          method: 'PATCH',
           body: JSON.stringify({ sendAt: d.toISOString() }),
         },
       );
-      toast.success(t("reminderRescheduled"));
+      toast.success(t('reminderRescheduled'));
       setReminderRescheduleAt((prev) => {
         const next = { ...prev };
         delete next[reminderId];
@@ -778,24 +843,21 @@ export default function SubmissionDetailPage() {
       });
       invalidateDetail(slug);
     } catch (err) {
-      if (err instanceof ApiError && err.code === "REMINDER_SEND_AT_TOO_SOON") {
-        toast.error(t("reminderSendAtTooSoon"), { id: toastId });
+      if (err instanceof ApiError && err.code === 'REMINDER_SEND_AT_TOO_SOON') {
+        toast.error(t('reminderSendAtTooSoon'), { id: toastId });
         return;
       }
-      if (err instanceof ApiError && err.code === "EMAIL_DB_FORBIDDEN") {
+      if (err instanceof ApiError && err.code === 'EMAIL_DB_FORBIDDEN') {
         toast.error(err.message, { id: toastId });
         return;
       }
-      showApiError(err, t("reminderRescheduleFailed"), { id: toastId });
+      showApiError(err, t('reminderRescheduleFailed'), { id: toastId });
     } finally {
       setBusy(false);
     }
   }
 
-  async function cancelReminderRow(
-    assignmentSlug: string,
-    reminderId: string,
-  ) {
+  async function cancelReminderRow(assignmentSlug: string, reminderId: string) {
     if (!sub) return;
     setBusy(true);
     setValidationError(null);
@@ -804,12 +866,12 @@ export default function SubmissionDetailPage() {
       const enc = encodeURIComponent(sub.slug);
       await apiJson(
         `/submissions/${enc}/assignments/${encodeURIComponent(assignmentSlug)}/reminders/${reminderId}/cancel`,
-        { method: "POST" },
+        { method: 'POST' },
       );
-      toast.success(t("reminderCancelled"));
+      toast.success(t('reminderCancelled'));
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("reminderCancelFailed"), { id: toastId });
+      showApiError(err, t('reminderCancelFailed'), { id: toastId });
     } finally {
       setBusy(false);
     }
@@ -823,15 +885,17 @@ export default function SubmissionDetailPage() {
       await apiJson(
         `/submissions/${encodeURIComponent(sub.slug)}/review-method`,
         {
-          method: "PATCH",
+          method: 'PATCH',
           body: JSON.stringify({ reviewMethod: nextMethod }),
         },
       );
-      toast.success(t("reviewMethodUpdated"), { id: "submission-review-method" });
+      toast.success(t('reviewMethodUpdated'), {
+        id: 'submission-review-method',
+      });
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("reviewMethodFailed"), {
-        id: "submission-review-method",
+      showApiError(err, t('reviewMethodFailed'), {
+        id: 'submission-review-method',
       });
     } finally {
       setBusy(false);
@@ -841,21 +905,21 @@ export default function SubmissionDetailPage() {
   async function patchFileReviewStage(f: FileRow) {
     if (!sub) return;
     if (!submissionAllowsReviewConfiguration(sub.status)) return;
-    const next = f.fileStage === "review" ? "submission" : "review";
+    const next = f.fileStage === 'review' ? 'submission' : 'review';
     setBusy(true);
     setValidationError(null);
     try {
       await apiJson(
         `/submissions/${encodeURIComponent(sub.slug)}/files/${f.id}/stage`,
         {
-          method: "PATCH",
+          method: 'PATCH',
           body: JSON.stringify({ fileStage: next }),
         },
       );
-      toast.success(t("fileStageUpdated"), { id: "submission-file-stage" });
+      toast.success(t('fileStageUpdated'), { id: 'submission-file-stage' });
       invalidateDetail(slug);
     } catch (err) {
-      showApiError(err, t("fileStageFailed"), { id: "submission-file-stage" });
+      showApiError(err, t('fileStageFailed'), { id: 'submission-file-stage' });
     } finally {
       setBusy(false);
     }
@@ -867,14 +931,15 @@ export default function SubmissionDetailPage() {
         message={loadError}
         error={detailQuery.error}
         hint={
-          detailQuery.error && getApiErrorKind(detailQuery.error) === "rateLimit"
-            ? tApi("rateLimitHint")
+          detailQuery.error &&
+          getApiErrorKind(detailQuery.error) === 'rateLimit'
+            ? tApi('rateLimitHint')
             : undefined
         }
         onRetry={() => void detailQuery.refetch()}
-        retryLabel={tApi("retry")}
+        retryLabel={tApi('retry')}
         backHref="/submissions"
-        backLabel={tSub("title")}
+        backLabel={tSub('title')}
       />
     );
   }
@@ -882,17 +947,17 @@ export default function SubmissionDetailPage() {
   if (detailQuery.isPending || !sub || !me) {
     return (
       <main className={PAGE_SHELL_NARROW}>
-        <LoadingCenter label={t("loading")} className="text-ink/60" />
+        <LoadingCenter label={t('loading')} className="text-ink/60" />
       </main>
     );
   }
 
   const isAuthor =
-    sub.authorId != null && sub.authorId !== "" && sub.authorId === me.id;
+    sub.authorId != null && sub.authorId !== '' && sub.authorId === me.id;
   const canManageOwn = canManageOwnSubmissions(me.permissions);
   const isEditorView = detail!.isEditorView;
   const showCorpusSimilarity =
-    !isAuthor && (isEditorView || sub.status !== "draft");
+    !isAuthor && (isEditorView || sub.status !== 'draft');
   const canConfigureReview =
     isEditorView &&
     (me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS) ||
@@ -904,7 +969,7 @@ export default function SubmissionDetailPage() {
     canConfigureReview && canConfigureReviewForStatus;
   const allowReviewPackageEdits = showReviewConfiguration;
   const showFileWorkflowStage = allowReviewPackageEdits;
-  const isPublishedSubmission = sub.status === "published";
+  const isPublishedSubmission = sub.status === 'published';
   const canAssignReviewer =
     isEditorView &&
     me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER) &&
@@ -912,26 +977,26 @@ export default function SubmissionDetailPage() {
   const canEditManuscript =
     canManageOwn &&
     isAuthor &&
-    (sub.status === "draft" ||
-      sub.status === "revisions_requested" ||
-      sub.status === "copyediting");
+    (sub.status === 'draft' ||
+      sub.status === 'revisions_requested' ||
+      sub.status === 'copyediting');
   const canRemoveFiles =
     canManageOwn &&
     isAuthor &&
-    (sub.status === "draft" || sub.status === "revisions_requested");
+    (sub.status === 'draft' || sub.status === 'revisions_requested');
   const showMetadataForm =
     canManageOwn &&
     isAuthor &&
     !isEditorView &&
-    (sub.status === "draft" || sub.status === "revisions_requested");
+    (sub.status === 'draft' || sub.status === 'revisions_requested');
   const showMetadataReadonly = isEditorView || (isAuthor && !showMetadataForm);
   const showAbstractSection = !showMetadataForm;
 
   const metadataFormInitial = {
     title: sub.title,
-    titleAr: sub.titleAr ?? "",
+    titleAr: sub.titleAr ?? '',
     abstract: sub.abstract,
-    abstractAr: sub.abstractAr ?? "",
+    abstractAr: sub.abstractAr ?? '',
     articleType: sub.articleType ?? null,
     keywords: sub.keywords ?? null,
     keywordsAr: sub.keywordsAr ?? null,
@@ -954,7 +1019,8 @@ export default function SubmissionDetailPage() {
     keywordsAr: metadataFormInitial.keywordsAr,
     contributors: metadataFormInitial.contributors,
     fundingStatement: metadataFormInitial.fundingStatement,
-    conflictOfInterestStatement: metadataFormInitial.conflictOfInterestStatement,
+    conflictOfInterestStatement:
+      metadataFormInitial.conflictOfInterestStatement,
     ethicalApprovalReference: metadataFormInitial.ethicalApprovalReference,
     originalityConfirmed: metadataFormInitial.originalityConfirmed,
     aiUsageStatement: metadataFormInitial.aiUsageStatement,
@@ -966,7 +1032,8 @@ export default function SubmissionDetailPage() {
           disciplineSuggested: metadataFormInitial.disciplineSuggested,
           disciplineSuggestedConfidence:
             metadataFormInitial.disciplineSuggestedConfidence,
-          disciplineScopeInJournal: metadataFormInitial.disciplineScopeInJournal,
+          disciplineScopeInJournal:
+            metadataFormInitial.disciplineScopeInJournal,
           disciplineScopeWarning: metadataFormInitial.disciplineScopeWarning,
         }),
   };
@@ -975,25 +1042,24 @@ export default function SubmissionDetailPage() {
     | ConstructorContent
     | null
     | undefined;
-  const { hasUploadedManuscript, hasConstructorDraft } = detectManuscriptSources(
-    { files, constructorContent },
-  );
+  const { hasUploadedManuscript, hasConstructorDraft } =
+    detectManuscriptSources({ files, constructorContent });
   const constructorManuscriptFiles = files.filter(
-    (f) => f.kind === "manuscript_constructor",
+    (f) => f.kind === 'manuscript_constructor',
   );
   const attachedConstructorFile = constructorManuscriptFiles[0];
   const canEditConstructor =
     canManageOwn &&
     isAuthor &&
-    (sub.status === "draft" || sub.status === "revisions_requested");
+    (sub.status === 'draft' || sub.status === 'revisions_requested');
   const constructorDisplayName = hasConstructorDraft
-    ? attachedConstructorFile?.originalName ??
-      resolveConstructorDocxFileName(constructorContent)
-    : "";
+    ? (attachedConstructorFile?.originalName ??
+      resolveConstructorDocxFileName(constructorContent))
+    : '';
   const constructorStatusHint = hasConstructorDraft
     ? attachedConstructorFile
-      ? ("attached" as const)
-      : ("pending" as const)
+      ? ('attached' as const)
+      : ('pending' as const)
     : undefined;
   const composeHref = `/submissions/${encodeURIComponent(sub.slug)}/compose`;
   const editableFileKinds = fileKindsForSubmissionDetail();
@@ -1002,8 +1068,8 @@ export default function SubmissionDetailPage() {
   const mainShellCls = isEditorView
     ? submissionQueueShellCls
     : PAGE_SHELL_NARROW;
-  const cardRounded = isEditorView ? "rounded-xl" : "rounded-lg";
-  const contentPad = isEditorView ? "p-6 sm:p-8" : "p-6";
+  const cardRounded = isEditorView ? 'rounded-xl' : 'rounded-lg';
+  const contentPad = isEditorView ? 'p-6 sm:p-8' : 'p-6';
 
   const statuses = editorStatusOptions(sub.status);
 
@@ -1025,7 +1091,8 @@ export default function SubmissionDetailPage() {
 
   const progressPercent = Math.round((completedSteps / totalSteps) * 100);
   const strokeDasharray = 2 * Math.PI * 24;
-  const strokeDashoffset = strokeDasharray - (progressPercent / 100) * strokeDasharray;
+  const strokeDashoffset =
+    strokeDasharray - (progressPercent / 100) * strokeDasharray;
 
   return (
     <main className={mainShellCls}>
@@ -1034,22 +1101,20 @@ export default function SubmissionDetailPage() {
         onOpenChange={(open) => {
           if (!open) setPendingRemoveFileId(null);
         }}
-        dir={locale === "ar" ? "rtl" : "ltr"}
-        title={t("removeFile")}
-        description={t("removeFileConfirm")}
-        cancelLabel={tManuscript("cancel")}
-        confirmLabel={t("removeFile")}
+        title={t('removeFile')}
+        description={t('removeFileConfirm')}
+        cancelLabel={tManuscript('cancel')}
+        confirmLabel={t('removeFile')}
         onConfirm={() => void confirmRemoveSubmissionFile()}
         confirmDisabled={busy}
       />
       <ConfirmDialog
         open={clearConstructorOpen}
         onOpenChange={setClearConstructorOpen}
-        dir={locale === "ar" ? "rtl" : "ltr"}
-        title={tManuscript("clearConstructorTitle")}
-        description={tManuscript("clearConstructorDescription")}
-        cancelLabel={tManuscript("cancel")}
-        confirmLabel={tManuscript("clearConstructorConfirm")}
+        title={tManuscript('clearConstructorTitle')}
+        description={tManuscript('clearConstructorDescription')}
+        cancelLabel={tManuscript('cancel')}
+        confirmLabel={tManuscript('clearConstructorConfirm')}
         onConfirm={() => void confirmClearConstructorDraft()}
         confirmDisabled={busy}
       />
@@ -1058,21 +1123,32 @@ export default function SubmissionDetailPage() {
       <header className="relative overflow-hidden rounded-2xl border border-ink/10 dark:border-white/10 bg-surface/60 dark:bg-white/5 backdrop-blur-md p-6 sm:p-8 shadow-xs hover:border-accent/15 transition-all duration-300">
         <div className="absolute -right-20 -top-20 size-48 rounded-full bg-accent/5 blur-3xl" />
         <div className="absolute -left-20 -bottom-20 size-48 rounded-full bg-accent-2/5 blur-3xl" />
-        
+
         {isEditorView ? (
           <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-ink/60">
-            <Link href="/submissions" className="text-accent hover:text-accent/80 transition-colors">
-              {t("back")}
+            <Link
+              href="/submissions"
+              className="text-accent hover:text-accent/80 transition-colors"
+            >
+              {t('back')}
             </Link>
-            <span className="text-ink/20" aria-hidden>·</span>
-            <Link href="/editor" className="hover:text-accent transition-colors">
-              {t("backToEditorQueue")}
+            <span className="text-ink/20" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/editor"
+              className="hover:text-accent transition-colors"
+            >
+              {t('backToEditorQueue')}
             </Link>
           </nav>
         ) : (
           <nav className="text-xs font-medium">
-            <Link href="/submissions" className="text-accent hover:text-accent/80 transition-colors">
-              {t("back")}
+            <Link
+              href="/submissions"
+              className="text-accent hover:text-accent/80 transition-colors"
+            >
+              {t('back')}
             </Link>
           </nav>
         )}
@@ -1087,7 +1163,7 @@ export default function SubmissionDetailPage() {
               type="button"
               onClick={() => setValidationError(null)}
               className="shrink-0 rounded-lg p-1 text-lg leading-none text-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
-              aria-label={t("dismissError")}
+              aria-label={t('dismissError')}
             >
               ×
             </button>
@@ -1098,19 +1174,29 @@ export default function SubmissionDetailPage() {
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded bg-accent/8 dark:bg-accent/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent font-semibold">
-                {sub.articleType ? tWfAny(`articleType_${sub.articleType}`) : (isAr ? "مخطوطة بحثية" : "Manuscript")}
+                {sub.articleType
+                  ? tWfAny(`articleType_${sub.articleType}`)
+                  : isAr
+                    ? 'مخطوطة بحثية'
+                    : 'Manuscript'}
               </span>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold shadow-2xs ${
-                sub.status === "draft" 
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                  : sub.status === "under_review"
-                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                    : sub.status === "accepted" || sub.status === "published"
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                      : "bg-ink/5 text-ink/70 dark:bg-white/10 dark:text-white/70"
-              }`}>
-                {sub.status === "draft" && <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />}
-                {sub.status === "under_review" && <span className="size-1.5 rounded-full bg-blue-500 animate-pulse" />}
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold shadow-2xs ${
+                  sub.status === 'draft'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                    : sub.status === 'under_review'
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                      : sub.status === 'accepted' || sub.status === 'published'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+                        : 'bg-ink/5 text-ink/70 dark:bg-white/10 dark:text-white/70'
+                }`}
+              >
+                {sub.status === 'draft' && (
+                  <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+                )}
+                {sub.status === 'under_review' && (
+                  <span className="size-1.5 rounded-full bg-blue-500 animate-pulse" />
+                )}
                 {statusLabel}
               </span>
             </div>
@@ -1129,37 +1215,60 @@ export default function SubmissionDetailPage() {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-ink/50 dark:text-white/40">
               <span>
-                {isAr ? "آخر تحديث:" : "Last updated:"} <span className="font-medium text-ink/70 dark:text-white/60">{new Date(sub.updatedAt).toLocaleDateString(locale, { dateStyle: 'medium' })}</span>
+                {isAr ? 'آخر تحديث:' : 'Last updated:'}{' '}
+                <span className="font-medium text-ink/70 dark:text-white/60">
+                  {new Date(sub.updatedAt).toLocaleDateString(locale, {
+                    dateStyle: 'medium',
+                  })}
+                </span>
               </span>
-              <span className="hidden sm:inline" aria-hidden>•</span>
+              <span className="hidden sm:inline" aria-hidden>
+                •
+              </span>
               <span>
-                {isAr ? "معرف الطلب:" : "ID:"} <span className="font-mono bg-ink/5 dark:bg-white/5 px-1.5 py-0.5 rounded">{sub.slug}</span>
+                {isAr ? 'معرف الطلب:' : 'ID:'}{' '}
+                <span className="font-mono bg-ink/5 dark:bg-white/5 px-1.5 py-0.5 rounded">
+                  {sub.slug}
+                </span>
               </span>
             </div>
           </div>
         </div>
 
-        {sub.reviewMethod === "double_anonymous" ? (
+        {sub.reviewMethod === 'double_anonymous' ? (
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200/40 bg-amber-500/[0.04] px-4 py-3 text-xs text-amber-800 dark:text-amber-400">
-            <svg className="size-5 shrink-0 text-amber-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="size-5 shrink-0 text-amber-500 mt-0.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
-            <p className="leading-relaxed">{t("doubleBlindAuthorNotice")}</p>
+            <p className="leading-relaxed">{t('doubleBlindAuthorNotice')}</p>
           </div>
         ) : null}
       </header>
 
       {/* Dual Column Layout Grid */}
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
         {/* Left Column (Main Workspace) */}
         <div className="lg:col-span-8 space-y-6">
           {showMetadataReadonly && (
-            <section className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad} hover:border-accent/15 transition-colors duration-300`}>
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad} hover:border-accent/15 transition-colors duration-300`}
+            >
               <h2 className="font-serif text-lg font-semibold text-ink">
-                {tWf("metadataReadonlyTitle")}
+                {tWf('metadataReadonlyTitle')}
               </h2>
-              <p className="mt-1 text-xs text-ink/65">{tWf("metadataReadonlyHint")}</p>
+              <p className="mt-1 text-xs text-ink/65">
+                {tWf('metadataReadonlyHint')}
+              </p>
               <div className="mt-4">
                 <SubmissionMetadataDisplay
                   key={sub.updatedAt}
@@ -1170,11 +1279,15 @@ export default function SubmissionDetailPage() {
           )}
 
           {showMetadataForm && (
-            <section className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}>
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
               <h2 className="font-serif text-lg font-semibold text-ink">
-                {tWf("metadataEditTitle")}
+                {tWf('metadataEditTitle')}
               </h2>
-              <p className="mt-1 text-xs text-ink/65">{tWf("metadataEditHint")}</p>
+              <p className="mt-1 text-xs text-ink/65">
+                {tWf('metadataEditHint')}
+              </p>
               <div className="mt-6">
                 <SubmissionMetadataForm
                   ref={metadataFormRef}
@@ -1188,7 +1301,8 @@ export default function SubmissionDetailPage() {
                   onSaved={() => invalidateDetail(slug)}
                   onDisciplineUpdated={() => invalidateDetail(slug)}
                   onError={(msg) => {
-                    if (msg.trim()) toast.error(msg, { id: "submission-metadata-form" });
+                    if (msg.trim())
+                      toast.error(msg, { id: 'submission-metadata-form' });
                   }}
                 />
               </div>
@@ -1196,12 +1310,16 @@ export default function SubmissionDetailPage() {
           )}
 
           {showAbstractSection && (
-            <section className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad} hover:border-accent/15 transition-colors duration-300`}>
-              <h2 className="font-serif text-lg font-semibold text-ink">{t("abstractsSection")}</h2>
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad} hover:border-accent/15 transition-colors duration-300`}
+            >
+              <h2 className="font-serif text-lg font-semibold text-ink">
+                {t('abstractsSection')}
+              </h2>
               <div className="mt-4 space-y-6">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                    {tWf("abstractLabelEn")}
+                    {tWf('abstractLabelEn')}
                   </h3>
                   <p
                     dir="ltr"
@@ -1213,7 +1331,7 @@ export default function SubmissionDetailPage() {
                 {sub.abstractAr?.trim() ? (
                   <div className="border-t border-ink/[0.05] dark:border-white/[0.05] pt-4 mt-4">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                      {tWf("abstractLabelAr")}
+                      {tWf('abstractLabelAr')}
                     </h3>
                     <p
                       dir="rtl"
@@ -1228,19 +1346,23 @@ export default function SubmissionDetailPage() {
           )}
 
           {canEditManuscript && (
-            <section className={`space-y-6 ${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}>
+            <section
+              className={`space-y-6 ${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
               <div>
                 <h2 className="font-serif text-lg font-semibold text-ink">
-                  {t("manuscript")}
+                  {t('manuscript')}
                 </h2>
-                <p className="mt-1 text-xs text-ink/75">{t("uploadSubtitle")}</p>
+                <p className="mt-1 text-xs text-ink/75">
+                  {t('uploadSubtitle')}
+                </p>
                 {canEditConstructor ? (
                   <p className="mt-2 text-xs text-ink/60">
-                    {tManuscript("dualPathHint")}
+                    {tManuscript('dualPathHint')}
                   </p>
                 ) : null}
               </div>
-              
+
               {canEditConstructor && (
                 <div className="flex flex-wrap items-center gap-3">
                   <Link
@@ -1248,7 +1370,7 @@ export default function SubmissionDetailPage() {
                     data-testid="open-constructor"
                     className="inline-flex items-center justify-center rounded-xl border border-accent bg-accent/8 px-4 py-2 text-sm font-semibold text-accent shadow-2xs hover:bg-accent/15 select-none active:scale-[0.98] transition-all duration-200"
                   >
-                    {tManuscript("openConstructor")}
+                    {tManuscript('openConstructor')}
                   </Link>
                 </div>
               )}
@@ -1260,7 +1382,7 @@ export default function SubmissionDetailPage() {
                     data-field-error={fileFieldKey(kind)}
                     className={fileRowCls(
                       hasFieldError(submitFieldErrors, fileFieldKey(kind)),
-                      "rounded-xl bg-paper/40 px-4 py-3",
+                      'rounded-xl bg-paper/40 px-4 py-3',
                     )}
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -1268,17 +1390,19 @@ export default function SubmissionDetailPage() {
                         {tWfAny(`fileKind_${kind}`)}
                         {required ? (
                           <span className="ms-1.5 text-[10px] font-bold text-red-700 bg-red-50 dark:bg-red-950/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            {tWf("requiredBadge")}
+                            {tWf('requiredBadge')}
                           </span>
                         ) : (
                           <span className="ms-1.5 text-[10px] font-semibold text-ink/50 bg-ink/5 dark:bg-white/5 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            {tWf("optionalBadge")}
+                            {tWf('optionalBadge')}
                           </span>
                         )}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-ink/55 leading-relaxed">{tWfAny(`fileKindHint_${kind}`)}</p>
-                    {kind === "manuscript" && hasConstructorDraft ? (
+                    <p className="mt-1 text-xs text-ink/55 leading-relaxed">
+                      {tWfAny(`fileKindHint_${kind}`)}
+                    </p>
+                    {kind === 'manuscript' && hasConstructorDraft ? (
                       <div className="mt-3">
                         <ConstructorManuscriptRow
                           displayName={constructorDisplayName}
@@ -1293,38 +1417,36 @@ export default function SubmissionDetailPage() {
                         />
                       </div>
                     ) : null}
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      <input
-                        id={`${fileInputId}-${kind}`}
-                        type="file"
-                        accept={
-                          kind === "figure" || kind === "table"
-                            ? ACCEPT_FIGURE
-                            : kind === "supplementary"
-                              ? ACCEPT_SUPPLEMENTARY
-                              : ACCEPT_MANUSCRIPT
-                        }
-                        className="sr-only"
-                        disabled={busy}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) void uploadFile(file, kind);
-                          e.target.value = "";
-                        }}
-                      />
-                      <label
-                        htmlFor={`${fileInputId}-${kind}`}
-                        className={`inline-flex cursor-pointer rounded-xl border border-ink/20 dark:border-white/20 bg-paper px-4 py-2 text-xs font-semibold text-ink shadow-2xs hover:border-accent/40 hover:bg-ink/[0.02] active:scale-[0.98] select-none transition-all duration-150 ${busy ? "pointer-events-none opacity-50" : ""}`}
-                      >
-                        {t("chooseFile")}
-                      </label>
-                    </div>
-                    {kind === "manuscript" && canEditConstructor ? (
+                    <FileDropZone
+                      inputId={`${fileInputId}-${kind}`}
+                      accept={
+                        kind === 'figure' || kind === 'table'
+                          ? ACCEPT_FIGURE
+                          : kind === 'supplementary'
+                            ? ACCEPT_SUPPLEMENTARY
+                            : ACCEPT_MANUSCRIPT
+                      }
+                      disabled={busy}
+                      uploading={!!uploadingName}
+                      onFile={(file) => void uploadFile(file, kind)}
+                      ariaLabel={t('chooseFile')}
+                      className="mt-3 border-0 p-0"
+                    >
+                      <div className="flex flex-wrap items-center gap-3 py-1">
+                        <label
+                          htmlFor={`${fileInputId}-${kind}`}
+                          className={`inline-flex cursor-pointer rounded-xl border border-ink/20 dark:border-white/20 bg-paper px-4 py-2 text-xs font-semibold text-ink shadow-2xs hover:border-accent/40 hover:bg-ink/[0.02] active:scale-[0.98] select-none transition-all duration-150 ${busy ? 'pointer-events-none opacity-50' : ''}`}
+                        >
+                          {t('chooseFile')}
+                        </label>
+                      </div>
+                    </FileDropZone>
+                    {kind === 'manuscript' && canEditConstructor ? (
                       <div
                         className={`mt-4 pt-4 border-t border-ink/[0.05] dark:border-white/[0.05] ${
-                          hasFieldError(submitFieldErrors, "presentation")
-                            ? "rounded-lg border border-red-400 p-3 ring-1 ring-red-500/15"
-                            : ""
+                          hasFieldError(submitFieldErrors, 'presentation')
+                            ? 'rounded-lg border border-red-400 p-3 ring-1 ring-red-500/15'
+                            : ''
                         }`}
                         data-field-error="presentation"
                       >
@@ -1333,7 +1455,7 @@ export default function SubmissionDetailPage() {
                           onChange={(next) => {
                             setReviewPresentation(next);
                             writeReviewManuscriptPresentation(sub.slug, next);
-                            clearSubmitFieldError("presentation");
+                            clearSubmitFieldError('presentation');
                           }}
                           hasUploadedManuscript={hasUploadedManuscript}
                           hasConstructorDraft={hasConstructorDraft}
@@ -1344,18 +1466,20 @@ export default function SubmissionDetailPage() {
                   </div>
                 ))}
               </div>
-              
+
               {uploadingName && (
                 <p className="flex items-center gap-2 text-sm text-ink/70">
                   <Spinner size="sm" />
                   <span className="font-medium text-ink">{uploadingName}</span>
-                  <span className="sr-only">{t("uploading")}</span>
+                  <span className="sr-only">{t('uploading')}</span>
                 </p>
               )}
-              <p className="text-xs text-ink/55">{t("uploadHint")}</p>
+              <p className="text-xs text-ink/55">{t('uploadHint')}</p>
               {files.length > 0 && (
                 <div className="pt-4 border-t border-ink/[0.05] dark:border-white/[0.05]">
-                  <h3 className="text-sm font-semibold text-ink mb-3">{t("yourFiles")}</h3>
+                  <h3 className="text-sm font-semibold text-ink mb-3">
+                    {t('yourFiles')}
+                  </h3>
                   <ul className="mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]">
                     {files.map((f) => (
                       <SubmissionFileRow
@@ -1374,7 +1498,9 @@ export default function SubmissionDetailPage() {
                             : undefined
                         }
                         onDownload={(row) => void downloadSubmissionFile(row)}
-                        onRemove={(fileId) => requestRemoveSubmissionFile(fileId)}
+                        onRemove={(fileId) =>
+                          requestRemoveSubmissionFile(fileId)
+                        }
                       />
                     ))}
                   </ul>
@@ -1384,16 +1510,24 @@ export default function SubmissionDetailPage() {
           )}
 
           {showReadonlyFiles && (
-            <section className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}>
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
               <h2 className="font-serif text-lg font-semibold text-ink">
-                {t("attachedFiles")}
+                {t('attachedFiles')}
               </h2>
               {isEditorView && isPublishedSubmission && (
                 <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-ink/70">
-                  {t("attachedFilesPublishedHint")}
+                  {t('attachedFilesPublishedHint')}
                 </p>
               )}
-              <ul className={isEditorView ? "mt-4 space-y-3" : "mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]"}>
+              <ul
+                className={
+                  isEditorView
+                    ? 'mt-4 space-y-3'
+                    : 'mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]'
+                }
+              >
                 {files.map((f) => (
                   <SubmissionFileRow
                     key={f.id}
@@ -1422,10 +1556,10 @@ export default function SubmissionDetailPage() {
           {isEditorView && (
             <section className="rounded-xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-4">
               <h2 className="font-serif text-lg font-semibold text-ink">
-                {t("editorPanelTitle")}
+                {t('editorPanelTitle')}
               </h2>
               <p className="max-w-2xl text-sm leading-relaxed text-ink/70">
-                {t("editorPanelHint")}
+                {t('editorPanelHint')}
               </p>
               <div className="pt-2">
                 <SubmissionDisciplinePanel
@@ -1438,7 +1572,8 @@ export default function SubmissionDetailPage() {
                     disciplineSuggested: sub.disciplineSuggested ?? null,
                     disciplineSuggestedConfidence:
                       sub.disciplineSuggestedConfidence ?? null,
-                    disciplineScopeInJournal: sub.disciplineScopeInJournal ?? null,
+                    disciplineScopeInJournal:
+                      sub.disciplineScopeInJournal ?? null,
                     disciplineScopeWarning: sub.disciplineScopeWarning ?? null,
                   }}
                   onUpdated={() => invalidateDetail(slug)}
@@ -1459,15 +1594,17 @@ export default function SubmissionDetailPage() {
           )}
 
           {isEditorView && (
-            <section className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}>
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
               <h2 className="font-serif text-lg font-semibold text-ink">
-                {t("reviewsSectionEditor")}
+                {t('reviewsSectionEditor')}
               </h2>
               {reviewsError && (
                 <p className="mt-3 text-sm text-red-700">{reviewsError}</p>
               )}
               {!reviewsError && editorReviews.length === 0 && (
-                <p className="mt-3 text-sm text-ink/65">{t("reviewsEmpty")}</p>
+                <p className="mt-3 text-sm text-ink/65">{t('reviewsEmpty')}</p>
               )}
               {!reviewsError && editorReviews.length > 0 && (
                 <ul className="mt-4 space-y-6">
@@ -1476,13 +1613,13 @@ export default function SubmissionDetailPage() {
                       r.assignment?.reviewer?.displayName?.trim() ||
                       r.assignment?.reviewer?.email?.trim();
                     const reviewerLine = name
-                      ? t("reviewFrom", { name })
-                      : t("reviewReviewerUnknown");
+                      ? t('reviewFrom', { name })
+                      : t('reviewReviewerUnknown');
                     const submitted = new Date(r.submittedAt).toLocaleString(
                       locale,
                       {
-                        dateStyle: "medium",
-                        timeStyle: "short",
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
                       },
                     );
                     return (
@@ -1494,15 +1631,17 @@ export default function SubmissionDetailPage() {
                           {reviewerLine}
                         </p>
                         <p className="mt-1 text-xs text-ink/50">
-                          {t("reviewSubmitted")}: {submitted}
+                          {t('reviewSubmitted')}: {submitted}
                         </p>
                         <p className="mt-4 text-sm font-bold text-ink">
-                          {t("reviewRecommendation")}:{" "}
-                          <span className="text-accent">{recommendationLabel(r.recommendation, tCommon)}</span>
+                          {t('reviewRecommendation')}:{' '}
+                          <span className="text-accent">
+                            {recommendationLabel(r.recommendation, tCommon)}
+                          </span>
                         </p>
                         <div className="mt-4">
                           <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                            {t("reviewForAuthor")}
+                            {t('reviewForAuthor')}
                           </h3>
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink/80 font-sans">
                             {r.commentsForAuthor}
@@ -1510,12 +1649,12 @@ export default function SubmissionDetailPage() {
                         </div>
                         <div className="mt-4 border-t border-ink/10 dark:border-white/10 pt-4">
                           <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                            {t("reviewForEditorOnly")}
+                            {t('reviewForEditorOnly')}
                           </h3>
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink/80 font-sans">
                             {r.commentsToEditorOnly?.trim()
                               ? r.commentsToEditorOnly
-                              : t("reviewNoEditorComments")}
+                              : t('reviewNoEditorComments')}
                           </p>
                         </div>
                       </li>
@@ -1527,9 +1666,11 @@ export default function SubmissionDetailPage() {
           )}
 
           {isAuthor && !isEditorView && authorReviews.length > 0 && (
-            <section className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}>
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
               <h2 className="font-serif text-lg font-semibold text-ink">
-                {t("reviewsSectionAuthor")}
+                {t('reviewsSectionAuthor')}
               </h2>
               {reviewsError && (
                 <p className="mt-3 text-sm text-red-700">{reviewsError}</p>
@@ -1539,8 +1680,8 @@ export default function SubmissionDetailPage() {
                   const submitted = new Date(r.submittedAt).toLocaleString(
                     locale,
                     {
-                      dateStyle: "medium",
-                      timeStyle: "short",
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
                     },
                   );
                   return (
@@ -1549,10 +1690,10 @@ export default function SubmissionDetailPage() {
                       className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/50 p-4 sm:p-5"
                     >
                       <p className="text-sm font-bold text-ink">
-                        {t("reviewFeedbackItem", { n: idx + 1 })}
+                        {t('reviewFeedbackItem', { n: idx + 1 })}
                       </p>
                       <p className="mt-1 text-xs text-ink/50">
-                        {t("reviewSubmitted")}: {submitted}
+                        {t('reviewSubmitted')}: {submitted}
                       </p>
                       <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink/80 font-sans">
                         {r.commentsForAuthor}
@@ -1578,246 +1719,364 @@ export default function SubmissionDetailPage() {
 
         {/* Right Column (Sidebar Widgets) */}
         <div className="lg:col-span-4 space-y-6">
-          
           {/* Author Submissions Readiness Checklist */}
-          {isAuthor && !isEditorView && (sub.status === "draft" || sub.status === "revisions_requested") && (
-            <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-6 relative overflow-hidden">
-              <div className="absolute -right-16 -top-16 size-36 rounded-full bg-accent/5 blur-2xl" />
-              
-              <div className="flex items-center justify-between border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
-                <h3 className="font-serif text-base font-semibold text-ink">
-                  {isAr ? "جاهزية تقديم المخطوطة" : "Submission Readiness"}
-                </h3>
-                <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent uppercase tracking-wider">
-                  {progressPercent}%
-                </span>
-              </div>
+          {isAuthor &&
+            !isEditorView &&
+            (sub.status === 'draft' ||
+              sub.status === 'revisions_requested') && (
+              <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-6 relative overflow-hidden">
+                <div className="absolute -right-16 -top-16 size-36 rounded-full bg-accent/5 blur-2xl" />
 
-              {/* Circular Progress and stats */}
-              <div className="flex items-center gap-4">
-                <div className="relative size-16 shrink-0">
-                  <svg className="size-full -rotate-90">
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="24"
-                      className="stroke-ink/5 dark:stroke-white/5"
-                      strokeWidth="5"
-                      fill="none"
-                    />
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="24"
-                      className="stroke-accent transition-all duration-500 ease-out"
-                      strokeWidth="5"
-                      strokeDasharray={strokeDasharray}
-                      strokeDashoffset={strokeDashoffset}
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-ink">
+                <div className="flex items-center justify-between border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
+                  <h3 className="font-serif text-base font-semibold text-ink">
+                    {isAr ? 'جاهزية تقديم المخطوطة' : 'Submission Readiness'}
+                  </h3>
+                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent uppercase tracking-wider">
                     {progressPercent}%
+                  </span>
+                </div>
+
+                {/* Circular Progress and stats */}
+                <div className="flex items-center gap-4">
+                  <div className="relative size-16 shrink-0">
+                    <svg className="size-full -rotate-90">
+                      <circle
+                        cx="32"
+                        cy="32"
+                        r="24"
+                        className="stroke-ink/5 dark:stroke-white/5"
+                        strokeWidth="5"
+                        fill="none"
+                      />
+                      <circle
+                        cx="32"
+                        cy="32"
+                        r="24"
+                        className="stroke-accent transition-all duration-500 ease-out"
+                        strokeWidth="5"
+                        strokeDasharray={strokeDasharray}
+                        strokeDashoffset={strokeDashoffset}
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-ink">
+                      {progressPercent}%
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-xs font-semibold text-ink">
+                      {isAr
+                        ? 'خطوات المتطلبات الأساسية'
+                        : 'Manuscript Requirements'}
+                    </p>
+                    <p className="text-[11px] text-ink/50 leading-relaxed">
+                      {isAr
+                        ? `تم إكمال ${completedSteps} من أصل ${totalSteps} متطلبات مطلوبة للتقديم للتقييم.`
+                        : `Completed ${completedSteps} of ${totalSteps} vital manuscript details.`}
+                    </p>
                   </div>
                 </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-xs font-semibold text-ink">
-                    {isAr ? "خطوات المتطلبات الأساسية" : "Manuscript Requirements"}
-                  </p>
-                  <p className="text-[11px] text-ink/50 leading-relaxed">
-                    {isAr 
-                      ? `تم إكمال ${completedSteps} من أصل ${totalSteps} متطلبات مطلوبة للتقديم للتقييم.`
-                      : `Completed ${completedSteps} of ${totalSteps} vital manuscript details.`}
-                  </p>
-                </div>
+
+                {/* Task list */}
+                <ul className="space-y-3 pt-2 text-xs">
+                  <li className="flex items-center gap-3">
+                    <span
+                      className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
+                        hasTitle && hasAbstract
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'border-ink/20 dark:border-white/20 bg-paper text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-ink">
+                        {isAr
+                          ? 'العنوان والملخص بالإنجليزية'
+                          : 'English Title & Abstract'}
+                      </p>
+                      <p className="text-[10px] text-ink/50">
+                        {isAr
+                          ? 'مطلوب لتصنيف المخطوطة'
+                          : 'Required for classification'}
+                      </p>
+                    </div>
+                  </li>
+
+                  <li className="flex items-center gap-3">
+                    <span
+                      className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
+                        sub.titleAr?.trim() && sub.abstractAr?.trim()
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'border-ink/10 dark:border-white/10 bg-paper/30 text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-ink/80">
+                        {isAr
+                          ? 'العنوان والملخص بالعربية'
+                          : 'Arabic Title & Abstract'}{' '}
+                        <span className="text-[10px] font-normal text-ink/40">
+                          ({isAr ? 'اختياري' : 'Optional'})
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-ink/40">
+                        {isAr
+                          ? 'يساعد في التصفح المحلي'
+                          : 'Enhances local discovery'}
+                      </p>
+                    </div>
+                  </li>
+
+                  <li className="flex items-center gap-3">
+                    <span
+                      className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
+                        hasManuscript
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'border-ink/20 dark:border-white/20 bg-paper text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-ink">
+                        {isAr ? 'ملف المخطوطة المرفق' : 'Manuscript File'}
+                      </p>
+                      <p className="text-[10px] text-ink/50">
+                        {hasManuscript
+                          ? hasConstructorDraft
+                            ? isAr
+                              ? 'مسودة الوورد منشأة'
+                              : 'Word Constructor Draft'
+                            : isAr
+                              ? 'مرفوعة كمستند'
+                              : 'Uploaded Document'
+                          : isAr
+                            ? 'لم يتم إرفاق ملف بعد'
+                            : 'Document file not uploaded'}
+                      </p>
+                    </div>
+                  </li>
+
+                  <li className="flex items-center gap-3">
+                    <span
+                      className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
+                        hasDiscipline
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'border-ink/20 dark:border-white/20 bg-paper text-transparent'
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-ink">
+                        {isAr ? 'التخصص والمسار العلمي' : 'Discipline & Fields'}
+                      </p>
+                      <p className="text-[10px] text-ink/50">
+                        {hasDiscipline
+                          ? formatDiscipline(sub.discipline)
+                          : isAr
+                            ? 'حدد التخصص العلمي للمقال'
+                            : 'Required for editor routing'}
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+
+                {/* Submit Section inside Checklist */}
+                {canEditConstructor && (
+                  <div className="pt-4 border-t border-ink/[0.06] dark:border-white/[0.06] space-y-3">
+                    <p className="text-[10px] text-ink/50 leading-relaxed">
+                      {t('submitIrreversibleHint')}
+                    </p>
+                    <Button
+                      disabled={busy || !hasManuscript}
+                      onClick={() => void submitForReview()}
+                      className="w-full py-3 text-xs font-bold"
+                    >
+                      {t('submitForReview')}
+                    </Button>
+                  </div>
+                )}
               </div>
+            )}
 
-              {/* Task list */}
-              <ul className="space-y-3 pt-2 text-xs">
-                <li className="flex items-center gap-3">
-                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                    hasTitle && hasAbstract
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "border-ink/20 dark:border-white/20 bg-paper text-transparent"
-                  }`}>
-                    ✓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-ink">{isAr ? "العنوان والملخص بالإنجليزية" : "English Title & Abstract"}</p>
-                    <p className="text-[10px] text-ink/50">{isAr ? "مطلوب لتصنيف المخطوطة" : "Required for classification"}</p>
-                  </div>
-                </li>
-
-                <li className="flex items-center gap-3">
-                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                    sub.titleAr?.trim() && sub.abstractAr?.trim()
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "border-ink/10 dark:border-white/10 bg-paper/30 text-transparent"
-                  }`}>
-                    ✓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-ink/80">
-                      {isAr ? "العنوان والملخص بالعربية" : "Arabic Title & Abstract"}{" "}
-                      <span className="text-[10px] font-normal text-ink/40">({isAr ? "اختياري" : "Optional"})</span>
-                    </p>
-                    <p className="text-[10px] text-ink/40">{isAr ? "يساعد في التصفح المحلي" : "Enhances local discovery"}</p>
-                  </div>
-                </li>
-
-                <li className="flex items-center gap-3">
-                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                    hasManuscript
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "border-ink/20 dark:border-white/20 bg-paper text-transparent"
-                  }`}>
-                    ✓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-ink">{isAr ? "ملف المخطوطة المرفق" : "Manuscript File"}</p>
-                    <p className="text-[10px] text-ink/50">
-                      {hasManuscript 
-                        ? (hasConstructorDraft ? (isAr ? "مسودة الوورد منشأة" : "Word Constructor Draft") : (isAr ? "مرفوعة كمستند" : "Uploaded Document"))
-                        : (isAr ? "لم يتم إرفاق ملف بعد" : "Document file not uploaded")}
-                    </p>
-                  </div>
-                </li>
-
-                <li className="flex items-center gap-3">
-                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                    hasDiscipline
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "border-ink/20 dark:border-white/20 bg-paper text-transparent"
-                  }`}>
-                    ✓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-ink">{isAr ? "التخصص والمسار العلمي" : "Discipline & Fields"}</p>
-                    <p className="text-[10px] text-ink/50">
-                      {hasDiscipline
-                        ? formatDiscipline(sub.discipline)
-                        : (isAr ? "حدد التخصص العلمي للمقال" : "Required for editor routing")}
-                    </p>
-                  </div>
-                </li>
-              </ul>
-
-              {/* Submit Section inside Checklist */}
-              {canEditConstructor && (
-                <div className="pt-4 border-t border-ink/[0.06] dark:border-white/[0.06] space-y-3">
-                  <p className="text-[10px] text-ink/50 leading-relaxed">
-                    {t("submitIrreversibleHint")}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={busy || !hasManuscript}
-                    onClick={() => void submitForReview()}
-                    className="w-full inline-flex items-center justify-center rounded-xl bg-accent px-4 py-3 text-xs font-bold text-white shadow-2xs hover:bg-accent/90 active:scale-[0.98] select-none transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    {t("submitForReview")}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          {isAuthor &&
+            !isEditorView &&
+            sub.messageForAuthor?.trim() &&
+            isEditorDecisionStatus(sub.status) && (
+              <div className="rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 p-6 shadow-xs space-y-3">
+                <h3 className="font-serif text-base font-semibold text-ink border-b border-amber-200/60 dark:border-amber-900/30 pb-3">
+                  {t('editorMessageCalloutTitle')}
+                </h3>
+                <p className="text-sm text-ink/80 whitespace-pre-wrap leading-relaxed">
+                  {sub.messageForAuthor}
+                </p>
+              </div>
+            )}
 
           {/* Author Submission Workflow Stage Tracker */}
-          {isAuthor && !isEditorView && !(sub.status === "draft" || sub.status === "revisions_requested") && (
-            <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-5">
-              <h3 className="font-serif text-base font-semibold text-ink border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
-                {isAr ? "مسار تقدم المعاملة" : "Workflow Progress"}
-              </h3>
-              
-              <div className="relative ps-6 space-y-6 before:absolute before:start-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-ink/[0.06] dark:before:bg-white/[0.06]">
-                {/* Step 1: Submitted */}
-                <div className="relative">
-                  <span className="absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">✓</span>
-                  <p className="text-xs font-bold text-ink">{isAr ? "تم تقديم المخطوطة" : "Manuscript Submitted"}</p>
-                  <p className="text-[10px] text-ink/50">{isAr ? "تم إرسال الملفات بنجاح" : "Files successfully archived"}</p>
-                </div>
+          {isAuthor &&
+            !isEditorView &&
+            !(
+              sub.status === 'draft' || sub.status === 'revisions_requested'
+            ) && (
+              <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-5">
+                <h3 className="font-serif text-base font-semibold text-ink border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
+                  {isAr ? 'مسار تقدم المعاملة' : 'Workflow Progress'}
+                </h3>
 
-                {/* Step 2: Under Review */}
-                <div className="relative">
-                  <span className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                    sub.status === "under_review" || sub.status === "revisions_requested"
-                      ? "border-blue-500 bg-blue-500 text-white animate-pulse"
-                      : sub.status === "accepted" || sub.status === "published"
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : "border-ink/20 dark:border-white/20 bg-paper text-ink/40"
-                  }`}>{sub.status === "accepted" || sub.status === "published" ? "✓" : "2"}</span>
-                  <p className={`text-xs font-bold ${sub.status === "under_review" ? "text-blue-600 dark:text-blue-400" : "text-ink"}`}>
-                    {isAr ? "التقييم والتحكيم النظير" : "Peer Review Phase"}
-                  </p>
-                  <p className="text-[10px] text-ink/50">
-                    {sub.status === "under_review" 
-                      ? (isAr ? "تخضع المقالة لمراجعة الخبراء حالياً" : "Currently being read by peer reviewers")
-                      : (sub.status === "accepted" || sub.status === "published" ? (isAr ? "تم الانتهاء من التقييم" : "Review process finished") : (isAr ? "انتظار بدء التقييم" : "Waiting for review assignments"))}
-                  </p>
-                </div>
+                <div className="relative ps-6 space-y-6 before:absolute before:start-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-ink/[0.06] dark:before:bg-white/[0.06]">
+                  {/* Step 1: Submitted */}
+                  <div className="relative">
+                    <span className="absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                      ✓
+                    </span>
+                    <p className="text-xs font-bold text-ink">
+                      {isAr ? 'تم تقديم المخطوطة' : 'Manuscript Submitted'}
+                    </p>
+                    <p className="text-[10px] text-ink/50">
+                      {isAr
+                        ? 'تم إرسال الملفات بنجاح'
+                        : 'Files successfully archived'}
+                    </p>
+                  </div>
 
-                {/* Step 3: Decision */}
-                <div className="relative">
-                  <span className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                    sub.status === "accepted"
-                      ? "border-emerald-500 bg-emerald-500 text-white animate-pulse"
-                      : sub.status === "published"
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : "border-ink/20 dark:border-white/20 bg-paper text-ink/40"
-                  }`}>{sub.status === "published" ? "✓" : "3"}</span>
-                  <p className="text-xs font-bold text-ink">{isAr ? "القرار التحريري" : "Editorial Decision"}</p>
-                  <p className="text-[10px] text-ink/50">
-                    {sub.status === "accepted" 
-                      ? (isAr ? "تم قبول البحث للنشر" : "Accepted for official publication")
-                      : (sub.status === "published" ? (isAr ? "تمت الموافقة والنشر" : "Final approval granted") : (isAr ? "في انتظار قرار رئيس التحرير" : "Waiting for final editorial outcome"))}
-                  </p>
-                </div>
+                  {/* Step 2: Under Review */}
+                  <div className="relative">
+                    <span
+                      className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                        sub.status === 'under_review' ||
+                        sub.status === 'revisions_requested'
+                          ? 'border-blue-500 bg-blue-500 text-white animate-pulse'
+                          : sub.status === 'accepted' ||
+                              sub.status === 'published'
+                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                            : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
+                      }`}
+                    >
+                      {sub.status === 'accepted' || sub.status === 'published'
+                        ? '✓'
+                        : '2'}
+                    </span>
+                    <p
+                      className={`text-xs font-bold ${sub.status === 'under_review' ? 'text-blue-600 dark:text-blue-400' : 'text-ink'}`}
+                    >
+                      {isAr ? 'التقييم والتحكيم النظير' : 'Peer Review Phase'}
+                    </p>
+                    <p className="text-[10px] text-ink/50">
+                      {sub.status === 'under_review'
+                        ? isAr
+                          ? 'تخضع المقالة لمراجعة الخبراء حالياً'
+                          : 'Currently being read by peer reviewers'
+                        : sub.status === 'accepted' ||
+                            sub.status === 'published'
+                          ? isAr
+                            ? 'تم الانتهاء من التقييم'
+                            : 'Review process finished'
+                          : isAr
+                            ? 'انتظار بدء التقييم'
+                            : 'Waiting for review assignments'}
+                    </p>
+                  </div>
 
-                {/* Step 4: Published */}
-                <div className="relative">
-                  <span className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                    sub.status === "published"
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : "border-ink/20 dark:border-white/20 bg-paper text-ink/40"
-                  }`}>{sub.status === "published" ? "✓" : "4"}</span>
-                  <p className={`text-xs font-bold ${sub.status === "published" ? "text-emerald-600 dark:text-emerald-400" : "text-ink"}`}>
-                    {isAr ? "البحث منشور بالكامل" : "Fully Published"}
-                  </p>
-                  <p className="text-[10px] text-ink/50">
-                    {sub.status === "published" 
-                      ? (isAr ? "متوفر حالياً للعامة في الكتالوج" : "Live in active journal catalog")
-                      : (isAr ? "سيتم التوزيع فور قبول المعاملة" : "Distributed upon production sign-off")}
-                  </p>
+                  {/* Step 3: Decision */}
+                  <div className="relative">
+                    <span
+                      className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                        sub.status === 'accepted'
+                          ? 'border-emerald-500 bg-emerald-500 text-white animate-pulse'
+                          : sub.status === 'published'
+                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                            : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
+                      }`}
+                    >
+                      {sub.status === 'published' ? '✓' : '3'}
+                    </span>
+                    <p className="text-xs font-bold text-ink">
+                      {isAr ? 'القرار التحريري' : 'Editorial Decision'}
+                    </p>
+                    <p className="text-[10px] text-ink/50">
+                      {sub.status === 'accepted'
+                        ? isAr
+                          ? 'تم قبول البحث للنشر'
+                          : 'Accepted for official publication'
+                        : sub.status === 'published'
+                          ? isAr
+                            ? 'تمت الموافقة والنشر'
+                            : 'Final approval granted'
+                          : isAr
+                            ? 'في انتظار قرار رئيس التحرير'
+                            : 'Waiting for final editorial outcome'}
+                    </p>
+                  </div>
+
+                  {/* Step 4: Published */}
+                  <div className="relative">
+                    <span
+                      className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                        sub.status === 'published'
+                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
+                      }`}
+                    >
+                      {sub.status === 'published' ? '✓' : '4'}
+                    </span>
+                    <p
+                      className={`text-xs font-bold ${sub.status === 'published' ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink'}`}
+                    >
+                      {isAr ? 'البحث منشور بالكامل' : 'Fully Published'}
+                    </p>
+                    <p className="text-[10px] text-ink/50">
+                      {sub.status === 'published'
+                        ? isAr
+                          ? 'متوفر حالياً للعامة في الكتالوج'
+                          : 'Live in active journal catalog'
+                        : isAr
+                          ? 'سيتم التوزيع فور قبول المعاملة'
+                          : 'Distributed upon production sign-off'}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Editor Command Center in Sidebar */}
           {isEditorView && (
             <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-6 relative overflow-hidden">
               <div className="absolute -right-16 -top-16 size-36 rounded-full bg-accent/5 blur-2xl" />
-              
+
               <div className="flex items-center justify-between border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
                 <h2 className="font-serif text-base font-semibold text-ink">
-                  {isAr ? "مركز التحكم بالمحرر" : "Editor Command Center"}
+                  {isAr ? 'مركز التحكم بالمحرر' : 'Editor Command Center'}
                 </h2>
                 <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold text-accent uppercase tracking-wider">
-                  {isAr ? "إشراف" : "Admin"}
+                  {isAr ? 'إشراف' : 'Admin'}
                 </span>
               </div>
 
               {showReviewConfiguration && (
                 <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
                   <div className="flex flex-col gap-1 text-xs font-medium text-ink">
-                    <span id={reviewMethodSelectId}>{t("reviewMethodLabel")}</span>
+                    <span id={reviewMethodSelectId}>
+                      {t('reviewMethodLabel')}
+                    </span>
                     <SimpleSelect
-                      value={sub.reviewMethod ?? "double_anonymous"}
+                      value={sub.reviewMethod ?? 'double_anonymous'}
                       onValueChange={(v) => void patchReviewMethod(v)}
                       options={[
-                        { value: "open", label: t("reviewMethod_open") },
-                        { value: "anonymous", label: t("reviewMethod_anonymous") },
-                        { value: "double_anonymous", label: t("reviewMethod_double_anonymous") },
+                        { value: 'open', label: t('reviewMethod_open') },
+                        {
+                          value: 'anonymous',
+                          label: t('reviewMethod_anonymous'),
+                        },
+                        {
+                          value: 'double_anonymous',
+                          label: t('reviewMethod_double_anonymous'),
+                        },
                       ]}
                       disabled={busy}
                       className="w-full"
@@ -1825,10 +2084,10 @@ export default function SubmissionDetailPage() {
                     />
                   </div>
                   <p className="text-[10px] leading-relaxed text-ink/65">
-                    {t("reviewMethodHint")}
+                    {t('reviewMethodHint')}
                   </p>
                   <p className="text-[10px] leading-relaxed text-amber-800 dark:text-amber-400">
-                    {t("reviewPackageEditorHint")}
+                    {t('reviewPackageEditorHint')}
                   </p>
                 </div>
               )}
@@ -1836,13 +2095,15 @@ export default function SubmissionDetailPage() {
               {/* Set Status Box */}
               <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                  {isAr ? "تحديث حالة الطلب" : "Update Status"}
+                  {isAr ? 'تحديث حالة الطلب' : 'Update Status'}
                 </h3>
                 <p className="text-[10px] text-ink/50">
-                  {t("editorWorkflowColumnHint")}
+                  {t('editorWorkflowColumnHint')}
                 </p>
                 <div className="flex flex-col gap-1 text-sm font-medium text-ink">
-                  <span id="status-select-label" className="sr-only">{t("setStatus")}</span>
+                  <span id="status-select-label" className="sr-only">
+                    {t('setStatus')}
+                  </span>
                   <SimpleSelect
                     value={statusPick}
                     onValueChange={setStatusPick}
@@ -1854,35 +2115,60 @@ export default function SubmissionDetailPage() {
                     aria-labelledby="status-select-label"
                   />
                 </div>
+                {isEditorDecisionStatus(statusPick) && (
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="message-for-author"
+                      className="text-xs font-semibold text-ink"
+                    >
+                      {t('messageForAuthorLabel')}
+                    </label>
+                    <p className="text-[10px] text-ink/50">
+                      {t('messageForAuthorHint')}
+                    </p>
+                    <textarea
+                      id="message-for-author"
+                      value={messageForAuthor}
+                      onChange={(e) => setMessageForAuthor(e.target.value)}
+                      placeholder={t('messageForAuthorPlaceholder')}
+                      disabled={busy}
+                      rows={4}
+                      maxLength={4000}
+                      className="w-full rounded-lg border border-ink/15 dark:border-white/15 bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void updateStatus()}
                   className="w-full rounded-xl bg-ink text-paper dark:bg-white dark:text-paper px-4 py-2.5 text-xs font-bold shadow-2xs hover:bg-ink/90 active:scale-[0.98] select-none transition-all duration-150 disabled:opacity-50"
                 >
-                  {t("applyStatus")}
+                  {t('applyStatus')}
                 </button>
               </div>
 
               {/* Assign Reviewer Box */}
               <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                  {isAr ? "تعيين مراجع" : "Assign Reviewer"}
+                  {isAr ? 'تعيين مراجع' : 'Assign Reviewer'}
                 </h3>
                 {canAssignReviewer ? (
                   <>
                     <p className="text-[10px] text-ink/50">
-                      {t("editorAssignColumnHint")}
+                      {t('editorAssignColumnHint')}
                     </p>
                     {editorAssignmentRows.some(
-                      (a) => a.status === "invited" || a.status === "accepted",
+                      (a) => a.status === 'invited' || a.status === 'accepted',
                     ) && (
                       <p className="text-[10px] text-ink/60">
-                        {t("reviewerAssignAdditionalHint")}
+                        {t('reviewerAssignAdditionalHint')}
                       </p>
                     )}
                     {reviewersLoadError && (
-                      <p className="text-[10px] text-red-600">{reviewersLoadError}</p>
+                      <p className="text-[10px] text-red-600">
+                        {reviewersLoadError}
+                      </p>
                     )}
                     <ReviewerSuggestionsPanel
                       slug={sub.slug}
@@ -1890,7 +2176,9 @@ export default function SubmissionDetailPage() {
                       onPick={setReviewerPick}
                     />
                     <div className="flex flex-col gap-1 text-sm font-medium text-ink">
-                      <span id="reviewer-select-label" className="sr-only">{t("reviewerLabel")}</span>
+                      <span id="reviewer-select-label" className="sr-only">
+                        {t('reviewerLabel')}
+                      </span>
                       <SearchableSelect
                         options={reviewerCandidates.map((c) => ({
                           value: c.id,
@@ -1899,31 +2187,32 @@ export default function SubmissionDetailPage() {
                         }))}
                         value={reviewerPick}
                         onValueChange={setReviewerPick}
-                        placeholder={t("reviewerPlaceholder")}
-                        searchPlaceholder={tUi("searchPlaceholder")}
-                        emptyText={tUi("noResults")}
+                        placeholder={t('reviewerPlaceholder')}
+                        searchPlaceholder={tUi('searchPlaceholder')}
+                        emptyText={tUi('noResults')}
                         disabled={busy || !!reviewersLoadError}
                         className="w-full animate-fade-in"
                         aria-labelledby="reviewer-select-label"
                       />
                     </div>
-                    <button
-                      type="button"
-                      disabled={busy || !reviewerPick.trim() || !!reviewersLoadError}
+                    <Button
+                      disabled={
+                        busy || !reviewerPick.trim() || !!reviewersLoadError
+                      }
                       onClick={() => void assignReviewer()}
-                      className="w-full rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-white shadow-2xs hover:bg-accent/90 active:scale-[0.98] select-none transition-all duration-150 disabled:opacity-50"
+                      className="w-full text-xs font-bold"
                     >
-                      {t("assignReviewer")}
-                    </button>
+                      {t('assignReviewer')}
+                    </Button>
                     {!reviewersLoadError && reviewerCandidates.length === 0 && (
                       <p className="text-[10px] text-ink/50 text-center">
-                        {t("noReviewersAvailable")}
+                        {t('noReviewersAvailable')}
                       </p>
                     )}
                   </>
                 ) : (
                   <p className="text-[10px] text-ink/50">
-                    {t("reviewerAssignClosedHint")}
+                    {t('reviewerAssignClosedHint')}
                   </p>
                 )}
               </div>
@@ -1932,7 +2221,7 @@ export default function SubmissionDetailPage() {
               {editorAssignmentRows.length > 0 && (
                 <div className="space-y-3 pt-4 border-t border-ink/[0.06] dark:border-white/[0.06]">
                   <h3 className="font-serif text-sm font-semibold text-ink">
-                    {t("editorAssignmentsTitle")}
+                    {t('editorAssignmentsTitle')}
                   </h3>
                   <div className="space-y-3">
                     {editorAssignmentRows.map((a) => {
@@ -1940,96 +2229,151 @@ export default function SubmissionDetailPage() {
                         a.reviewer?.displayName?.trim() ||
                         a.reviewer?.email?.trim() ||
                         a.reviewerId;
-                      const asg = a.slug ? String(a.slug) : "";
-                      const remList = asg ? (assignmentReminders[asg] ?? []) : [];
+                      const asg = a.slug ? String(a.slug) : '';
+                      const remList = asg
+                        ? (assignmentReminders[asg] ?? [])
+                        : [];
                       const remindersFailed = asg
                         ? reminderLoadFailedByAssignment[asg] === true
                         : false;
                       return (
-                        <div key={a.id} className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/60 p-4 space-y-3">
+                        <div
+                          key={a.id}
+                          className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/60 p-4 space-y-3"
+                        >
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium text-xs text-ink truncate max-w-[120px]" title={name}>{name}</span>
-                            <span className={assignmentStatusPillClass(a.status)}>
+                            <span
+                              className="font-medium text-xs text-ink truncate max-w-[120px]"
+                              title={name}
+                            >
+                              {name}
+                            </span>
+                            <span
+                              className={assignmentStatusPillClass(a.status)}
+                            >
                               {assignmentStatusLabel(a.status, tAssign)}
                             </span>
                           </div>
                           <div className="border-t border-ink/10 dark:border-white/10 pt-3 space-y-2 text-[11px]">
-                            <p className="font-semibold text-ink/80">{t("emailRemindersTitle")}</p>
+                            <p className="font-semibold text-ink/80">
+                              {t('emailRemindersTitle')}
+                            </p>
                             {canManageReminders && (
                               <p className="text-[10px] leading-relaxed text-ink/55">
-                                {t("emailRemindersHint")}
+                                {t('emailRemindersHint')}
                               </p>
                             )}
                             {!a.slug ? (
-                              <p className="text-amber-700">{t("reminderNoSlug")}</p>
+                              <p className="text-amber-700">
+                                {t('reminderNoSlug')}
+                              </p>
                             ) : remindersFailed ? (
                               <p className="text-red-700 dark:text-red-400">
-                                {t("reminderLoadFailed")}
+                                {t('reminderLoadFailed')}
                               </p>
                             ) : remList.length === 0 ? (
-                              <p className="text-ink/40">{t("reminderNoneScheduled")}</p>
+                              <p className="text-ink/40">
+                                {t('reminderNoneScheduled')}
+                              </p>
                             ) : (
                               <div className="space-y-3">
                                 {remList.map((r) => {
-                                  const rescheduleValue = reminderRescheduleInputValue(
-                                    reminderRescheduleAt,
-                                    r.id,
-                                    r.sendAt,
-                                  );
+                                  const rescheduleValue =
+                                    reminderRescheduleInputValue(
+                                      reminderRescheduleAt,
+                                      r.id,
+                                      r.sendAt,
+                                    );
                                   return (
-                                    <div key={r.id} className="p-2 rounded-lg bg-ink/5 dark:bg-white/5 space-y-2 border border-ink/[0.03]">
+                                    <div
+                                      key={r.id}
+                                      className="p-2 rounded-lg bg-ink/5 dark:bg-white/5 space-y-2 border border-ink/[0.03]"
+                                    >
                                       <div className="flex items-center justify-between text-[10px] font-medium">
                                         <span className="text-ink/50">
-                                          {r.kind === "review_overdue" ? t("reminderKindOverdue") : t("reminderKindDueSoon")}
+                                          {r.kind === 'review_overdue'
+                                            ? t('reminderKindOverdue')
+                                            : t('reminderKindDueSoon')}
                                         </span>
                                         <span className="px-1 py-0.5 rounded bg-ink/10 dark:bg-white/10 font-mono text-[9px]">
                                           {r.status}
                                         </span>
                                       </div>
                                       <p className="text-[10px] text-ink/65">
-                                        <span className="font-medium text-ink/50">{t("reminderSendAt")}: </span>
-                                        <time className="font-mono" dateTime={r.sendAt}>
-                                          {new Date(r.sendAt).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" })}
+                                        <span className="font-medium text-ink/50">
+                                          {t('reminderSendAt')}:{' '}
+                                        </span>
+                                        <time
+                                          className="font-mono"
+                                          dateTime={r.sendAt}
+                                        >
+                                          {new Date(r.sendAt).toLocaleString(
+                                            locale,
+                                            {
+                                              dateStyle: 'short',
+                                              timeStyle: 'short',
+                                            },
+                                          )}
                                         </time>
                                       </p>
-                                      {r.status === "pending" && canManageReminders && (
-                                        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-ink/[0.05] dark:border-white/[0.05]">
-                                          <label className="text-[10px] font-medium text-ink/55">
-                                            {t("reminderReschedulePlaceholder")}
-                                          </label>
-                                          <input
-                                            type="datetime-local"
-                                            step={60}
-                                            min={minReminderRescheduleDatetimeLocal(REMINDER_MIN_LEAD_MS)}
-                                            className="rounded border border-ink/15 bg-paper px-2 py-1 text-[10px] text-ink w-full"
-                                            value={rescheduleValue}
-                                            onChange={(e) =>
-                                              setReminderRescheduleAt((prev) => ({
-                                                ...prev,
-                                                [r.id]: e.target.value,
-                                              }))
-                                            }
-                                          />
-                                          <div className="flex items-center gap-1">
-                                            <button
-                                              type="button"
-                                              disabled={busy || !rescheduleValue.trim()}
-                                              className="flex-1 rounded bg-ink/80 hover:bg-ink dark:bg-white/80 dark:hover:bg-white dark:text-paper px-2 py-1 text-[9px] font-semibold text-paper disabled:opacity-50 transition-colors"
-                                              onClick={() => void patchReminderSendAt(asg, r.id)}
-                                            >
-                                              {t("reminderApplyReschedule")}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={busy}
-                                              className="rounded border border-red-200 dark:border-red-900/30 px-2 py-1 text-[9px] font-semibold text-red-800 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-50 transition-colors"
-                                              onClick={() => void cancelReminderRow(asg, r.id)}
-                                            >
-                                              {t("reminderCancel")}
-                                            </button>
+                                      {r.status === 'pending' &&
+                                        canManageReminders && (
+                                          <div className="flex flex-col gap-1.5 pt-1.5 border-t border-ink/[0.05] dark:border-white/[0.05]">
+                                            <label className="text-[10px] font-medium text-ink/55">
+                                              {t(
+                                                'reminderReschedulePlaceholder',
+                                              )}
+                                            </label>
+                                            <input
+                                              type="datetime-local"
+                                              step={60}
+                                              min={minReminderRescheduleDatetimeLocal(
+                                                REMINDER_MIN_LEAD_MS,
+                                              )}
+                                              className="rounded border border-ink/15 bg-paper px-2 py-1 text-[10px] text-ink w-full"
+                                              value={rescheduleValue}
+                                              onChange={(e) =>
+                                                setReminderRescheduleAt(
+                                                  (prev) => ({
+                                                    ...prev,
+                                                    [r.id]: e.target.value,
+                                                  }),
+                                                )
+                                              }
+                                            />
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                type="button"
+                                                disabled={
+                                                  busy ||
+                                                  !rescheduleValue.trim()
+                                                }
+                                                className="flex-1 rounded bg-ink/80 hover:bg-ink dark:bg-white/80 dark:hover:bg-white dark:text-paper px-2 py-1 text-[9px] font-semibold text-paper disabled:opacity-50 transition-colors"
+                                                onClick={() =>
+                                                  void patchReminderSendAt(
+                                                    asg,
+                                                    r.id,
+                                                  )
+                                                }
+                                              >
+                                                {t('reminderApplyReschedule')}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={busy}
+                                                className="rounded border border-red-200 dark:border-red-900/30 px-2 py-1 text-[9px] font-semibold text-red-800 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-50 transition-colors"
+                                                onClick={() =>
+                                                  void cancelReminderRow(
+                                                    asg,
+                                                    r.id,
+                                                  )
+                                                }
+                                              >
+                                                {t('reminderCancel')}
+                                              </button>
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
+                                        )}
                                     </div>
                                   );
                                 })}

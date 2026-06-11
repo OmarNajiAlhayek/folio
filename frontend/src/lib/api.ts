@@ -1,59 +1,98 @@
-import { isCsrfApiError } from "@/lib/api-error-message";
+import { isCsrfApiError } from '@/lib/api-error-message';
+import { refreshSession } from '@/lib/auth-refresh';
 import {
   ApiError,
   parseApiJsonBody,
   readResponseText,
   setApiUnauthorizedHandler,
-} from "@/lib/api-response";
-import {
-  captureCsrfFromApiResponse,
-  getCsrfToken,
-} from "@/lib/csrf-token";
+} from '@/lib/api-response';
+import { captureCsrfFromApiResponse, getCsrfToken } from '@/lib/csrf-token';
 
-export { ApiError, setApiUnauthorizedHandler } from "@/lib/api-response";
+export { ApiError, setApiUnauthorizedHandler } from '@/lib/api-response';
 
-const CSRF_HEADER = "X-CSRF-Token";
+const CSRF_HEADER = 'X-CSRF-Token';
+const REQUEST_ID_HEADER = 'X-Request-Id';
 
-const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Pre-auth routes: backend skips CSRF; do not bootstrap via /auth/me before these. */
-const CSRF_SKIP_API_PATHS = ["/auth/login", "/auth/register"];
+const CSRF_SKIP_API_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
+
+const REFRESH_SKIP_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/logout',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
 
 function normalizeApiPath(path: string): string {
-  return path.startsWith("/") ? path : `/${path}`;
+  return path.startsWith('/') ? path : `/${path}`;
 }
 
 function needsCsrfForRequest(path: string, method: string): boolean {
   if (!MUTATING_METHODS.has(method)) return false;
   const p = normalizeApiPath(path);
-  return !CSRF_SKIP_API_PATHS.some((skip) => p === skip || p.startsWith(`${skip}/`));
+  return !CSRF_SKIP_API_PATHS.some(
+    (skip) => p === skip || p.startsWith(`${skip}/`),
+  );
+}
+
+function canRefreshOn401(path: string): boolean {
+  const p = normalizeApiPath(path);
+  return !REFRESH_SKIP_PATHS.some(
+    (skip) => p === skip || p.startsWith(`${skip}/`),
+  );
 }
 
 export function getApiBase(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL;
-  if (raw == null || raw.trim() === "") return "";
-  return raw.replace(/\/+$/, "");
+  if (raw == null || raw.trim() === '') return '';
+  return raw.replace(/\/+$/, '');
 }
 
 export function apiUrl(path: string): string {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
   const base = getApiBase();
-  if (base === "") return `/api/v1${normalized}`;
+  if (base === '') return `/api/v1${normalized}`;
   return `${base}/api/v1${normalized}`;
 }
 
 let csrfBootstrapPromise: Promise<void> | null = null;
 
+async function fetchWithAuthRetry(
+  path: string,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  let res = await fetch(url, init);
+  if (res.status === 401 && canRefreshOn401(path)) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      res = await fetch(url, init);
+    }
+  }
+  return res;
+}
+
 /** Sync in-memory CSRF from `GET /auth/me` response body (not document.cookie). */
 async function fetchCsrfCookie(): Promise<void> {
-  const res = await fetch(apiUrl("/auth/me"), {
-    method: "GET",
-    credentials: "include",
+  const path = '/auth/me';
+  const res = await fetchWithAuthRetry(path, apiUrl(path), {
+    method: 'GET',
+    credentials: 'include',
   });
   if (res.status === 401) return;
   const text = await readResponseText(res);
   const data = parseApiJsonBody(res, text);
-  captureCsrfFromApiResponse("/auth/me", data);
+  captureCsrfFromApiResponse(path, data);
 }
 
 /**
@@ -74,7 +113,7 @@ async function withAuthFetchInitAsync(
   path: string,
   options: RequestInit = {},
 ): Promise<RequestInit> {
-  const method = (options.method ?? "GET").toUpperCase();
+  const method = (options.method ?? 'GET').toUpperCase();
   if (needsCsrfForRequest(path, method)) {
     await ensureCsrfToken();
   }
@@ -86,7 +125,10 @@ function withAuthFetchInit(
   options: RequestInit = {},
 ): RequestInit {
   const headers = new Headers(options.headers);
-  const method = (options.method ?? "GET").toUpperCase();
+  if (!headers.has(REQUEST_ID_HEADER)) {
+    headers.set(REQUEST_ID_HEADER, crypto.randomUUID());
+  }
+  const method = (options.method ?? 'GET').toUpperCase();
   if (needsCsrfForRequest(path, method)) {
     const csrf = getCsrfToken();
     if (csrf) headers.set(CSRF_HEADER, csrf);
@@ -94,7 +136,7 @@ function withAuthFetchInit(
   return {
     ...options,
     headers,
-    credentials: "include",
+    credentials: 'include',
   };
 }
 
@@ -103,7 +145,7 @@ export async function apiFetch(
   options: RequestInit = {},
 ): Promise<Response> {
   const init = await withAuthFetchInitAsync(path, options);
-  return fetch(apiUrl(path), init);
+  return fetchWithAuthRetry(path, apiUrl(path), init);
 }
 
 export async function apiJson<T>(
@@ -112,11 +154,14 @@ export async function apiJson<T>(
 ): Promise<T> {
   const init = await withAuthFetchInitAsync(path, options);
   const headers = new Headers(init.headers);
-  if (!headers.has("Content-Type") && init.body) {
-    headers.set("Content-Type", "application/json");
+  if (!headers.has('Content-Type') && init.body) {
+    headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(apiUrl(path), { ...init, headers });
+  const res = await fetchWithAuthRetry(path, apiUrl(path), {
+    ...init,
+    headers,
+  });
   const text = await readResponseText(res);
   const data = parseApiJsonBody(res, text);
   captureCsrfFromApiResponse(path, data);
@@ -130,22 +175,22 @@ export async function apiUpload(
 ): Promise<unknown> {
   await ensureCsrfToken();
   const form = new FormData();
-  form.append("file", file);
+  form.append('file', file);
   const headers = new Headers();
   const csrf = getCsrfToken();
   if (csrf) headers.set(CSRF_HEADER, csrf);
 
   const q =
-    options?.kind != null && options.kind !== ""
+    options?.kind != null && options.kind !== ''
       ? `?kind=${encodeURIComponent(options.kind)}`
-      : "";
+      : '';
 
-  const res = await fetch(`${apiUrl(path)}${q}`, {
-    method: "POST",
+  const res = await fetchWithAuthRetry(path, `${apiUrl(path)}${q}`, {
+    method: 'POST',
     headers,
     body: form,
     signal: options?.signal,
-    credentials: "include",
+    credentials: 'include',
   });
 
   const text = await readResponseText(res);
@@ -165,8 +210,8 @@ export async function apiBlob(
 }
 
 export type ApiPostJsonOrBlobResult<T> =
-  | { kind: "json"; data: T }
-  | { kind: "blob"; data: Blob };
+  | { kind: 'json'; data: T }
+  | { kind: 'blob'; data: Blob };
 
 /**
  * POST JSON body; response is JSON (e.g. attach=true) or binary (download).
@@ -176,19 +221,19 @@ export async function apiPostJsonOrBlob<T>(
   body: unknown,
   options: RequestInit = {},
 ): Promise<ApiPostJsonOrBlobResult<T>> {
-  if (needsCsrfForRequest(path, "POST")) {
+  if (needsCsrfForRequest(path, 'POST')) {
     await ensureCsrfToken(true);
   }
 
   const run = async (): Promise<ApiPostJsonOrBlobResult<T>> => {
     const init = await withAuthFetchInitAsync(path, options);
     const headers = new Headers(init.headers);
-    headers.set("Content-Type", "application/json");
+    headers.set('Content-Type', 'application/json');
     const csrf = getCsrfToken();
     if (csrf) headers.set(CSRF_HEADER, csrf);
 
-    const res = await fetch(apiUrl(path), {
-      method: "POST",
+    const res = await fetchWithAuthRetry(path, apiUrl(path), {
+      method: 'POST',
       ...init,
       headers,
       body: JSON.stringify(body),
@@ -199,14 +244,14 @@ export async function apiPostJsonOrBlob<T>(
       parseApiJsonBody(res, text);
     }
 
-    const contentType = res.headers.get("Content-Type") ?? "";
-    if (contentType.includes("application/json")) {
+    const contentType = res.headers.get('Content-Type') ?? '';
+    if (contentType.includes('application/json')) {
       const text = await readResponseText(res);
       const data = parseApiJsonBody(res, text) as T;
-      return { kind: "json", data };
+      return { kind: 'json', data };
     }
 
-    return { kind: "blob", data: await res.blob() };
+    return { kind: 'blob', data: await res.blob() };
   };
 
   try {
@@ -223,5 +268,5 @@ export async function publicFetch(
   path: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  return fetch(apiUrl(path), { ...options, credentials: "include" });
+  return fetch(apiUrl(path), { ...options, credentials: 'include' });
 }

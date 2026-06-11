@@ -1,4 +1,4 @@
-export type PublicationSearchMode = "keyword" | "semantic";
+export type PublicationSearchMode = 'keyword' | 'semantic';
 
 export type PublicationCatalogFilters = {
   q?: string;
@@ -11,13 +11,13 @@ export type PublicationCatalogFilters = {
 };
 
 const FILTER_KEYS: (keyof PublicationCatalogFilters)[] = [
-  "q",
-  "searchMode",
-  "author",
-  "discipline",
-  "articleType",
-  "publishedFrom",
-  "publishedTo",
+  'q',
+  'searchMode',
+  'author',
+  'discipline',
+  'articleType',
+  'publishedFrom',
+  'publishedTo',
 ];
 
 export function parsePublicationCatalogFilters(
@@ -26,7 +26,12 @@ export function parsePublicationCatalogFilters(
   const filters: PublicationCatalogFilters = {};
   for (const key of FILTER_KEYS) {
     const value = params.get(key)?.trim();
-    if (value) {
+    if (!value) continue;
+    if (key === 'searchMode') {
+      if (value === 'keyword' || value === 'semantic') {
+        filters.searchMode = value;
+      }
+    } else {
       filters[key] = value;
     }
   }
@@ -38,17 +43,17 @@ export function publicationCatalogFiltersActive(
 ): boolean {
   return FILTER_KEYS.some((k) => {
     const value = filters[k];
-    if (k === "searchMode") {
-      return value === "semantic";
+    if (k === 'searchMode') {
+      return value === 'semantic';
     }
-    return Boolean(typeof value === "string" && value.trim());
+    return Boolean(typeof value === 'string' && value.trim());
   });
 }
 
 export function publicationCatalogUsesSemanticSearch(
   filters: PublicationCatalogFilters,
 ): boolean {
-  return filters.searchMode === "semantic" && Boolean(filters.q?.trim());
+  return filters.searchMode === 'semantic' && Boolean(filters.q?.trim());
 }
 
 export function buildPublicSubmissionsQuery(
@@ -62,7 +67,7 @@ export function buildPublicSubmissionsQuery(
     }
   }
   const qs = sp.toString();
-  return qs ? `?${qs}` : "";
+  return qs ? `?${qs}` : '';
 }
 
 export function publicationCatalogFiltersToSearchParams(

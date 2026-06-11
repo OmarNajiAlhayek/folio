@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -13,7 +13,7 @@
   --ink: #0f172a;
   --accent: #c45c3e;
   --accent-2: #3d5a4a;
-  --border: rgba(15, 23, 42, 0.10);
+  --border: rgba(15, 23, 42, 0.1);
   --success: #166534;
   --warning: #92400e;
   --danger: #991b1b;
@@ -34,7 +34,7 @@ html.dark {
   --ink: #ebe8e3;
   --accent: #d4785c;
   --accent-2: #6a9b82;
-  --border: rgba(235, 232, 227, 0.10);
+  --border: rgba(235, 232, 227, 0.1);
   --success: #4ade80;
   --warning: #fbbf24;
   --danger: #f87171;
@@ -61,75 +61,63 @@ html.dark {
   --font-serif: var(--font-serif);
 }
 
-/*
- * Logout modal: enter/exit without JS — transition-behavior: allow-discrete on top-layer
- * display/overlay holds the previous state until opacity/backdrop transitions finish.
- */
-dialog.folio-logout-dialog {
-  opacity: 0;
-  transition:
-    opacity 200ms ease,
-    display 200ms allow-discrete,
-    overlay 200ms allow-discrete;
-}
-
-dialog.folio-logout-dialog[open] {
-  opacity: 1;
-}
-
-@starting-style {
-  dialog.folio-logout-dialog[open] {
+/* Radix Dialog animations */
+@keyframes dialog-overlay-in {
+  from {
     opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialog-content-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
   }
 }
 
-/* Same scrim as the original static backdrop — fade via opacity only so we never interpolate transparent→ink (that washes lighter). */
-dialog.folio-logout-dialog::backdrop {
-  background: color-mix(in oklab, var(--ink) 38%, transparent);
-  opacity: 0;
-  transition:
-    opacity 200ms ease,
-    display 200ms allow-discrete,
-    overlay 200ms allow-discrete;
-}
-
-dialog.folio-logout-dialog[open]::backdrop {
-  opacity: 1;
-}
-
-@starting-style {
-  dialog.folio-logout-dialog[open]::backdrop {
-    opacity: 0;
+@keyframes upload-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
   }
 }
 
-dialog.folio-logout-dialog .folio-logout-dialog__panel {
-  opacity: 0;
-  transform: scale(0.97);
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-
-dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
-  opacity: 1;
-  transform: scale(1);
-}
-
-@starting-style {
-  dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
-    opacity: 0;
-    transform: scale(0.97);
-  }
+input[type='datetime-local'] {
+  color-scheme: light dark;
 }
 
 /* Premium Notification Bell Micro-Interactions */
 @keyframes bell-ring {
-  0%, 100% { transform: rotate(0); }
-  15% { transform: rotate(10deg); }
-  30% { transform: rotate(-10deg); }
-  45% { transform: rotate(6deg); }
-  60% { transform: rotate(-6deg); }
-  75% { transform: rotate(3deg); }
-  90% { transform: rotate(-3deg); }
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(10deg);
+  }
+  30% {
+    transform: rotate(-10deg);
+  }
+  45% {
+    transform: rotate(6deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+  90% {
+    transform: rotate(-3deg);
+  }
 }
 
 .animate-bell-hover:hover svg {
@@ -153,9 +141,6 @@ dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  dialog.folio-logout-dialog,
-  dialog.folio-logout-dialog::backdrop,
-  dialog.folio-logout-dialog .folio-logout-dialog__panel,
   .notification-panel {
     transition-duration: 0ms !important;
   }
@@ -179,28 +164,40 @@ dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
 
 /* Premium Dashboard Card Glow Transitions */
 .hover-glow-indigo {
-  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+  transition:
+    box-shadow 300ms ease,
+    border-color 300ms ease,
+    transform 300ms ease;
 }
 .hover-glow-indigo:hover {
   box-shadow: 0 12px 30px -8px rgba(99, 102, 241, 0.18) !important;
 }
 
 .hover-glow-accent {
-  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+  transition:
+    box-shadow 300ms ease,
+    border-color 300ms ease,
+    transform 300ms ease;
 }
 .hover-glow-accent:hover {
   box-shadow: 0 12px 30px -8px rgba(196, 92, 62, 0.18) !important;
 }
 
 .hover-glow-emerald {
-  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+  transition:
+    box-shadow 300ms ease,
+    border-color 300ms ease,
+    transform 300ms ease;
 }
 .hover-glow-emerald:hover {
   box-shadow: 0 12px 30px -8px rgba(16, 185, 129, 0.18) !important;
 }
 
 .hover-glow-amber {
-  transition: box-shadow 300ms ease, border-color 300ms ease, transform 300ms ease;
+  transition:
+    box-shadow 300ms ease,
+    border-color 300ms ease,
+    transform 300ms ease;
 }
 .hover-glow-amber:hover {
   box-shadow: 0 12px 30px -8px rgba(245, 158, 11, 0.18) !important;
@@ -218,11 +215,9 @@ dialog.folio-logout-dialog[open] .folio-logout-dialog__panel {
   }
 }
 
-
-
 /* Layered page backdrop: cool mid-tone, warm floor, soft radial accents */
-html[dir="ltr"] body,
-html[dir="rtl"] body {
+html[dir='ltr'] body,
+html[dir='rtl'] body {
   background-color: var(--paper);
   background-image:
     radial-gradient(
@@ -249,15 +244,15 @@ html[dir="rtl"] body {
   color: var(--ink);
 }
 
-html[dir="ltr"] body {
+html[dir='ltr'] body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-html[dir="rtl"] body {
+html[dir='rtl'] body {
   font-family: var(--font-noto-arabic), var(--font-sans), system-ui, sans-serif;
 }
 
-html[dir="rtl"] .font-serif {
+html[dir='rtl'] .font-serif {
   font-family: var(--font-amiri), var(--font-serif), serif;
 }
 

@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useTranslations } from "next-intl";
+import { useTranslations } from 'next-intl';
 import {
   forwardRef,
   useCallback,
@@ -8,20 +8,24 @@ import {
   useImperativeHandle,
   useMemo,
   useState,
-} from "react";
-import { apiJson, apiUpload } from "@/lib/api";
-import { toast } from "@/lib/toast";
-import { useApiErrorMessages } from "@/lib/use-api-error-messages";
-import { SimpleSelect } from "@/components/ui/select";
+} from 'react';
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  type FieldErrors,
+  type Resolver,
+} from 'react-hook-form';
+import { apiJson, apiUpload } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { SimpleSelect } from '@/components/ui/select';
 import {
   KeywordTagsDisplay,
   KeywordTagsInput,
-} from "@/components/ui/keyword-tags-input";
-import { Spinner } from "@/components/ui/spinner";
-import {
-  parseKeywordsFromStorage,
-  serializeKeywords,
-} from "@/lib/keywords";
+} from '@/components/ui/keyword-tags-input';
+import { Spinner } from '@/components/ui/spinner';
+import { parseKeywordsFromStorage, serializeKeywords } from '@/lib/keywords';
 import {
   addAllSuggestedKeywords,
   addSuggestedKeyword,
@@ -29,27 +33,30 @@ import {
   notifyKeywordAddFailure,
   SubmissionKeywordSuggest,
   type KeywordSuggestionResult,
-} from "@/components/submission-keyword-suggest";
+} from '@/components/submission-keyword-suggest';
 import {
   contributorFieldKey,
   fieldInputCls,
   hasFieldError,
-  zodTopLevelToFieldErrors,
-} from "@/lib/submission-field-errors";
+  metadataFormFieldForUiKey,
+  rhfErrorsToBulletMessage,
+  rhfErrorsToFieldErrorSet,
+  schemaFieldToUiErrorKey,
+} from '@/lib/submission-field-errors';
+import type { z } from 'zod';
 import {
   ABSTRACT_MAX_WORDS,
   countWords,
   createSubmissionSchema,
-  firstIssueByTopLevelPath,
-  formatZodIssues,
-  joinValidationBulletList,
-  safeParseResult,
   submissionMetadataPatchSchema,
   SUBMISSION_ARTICLE_TYPES,
-} from "@/lib/validation";
-import { SubmissionDisciplinePanel } from "@/components/submission-discipline-panel";
-import type { SubmissionDisciplineFields } from "@/lib/discipline-labels";
-import { useDisciplineLabel } from "@/lib/use-discipline-label";
+  translatedZodResolver,
+} from '@/lib/validation';
+
+type MetadataPayload = z.infer<typeof createSubmissionSchema>;
+import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
+import type { SubmissionDisciplineFields } from '@/lib/discipline-labels';
+import { useDisciplineLabel } from '@/lib/use-discipline-label';
 
 export type ContributorRow = {
   fullName: string;
@@ -82,15 +89,15 @@ export type SubmissionMetadataFormInitial = {
 };
 
 export const FILE_KIND_ORDER = [
-  { kind: "cover_letter", required: true },
-  { kind: "title_page", required: true },
-  { kind: "manuscript", required: true },
-  { kind: "figure", required: false },
-  { kind: "table", required: false },
-  { kind: "supplementary", required: false },
+  { kind: 'cover_letter', required: true },
+  { kind: 'title_page', required: true },
+  { kind: 'manuscript', required: true },
+  { kind: 'figure', required: false },
+  { kind: 'table', required: false },
+  { kind: 'supplementary', required: false },
 ] as const;
 
-export type SubmissionFileKind = (typeof FILE_KIND_ORDER)[number]["kind"];
+export type SubmissionFileKind = (typeof FILE_KIND_ORDER)[number]['kind'];
 
 /** File upload rows for the submission detail page (all kinds, including manuscript). */
 export function fileKindsForSubmissionDetail(_isConstructor?: boolean) {
@@ -117,6 +124,13 @@ type SubmissionMetadataFormProps = SubmissionFieldErrorProps &
         getStagedFiles?: () => Partial<Record<SubmissionFileKind, File>>;
         clearStagedFiles?: () => void;
         onSavingChange?: (busy: boolean) => void;
+        /** When set, only the matching wizard section is rendered (new-submission flow). */
+        wizardStep?: 2 | 3 | 4;
+        /** Keep RHF state mounted while the wizard shows other steps. */
+        keepMounted?: boolean;
+        hideSaveButton?: boolean;
+        /** Article type is collected on wizard step 1 instead of inside the form. */
+        hideArticleType?: boolean;
       }
     | {
         createMode?: false;
@@ -130,32 +144,147 @@ type SubmissionMetadataFormProps = SubmissionFieldErrorProps &
       }
   );
 
+export type SubmissionMetadataWizardSnapshot = SubmissionMetadataFormValues & {
+  keywordTags: string[];
+  keywordTagsAr: string[];
+};
+
+export type WizardStepValidation = {
+  valid: boolean;
+  fieldErrors: Set<string>;
+  message: string | null;
+};
+
 export type SubmissionMetadataFormHandle = {
   save: (opts?: { silent?: boolean }) => Promise<boolean>;
+  validateWizardStep: (step: 2 | 3 | 4) => Promise<WizardStepValidation>;
+  getSnapshot: () => SubmissionMetadataWizardSnapshot;
+  mergeInitial: (partial: Partial<SubmissionMetadataFormInitial>) => void;
+  setArticleType: (value: string) => void;
 };
+
+export function emptySubmissionMetadataInitial(): SubmissionMetadataFormInitial {
+  return {
+    title: '',
+    titleAr: '',
+    abstract: '',
+    abstractAr: '',
+    articleType: null,
+    keywords: null,
+    keywordsAr: null,
+    contributors: null,
+    fundingStatement: null,
+    conflictOfInterestStatement: null,
+    ethicalApprovalReference: null,
+    originalityConfirmed: false,
+    aiUsageStatement: null,
+  };
+}
+
+type SubmissionMetadataFormValues = {
+  title: string;
+  titleAr: string;
+  abstract: string;
+  abstractAr: string;
+  articleType: string;
+  fundingStatement: string;
+  conflictOfInterestStatement: string;
+  ethicalApprovalReference: string;
+  originalityConfirmed: boolean;
+  aiUsageStatement: string;
+  contributors: ContributorRow[];
+};
+
+function defaultContributorRow(
+  sortOrder = 0,
+  isCorresponding = sortOrder === 0,
+): ContributorRow {
+  return {
+    fullName: '',
+    email: '',
+    affiliation: '',
+    sortOrder,
+    isCorresponding,
+  };
+}
+
+function initialContributors(
+  initial: SubmissionMetadataFormInitial,
+): ContributorRow[] {
+  if (initial.contributors?.length) {
+    return initial.contributors.map((c, i) => ({
+      fullName: c.fullName,
+      email: c.email ?? '',
+      affiliation: c.affiliation,
+      sortOrder: c.sortOrder ?? i,
+      isCorresponding: c.isCorresponding,
+    }));
+  }
+  return [defaultContributorRow()];
+}
+
+function initialToFormValues(
+  initial: SubmissionMetadataFormInitial,
+): SubmissionMetadataFormValues {
+  return {
+    title: initial.title,
+    titleAr: initial.titleAr,
+    abstract: initial.abstract,
+    abstractAr: initial.abstractAr,
+    articleType: initial.articleType ?? '',
+    fundingStatement: initial.fundingStatement ?? '',
+    conflictOfInterestStatement: initial.conflictOfInterestStatement ?? '',
+    ethicalApprovalReference: initial.ethicalApprovalReference ?? '',
+    originalityConfirmed: initial.originalityConfirmed,
+    aiUsageStatement: initial.aiUsageStatement ?? '',
+    contributors: initialContributors(initial),
+  };
+}
+
+function keywordsWithDraft(tags: string[], draft: string): string[] {
+  const trimmed = draft.trim();
+  if (!trimmed) return tags;
+  const lower = trimmed.toLowerCase();
+  if (tags.some((x) => x.toLowerCase() === lower)) return tags;
+  return [...tags, trimmed];
+}
 
 export const SubmissionMetadataForm = forwardRef<
   SubmissionMetadataFormHandle,
   SubmissionMetadataFormProps
 >(function SubmissionMetadataForm(props, ref) {
   const isCreate = props.createMode === true;
-  const slug = !isCreate ? props.slug : "";
+  const slug = !isCreate ? props.slug : '';
   const canEdit = isCreate ? true : props.canEdit;
   const initial = props.initial;
   const onError = props.onError;
   const saveLabelOverride = props.saveButtonLabel;
   const onSavedNext =
-    "onSaved" in props && props.onSaved ? props.onSaved : undefined;
+    'onSaved' in props && props.onSaved ? props.onSaved : undefined;
   const onCreatedNext =
-    "onCreated" in props && props.onCreated ? props.onCreated : undefined;
+    'onCreated' in props && props.onCreated ? props.onCreated : undefined;
   const getStagedFiles =
-    isCreate && "getStagedFiles" in props ? props.getStagedFiles : undefined;
+    isCreate && 'getStagedFiles' in props ? props.getStagedFiles : undefined;
   const clearStagedFiles =
-    isCreate && "clearStagedFiles" in props ? props.clearStagedFiles : undefined;
+    isCreate && 'clearStagedFiles' in props
+      ? props.clearStagedFiles
+      : undefined;
   const onSavingChange =
-    isCreate && "onSavingChange" in props ? props.onSavingChange : undefined;
+    isCreate && 'onSavingChange' in props ? props.onSavingChange : undefined;
+  const wizardStep =
+    isCreate && 'wizardStep' in props ? props.wizardStep : undefined;
+  const keepMounted =
+    isCreate && 'keepMounted' in props ? props.keepMounted : false;
+  const hideSaveButton =
+    isCreate && 'hideSaveButton' in props ? props.hideSaveButton : false;
+  const hideArticleType =
+    isCreate && 'hideArticleType' in props ? props.hideArticleType : false;
+  const inputVariant = wizardStep ? 'wizard' : 'form';
+  const showMetadataSection = !wizardStep || wizardStep === 2;
+  const showAuthorsSection = !wizardStep || wizardStep === 3;
+  const showDeclarationsSection = !wizardStep || wizardStep === 4;
   const onDisciplineUpdated =
-    !isCreate && "onDisciplineUpdated" in props
+    !isCreate && 'onDisciplineUpdated' in props
       ? props.onDisciplineUpdated
       : undefined;
   const externalFieldErrors = props.fieldErrors;
@@ -166,11 +295,6 @@ export const SubmissionMetadataForm = forwardRef<
     () => new Set(),
   );
   const activeFieldErrors = externalFieldErrors ?? localFieldErrors;
-
-  const hasErr = useCallback(
-    (key: string) => hasFieldError(activeFieldErrors, key),
-    [activeFieldErrors],
-  );
 
   const clearErr = useCallback(
     (key: string) => {
@@ -199,93 +323,101 @@ export const SubmissionMetadataForm = forwardRef<
     [onFieldErrorsChange],
   );
 
-  const t = useTranslations("SubmissionWorkflow");
-  const tv = useTranslations("Validation");
-  const tDetail = useTranslations("SubmissionDetail");
+  const t = useTranslations('SubmissionWorkflow');
+  const tv = useTranslations('Validation');
+  const tDetail = useTranslations('SubmissionDetail');
   const { resolve: resolveApiError } = useApiErrorMessages();
-  const [title, setTitle] = useState(initial.title);
-  const [titleAr, setTitleAr] = useState(initial.titleAr);
-  const [abstract, setAbstract] = useState(initial.abstract);
-  const [abstractAr, setAbstractAr] = useState(initial.abstractAr);
-  const [articleType, setArticleType] = useState(initial.articleType ?? "");
+
   const [keywordTags, setKeywordTags] = useState<string[]>(() =>
     parseKeywordsFromStorage(initial.keywords),
   );
-  const [keywordDraft, setKeywordDraft] = useState("");
+  const [keywordDraft, setKeywordDraft] = useState('');
   const [keywordTagsAr, setKeywordTagsAr] = useState<string[]>(() =>
     parseKeywordsFromStorage(initial.keywordsAr),
   );
-  const [keywordDraftAr, setKeywordDraftAr] = useState("");
+  const [keywordDraftAr, setKeywordDraftAr] = useState('');
   const [suggestedKeywordsEn, setSuggestedKeywordsEn] = useState<string[]>([]);
   const [suggestedKeywordsAr, setSuggestedKeywordsAr] = useState<string[]>([]);
-  const [contributors, setContributors] = useState<ContributorRow[]>(() =>
-    initial.contributors?.length
-      ? initial.contributors.map((c, i) => ({
-          fullName: c.fullName,
-          email: c.email ?? "",
-          affiliation: c.affiliation,
-          sortOrder: c.sortOrder ?? i,
-          isCorresponding: c.isCorresponding,
-        }))
-      : [
-          {
-            fullName: "",
-            email: "",
-            affiliation: "",
-            sortOrder: 0,
-            isCorresponding: true,
-          },
-        ],
-  );
-  const [fundingStatement, setFundingStatement] = useState(
-    initial.fundingStatement ?? "",
-  );
-  const [coi, setCoi] = useState(initial.conflictOfInterestStatement ?? "");
-  const [ethics, setEthics] = useState(initial.ethicalApprovalReference ?? "");
-  const [originality, setOriginality] = useState(initial.originalityConfirmed);
-  const [aiUsage, setAiUsage] = useState(initial.aiUsageStatement ?? "");
-  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    onSavingChange?.(saving);
-  }, [saving, onSavingChange]);
+  const metadataSchema = isCreate
+    ? createSubmissionSchema
+    : submissionMetadataPatchSchema;
+
+  const preprocessMetadata = useCallback(
+    (values: unknown) => {
+      const v = values as SubmissionMetadataFormValues;
+      return {
+        ...v,
+        title: v.title.trim(),
+        titleAr: v.titleAr.trim(),
+        abstract: v.abstract.trim(),
+        abstractAr: v.abstractAr.trim(),
+        keywords:
+          serializeKeywords(keywordsWithDraft(keywordTags, keywordDraft)) ||
+          undefined,
+        keywordsAr:
+          serializeKeywords(keywordsWithDraft(keywordTagsAr, keywordDraftAr)) ||
+          undefined,
+        fundingStatement: v.fundingStatement.trim() || undefined,
+        conflictOfInterestStatement:
+          v.conflictOfInterestStatement.trim() || undefined,
+        ethicalApprovalReference:
+          v.ethicalApprovalReference.trim() || undefined,
+        aiUsageStatement: v.aiUsageStatement.trim() || undefined,
+        articleType: v.articleType || undefined,
+        contributors: v.contributors.map((c, i) => ({
+          fullName: c.fullName.trim(),
+          email: c.email?.trim() || undefined,
+          affiliation: c.affiliation.trim(),
+          sortOrder: i,
+          isCorresponding: c.isCorresponding,
+        })),
+      };
+    },
+    [keywordTags, keywordDraft, keywordTagsAr, keywordDraftAr],
+  );
+
+  const resolver = useMemo(
+    () => translatedZodResolver(metadataSchema, tv, preprocessMetadata),
+    [metadataSchema, tv, preprocessMetadata],
+  );
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    clearErrors,
+    trigger,
+    getValues,
+    getFieldState,
+    formState: { errors, isSubmitting },
+  } = useForm<SubmissionMetadataFormValues>({
+    resolver: resolver as Resolver<SubmissionMetadataFormValues>,
+    defaultValues: initialToFormValues(initial),
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'contributors',
+  });
+
+  const title = watch('title');
+  const titleAr = watch('titleAr');
+  const abstract = watch('abstract');
+  const abstractAr = watch('abstractAr');
+  const contributors = watch('contributors');
 
   const initialContributorsKey = JSON.stringify(initial.contributors ?? []);
 
   useEffect(() => {
-    setTitle(initial.title);
-    setTitleAr(initial.titleAr);
-    setAbstract(initial.abstract);
-    setAbstractAr(initial.abstractAr);
-    setArticleType(initial.articleType ?? "");
+    reset(initialToFormValues(initial));
     setKeywordTags(parseKeywordsFromStorage(initial.keywords));
-    setKeywordDraft("");
+    setKeywordDraft('');
     setKeywordTagsAr(parseKeywordsFromStorage(initial.keywordsAr));
-    setKeywordDraftAr("");
-    setContributors(
-      initial.contributors?.length
-        ? initial.contributors.map((c, i) => ({
-            fullName: c.fullName,
-            email: c.email ?? "",
-            affiliation: c.affiliation,
-            sortOrder: c.sortOrder ?? i,
-            isCorresponding: c.isCorresponding,
-          }))
-        : [
-            {
-              fullName: "",
-              email: "",
-              affiliation: "",
-              sortOrder: 0,
-              isCorresponding: true,
-            },
-          ],
-    );
-    setFundingStatement(initial.fundingStatement ?? "");
-    setCoi(initial.conflictOfInterestStatement ?? "");
-    setEthics(initial.ethicalApprovalReference ?? "");
-    setOriginality(initial.originalityConfirmed);
-    setAiUsage(initial.aiUsageStatement ?? "");
+    setKeywordDraftAr('');
   }, [
     initial.title,
     initial.titleAr,
@@ -300,172 +432,374 @@ export const SubmissionMetadataForm = forwardRef<
     initial.originalityConfirmed,
     initial.aiUsageStatement,
     initialContributorsKey,
+    reset,
   ]);
 
-  const save = useCallback(async (opts?: { silent?: boolean }): Promise<boolean> => {
-    setSaving(true);
-    onError("");
-    try {
-      const body = {
-        title: title.trim(),
-        titleAr: titleAr.trim(),
-        abstract: abstract.trim(),
-        abstractAr: abstractAr.trim(),
-        keywords: serializeKeywords(keywordTags) || undefined,
-        keywordsAr: serializeKeywords(keywordTagsAr) || undefined,
-        fundingStatement: fundingStatement.trim() || undefined,
-        conflictOfInterestStatement: coi.trim() || undefined,
-        ethicalApprovalReference: ethics.trim() || undefined,
-        originalityConfirmed: originality,
-        aiUsageStatement: aiUsage.trim() || undefined,
-        contributors: contributors.map((c, i) => ({
-          fullName: c.fullName.trim(),
-          email: c.email?.trim() || undefined,
-          affiliation: c.affiliation.trim(),
-          sortOrder: i,
-          isCorresponding: c.isCorresponding,
-        })),
-        articleType: articleType || undefined,
-      };
+  useEffect(() => {
+    onSavingChange?.(isSubmitting);
+  }, [isSubmitting, onSavingChange]);
 
-      const metadataSchema = isCreate
-        ? createSubmissionSchema
-        : submissionMetadataPatchSchema;
-      const parsed = safeParseResult(metadataSchema, body);
-      if (!parsed.ok) {
-        const byField = firstIssueByTopLevelPath(tv, parsed.error);
-        applyFieldErrors(zodTopLevelToFieldErrors(byField));
-        onError(
-          joinValidationBulletList(formatZodIssues(tv, parsed.error.issues)),
-        );
-        return false;
-      }
+  const rhfFieldErrors = useMemo(
+    () => rhfErrorsToFieldErrorSet(errors),
+    [errors],
+  );
 
-      if (isCreate) {
-        const created = await apiJson<{ id: string; slug: string }>(
-          "/submissions",
-          {
-            method: "POST",
-            body: JSON.stringify(parsed.data),
-          },
-        );
-        const createdSlug = created.slug;
-        const staged = getStagedFiles?.() ?? {};
-        let uploadErr: string | null = null;
-        // If an upload fails, still navigate so the author can finish on the detail page.
-        for (const { kind } of FILE_KIND_ORDER) {
-          const file = staged[kind];
-          if (!file) continue;
-          try {
-            await apiUpload(
-              `/submissions/${encodeURIComponent(createdSlug)}/files`,
-              file,
-              { kind },
-            );
-          } catch (e) {
-            if (!uploadErr) {
-              uploadErr = resolveApiError(e, tDetail("uploadFailed"));
+  const combinedFieldErrors = useMemo(() => {
+    const next = new Set(activeFieldErrors);
+    for (const key of rhfFieldErrors) next.add(key);
+    return next;
+  }, [activeFieldErrors, rhfFieldErrors]);
+
+  const hasErr = useCallback(
+    (key: string) => hasFieldError(combinedFieldErrors, key),
+    [combinedFieldErrors],
+  );
+
+  const clearFormErr = useCallback(
+    (key: string) => {
+      clearErr(key);
+      clearErrors(
+        metadataFormFieldForUiKey(key) as keyof SubmissionMetadataFormValues,
+      );
+    },
+    [clearErr, clearErrors],
+  );
+
+  const onInvalid = useCallback(
+    (formErrors: FieldErrors<SubmissionMetadataFormValues>) => {
+      applyFieldErrors(rhfErrorsToFieldErrorSet(formErrors));
+      onError(rhfErrorsToBulletMessage(formErrors));
+    },
+    [applyFieldErrors, onError],
+  );
+
+  const persistMetadata = useCallback(
+    async (
+      data: MetadataPayload,
+      opts?: { silent?: boolean },
+    ): Promise<boolean> => {
+      onError('');
+      try {
+        if (isCreate) {
+          const created = await apiJson<{ id: string; slug: string }>(
+            '/submissions',
+            {
+              method: 'POST',
+              body: JSON.stringify(data),
+            },
+          );
+          const createdSlug = created.slug;
+          const staged = getStagedFiles?.() ?? {};
+          let uploadErr: string | null = null;
+          for (const { kind } of FILE_KIND_ORDER) {
+            const file = staged[kind];
+            if (!file) continue;
+            try {
+              await apiUpload(
+                `/submissions/${encodeURIComponent(createdSlug)}/files`,
+                file,
+                { kind },
+              );
+            } catch (e) {
+              if (!uploadErr) {
+                uploadErr = resolveApiError(e, tDetail('uploadFailed'));
+              }
             }
           }
+          if (!opts?.silent) {
+            toast.success(t('draftCreated'), {
+              id: 'submission-metadata-draft-created',
+            });
+          }
+          if (uploadErr) onError(uploadErr);
+          clearStagedFiles?.();
+          await Promise.resolve(onCreatedNext?.(createdSlug));
+          return true;
         }
-        if (!opts?.silent) {
-          toast.success(t("draftCreated"), { id: "submission-metadata-draft-created" });
-        }
-        if (uploadErr) onError(uploadErr);
-        clearStagedFiles?.();
-        onCreatedNext?.(createdSlug);
-        return true;
-      } else {
+
         await apiJson(`/submissions/${encodeURIComponent(slug)}`, {
-          method: "PATCH",
-          body: JSON.stringify(parsed.data),
+          method: 'PATCH',
+          body: JSON.stringify(data),
         });
         if (!opts?.silent) {
-          toast.success(t("saveSuccess"), { id: "submission-metadata-save-success" });
+          toast.success(t('saveSuccess'), {
+            id: 'submission-metadata-save-success',
+          });
         }
         onSavedNext?.();
         return true;
+      } catch (e) {
+        onError(resolveApiError(e, t('saveFailed')));
+        return false;
       }
-    } catch (e) {
-      onError(resolveApiError(e, t("saveFailed")));
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    isCreate,
-    slug,
-    title,
-    titleAr,
-    abstract,
-    abstractAr,
-    articleType,
-    keywordTags,
-    keywordTagsAr,
-    contributors,
-    fundingStatement,
-    coi,
-    ethics,
-    originality,
-    aiUsage,
-    applyFieldErrors,
-    onError,
-    onSavedNext,
-    onCreatedNext,
-    getStagedFiles,
-    clearStagedFiles,
-    t,
-    tDetail,
-    tv,
-    resolveApiError,
-  ]);
+    },
+    [
+      isCreate,
+      slug,
+      onError,
+      onSavedNext,
+      onCreatedNext,
+      getStagedFiles,
+      clearStagedFiles,
+      t,
+      tDetail,
+      resolveApiError,
+    ],
+  );
 
-  useImperativeHandle(ref, () => ({ save }), [save]);
+  const save = useCallback(
+    (opts?: { silent?: boolean }) =>
+      new Promise<boolean>((resolve) => {
+        handleSubmit(
+          async (data) => {
+            const ok = await persistMetadata(data as MetadataPayload, opts);
+            resolve(ok);
+          },
+          (formErrors) => {
+            onInvalid(formErrors);
+            resolve(false);
+          },
+        )();
+      }),
+    [handleSubmit, persistMetadata, onInvalid],
+  );
 
   function setCorresponding(idx: number) {
-    setContributors((rows) =>
-      rows.map((r, i) => ({ ...r, isCorresponding: i === idx })),
-    );
+    fields.forEach((_, i) => {
+      setValue(`contributors.${i}.isCorresponding`, i === idx);
+    });
+    clearFormErr('corresponding');
+    clearFormErr('contributors');
   }
 
   function addContributor() {
-    setContributors((rows) => [
-      ...rows,
-      {
-        fullName: "",
-        email: "",
-        affiliation: "",
-        sortOrder: rows.length,
-        isCorresponding: false,
-      },
-    ]);
+    append(defaultContributorRow(fields.length, false));
   }
 
   function removeContributor(idx: number) {
-    setContributors((rows) => {
-      const next = rows.filter((_, i) => i !== idx);
-      if (!next.some((r) => r.isCorresponding) && next.length > 0) {
-        next[0] = { ...next[0], isCorresponding: true };
-      }
-      return next.map((r, i) => ({ ...r, sortOrder: i }));
-    });
+    const wasCorresponding = contributors[idx]?.isCorresponding;
+    remove(idx);
+    if (wasCorresponding) {
+      const after = watch('contributors');
+      after.forEach((_, i) => {
+        setValue(`contributors.${i}.isCorresponding`, i === 0);
+      });
+    }
   }
 
   const canSuggestKeywords =
     Boolean(title.trim() && abstract.trim()) ||
     Boolean(titleAr.trim() && abstractAr.trim());
 
-  const onKeywordSuggestions = useCallback((result: KeywordSuggestionResult) => {
-    setSuggestedKeywordsEn(result.keywordsEn);
-    setSuggestedKeywordsAr(result.keywordsAr);
-  }, []);
+  const keywordPreviewInput = useMemo(
+    () => ({
+      title: title.trim() || undefined,
+      abstract: abstract.trim() || undefined,
+      titleAr: titleAr.trim() || undefined,
+      abstractAr: abstractAr.trim() || undefined,
+    }),
+    [title, abstract, titleAr, abstractAr],
+  );
+
+  const mergeInitial = useCallback(
+    (partial: Partial<SubmissionMetadataFormInitial>) => {
+      const current = getValues();
+      const merged: SubmissionMetadataFormInitial = {
+        ...initial,
+        title: partial.title ?? current.title,
+        titleAr: partial.titleAr ?? current.titleAr,
+        abstract: partial.abstract ?? current.abstract,
+        abstractAr: partial.abstractAr ?? current.abstractAr,
+        articleType: partial.articleType ?? current.articleType ?? null,
+        keywords: partial.keywords ?? serializeKeywords(keywordTags) ?? null,
+        keywordsAr:
+          partial.keywordsAr ?? serializeKeywords(keywordTagsAr) ?? null,
+        contributors:
+          partial.contributors ??
+          current.contributors.map((c, i) => ({
+            ...c,
+            sortOrder: c.sortOrder ?? i,
+          })),
+        fundingStatement:
+          partial.fundingStatement ?? current.fundingStatement ?? null,
+        conflictOfInterestStatement:
+          partial.conflictOfInterestStatement ??
+          current.conflictOfInterestStatement ??
+          null,
+        ethicalApprovalReference:
+          partial.ethicalApprovalReference ??
+          current.ethicalApprovalReference ??
+          null,
+        originalityConfirmed:
+          partial.originalityConfirmed ?? current.originalityConfirmed,
+        aiUsageStatement:
+          partial.aiUsageStatement ?? current.aiUsageStatement ?? null,
+      };
+      reset(initialToFormValues(merged));
+      if (partial.keywords !== undefined) {
+        setKeywordTags(parseKeywordsFromStorage(partial.keywords));
+        setKeywordDraft('');
+      }
+      if (partial.keywordsAr !== undefined) {
+        setKeywordTagsAr(parseKeywordsFromStorage(partial.keywordsAr));
+        setKeywordDraftAr('');
+      }
+    },
+    [getValues, initial, keywordTags, keywordTagsAr, reset],
+  );
+
+  const setArticleType = useCallback(
+    (value: string) => {
+      setValue('articleType', value);
+      clearFormErr('articleType');
+    },
+    [setValue, clearFormErr],
+  );
+
+  const getSnapshot = useCallback((): SubmissionMetadataWizardSnapshot => {
+    const values = getValues();
+    return {
+      ...values,
+      keywordTags: keywordsWithDraft(keywordTags, keywordDraft),
+      keywordTagsAr: keywordsWithDraft(keywordTagsAr, keywordDraftAr),
+    };
+  }, [getValues, keywordTags, keywordDraft, keywordTagsAr, keywordDraftAr]);
+
+  const validateWizardStep = useCallback(
+    async (stepNum: 2 | 3 | 4): Promise<WizardStepValidation> => {
+      const fieldErrors = new Set<string>();
+      let message: string | null = null;
+      const setFirst = (msg: string) => {
+        if (!message) message = msg;
+      };
+
+      if (stepNum === 2) {
+        const ok = await trigger([
+          'title',
+          'titleAr',
+          'abstract',
+          'abstractAr',
+        ]);
+        const values = getValues();
+        const kw = keywordsWithDraft(keywordTags, keywordDraft);
+        const kwAr = keywordsWithDraft(keywordTagsAr, keywordDraftAr);
+        if (kw.length < 3 || kw.length > 6) {
+          fieldErrors.add('keywords');
+          setFirst(t('keywordsLabelEn'));
+        }
+        if (values.titleAr.trim() && (kwAr.length < 3 || kwAr.length > 6)) {
+          fieldErrors.add('keywordsAr');
+          setFirst(t('keywordsLabelAr'));
+        }
+        if (!ok) {
+          for (const name of [
+            'title',
+            'titleAr',
+            'abstract',
+            'abstractAr',
+          ] as const) {
+            const err = getFieldState(name).error?.message;
+            if (err) setFirst(String(err));
+            fieldErrors.add(schemaFieldToUiErrorKey(name));
+          }
+        }
+      }
+
+      if (stepNum === 3) {
+        const rows = getValues().contributors;
+        const fieldsToTrigger = rows.flatMap((_, i) => [
+          `contributors.${i}.fullName` as const,
+          `contributors.${i}.affiliation` as const,
+          `contributors.${i}.email` as const,
+        ]);
+        const ok = await trigger(fieldsToTrigger);
+        const correspondingCount = rows.filter((r) => r.isCorresponding).length;
+        if (rows.length === 0) {
+          fieldErrors.add('contributors');
+          setFirst(t('sectionAuthors'));
+        }
+        if (correspondingCount !== 1) {
+          fieldErrors.add('corresponding');
+          setFirst(t('correspondingAuthor'));
+        }
+        if (!ok) {
+          rows.forEach((_, i) => {
+            for (const suffix of [
+              'fullName',
+              'affiliation',
+              'email',
+            ] as const) {
+              const path = `contributors.${i}.${suffix}` as const;
+              const err = getFieldState(path).error?.message;
+              if (err) {
+                setFirst(String(err));
+                fieldErrors.add(
+                  suffix === 'fullName' || suffix === 'affiliation'
+                    ? contributorFieldKey(i, suffix)
+                    : contributorFieldKey(i, 'email'),
+                );
+              }
+            }
+          });
+        }
+      }
+
+      if (stepNum === 4) {
+        if (!getValues().originalityConfirmed) {
+          fieldErrors.add('originality');
+          setFirst(t('originalityConfirm'));
+        }
+      }
+
+      if (fieldErrors.size > 0) {
+        applyFieldErrors(fieldErrors);
+      }
+
+      return {
+        valid: fieldErrors.size === 0,
+        fieldErrors,
+        message,
+      };
+    },
+    [
+      trigger,
+      getValues,
+      keywordTags,
+      keywordDraft,
+      keywordTagsAr,
+      keywordDraftAr,
+      getFieldState,
+      applyFieldErrors,
+      t,
+    ],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      save,
+      validateWizardStep,
+      getSnapshot,
+      mergeInitial,
+      setArticleType,
+    }),
+    [save, validateWizardStep, getSnapshot, mergeInitial, setArticleType],
+  );
+
+  const onKeywordSuggestions = useCallback(
+    (result: KeywordSuggestionResult) => {
+      setSuggestedKeywordsEn(result.keywordsEn);
+      setSuggestedKeywordsAr(result.keywordsAr);
+    },
+    [],
+  );
 
   const keywordAddMessages = useMemo(
     () => ({
-      max: t("keywordSuggestMax"),
-      duplicate: t("keywordSuggestDuplicate"),
-      tooLong: t("keywordSuggestTooLong"),
-      addAllNone: t("keywordSuggestAddAllNone"),
+      max: t('keywordSuggestMax'),
+      duplicate: t('keywordSuggestDuplicate'),
+      tooLong: t('keywordSuggestTooLong'),
+      addAllNone: t('keywordSuggestAddAllNone'),
     }),
     [t],
   );
@@ -473,7 +807,7 @@ export const SubmissionMetadataForm = forwardRef<
   const addEnKeyword = useCallback(
     (kw: string) => {
       setKeywordTags((tags) => {
-        const result = addSuggestedKeyword(tags, kw, "en");
+        const result = addSuggestedKeyword(tags, kw, 'en');
         if (result.addedCount > 0) return result.tags;
         notifyKeywordAddFailure(result.failure, keywordAddMessages);
         return tags;
@@ -484,7 +818,7 @@ export const SubmissionMetadataForm = forwardRef<
 
   const addAllEnKeywords = useCallback(() => {
     setKeywordTags((tags) => {
-      const result = addAllSuggestedKeywords(tags, suggestedKeywordsEn, "en");
+      const result = addAllSuggestedKeywords(tags, suggestedKeywordsEn, 'en');
       if (result.addedCount > 0) return result.tags;
       notifyKeywordAddFailure(result.failure, keywordAddMessages);
       return tags;
@@ -494,7 +828,7 @@ export const SubmissionMetadataForm = forwardRef<
   const addArKeyword = useCallback(
     (kw: string) => {
       setKeywordTagsAr((tags) => {
-        const result = addSuggestedKeyword(tags, kw, "ar");
+        const result = addSuggestedKeyword(tags, kw, 'ar');
         if (result.addedCount > 0) return result.tags;
         notifyKeywordAddFailure(result.failure, keywordAddMessages);
         return tags;
@@ -505,7 +839,7 @@ export const SubmissionMetadataForm = forwardRef<
 
   const addAllArKeywords = useCallback(() => {
     setKeywordTagsAr((tags) => {
-      const result = addAllSuggestedKeywords(tags, suggestedKeywordsAr, "ar");
+      const result = addAllSuggestedKeywords(tags, suggestedKeywordsAr, 'ar');
       if (result.addedCount > 0) return result.tags;
       notifyKeywordAddFailure(result.failure, keywordAddMessages);
       return tags;
@@ -516,423 +850,475 @@ export const SubmissionMetadataForm = forwardRef<
     return <SubmissionMetadataDisplay initial={initial} />;
   }
 
+  if (keepMounted && !wizardStep) {
+    return null;
+  }
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h3 className="font-serif text-lg font-semibold text-ink">
-          {t("sectionMetadata")}
-        </h3>
-        <p className="mt-1 text-sm text-ink/65">{t("sectionMetadataHint")}</p>
-        <div className="mt-4 flex flex-col gap-4">
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="articleType"
-          >
-            <span className="font-medium text-ink">{t("articleType")}</span>
-            <SimpleSelect
-              value={articleType}
-              onValueChange={(v) => {
-                setArticleType(v);
-                clearErr("articleType");
-              }}
-              placeholder={t("articleTypePlaceholder")}
-              className={
-                hasErr("articleType")
-                  ? "border-red-400 focus-visible:border-red-400 focus-visible:ring-red-500/15"
-                  : undefined
-              }
-              options={SUBMISSION_ARTICLE_TYPES.map((v) => ({
-                value: v,
-                label: t(`articleType_${v}`),
-              }))}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="title"
-          >
-            <span className="font-medium text-ink">{t("titleLabelEn")}</span>
-            <input
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                clearErr("title");
-              }}
-              dir="ltr"
-              aria-invalid={hasErr("title")}
-              className={fieldInputCls(hasErr("title"), "form")}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="titleAr"
-          >
-            <span className="font-medium text-ink">{t("titleLabelAr")}</span>
-            <input
-              value={titleAr}
-              onChange={(e) => {
-                setTitleAr(e.target.value);
-                clearErr("titleAr");
-              }}
-              dir="rtl"
-              aria-invalid={hasErr("titleAr")}
-              className={fieldInputCls(hasErr("titleAr"), "form")}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="abstract"
-          >
-            <span className="font-medium text-ink">{t("abstractLabelEn")}</span>
-            <textarea
-              value={abstract}
-              onChange={(e) => {
-                setAbstract(e.target.value);
-                clearErr("abstract");
-              }}
-              rows={6}
-              dir="ltr"
-              aria-invalid={hasErr("abstract")}
-              className={fieldInputCls(hasErr("abstract"), "form")}
-            />
-            <span className="text-xs text-ink/55">
-              {t("abstractWordCount", {
-                count: countWords(abstract),
-                max: ABSTRACT_MAX_WORDS,
-              })}
-            </span>
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="abstractAr"
-          >
-            <span className="font-medium text-ink">{t("abstractLabelAr")}</span>
-            <textarea
-              value={abstractAr}
-              onChange={(e) => {
-                setAbstractAr(e.target.value);
-                clearErr("abstractAr");
-              }}
-              rows={6}
-              dir="rtl"
-              aria-invalid={hasErr("abstractAr")}
-              className={fieldInputCls(hasErr("abstractAr"), "form")}
-            />
-            <span className="text-xs text-ink/55">
-              {t("abstractWordCount", {
-                count: countWords(abstractAr),
-                max: ABSTRACT_MAX_WORDS,
-              })}
-            </span>
-          </label>
-          {!isCreate && slug ? (
-            <SubmissionKeywordSuggest
-              slug={slug}
-              canSuggest={canSuggestKeywords}
-              suggestedEn={suggestedKeywordsEn}
-              suggestedAr={suggestedKeywordsAr}
-              onSuggestions={onKeywordSuggestions}
-            />
+    <div className={wizardStep ? '' : 'space-y-8'}>
+      {showMetadataSection ? (
+        <div>
+          {!wizardStep ? (
+            <>
+              <h3 className="font-serif text-lg font-semibold text-ink">
+                {t('sectionMetadata')}
+              </h3>
+              <p className="mt-1 text-sm text-ink/65">
+                {t('sectionMetadataHint')}
+              </p>
+            </>
           ) : null}
           <div
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="keywords"
+            className={
+              wizardStep ? 'flex flex-col gap-4' : 'mt-4 flex flex-col gap-4'
+            }
           >
-            <span
-              id="submission-keywords-en-label"
-              className="font-medium text-ink"
+            {!hideArticleType ? (
+              <label
+                className="flex flex-col gap-1 text-sm"
+                data-field-error="articleType"
+              >
+                <span className="font-medium text-ink">{t('articleType')}</span>
+                <Controller
+                  name="articleType"
+                  control={control}
+                  render={({ field }) => (
+                    <SimpleSelect
+                      value={field.value}
+                      onValueChange={(v) => {
+                        field.onChange(v);
+                        clearFormErr('articleType');
+                      }}
+                      placeholder={t('articleTypePlaceholder')}
+                      className={
+                        hasErr('articleType')
+                          ? 'border-red-400 focus-visible:border-red-400 focus-visible:ring-red-500/15'
+                          : undefined
+                      }
+                      options={SUBMISSION_ARTICLE_TYPES.map((v) => ({
+                        value: v,
+                        label: t(`articleType_${v}`),
+                      }))}
+                    />
+                  )}
+                />
+              </label>
+            ) : null}
+            <label
+              className="flex flex-col gap-1 text-sm"
+              data-field-error="title"
             >
-              {t("keywordsLabelEn")}
-            </span>
-            <div dir="ltr" lang="en">
-              <KeywordTagsInput
-                tags={keywordTags}
-                onChange={(tags) => {
-                  setKeywordTags(tags);
-                  clearErr("keywords");
-                }}
-                inputValue={keywordDraft}
-                onInputChange={setKeywordDraft}
-                placeholder={t("keywordsPlaceholder")}
-                id="submission-keywords-en"
-                aria-labelledby="submission-keywords-en-label"
-                aria-describedby="submission-keywords-en-hint"
-                invalid={hasErr("keywords")}
+              <span className="font-medium text-ink">{t('titleLabelEn')}</span>
+              <input
+                {...register('title', {
+                  onChange: () => clearFormErr('title'),
+                })}
+                dir="ltr"
+                aria-invalid={hasErr('title')}
+                className={fieldInputCls(hasErr('title'), inputVariant)}
+              />
+            </label>
+            <label
+              className="flex flex-col gap-1 text-sm"
+              data-field-error="titleAr"
+            >
+              <span className="font-medium text-ink">{t('titleLabelAr')}</span>
+              <input
+                {...register('titleAr', {
+                  onChange: () => clearFormErr('titleAr'),
+                })}
+                dir="rtl"
+                aria-invalid={hasErr('titleAr')}
+                className={fieldInputCls(hasErr('titleAr'), inputVariant)}
+              />
+            </label>
+            <label
+              className="flex flex-col gap-1 text-sm"
+              data-field-error="abstract"
+            >
+              <span className="font-medium text-ink">
+                {t('abstractLabelEn')}
+              </span>
+              <textarea
+                {...register('abstract', {
+                  onChange: () => clearFormErr('abstract'),
+                })}
+                rows={6}
+                dir="ltr"
+                aria-invalid={hasErr('abstract')}
+                className={fieldInputCls(hasErr('abstract'), inputVariant)}
+              />
+              <span className="text-xs text-ink/55">
+                {t('abstractWordCount', {
+                  count: countWords(abstract),
+                  max: ABSTRACT_MAX_WORDS,
+                })}
+              </span>
+            </label>
+            <label
+              className="flex flex-col gap-1 text-sm"
+              data-field-error="abstractAr"
+            >
+              <span className="font-medium text-ink">
+                {t('abstractLabelAr')}
+              </span>
+              <textarea
+                {...register('abstractAr', {
+                  onChange: () => clearFormErr('abstractAr'),
+                })}
+                rows={6}
+                dir="rtl"
+                aria-invalid={hasErr('abstractAr')}
+                className={fieldInputCls(hasErr('abstractAr'), inputVariant)}
+              />
+              <span className="text-xs text-ink/55">
+                {t('abstractWordCount', {
+                  count: countWords(abstractAr),
+                  max: ABSTRACT_MAX_WORDS,
+                })}
+              </span>
+            </label>
+            {isCreate ? (
+              <SubmissionKeywordSuggest
+                previewInput={keywordPreviewInput}
+                canSuggest={canSuggestKeywords}
+                suggestedEn={suggestedKeywordsEn}
+                suggestedAr={suggestedKeywordsAr}
+                onSuggestions={onKeywordSuggestions}
+              />
+            ) : slug ? (
+              <SubmissionKeywordSuggest
+                slug={slug}
+                canSuggest={canSuggestKeywords}
+                suggestedEn={suggestedKeywordsEn}
+                suggestedAr={suggestedKeywordsAr}
+                onSuggestions={onKeywordSuggestions}
+              />
+            ) : null}
+            <div
+              className="flex flex-col gap-1 text-sm"
+              data-field-error="keywords"
+            >
+              <span
+                id="submission-keywords-en-label"
+                className="font-medium text-ink"
+              >
+                {t('keywordsLabelEn')}
+              </span>
+              <div dir="ltr" lang="en">
+                <KeywordTagsInput
+                  tags={keywordTags}
+                  onChange={(tags) => {
+                    setKeywordTags(tags);
+                    clearFormErr('keywords');
+                  }}
+                  inputValue={keywordDraft}
+                  onInputChange={setKeywordDraft}
+                  placeholder={t('keywordsPlaceholder')}
+                  id="submission-keywords-en"
+                  aria-labelledby="submission-keywords-en-label"
+                  aria-describedby="submission-keywords-en-hint"
+                  invalid={hasErr('keywords')}
+                />
+              </div>
+              <span
+                id="submission-keywords-en-hint"
+                className="text-xs text-ink/55"
+              >
+                {t('keywordsCount', { count: keywordTags.length })}
+              </span>
+              <KeywordSuggestionChips
+                suggestions={suggestedKeywordsEn}
+                onAdd={addEnKeyword}
+                onAddAll={addAllEnKeywords}
+                addLabel={t('keywordSuggestAdd')}
+                addAllLabel={t('keywordSuggestAddAll')}
+                dir="ltr"
+                lang="en"
               />
             </div>
-            <span
-              id="submission-keywords-en-hint"
-              className="text-xs text-ink/55"
+            <div
+              className="flex flex-col gap-1 text-sm"
+              data-field-error="keywordsAr"
             >
-              {t("keywordsCount", { count: keywordTags.length })}
-            </span>
-            <KeywordSuggestionChips
-              suggestions={suggestedKeywordsEn}
-              onAdd={addEnKeyword}
-              onAddAll={addAllEnKeywords}
-              addLabel={t("keywordSuggestAdd")}
-              addAllLabel={t("keywordSuggestAddAll")}
-              dir="ltr"
-              lang="en"
-            />
-          </div>
-          <div
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="keywordsAr"
-          >
-            <span
-              id="submission-keywords-ar-label"
-              className="font-medium text-ink"
-            >
-              {t("keywordsLabelAr")}
-            </span>
-            <div dir="rtl" lang="ar">
-              <KeywordTagsInput
-                tags={keywordTagsAr}
-                onChange={(tags) => {
-                  setKeywordTagsAr(tags);
-                  clearErr("keywordsAr");
-                }}
-                inputValue={keywordDraftAr}
-                onInputChange={setKeywordDraftAr}
-                placeholder={t("keywordsPlaceholderAr")}
-                id="submission-keywords-ar"
-                aria-labelledby="submission-keywords-ar-label"
-                aria-describedby="submission-keywords-ar-hint"
-                invalid={hasErr("keywordsAr")}
+              <span
+                id="submission-keywords-ar-label"
+                className="font-medium text-ink"
+              >
+                {t('keywordsLabelAr')}
+              </span>
+              <div dir="rtl" lang="ar">
+                <KeywordTagsInput
+                  tags={keywordTagsAr}
+                  onChange={(tags) => {
+                    setKeywordTagsAr(tags);
+                    clearFormErr('keywordsAr');
+                  }}
+                  inputValue={keywordDraftAr}
+                  onInputChange={setKeywordDraftAr}
+                  placeholder={t('keywordsPlaceholderAr')}
+                  id="submission-keywords-ar"
+                  aria-labelledby="submission-keywords-ar-label"
+                  aria-describedby="submission-keywords-ar-hint"
+                  invalid={hasErr('keywordsAr')}
+                />
+              </div>
+              <span
+                id="submission-keywords-ar-hint"
+                className="text-xs text-ink/55"
+              >
+                {t('keywordsCount', { count: keywordTagsAr.length })}
+              </span>
+              <KeywordSuggestionChips
+                suggestions={suggestedKeywordsAr}
+                onAdd={addArKeyword}
+                onAddAll={addAllArKeywords}
+                addLabel={t('keywordSuggestAdd')}
+                addAllLabel={t('keywordSuggestAddAll')}
+                dir="rtl"
+                lang="ar"
               />
             </div>
-            <span
-              id="submission-keywords-ar-hint"
-              className="text-xs text-ink/55"
-            >
-              {t("keywordsCount", { count: keywordTagsAr.length })}
-            </span>
-            <KeywordSuggestionChips
-              suggestions={suggestedKeywordsAr}
-              onAdd={addArKeyword}
-              onAddAll={addAllArKeywords}
-              addLabel={t("keywordSuggestAdd")}
-              addAllLabel={t("keywordSuggestAddAll")}
-              dir="rtl"
-              lang="ar"
-            />
           </div>
         </div>
-      </div>
+      ) : null}
 
-      <div>
-        <h3 className="font-serif text-lg font-semibold text-ink">
-          {t("sectionAuthors")}
-        </h3>
-        <p className="mt-1 text-sm text-ink/65">{t("sectionAuthorsHint")}</p>
-        <ul className="mt-4 space-y-4">
-          {contributors.map((c, idx) => (
-            <li
-              key={idx}
-              data-field-error={contributorFieldKey(idx, "fullName")}
-              className={`rounded-lg border bg-paper/40 p-4 ${
-                hasErr(contributorFieldKey(idx, "fullName")) ||
-                hasErr(contributorFieldKey(idx, "affiliation")) ||
-                hasErr("corresponding") ||
-                hasErr("contributors")
-                  ? "border-red-400 ring-1 ring-red-500/15"
-                  : "border-ink/12"
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-ink/50">
-                  {t("authorN", { n: idx + 1 })}
-                </span>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="corresponding"
-                    checked={c.isCorresponding}
-                    onChange={() => {
-                      setCorresponding(idx);
-                      clearErr("corresponding");
-                    }}
-                    className="size-4 text-accent"
-                  />
-                  {t("correspondingAuthor")}
-                </label>
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-                  <span>{t("authorFullName")}</span>
-                  <input
-                    value={c.fullName}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      clearErr(contributorFieldKey(idx, "fullName"));
-                      clearErr("contributors");
-                      setContributors((rows) =>
-                        rows.map((r, i) =>
-                          i === idx ? { ...r, fullName: v } : r,
-                        ),
-                      );
-                    }}
-                    aria-invalid={hasErr(contributorFieldKey(idx, "fullName"))}
-                    className={fieldInputCls(
-                      hasErr(contributorFieldKey(idx, "fullName")),
-                      "form",
-                    )}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  <span>{t("authorEmail")}</span>
-                  <input
-                    type="email"
-                    value={c.email}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setContributors((rows) =>
-                        rows.map((r, i) => (i === idx ? { ...r, email: v } : r)),
-                      );
-                    }}
-                    className={fieldInputCls(false, "form")}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-                  <span>{t("authorAffiliation")}</span>
-                  <input
-                    value={c.affiliation}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      clearErr(contributorFieldKey(idx, "affiliation"));
-                      clearErr("contributors");
-                      setContributors((rows) =>
-                        rows.map((r, i) =>
-                          i === idx ? { ...r, affiliation: v } : r,
-                        ),
-                      );
-                    }}
-                    placeholder={t("authorAffiliationPlaceholder")}
-                    aria-invalid={hasErr(contributorFieldKey(idx, "affiliation"))}
-                    className={fieldInputCls(
-                      hasErr(contributorFieldKey(idx, "affiliation")),
-                      "form",
-                      "placeholder:text-ink/35",
-                    )}
-                  />
-                </label>
-              </div>
-              {contributors.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeContributor(idx)}
-                  className="mt-3 text-sm text-red-700 hover:underline"
+      {showAuthorsSection ? (
+        <div>
+          {!wizardStep ? (
+            <>
+              <h3 className="font-serif text-lg font-semibold text-ink">
+                {t('sectionAuthors')}
+              </h3>
+              <p className="mt-1 text-sm text-ink/65">
+                {t('sectionAuthorsHint')}
+              </p>
+            </>
+          ) : null}
+          <ul className="mt-4 space-y-4">
+            {fields.map((field, idx) => {
+              const c = contributors[idx];
+              if (!c) return null;
+              return (
+                <li
+                  key={field.id}
+                  data-field-error={contributorFieldKey(idx, 'fullName')}
+                  className={`rounded-lg border bg-paper/40 p-4 ${
+                    hasErr(contributorFieldKey(idx, 'fullName')) ||
+                    hasErr(contributorFieldKey(idx, 'affiliation')) ||
+                    hasErr('corresponding') ||
+                    hasErr('contributors')
+                      ? 'border-red-400 ring-1 ring-red-500/15'
+                      : 'border-ink/12'
+                  }`}
                 >
-                  {t("removeAuthor")}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        <button
-          type="button"
-          onClick={addContributor}
-          className="mt-3 text-sm font-medium text-accent hover:underline"
-        >
-          {t("addAuthor")}
-        </button>
-      </div>
-
-      <div>
-        <h3 className="font-serif text-lg font-semibold text-ink">
-          {t("sectionFunding")}
-        </h3>
-        <label className="mt-3 flex flex-col gap-1 text-sm">
-          <span className="text-ink/80">{t("fundingStatement")}</span>
-          <textarea
-            value={fundingStatement}
-            onChange={(e) => setFundingStatement(e.target.value)}
-            rows={3}
-            placeholder={t("fundingPlaceholder")}
-            className="rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none placeholder:text-ink/35 focus:border-accent"
-          />
-        </label>
-      </div>
-
-      <div>
-        <h3 className="font-serif text-lg font-semibold text-ink">
-          {t("sectionDeclarations")}
-        </h3>
-        <p className="mt-1 text-sm text-ink/65">{t("sectionDeclarationsHint")}</p>
-        <div className="mt-4 flex flex-col gap-4">
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="coi"
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink/50">
+                      {t('authorN', { n: idx + 1 })}
+                    </span>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="corresponding"
+                        checked={c.isCorresponding}
+                        onChange={() => setCorresponding(idx)}
+                        className="size-4 text-accent"
+                      />
+                      {t('correspondingAuthor')}
+                    </label>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                      <span>{t('authorFullName')}</span>
+                      <input
+                        {...register(`contributors.${idx}.fullName`, {
+                          onChange: () => {
+                            clearFormErr(contributorFieldKey(idx, 'fullName'));
+                            clearFormErr('contributors');
+                          },
+                        })}
+                        aria-invalid={hasErr(
+                          contributorFieldKey(idx, 'fullName'),
+                        )}
+                        className={fieldInputCls(
+                          hasErr(contributorFieldKey(idx, 'fullName')),
+                          inputVariant,
+                        )}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm">
+                      <span>{t('authorEmail')}</span>
+                      <input
+                        type="email"
+                        {...register(`contributors.${idx}.email`)}
+                        className={fieldInputCls(false, inputVariant)}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                      <span>{t('authorAffiliation')}</span>
+                      <input
+                        {...register(`contributors.${idx}.affiliation`, {
+                          onChange: () => {
+                            clearFormErr(
+                              contributorFieldKey(idx, 'affiliation'),
+                            );
+                            clearFormErr('contributors');
+                          },
+                        })}
+                        placeholder={t('authorAffiliationPlaceholder')}
+                        aria-invalid={hasErr(
+                          contributorFieldKey(idx, 'affiliation'),
+                        )}
+                        className={fieldInputCls(
+                          hasErr(contributorFieldKey(idx, 'affiliation')),
+                          inputVariant,
+                          'placeholder:text-ink/35',
+                        )}
+                      />
+                    </label>
+                  </div>
+                  {fields.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeContributor(idx)}
+                      className="mt-3 text-sm text-red-700 hover:underline"
+                    >
+                      {t('removeAuthor')}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <button
+            type="button"
+            onClick={addContributor}
+            className="mt-3 text-sm font-medium text-accent hover:underline"
           >
-            <span className="font-medium">{t("conflictOfInterest")}</span>
-            <textarea
-              value={coi}
-              onChange={(e) => {
-                setCoi(e.target.value);
-                clearErr("coi");
-              }}
-              rows={2}
-              placeholder={t("coiPlaceholder")}
-              aria-invalid={hasErr("coi")}
-              className={fieldInputCls(hasErr("coi"), "form", "placeholder:text-ink/35")}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="ethics"
-          >
-            <span className="font-medium">{t("ethicalApproval")}</span>
-            <input
-              value={ethics}
-              onChange={(e) => {
-                setEthics(e.target.value);
-                clearErr("ethics");
-              }}
-              placeholder={t("ethicalPlaceholder")}
-              aria-invalid={hasErr("ethics")}
-              className={fieldInputCls(hasErr("ethics"), "form", "placeholder:text-ink/35")}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm"
-            data-field-error="aiUsage"
-          >
-            <span className="font-medium">{t("aiUsage")}</span>
-            <textarea
-              value={aiUsage}
-              onChange={(e) => {
-                setAiUsage(e.target.value);
-                clearErr("aiUsage");
-              }}
-              rows={2}
-              placeholder={t("aiPlaceholder")}
-              aria-invalid={hasErr("aiUsage")}
-              className={fieldInputCls(hasErr("aiUsage"), "form", "placeholder:text-ink/35")}
-            />
-          </label>
-          <label
-            className={`flex cursor-pointer items-start gap-2 text-sm rounded-md border p-2 ${
-              hasErr("originality")
-                ? "border-red-400 ring-1 ring-red-500/15"
-                : "border-transparent"
-            }`}
-            data-field-error="originality"
-          >
-            <input
-              type="checkbox"
-              checked={originality}
-              onChange={(e) => {
-                setOriginality(e.target.checked);
-                clearErr("originality");
-              }}
-              aria-invalid={hasErr("originality")}
-              className="mt-1 size-4 rounded border-ink/25 text-accent"
-            />
-            <span>{t("originalityConfirm")}</span>
-          </label>
+            {t('addAuthor')}
+          </button>
         </div>
-      </div>
+      ) : null}
+
+      {showDeclarationsSection ? (
+        <>
+          <div>
+            {!wizardStep ? (
+              <h3 className="font-serif text-lg font-semibold text-ink">
+                {t('sectionFunding')}
+              </h3>
+            ) : null}
+            <label
+              className={`flex flex-col gap-1 text-sm ${wizardStep ? '' : 'mt-3'}`}
+            >
+              <span className="text-ink/80">{t('fundingStatement')}</span>
+              <textarea
+                {...register('fundingStatement')}
+                rows={3}
+                placeholder={t('fundingPlaceholder')}
+                className={
+                  wizardStep
+                    ? fieldInputCls(
+                        false,
+                        inputVariant,
+                        'placeholder:text-ink/35',
+                      )
+                    : 'rounded-md border border-ink/15 bg-surface px-3 py-2 outline-none placeholder:text-ink/35 focus:border-accent'
+                }
+              />
+            </label>
+          </div>
+
+          <div>
+            {!wizardStep ? (
+              <>
+                <h3 className="font-serif text-lg font-semibold text-ink">
+                  {t('sectionDeclarations')}
+                </h3>
+                <p className="mt-1 text-sm text-ink/65">
+                  {t('sectionDeclarationsHint')}
+                </p>
+              </>
+            ) : null}
+            <div className={`flex flex-col gap-4 ${wizardStep ? '' : 'mt-4'}`}>
+              <label
+                className="flex flex-col gap-1 text-sm"
+                data-field-error="coi"
+              >
+                <span className="font-medium">{t('conflictOfInterest')}</span>
+                <textarea
+                  {...register('conflictOfInterestStatement', {
+                    onChange: () => clearFormErr('coi'),
+                  })}
+                  rows={2}
+                  placeholder={t('coiPlaceholder')}
+                  aria-invalid={hasErr('coi')}
+                  className={fieldInputCls(
+                    hasErr('coi'),
+                    inputVariant,
+                    'placeholder:text-ink/35',
+                  )}
+                />
+              </label>
+              <label
+                className="flex flex-col gap-1 text-sm"
+                data-field-error="ethics"
+              >
+                <span className="font-medium">{t('ethicalApproval')}</span>
+                <input
+                  {...register('ethicalApprovalReference', {
+                    onChange: () => clearFormErr('ethics'),
+                  })}
+                  placeholder={t('ethicalPlaceholder')}
+                  aria-invalid={hasErr('ethics')}
+                  className={fieldInputCls(
+                    hasErr('ethics'),
+                    inputVariant,
+                    'placeholder:text-ink/35',
+                  )}
+                />
+              </label>
+              <label
+                className="flex flex-col gap-1 text-sm"
+                data-field-error="aiUsage"
+              >
+                <span className="font-medium">{t('aiUsage')}</span>
+                <textarea
+                  {...register('aiUsageStatement', {
+                    onChange: () => clearFormErr('aiUsage'),
+                  })}
+                  rows={2}
+                  placeholder={t('aiPlaceholder')}
+                  aria-invalid={hasErr('aiUsage')}
+                  className={fieldInputCls(
+                    hasErr('aiUsage'),
+                    inputVariant,
+                    'placeholder:text-ink/35',
+                  )}
+                />
+              </label>
+              <label
+                className={`flex cursor-pointer items-start gap-2 text-sm rounded-md border p-2 ${
+                  hasErr('originality')
+                    ? 'border-red-400 ring-1 ring-red-500/15'
+                    : 'border-transparent'
+                }`}
+                data-field-error="originality"
+              >
+                <input
+                  type="checkbox"
+                  {...register('originalityConfirmed', {
+                    onChange: () => clearFormErr('originality'),
+                  })}
+                  aria-invalid={hasErr('originality')}
+                  className="mt-1 size-4 rounded border-ink/25 text-accent"
+                />
+                <span>{t('originalityConfirm')}</span>
+              </label>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {!isCreate && slug && onDisciplineUpdated && (
         <SubmissionDisciplinePanel
@@ -952,16 +1338,22 @@ export const SubmissionMetadataForm = forwardRef<
         />
       )}
 
-      <button
-        type="button"
-        disabled={saving}
-        aria-busy={saving}
-        aria-label={saving ? t("saving") : undefined}
-        onClick={() => void save()}
-        className="inline-flex min-w-[7rem] items-center justify-center rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-paper disabled:opacity-60"
-      >
-        {saving ? <Spinner size="sm" className="border-ink/30 border-t-paper" /> : (saveLabelOverride ?? t("saveMetadata"))}
-      </button>
+      {!hideSaveButton ? (
+        <button
+          type="button"
+          disabled={isSubmitting}
+          aria-busy={isSubmitting}
+          aria-label={isSubmitting ? t('saving') : undefined}
+          onClick={() => void save()}
+          className="inline-flex min-w-[7rem] items-center justify-center rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-paper disabled:opacity-60"
+        >
+          {isSubmitting ? (
+            <Spinner size="sm" className="border-ink/30 border-t-paper" />
+          ) : (
+            (saveLabelOverride ?? t('saveMetadata'))
+          )}
+        </button>
+      ) : null}
     </div>
   );
 });
@@ -990,7 +1382,7 @@ export function SubmissionMetadataDisplay({
 }
 
 function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
-  const t = useTranslations("SubmissionWorkflow");
+  const t = useTranslations('SubmissionWorkflow');
   const { format: formatDiscipline } = useDisciplineLabel();
   const tKey = t as unknown as (k: string) => string;
   const typeLabel =
@@ -1004,18 +1396,25 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
     discipline: initial.discipline ?? null,
     disciplineSource: initial.disciplineSource ?? null,
     disciplineSuggested: initial.disciplineSuggested ?? null,
-    disciplineSuggestedConfidence: initial.disciplineSuggestedConfidence ?? null,
+    disciplineSuggestedConfidence:
+      initial.disciplineSuggestedConfidence ?? null,
     disciplineScopeInJournal: initial.disciplineScopeInJournal ?? null,
     disciplineScopeWarning: initial.disciplineScopeWarning ?? null,
   };
 
   return (
     <div className="space-y-4">
-      {(disciplineFields.disciplineSuggested || disciplineFields.discipline) && (
-        <div className="rounded-md border border-ink/10 bg-paper/40 px-3 py-2 text-sm" dir="auto">
+      {(disciplineFields.disciplineSuggested ||
+        disciplineFields.discipline) && (
+        <div
+          className="rounded-md border border-ink/10 bg-paper/40 px-3 py-2 text-sm"
+          dir="auto"
+        >
           {disciplineFields.disciplineSuggested && (
             <p className="text-ink/85">
-              <span className="font-medium text-ink">{t("disciplineAiSuggestion")}: </span>
+              <span className="font-medium text-ink">
+                {t('disciplineAiSuggestion')}:{' '}
+              </span>
               {formatDiscipline(disciplineFields.disciplineSuggested)}
               {disciplineFields.disciplineSuggestedConfidence != null && (
                 <span className="ms-1 text-ink/55">
@@ -1026,20 +1425,23 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
           )}
           {disciplineFields.discipline && (
             <p className="mt-1 text-ink/85">
-              <span className="font-medium text-ink">{t("disciplineConfirmed")}: </span>
+              <span className="font-medium text-ink">
+                {t('disciplineConfirmed')}:{' '}
+              </span>
               {formatDiscipline(disciplineFields.discipline)}
             </p>
           )}
-          {disciplineFields.disciplineScopeWarning === "suggested_out_of_journal_scope" && (
+          {disciplineFields.disciplineScopeWarning ===
+            'suggested_out_of_journal_scope' && (
             <p className="mt-2 text-xs font-medium text-amber-900">
-              {t("disciplineScopeWarning")}
+              {t('disciplineScopeWarning')}
             </p>
           )}
         </div>
       )}
       {initial.articleType && (
         <p>
-          <span className="font-medium text-ink">{t("articleType")}: </span>
+          <span className="font-medium text-ink">{t('articleType')}: </span>
           <span className="text-ink/80">{typeLabel}</span>
         </p>
       )}
@@ -1050,7 +1452,7 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
           className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-baseline"
         >
           <span className="shrink-0 font-medium text-ink">
-            {t("keywordsLabelEn")}:{" "}
+            {t('keywordsLabelEn')}:{' '}
           </span>
           <KeywordTagsDisplay
             tags={parseKeywordsFromStorage(initial.keywords)}
@@ -1064,7 +1466,7 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
           className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-baseline"
         >
           <span className="shrink-0 font-medium text-ink">
-            {t("keywordsLabelAr")}:{" "}
+            {t('keywordsLabelAr')}:{' '}
           </span>
           <KeywordTagsDisplay
             tags={parseKeywordsFromStorage(initial.keywordsAr)}
@@ -1073,15 +1475,15 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
       )}
       {initial.contributors && initial.contributors.length > 0 && (
         <div>
-          <p className="font-medium text-ink">{t("sectionAuthors")}</p>
+          <p className="font-medium text-ink">{t('sectionAuthors')}</p>
           <ul className="mt-2 list-inside list-disc text-ink/80">
             {initial.contributors.map((c, i) => (
               <li key={i}>
                 {c.fullName}
-                {c.isCorresponding ? ` (${t("correspondingAuthor")})` : ""}
-                {" — "}
+                {c.isCorresponding ? ` (${t('correspondingAuthor')})` : ''}
+                {' — '}
                 {c.affiliation}
-                {c.email?.trim() ? ` · ${c.email}` : ""}
+                {c.email?.trim() ? ` · ${c.email}` : ''}
               </li>
             ))}
           </ul>
@@ -1089,34 +1491,35 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
       )}
       {initial.fundingStatement?.trim() && (
         <div>
-          <p className="font-medium text-ink">{t("fundingStatement")}</p>
+          <p className="font-medium text-ink">{t('fundingStatement')}</p>
           <p className="mt-1 whitespace-pre-wrap text-ink/80">
             {initial.fundingStatement}
           </p>
         </div>
       )}
       <div className="space-y-2 border-t border-ink/10 pt-3">
-        <p className="font-medium text-ink">{t("sectionDeclarations")}</p>
+        <p className="font-medium text-ink">{t('sectionDeclarations')}</p>
         {initial.conflictOfInterestStatement && (
           <p className="text-sm text-ink/80">
-            <span className="font-medium">{t("conflictOfInterest")}: </span>
+            <span className="font-medium">{t('conflictOfInterest')}: </span>
             {initial.conflictOfInterestStatement}
           </p>
         )}
         {initial.ethicalApprovalReference && (
           <p className="text-sm text-ink/80">
-            <span className="font-medium">{t("ethicalApproval")}: </span>
+            <span className="font-medium">{t('ethicalApproval')}: </span>
             {initial.ethicalApprovalReference}
           </p>
         )}
         {initial.aiUsageStatement && (
           <p className="text-sm text-ink/80">
-            <span className="font-medium">{t("aiUsage")}: </span>
+            <span className="font-medium">{t('aiUsage')}: </span>
             {initial.aiUsageStatement}
           </p>
         )}
         <p className="text-sm text-ink/80">
-          {t("originalityConfirm")}: {initial.originalityConfirmed ? t("yes") : t("no")}
+          {t('originalityConfirm')}:{' '}
+          {initial.originalityConfirmed ? t('yes') : t('no')}
         </p>
       </div>
     </div>

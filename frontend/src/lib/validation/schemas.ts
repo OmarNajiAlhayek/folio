@@ -1,15 +1,39 @@
-import { z } from "zod";
+import { z } from 'zod';
 import {
   MAX_UPLOAD_BYTES,
   SUBMISSION_ARTICLE_TYPES,
   SUBMISSION_STATUSES,
-} from "./constants";
+} from './constants';
 
 /** backend/src/auth/dto/login.dto.ts */
 export const loginSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(1),
 });
+
+/** backend/src/auth/dto/verify-email.dto.ts */
+export const verifyEmailSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/),
+});
+
+/** backend/src/auth/dto/forgot-password.dto.ts */
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email(),
+});
+
+/** backend/src/auth/dto/reset-password.dto.ts */
+export const resetPasswordSchema = z
+  .object({
+    password: z.string().min(8).max(128),
+    confirmPassword: z.string().min(8).max(128),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: 'passwordMismatch',
+    path: ['confirmPassword'],
+  });
 
 /** backend/src/auth/dto/register.dto.ts */
 export const registerSchema = z.object({
@@ -23,7 +47,7 @@ export const registerSchema = z.object({
     .transform((s) => {
       if (s === undefined) return undefined;
       const t = s.trim();
-      return t === "" ? undefined : t;
+      return t === '' ? undefined : t;
     }),
   orcid: z
     .string()
@@ -31,11 +55,11 @@ export const registerSchema = z.object({
     .transform((s) => {
       if (s === undefined) return undefined;
       const t = s.trim();
-      if (t === "") return undefined;
+      if (t === '') return undefined;
       return t.toUpperCase();
     })
     .refine((v) => v === undefined || /^(\d{4}-){3}\d{3}[\dX]$/.test(v), {
-      message: "orcidFormat",
+      message: 'orcidFormat',
     }),
   reviewKeywords: z
     .string()
@@ -44,7 +68,7 @@ export const registerSchema = z.object({
     .transform((s) => {
       if (s === undefined) return undefined;
       const t = s.trim();
-      return t === "" ? undefined : t;
+      return t === '' ? undefined : t;
     }),
   willingToReview: z.boolean().optional(),
 });
@@ -53,21 +77,21 @@ const optionalTrimmedMax = (max: number) =>
   z.preprocess((v) => {
     if (v === undefined || v === null) return undefined;
     const s = String(v).trim();
-    return s === "" ? undefined : s;
+    return s === '' ? undefined : s;
   }, z.string().max(max).optional());
 
 const optionalTrimmedMinMax = (min: number, max: number) =>
   z.preprocess((v) => {
     if (v === undefined || v === null) return undefined;
     const s = String(v).trim();
-    return s === "" ? undefined : s;
+    return s === '' ? undefined : s;
   }, z.string().min(min).max(max).optional());
 
 function optionalEmailField() {
   return z.preprocess((v) => {
-    if (v === undefined || v === null || v === "") return undefined;
+    if (v === undefined || v === null || v === '') return undefined;
     const s = String(v).trim();
-    return s === "" ? undefined : s;
+    return s === '' ? undefined : s;
   }, z.string().email().optional());
 }
 
@@ -81,7 +105,7 @@ export const contributorRowSchema = z.object({
 });
 
 const articleTypeFromForm = z.preprocess((v) => {
-  if (v === undefined || v === null || v === "") return undefined;
+  if (v === undefined || v === null || v === '') return undefined;
   return v;
 }, z.enum(SUBMISSION_ARTICLE_TYPES).optional());
 
@@ -101,16 +125,16 @@ function refineAbstractWordLimits(
   if (countWords(data.abstract) > ABSTRACT_MAX_WORDS) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "abstractMaxWordsEn",
-      path: ["abstract"],
+      message: 'abstractMaxWordsEn',
+      path: ['abstract'],
     });
   }
-  const ar = data.abstractAr ?? "";
+  const ar = data.abstractAr ?? '';
   if (ar && countWords(ar) > ABSTRACT_MAX_WORDS) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "abstractMaxWordsAr",
-      path: ["abstractAr"],
+      message: 'abstractMaxWordsAr',
+      path: ['abstractAr'],
     });
   }
 }
@@ -133,7 +157,7 @@ export const createSubmissionSchema = z
     contributors: z.preprocess((val) => {
       if (!Array.isArray(val)) return undefined;
       const filtered = val.filter((c) =>
-        String((c as { fullName?: string })?.fullName ?? "").trim(),
+        String((c as { fullName?: string })?.fullName ?? '').trim(),
       );
       return filtered.length > 0 ? filtered : undefined;
     }, z.array(contributorRowSchema).optional()),
@@ -168,7 +192,7 @@ export const submissionMetadataPatchSchema = z
   });
 
 const reviewCommentTrim = z.preprocess(
-  (v) => (v === undefined || v === null ? "" : String(v).trim()),
+  (v) => (v === undefined || v === null ? '' : String(v).trim()),
   z.string().max(50000),
 );
 
@@ -177,14 +201,14 @@ export const createReviewSchema = z
   .object({
     commentsForAuthor: reviewCommentTrim,
     commentsToEditorOnly: reviewCommentTrim,
-    recommendation: z.enum(["accept", "reject", "revisions"]),
+    recommendation: z.enum(['accept', 'reject', 'revisions']),
   })
   .refine(
     (d) =>
-      d.recommendation === "accept" ||
+      d.recommendation === 'accept' ||
       d.commentsForAuthor.length > 0 ||
       d.commentsToEditorOnly.length > 0,
-    { message: "reviewCommentsRequired", path: ["commentsForAuthor"] },
+    { message: 'reviewCommentsRequired', path: ['commentsForAuthor'] },
   );
 
 /** backend/src/users/dto/update-user-roles.dto.ts */
@@ -194,7 +218,7 @@ export const updateUserRolesSchema = z.object({
 
 /** backend/src/users/dto/create-role-invitation.dto.ts */
 export const createRoleInvitationSchema = z.object({
-  roleSlug: z.enum(["editor", "journal_manager"]),
+  roleSlug: z.enum(['editor', 'journal_manager']),
 });
 
 /** backend/src/submissions/dto/assign-reviewer.dto.ts */
@@ -205,6 +229,7 @@ export const assignReviewerSchema = z.object({
 /** backend/src/submissions/dto/update-status.dto.ts */
 export const updateSubmissionStatusSchema = z.object({
   status: z.enum(SUBMISSION_STATUSES),
+  messageForAuthor: z.string().max(4000).optional(),
 });
 
 export function fileExceedsUploadLimit(file: File): boolean {

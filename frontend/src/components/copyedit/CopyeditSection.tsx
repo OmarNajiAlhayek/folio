@@ -1,16 +1,17 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
-import { apiJson, apiUpload } from "@/lib/api";
-import { toast } from "@/lib/toast";
-import { useToastApiError } from "@/lib/use-toast-api-error";
-import { PERMISSION_SLUGS } from "@/lib/permissions";
-import { SearchableSelect } from "@/components/ui/searchable-select";
-import { statusPillClass } from "@/lib/submission-list-ui";
-import { fileExceedsUploadLimit, MAX_UPLOAD_MB } from "@/lib/validation";
-import { ACCEPT_MANUSCRIPT } from "@/lib/upload-accept";
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
+import { apiJson, apiUpload } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import { useToastApiError } from '@/lib/use-toast-api-error';
+import { PERMISSION_SLUGS } from '@/lib/permissions';
+import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { statusPillClass } from '@/lib/submission-list-ui';
+import { fileExceedsUploadLimit, MAX_UPLOAD_MB } from '@/lib/validation';
+import { ACCEPT_MANUSCRIPT } from '@/lib/upload-accept';
 
 type CopyeditorCandidate = {
   id: string;
@@ -53,12 +54,12 @@ export function CopyeditSection({
   permissions: string[];
   onReload: () => void;
 }) {
-  const t = useTranslations("Copyedit");
+  const t = useTranslations('Copyedit');
   const canAssign = permissions.includes(
     PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
   );
   const [candidates, setCandidates] = useState<CopyeditorCandidate[]>([]);
-  const [selectedCopyeditor, setSelectedCopyeditor] = useState("");
+  const [selectedCopyeditor, setSelectedCopyeditor] = useState('');
   const [assignments, setAssignments] = useState<CopyeditAssignmentRow[]>([]);
   const [notes, setNotes] = useState<CopyeditNoteRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -81,17 +82,19 @@ export function CopyeditSection({
   useEffect(() => {
     if (!isAuthor && !isEditor) return;
     void load().catch((err) => {
-      showApiError(err, t("sectionLoadFailed"), { id: "copyedit-section-load" });
+      showApiError(err, t('sectionLoadFailed'), {
+        id: 'copyedit-section-load',
+      });
     });
   }, [isAuthor, isEditor, load, showApiError, t]);
 
   useEffect(() => {
-    if (!canAssign || submissionStatus !== "accepted") return;
-    void apiJson<CopyeditorCandidate[]>("/users/copyeditor-candidates")
+    if (!canAssign || submissionStatus !== 'accepted') return;
+    void apiJson<CopyeditorCandidate[]>('/users/copyeditor-candidates')
       .then(setCandidates)
       .catch((err) => {
-        showApiError(err, t("candidatesLoadFailed"), {
-          id: "copyedit-candidates-load",
+        showApiError(err, t('candidatesLoadFailed'), {
+          id: 'copyedit-candidates-load',
         });
       });
   }, [canAssign, submissionStatus, showApiError, t]);
@@ -101,15 +104,15 @@ export function CopyeditSection({
     setBusy(true);
     try {
       await apiJson(`/submissions/${submissionSlug}/copyedit-assignments`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify({ copyeditorId: selectedCopyeditor }),
       });
-      toast.success(t("assigned"));
-      setSelectedCopyeditor("");
+      toast.success(t('assigned'));
+      setSelectedCopyeditor('');
       onReload();
       await load();
     } catch (err) {
-      showApiError(err, t("assignFailed"), { id: "copyedit-assign" });
+      showApiError(err, t('assignFailed'), { id: 'copyedit-assign' });
     } finally {
       setBusy(false);
     }
@@ -119,13 +122,13 @@ export function CopyeditSection({
     setBusy(true);
     try {
       await apiJson(`/copyedit-assignments/${assignmentSlug}/ready`, {
-        method: "POST",
+        method: 'POST',
       });
-      toast.success(t("markedReady"));
+      toast.success(t('markedReady'));
       onReload();
       await load();
     } catch (err) {
-      showApiError(err, t("readyFailed"), { id: "copyedit-mark-ready" });
+      showApiError(err, t('readyFailed'), { id: 'copyedit-mark-ready' });
     } finally {
       setBusy(false);
     }
@@ -133,30 +136,27 @@ export function CopyeditSection({
 
   async function uploadRevision(file: File) {
     if (fileExceedsUploadLimit(file)) {
-      toast.error(t("fileTooLarge", { maxMb: String(MAX_UPLOAD_MB) }), {
-        id: "copyedit-file-too-large",
+      toast.error(t('fileTooLarge', { maxMb: String(MAX_UPLOAD_MB) }), {
+        id: 'copyedit-file-too-large',
       });
       return;
     }
     setUploading(true);
     try {
       await apiUpload(`/submissions/${submissionSlug}/files`, file, {
-        kind: "manuscript",
+        kind: 'manuscript',
       });
-      toast.success(t("revisionUploaded"));
+      toast.success(t('revisionUploaded'));
       onReload();
     } catch (err) {
-      showApiError(err, t("uploadFailed"), { id: "copyedit-upload" });
+      showApiError(err, t('uploadFailed'), { id: 'copyedit-upload' });
     } finally {
       setUploading(false);
     }
   }
 
   if (!isAuthor && !isEditor) return null;
-  if (
-    submissionStatus !== "copyediting" &&
-    submissionStatus !== "accepted"
-  ) {
+  if (submissionStatus !== 'copyediting' && submissionStatus !== 'accepted') {
     return null;
   }
 
@@ -170,13 +170,16 @@ export function CopyeditSection({
 
   return (
     <section className="mt-8 rounded-xl border border-ink/10 bg-paper/50 p-6 shadow-sm">
-      <h2 className="font-sans text-lg font-semibold text-ink">{t("title")}</h2>
+      <h2 className="font-sans text-lg font-semibold text-ink">{t('title')}</h2>
 
-      {isEditor && submissionStatus === "accepted" && canAssign && (
+      {isEditor && submissionStatus === 'accepted' && canAssign && (
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="min-w-[12rem] flex-1">
-            <label className="text-sm font-medium text-ink" htmlFor="copyeditor-pick">
-              {t("assignLabel")}
+            <label
+              className="text-sm font-medium text-ink"
+              htmlFor="copyeditor-pick"
+            >
+              {t('assignLabel')}
             </label>
             <SearchableSelect
               options={candidates.map((c) => ({
@@ -185,9 +188,9 @@ export function CopyeditSection({
               }))}
               value={selectedCopyeditor}
               onValueChange={setSelectedCopyeditor}
-              placeholder={t("assignPlaceholder")}
-              searchPlaceholder={t("assignPlaceholder")}
-              emptyText={t("assignPlaceholder")}
+              placeholder={t('assignPlaceholder')}
+              searchPlaceholder={t('assignPlaceholder')}
+              emptyText={t('assignPlaceholder')}
             />
           </div>
           <button
@@ -196,7 +199,7 @@ export function CopyeditSection({
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={() => void assignCopyeditor()}
           >
-            {t("assignButton")}
+            {t('assignButton')}
           </button>
         </div>
       )}
@@ -206,20 +209,18 @@ export function CopyeditSection({
           {assignments.map((a) => (
             <li key={a.id}>
               {a.copyeditor?.displayName ?? a.copyeditor?.email ?? a.id}
-              <span
-                className={`ms-2 ${statusPillClass(a.status)}`}
-              >
-                {t(`assignmentStatus_${a.status}` as "assignmentStatus_active")}
+              <span className={`ms-2 ${statusPillClass(a.status)}`}>
+                {t(`assignmentStatus_${a.status}` as 'assignmentStatus_active')}
               </span>
             </li>
           ))}
         </ul>
       )}
 
-      {isAuthor && submissionStatus === "copyediting" && (
+      {isAuthor && submissionStatus === 'copyediting' && (
         <>
           {notes.length === 0 ? (
-            <p className="mt-3 text-sm text-ink/65">{t("noNotesYet")}</p>
+            <p className="mt-3 text-sm text-ink/65">{t('noNotesYet')}</p>
           ) : (
             <ul className="mt-4 space-y-4">
               {notes.map((n) => (
@@ -228,50 +229,50 @@ export function CopyeditSection({
                   className="rounded-lg border border-ink/10 bg-surface p-4"
                 >
                   <p className="text-xs font-medium uppercase tracking-wide text-ink/50">
-                    {t("roundLabel", { round: String(n.round) })}
+                    {t('roundLabel', { round: String(n.round) })}
                     {n.copyeditor?.displayName
                       ? ` · ${n.copyeditor.displayName}`
-                      : ""}
+                      : ''}
                   </p>
                   <p className="mt-2 whitespace-pre-wrap text-sm text-ink">
                     {n.noteForAuthor}
                   </p>
-                  {n.assignmentSlug && n.assignmentStatus === "awaiting_author" && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="mt-3 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                      onClick={() => void markReady(n.assignmentSlug!)}
-                    >
-                      {t("markReady")}
-                    </button>
-                  )}
+                  {n.assignmentSlug &&
+                    n.assignmentStatus === 'awaiting_author' && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="mt-3 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                        onClick={() => void markReady(n.assignmentSlug!)}
+                      >
+                        {t('markReady')}
+                      </button>
+                    )}
                 </li>
               ))}
             </ul>
           )}
 
           <div className="mt-6">
-            <label className="text-sm font-medium text-ink">
-              {t("uploadRevision")}
-            </label>
-            <input
-              type="file"
+            <span className="text-sm font-medium text-ink">
+              {t('uploadRevision')}
+            </span>
+            <FileDropZone
               accept={ACCEPT_MANUSCRIPT}
-              className="mt-2 block w-full text-sm"
               disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadRevision(f);
-                e.target.value = "";
-              }}
+              uploading={uploading}
+              onFile={(f) => void uploadRevision(f)}
+              ariaLabel={t('uploadRevision')}
+              className="mt-2"
             />
-            <p className="mt-1 text-xs text-ink/55">{t("uploadRevisionHint")}</p>
+            <p className="mt-1 text-xs text-ink/55">
+              {t('uploadRevisionHint')}
+            </p>
           </div>
         </>
       )}
 
-      {isEditor && submissionStatus === "copyediting" && notes.length > 0 && (
+      {isEditor && submissionStatus === 'copyediting' && notes.length > 0 && (
         <ul className="mt-4 space-y-3">
           {notes.map((n) => (
             <li
@@ -279,12 +280,12 @@ export function CopyeditSection({
               className="rounded-lg border border-ink/10 bg-surface p-3 text-sm"
             >
               <p className="text-xs text-ink/50">
-                {t("roundLabel", { round: String(n.round) })}
+                {t('roundLabel', { round: String(n.round) })}
               </p>
               <p className="mt-1 font-medium">{n.noteForAuthor}</p>
               {n.noteToEditorOnly ? (
                 <p className="mt-2 text-ink/70">
-                  <span className="font-medium">{t("editorOnly")}: </span>
+                  <span className="font-medium">{t('editorOnly')}: </span>
                   {n.noteToEditorOnly}
                 </p>
               ) : null}

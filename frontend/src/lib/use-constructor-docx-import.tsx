@@ -1,32 +1,32 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { useTranslations } from "next-intl";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Spinner } from "@/components/ui/spinner";
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { useTranslations } from 'next-intl';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Spinner } from '@/components/ui/spinner';
 import {
   constructorDraftHasMeaningfulContent,
   mergeImportedConstructorContent,
-} from "@/lib/constructor-import-merge";
+} from '@/lib/constructor-import-merge';
 import type {
   ConstructorContent,
   ConstructorGuidance,
-} from "@/lib/constructor-content.types";
+} from '@/lib/constructor-content.types';
 import {
   CONSTRUCTOR_IMPORT_NO_CONTENT,
   isImportWarningCode,
-} from "@/lib/constructor-import-warning-codes";
-import { ApiError } from "@/lib/api-response";
-import { importConstructorDocx } from "@/lib/import-constructor-docx";
+} from '@/lib/constructor-import-warning-codes';
+import { ApiError } from '@/lib/api-response';
+import { importConstructorDocx } from '@/lib/import-constructor-docx';
 import {
   clearStoredImportWarnings,
   readStoredImportWarnings,
   writeStoredImportWarnings,
-} from "@/lib/constructor-import-warnings-storage";
-import { toast } from "@/lib/toast";
-import { useToastApiError } from "@/lib/use-toast-api-error";
+} from '@/lib/constructor-import-warnings-storage';
+import { toast } from '@/lib/toast';
+import { useToastApiError } from '@/lib/use-toast-api-error';
 
-type ConstructorPageT = ReturnType<typeof useTranslations<"ConstructorPage">>;
+type ConstructorPageT = ReturnType<typeof useTranslations<'ConstructorPage'>>;
 
 export type UseConstructorDocxImportParams = {
   content: ConstructorContent;
@@ -68,7 +68,7 @@ export function useConstructorDocxImport({
   }, [scopeKey]);
 
   const resetImportInput = useCallback(() => {
-    if (importInputRef.current) importInputRef.current.value = "";
+    if (importInputRef.current) importInputRef.current.value = '';
   }, []);
 
   const dismissImportWarnings = useCallback(() => {
@@ -93,7 +93,7 @@ export function useConstructorDocxImport({
           .filter(isImportWarningCode)
           .map((code) => {
             try {
-              return t(`importWarning_${code}` as "importWordSuccess");
+              return t(`importWarning_${code}` as 'importWordSuccess');
             } catch {
               return code;
             }
@@ -101,13 +101,15 @@ export function useConstructorDocxImport({
         const warnings = [...codeMessages, ...(result.warnings ?? [])];
         setImportWarnings(warnings);
         writeStoredImportWarnings(scopeKey, warnings);
-        toast.success(t("importWordSuccess"), { id: "constructor-import-docx" });
+        toast.success(t('importWordSuccess'), {
+          id: 'constructor-import-docx',
+        });
       } catch (e) {
         const fallback =
           e instanceof ApiError && e.code === CONSTRUCTOR_IMPORT_NO_CONTENT
-            ? t("importWordNoContent")
-            : t("importWordFailed");
-        showApiError(e, fallback, { id: "constructor-import-docx" });
+            ? t('importWordNoContent')
+            : t('importWordFailed');
+        showApiError(e, fallback, { id: 'constructor-import-docx' });
       } finally {
         setImportingDocx(false);
         resetImportInput();
@@ -172,10 +174,10 @@ export function useConstructorDocxImport({
         htmlFor={importInputId}
         data-testid="constructor-import-docx"
         aria-busy={importingDocx}
-        aria-label={importingDocx ? t("importingWord") : undefined}
-        className={`inline-flex min-w-[7rem] cursor-pointer items-center justify-center rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 ${importDisabled ? "pointer-events-none opacity-50" : ""}`}
+        aria-label={importingDocx ? t('importingWord') : undefined}
+        className={`inline-flex min-w-[7rem] cursor-pointer items-center justify-center rounded-md border border-ink/20 bg-paper px-4 py-2 text-sm font-medium text-ink shadow-sm hover:border-accent/40 ${importDisabled ? 'pointer-events-none opacity-50' : ''}`}
       >
-        {importingDocx ? <Spinner size="sm" /> : t("importWord")}
+        {importingDocx ? <Spinner size="sm" /> : t('importWord')}
       </label>
     </>
   );
@@ -184,13 +186,13 @@ export function useConstructorDocxImport({
     importWarnings.length > 0 ? (
       <div className="rounded-md border border-amber-300/70 bg-amber-100/70 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/35 dark:bg-amber-500/12 dark:text-amber-200">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <p className="font-medium">{t("importWordWarnings")}</p>
+          <p className="font-medium">{t('importWordWarnings')}</p>
           <button
             type="button"
             onClick={dismissImportWarnings}
             className="shrink-0 text-xs font-medium text-amber-950/80 underline-offset-2 hover:underline dark:text-amber-100/90"
           >
-            {t("dismissImportNotes")}
+            {t('dismissImportNotes')}
           </button>
         </div>
         <ul className="mt-1 list-inside list-disc">
@@ -208,11 +210,10 @@ export function useConstructorDocxImport({
         setImportConfirmOpen(next);
         if (!next) handleImportConfirmDismiss();
       }}
-      dir={locale === "ar" ? "rtl" : "ltr"}
-      title={t("importWordReplaceTitle")}
-      description={t("importWordReplaceDescription")}
-      cancelLabel={t("importWordReplaceCancel")}
-      confirmLabel={t("importWordReplaceAction")}
+      title={t('importWordReplaceTitle')}
+      description={t('importWordReplaceDescription')}
+      cancelLabel={t('importWordReplaceCancel')}
+      confirmLabel={t('importWordReplaceAction')}
       onConfirm={handleImportConfirm}
       confirmDisabled={importingDocx}
     />
