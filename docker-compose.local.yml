@@ -1,0 +1,199 @@
+# Full local dev stack for Folio — spins up every service in one command.
+#
+#   docker compose -f docker-compose.local.yml up
+#
+# All app services use your existing .env files for base config; only the
+# inter-service URLs (DB_HOST, RABBITMQ_URL, etc.) are overridden here so
+# containers can reach each other by name instead of localhost.
+#
+# Hot reload is enabled for backend and frontend via bind-mounted source trees.
+# node_modules are kept inside each container (anonymous volumes shadow the
+# host copy) so platform-native binaries (bcrypt, sharp, …) stay intact.
+#
+# Ports exposed to the host mirror the native-dev defaults:
+#   frontend      → http://localhost:5240
+#   backend API   → http://localhost:5243  (also /api-docs)
+#   email-service → http://localhost:5244
+#   ai-service    → http://localhost:5245
+#   postgres      → localhost:5432
+#   rabbitmq      → localhost:5672  (management: http://localhost:15672)
+#   languagetool  → http://localhost:8010
+#
+# NOTE: Do not run this together with docker-compose.dev.yml — they both bind
+# port 5432 and 5672.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: folio-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: folio_review
+    volumes:
+      - folio-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres-email:
+    image: postgres:17-alpine
+    container_name: folio-postgres-email
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: folio_email
+    volumes:
+      - folio-postgres-email-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: folio-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - folio-rabbitmq-data:/var/lib/rabbitmq
+
+  languagetool:
+    image: erikvl87/languagetool:latest
+    container_name: folio-languagetool
+    ports:
+      - "8010:8010"
+    environment:
+      - Java_Xms=256m
+      - Java_Xmx=512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8010/v2/languages | grep -q 'name'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Application services
+  # ---------------------------------------------------------------------------
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: folio-backend
+    ports:
+      - "5243:5243"
+    env_file: ./backend/.env
+    environment:
+      # Override localhost references so containers talk to each other by name.
+      DB_HOST: postgres
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      AI_SERVICE_GRPC_HOST: ai-service
+      EMAIL_SERVICE_URL: http://email-service:5244
+      EMAIL_SERVICE_TOKEN: dev-email-internal-token
+      LANGUAGE_TOOL_URL: http://languagetool:8010
+      UPLOAD_DIR: /app/uploads
+      # Bearer tokens for Playwright, TestSprite API tests, and local scripts (CSRF skipped for Bearer).
+      AUTH_RETURN_BEARER: "true"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - folio-uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: folio-frontend
+    ports:
+      - "5240:5240"
+    env_file: ./frontend/.env.local
+    environment:
+      # Route the server-side proxy to the backend container.
+      API_PROXY_TARGET: http://backend:5243
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  email-service:
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    container_name: folio-email-service
+    ports:
+      - "5244:5244"
+    env_file: ./services/email-service/.env
+    environment:
+      DB_HOST: postgres-email
+      DB_PORT: "5432"
+      DB_DATABASE: folio_email
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      HTTP_BIND_HOST: "0.0.0.0"
+      EMAIL_SERVICE_TOKEN: dev-email-internal-token
+    depends_on:
+      postgres-email:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    container_name: folio-ai-service
+    ports:
+      - "5245:5245"
+      - "5246:5246"
+    env_file: ./services/ai-service/.env
+    environment:
+      # Bind to all interfaces so the backend container can reach gRPC/HTTP.
+      HTTP_BIND_HOST: "0.0.0.0"
+      GRPC_BIND_HOST: "0.0.0.0"
+      VECTOR_DB_HOST: postgres
+      VECTOR_DB_PORT: "5432"
+      VECTOR_DB_USER: postgres
+      VECTOR_DB_PASSWORD: changeme
+      VECTOR_DB_DATABASE: folio_review
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  folio-postgres-data:
+  folio-postgres-email-data:
+  folio-rabbitmq-data:
+  folio-uploads:

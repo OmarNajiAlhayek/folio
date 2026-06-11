@@ -1,18 +1,62 @@
 # Local development infrastructure for Folio.
 #
-# Provides RabbitMQ (email pipeline) and LanguageTool (copyedit grammar checks).
-# Run all services:
+# Provides PostgreSQL, RabbitMQ, and LanguageTool so you can run the app
+# services (backend, frontend, email-service, ai-service) natively with hot
+# reload.  Run all infra:
 #
 #   docker compose -f docker-compose.dev.yml up -d
 #
 # Or start individually, e.g.:
+#   docker compose -f docker-compose.dev.yml up -d postgres
+#   docker compose -f docker-compose.dev.yml up -d postgres-email
 #   docker compose -f docker-compose.dev.yml up -d rabbitmq
 #   docker compose -f docker-compose.dev.yml up -d languagetool
 #
-# A production compose file is intentionally NOT included yet; that
-# lives with the deployment story (see docs/plans/email-service.md).
+# To run EVERYTHING in Docker (infra + all app services) use the full stack
+# compose instead:
+#
+#   docker compose -f docker-compose.local.yml up
+#
+# NOTE: Do not run both files simultaneously — they share ports 5432 and 5672.
 
 services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: folio-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: folio_review
+    volumes:
+      - folio-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres-email:
+    image: postgres:17-alpine
+    container_name: folio-postgres-email
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: folio_email
+    volumes:
+      - folio-postgres-email-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: folio-rabbitmq
@@ -45,4 +89,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  folio-postgres-data:
+  folio-postgres-email-data:
   folio-rabbitmq-data:

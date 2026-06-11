@@ -19,8 +19,9 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ name: 'password_hash' })
-  passwordHash: string;
+  /** Null for ORCID-only accounts until a password is set. */
+  @Column({ name: 'password_hash', type: 'varchar', nullable: true })
+  passwordHash: string | null;
 
   @Column({ name: 'display_name' })
   displayName: string;
@@ -41,8 +42,17 @@ export class User {
   willingToReview: boolean;
 
   /** Preferred locale for transactional email (`en` | `ar`). */
-  @Column({ name: 'preferred_locale', type: 'varchar', length: 10, nullable: true })
+  @Column({
+    name: 'preferred_locale',
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+  })
   preferredLocale: string | null;
+
+  /** Set when the user confirms ownership of `email` via OTP. */
+  @Column({ name: 'email_verified_at', type: 'timestamptz', nullable: true })
+  emailVerifiedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -103,7 +103,12 @@ export class Submission {
   })
   disciplineSource: SubmissionDisciplineSource | null;
 
-  @Column({ name: 'discipline_suggested', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'discipline_suggested',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   disciplineSuggested: string | null;
 
   @Column({
@@ -129,7 +134,11 @@ export class Submission {
    * Set on submit: which main manuscript sources are placed in the review package
    * (uploaded file and/or constructor-generated .docx).
    */
-  @Column({ name: 'review_manuscript_presentation', type: 'jsonb', nullable: true })
+  @Column({
+    name: 'review_manuscript_presentation',
+    type: 'jsonb',
+    nullable: true,
+  })
   reviewManuscriptPresentation: ReviewManuscriptPresentation | null;
 
   @Column({
@@ -138,6 +147,10 @@ export class Submission {
     default: SubmissionStatus.DRAFT,
   })
   status: SubmissionStatus;
+
+  /** Optional rationale from the editor on accept/reject/revisions_requested. */
+  @Column({ name: 'message_for_author', type: 'text', nullable: true })
+  messageForAuthor: string | null;
 
   /**
    * Peer review visibility model (OJS: open / single-anonymous / double-anonymous).
@@ -158,6 +171,14 @@ export class Submission {
 
   @Column({ name: 'published_at', type: 'timestamptz', nullable: true })
   publishedAt: Date | null;
+
+  /** Set when the article is indexed in the ai-service similarity corpus. */
+  @Column({
+    name: 'similarity_indexed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  similarityIndexedAt: Date | null;
 
   /** Maintained by DB trigger `trg_submissions_publication_search`; not loaded by TypeORM. */
   @Column({
