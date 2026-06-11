@@ -1,31 +1,22 @@
-import {
-  ForbiddenException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
-import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, QueryFailedError, Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { redactOperatorErrorMessage } from '../common/email-operator-error-redaction';
+import { EmailServiceClient } from '../email-client/email-client.service';
+import type {
+  EmailLogStatusCount,
+  FailedEmailSample,
+  ReminderStatusCount,
+} from '../email-client/email-client.types';
 import { OutboundEvent } from '../entities/outbound-event.entity';
-import { RabbitMqPipelineMetrics, RabbitMqQueueMetricsService } from '../messaging/rabbitmq-queue-metrics.service';
+import {
+  RabbitMqPipelineMetrics,
+  RabbitMqQueueMetricsService,
+} from '../messaging/rabbitmq-queue-metrics.service';
 
-const FAILED_SAMPLE_LIMIT = 15;
 const DEAD_SAMPLE_LIMIT = 15;
-const STUCK_REMINDER_MINUTES = 15;
 
-export type EmailLogStatusCount = {
-  pending: number;
-  sent: number;
-  failed: number;
-};
-
-export type FailedEmailSample = {
-  id: string;
-  idempotencyKey: string;
-  template: string;
-  createdAt: string;
-  errorRedacted: string | null;
-};
+export type { EmailLogStatusCount, FailedEmailSample, ReminderStatusCount };
 
 export type DeadOutboxSample = {
   id: string;
@@ -33,12 +24,6 @@ export type DeadOutboxSample = {
   attempts: number;
   createdAt: string;
   lastErrorRedacted: string | null;
-};
-
-export type ReminderStatusCount = {
-  pending: number;
-  sent: number;
-  cancelled: number;
 };
 
 export type PipelineStatusResponse = {
@@ -68,13 +53,11 @@ export type PipelineStatusResponse = {
 
 @Injectable()
 export class EmailPipelineObservabilityService {
-  private readonly logger = new Logger(EmailPipelineObservabilityService.name);
-
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(OutboundEvent)
     private readonly outboxRepo: Repository<OutboundEvent>,
     private readonly queueMetrics: RabbitMqQueueMetricsService,
+    private readonly emailClient: EmailServiceClient,
   ) {}
 
   async getPipelineStatus(): Promise<PipelineStatusResponse> {
@@ -87,6 +70,7 @@ export class EmailPipelineObservabilityService {
       dueNow,
       deadSampleRows,
       rabbitMq,
+      emailSlice,
     ] = await Promise.all([
       this.outboxRepo.count({ where: { status: 'pending' } }),
       this.outboxRepo.count({ where: { status: 'dead' } }),
@@ -115,10 +99,8 @@ export class EmailPipelineObservabilityService {
         select: ['id', 'routingKey', 'attempts', 'createdAt', 'lastError'],
       }),
       this.queueMetrics.getCachedMetrics(),
+      this.emailClient.getPipelineSlice(),
     ]);
-
-    const emailLog = await this.loadEmailLogSection();
-    const reminders = await this.loadReminderSection();
 
     return {
       outbox: {
@@ -142,152 +124,9 @@ export class EmailPipelineObservabilityService {
           lastErrorRedacted: redactOperatorErrorMessage(r.lastError),
         })),
       },
-      emailLog,
-      reminders,
+      emailLog: emailSlice.emailLog,
+      reminders: emailSlice.reminders,
       rabbitMq,
     };
-  }
-
-  private async loadEmailLogSection(): Promise<{
-    counts: EmailLogStatusCount;
-    failedSample: FailedEmailSample[];
-  }> {
-    const counts: EmailLogStatusCount = {
-      pending: 0,
-      sent: 0,
-      failed: 0,
-    };
-    try {
-      const rows = (await this.dataSource.query(
-        `SELECT status, COUNT(*)::int AS c
-           FROM "email"."email_log"
-          GROUP BY status`,
-      )) as Array<{ status: string; c: number }>;
-      for (const r of rows) {
-        if (r.status === 'pending') counts.pending = r.c;
-        else if (r.status === 'sent') counts.sent = r.c;
-        else if (r.status === 'failed') counts.failed = r.c;
-      }
-
-      const failedRows = (await this.dataSource.query(
-        `SELECT id, idempotency_key, template, created_at, error
-           FROM "email"."email_log"
-          WHERE status = 'failed'
-          ORDER BY created_at DESC
-          LIMIT $1`,
-        [FAILED_SAMPLE_LIMIT],
-      )) as Array<{
-        id: string;
-        idempotency_key: string;
-        template: string;
-        created_at: Date;
-        error: string | null;
-      }>;
-
-      const failedSample: FailedEmailSample[] = failedRows.map((r) => ({
-        id: r.id,
-        idempotencyKey: r.idempotency_key,
-        template: r.template,
-        createdAt: new Date(r.created_at).toISOString(),
-        errorRedacted: redactOperatorErrorMessage(r.error),
-      }));
-
-      return { counts, failedSample };
-    } catch (e) {
-      this.rethrowUnlessPermissionDenied(e);
-    }
-  }
-
-  private async loadReminderSection(): Promise<{
-    counts: ReminderStatusCount;
-    stuckPendingPastDue: number;
-  }> {
-    const counts: ReminderStatusCount = {
-      pending: 0,
-      sent: 0,
-      cancelled: 0,
-    };
-    try {
-      const rows = (await this.dataSource.query(
-        `SELECT status, COUNT(*)::int AS c
-           FROM "email"."reminder"
-          GROUP BY status`,
-      )) as Array<{ status: string; c: number }>;
-      for (const r of rows) {
-        if (r.status === 'pending') counts.pending = r.c;
-        else if (r.status === 'sent') counts.sent = r.c;
-        else if (r.status === 'cancelled') counts.cancelled = r.c;
-      }
-
-      const stuckRows = (await this.dataSource.query(
-        `SELECT COUNT(*)::int AS c
-           FROM "email"."reminder"
-          WHERE status = 'pending'
-            AND send_at < NOW() - ($1::int * INTERVAL '1 minute')`,
-        [STUCK_REMINDER_MINUTES],
-      )) as Array<{ c: number }>;
-
-      return {
-        counts,
-        stuckPendingPastDue: stuckRows[0]?.c ?? 0,
-      };
-    } catch (e) {
-      this.rethrowUnlessPermissionDenied(e);
-    }
-  }
-
-  private rethrowUnlessPermissionDenied(err: unknown): never {
-    const driverErr = this.getPgDriverError(err);
-    const message =
-      driverErr?.message ?? (err instanceof Error ? err.message : '') ?? '';
-    const code =
-      driverErr?.code ??
-      (typeof err === 'object' &&
-      err !== null &&
-      'code' in err &&
-      typeof (err as { code?: string }).code === 'string'
-        ? (err as { code: string }).code
-        : undefined);
-    const looksLikeQueryFailed =
-      err instanceof QueryFailedError ||
-      (typeof err === 'object' &&
-        err !== null &&
-        (err as { name?: string }).name === 'QueryFailedError') ||
-      driverErr !== undefined;
-
-    if (
-      looksLikeQueryFailed &&
-      (code === '42501' || /permission denied/i.test(message))
-    ) {
-      this.logger.error(
-        `Pipeline observability DB permission denied: ${message}`,
-        err instanceof Error ? err.stack : undefined,
-      );
-      throw new ForbiddenException({
-        message:
-          'Database permission denied for this operation. Apply grants for the app DB role (see backend/scripts/grant-email-reminder-admin.sql).',
-        code: 'EMAIL_DB_FORBIDDEN',
-      });
-    }
-    throw err;
-  }
-
-  private getPgDriverError(
-    err: unknown,
-  ): { code?: string; message?: string } | undefined {
-    if (err instanceof QueryFailedError) {
-      return err.driverError as { code?: string; message?: string };
-    }
-    if (
-      typeof err === 'object' &&
-      err !== null &&
-      'driverError' in err &&
-      typeof (err as { driverError?: unknown }).driverError === 'object' &&
-      (err as { driverError?: unknown }).driverError !== null
-    ) {
-      return (err as { driverError: { code?: string; message?: string } })
-        .driverError;
-    }
-    return undefined;
   }
 }

@@ -15,9 +15,9 @@ export type ReminderStatus = 'pending' | 'sent' | 'cancelled';
  * `reminder.due` event back through the broker (plan §6) when
  * `sendAt <= now()`.
  *
- * Cancellation is reserved for future `ReviewerResponded` events;
- * v1 has no consumer for that yet, so the cron also re-checks
- * assignment status by calling the backend before publishing.
+ * Pending rows are cancelled proactively when the backend publishes
+ * `reviewer.responded` (decline or review submit). The `reminder.due`
+ * handler also skips send if status is no longer `pending`.
  */
 @Entity({ name: 'reminder', schema: 'email' })
 @Index('ix_reminder_due', ['status', 'sendAt'])
@@ -29,7 +29,12 @@ export class Reminder {
   assignmentSlug: string;
 
   /** Snapshot of submission title when the invite created this reminder. */
-  @Column({ name: 'submission_title', type: 'varchar', length: 500, default: '' })
+  @Column({
+    name: 'submission_title',
+    type: 'varchar',
+    length: 500,
+    default: '',
+  })
   submissionTitle: string;
 
   @Column({ name: 'reviewer_id', type: 'varchar', length: 64 })

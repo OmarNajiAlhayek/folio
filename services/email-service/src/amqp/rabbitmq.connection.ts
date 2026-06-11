@@ -3,10 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
 import type { Channel, ChannelModel, ConsumeMessage } from 'amqplib';
 import {
+  injectTraceContextIntoAmqpHeaders,
+  withAmqpConsumerContext,
+} from '@folio/shared/observability';
+import {
   assertTopology,
   DEFAULT_TOPOLOGY,
   TopologyNames,
-} from '../shared/topology';
+} from '@folio/shared/messaging/topology';
 
 const RECONNECT_DELAY_MS = 5_000;
 
@@ -36,6 +40,7 @@ export class RabbitMqConnection implements OnModuleDestroy {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private destroyed = false;
+  private connecting = false;
   private readonly url: string;
   private readonly topology: TopologyNames;
   private readonly subscriptions: Array<{
@@ -61,7 +66,8 @@ export class RabbitMqConnection implements OnModuleDestroy {
   }
 
   async connect(): Promise<void> {
-    if (this.destroyed) return;
+    if (this.destroyed || this.channel || this.connecting) return;
+    this.connecting = true;
     try {
       const conn = await amqplib.connect(this.url);
       conn.on('error', (err: Error) => {
@@ -100,6 +106,8 @@ export class RabbitMqConnection implements OnModuleDestroy {
       if (!this.destroyed) {
         setTimeout(() => void this.connect(), RECONNECT_DELAY_MS);
       }
+    } finally {
+      this.connecting = false;
     }
   }
 
@@ -110,6 +118,10 @@ export class RabbitMqConnection implements OnModuleDestroy {
     this.subscriptions.push({ queue, handler });
     if (this.channel) {
       await this.startConsumer(queue, handler);
+      return;
+    }
+    if (this.subscriptions.length === 1) {
+      await this.connect();
     }
   }
 
@@ -125,7 +137,11 @@ export class RabbitMqConnection implements OnModuleDestroy {
         if (!msg) return;
         void (async () => {
           try {
-            await handler(msg);
+            await withAmqpConsumerContext(
+              msg.properties.headers as Record<string, unknown> | undefined,
+              { queue, operation: 'email.event' },
+              () => handler(msg),
+            );
           } catch (err) {
             this.logger.error(
               `unhandled consumer error on ${queue}: ${err instanceof Error ? err.message : String(err)}`,
@@ -152,9 +168,11 @@ export class RabbitMqConnection implements OnModuleDestroy {
       throw new Error('AMQP channel not ready');
     }
     const buffer = Buffer.from(JSON.stringify(payload));
+    const headers = injectTraceContextIntoAmqpHeaders({});
     const ok = ch.publish(this.topology.exchange, routingKey, buffer, {
       persistent: true,
       contentType: 'application/json',
+      headers,
     });
     if (!ok) {
       await new Promise<void>((resolve) => ch.once('drain', () => resolve()));

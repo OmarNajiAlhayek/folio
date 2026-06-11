@@ -1,0 +1,13 @@
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{authorDisplayName}},</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;">
+  <tr>
+    <td style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px 16px;">
+      Your manuscript <strong>{{submissionTitle}}</strong> is now
+      <strong style="color:#1d4ed8;">under peer review</strong>.
+    </td>
+  </tr>
+</table>
+{{> folio-email-button href=submissionUrl label="View your submission" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Folio editorial team</p>
+{{/folio-email-layout}}

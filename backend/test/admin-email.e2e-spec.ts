@@ -1,15 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /**
  * Admin email HTTP contract (supertest).
  *
- * **Full DB profile**: Postgres has schema `email` with tables from email-service
- * migrations (including `email_reminder_policy` id=1 and `email_template` rows).
+ * **Full profile**: email-service is running at `EMAIL_SERVICE_URL` with
+ * migrations applied (`email_reminder_policy` id=1 and `email_template` rows).
  * Expect 200 on happy-path GETs below.
  *
- * **Light profile**: If `GET /admin/email/reminder-policy` returns 404
- * (`EMAIL_POLICY_NOT_FOUND`) or 500 (e.g. missing relation), DB-backed `it`
- * blocks return immediately (no assertions) so CI stays green; see console
- * warning. Prefer running this file only on the **full DB profile** so those
- * cases execute.
+ * **Light profile**: If `GET /admin/email/reminder-policy` returns non-200
+ * (email-service down, 404 policy, 503 unavailable), DB-backed `it` blocks
+ * return immediately (no assertions) so CI stays green; see console warning.
  *
  * Always runs: 401 (no JWT), 403 (authenticated author), 422 (invalid template key).
  */
@@ -57,9 +56,7 @@ describe('Admin email (e2e)', () => {
       passwordHash,
       displayName: 'E2E Admin Email Editor',
     });
-    await rbacService.assignRoles(editorUser.id, [
-      ROLE_SLUGS.JOURNAL_MANAGER,
-    ]);
+    await rbacService.assignRoles(editorUser.id, [ROLE_SLUGS.JOURNAL_MANAGER]);
 
     await usersService.create({
       email: `admin-email-author-${suffix}@test.local`,
@@ -87,7 +84,7 @@ describe('Admin email (e2e)', () => {
     skipEmailAdminIntegration = probe.status !== 200;
     if (skipEmailAdminIntegration) {
       console.warn(
-        `[admin-email.e2e-spec] Skipping DB-backed cases (probe status ${probe.status}). Apply email-service migrations for full coverage.`,
+        `[admin-email.e2e-spec] Skipping email-backed cases (probe status ${probe.status}). Start email-service with migrations for full coverage.`,
       );
     }
   }, 60_000);
@@ -254,7 +251,10 @@ describe('Admin email (e2e)', () => {
     const b = res.body as {
       outbox: { pending: number; deadSample: unknown[] };
       emailLog: { counts: Record<string, number>; failedSample: unknown[] };
-      reminders: { counts: Record<string, number>; stuckPendingPastDue: number };
+      reminders: {
+        counts: Record<string, number>;
+        stuckPendingPastDue: number;
+      };
       rabbitMq: {
         metricsAvailable: boolean;
         cachedAt: string;

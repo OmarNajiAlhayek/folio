@@ -2,17 +2,17 @@
 
  * Event payloads shared between the Nest backend (publisher) and the
 
- * email microservice (consumer). Canonical definitions live here; each app
+ * email microservice (consumer). Imported via the `@folio/shared` workspace
 
- * also keeps a byte-identical mirror under its `src/` for Nest `tsc`
-
- * layout — keep mirrors in sync when changing contracts.
+ * package — edit only under `packages/shared/`.
 
  *
 
  * Routing keys live on the topic exchange `folio.events`:
 
  *   reviewer.invited       -> ReviewerInvitedEvent
+
+ *   reviewer.responded     -> ReviewerRespondedEvent
 
  *   reminder.due           -> ReminderDueEvent
 
@@ -23,11 +23,15 @@
  *   copyedit.author_ready  -> CopyeditAuthorReadyEvent
  *   submission.submitted   -> SubmissionSubmittedEvent
  *   submission.decision    -> SubmissionDecisionEvent
+ *   submission.under_review -> SubmissionUnderReviewEvent
  *   submission.published   -> SubmissionPublishedEvent
  *   review.submitted       -> ReviewSubmittedEvent
  *   review.invitation_accepted -> ReviewInvitationAcceptedEvent
  *   review.invitation_declined -> ReviewInvitationDeclinedEvent
  *   role.invitation        -> RoleInvitationCreatedEvent
+ *   auth.verification_otp     -> AuthVerificationOtpEvent
+ *   auth.password_reset       -> AuthPasswordResetEvent
+ *   auth.registration_welcome -> AuthRegistrationWelcomeEvent
 
  *
 
@@ -39,56 +43,37 @@
 
  */
 
-
-
 export type ReviewerIdentity = {
-
   id: string;
 
   email: string;
 
   displayName: string;
-
 };
-
-
 
 export type EditorIdentity = {
-
   id: string;
 
   displayName: string;
-
 };
-
-
 
 export type AuthorIdentity = {
-
   id: string;
 
   email: string;
 
   displayName: string;
-
 };
-
-
 
 export type CopyeditorIdentity = {
-
   id: string;
 
   email: string;
 
   displayName: string;
-
 };
 
-
-
 export type ReviewerInvitedEvent = {
-
   type: 'ReviewerInvited';
 
   occurredAt: string;
@@ -112,17 +97,11 @@ export type ReviewerInvitedEvent = {
   acceptUrl: string;
 
   declineUrl: string;
-
 };
-
-
 
 export type ReminderKind = 'review_due_soon' | 'review_overdue';
 
-
-
 export type ReminderDueEvent = {
-
   type: 'ReminderDue';
 
   occurredAt: string;
@@ -146,13 +125,25 @@ export type ReminderDueEvent = {
   reviewer: ReviewerIdentity;
 
   dueAt: string;
-
 };
 
+export type ReviewerRespondedOutcome = 'declined' | 'completed';
 
+export type ReviewerRespondedEvent = {
+  type: 'ReviewerResponded';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  assignmentSlug: string;
+
+  outcome: ReviewerRespondedOutcome;
+
+  reviewer: { id: string; displayName: string };
+};
 
 export type CopyeditAssignedEvent = {
-
   type: 'CopyeditAssigned';
 
   occurredAt: string;
@@ -172,13 +163,9 @@ export type CopyeditAssignedEvent = {
   assignedBy: EditorIdentity;
 
   workbenchUrl: string;
-
 };
 
-
-
 export type CopyeditQueriesSentEvent = {
-
   type: 'CopyeditQueriesSent';
 
   occurredAt: string;
@@ -202,13 +189,9 @@ export type CopyeditQueriesSentEvent = {
   submissionUrl: string;
 
   noteExcerpt: string;
-
 };
 
-
-
 export type CopyeditAuthorReadyEvent = {
-
   type: 'CopyeditAuthorReady';
 
   occurredAt: string;
@@ -230,23 +213,14 @@ export type CopyeditAuthorReadyEvent = {
   author: AuthorIdentity;
 
   workbenchUrl: string;
-
 };
 
-
-
 export type SubmissionDecisionKind =
-
   | 'revisions_requested'
-
   | 'accepted'
-
   | 'rejected';
 
-
-
 export type SubmissionSubmittedEvent = {
-
   type: 'SubmissionSubmitted';
 
   occurredAt: string;
@@ -264,23 +238,17 @@ export type SubmissionSubmittedEvent = {
   author: AuthorIdentity;
 
   editor: {
-
     id: string;
 
     email: string;
 
     displayName: string;
-
   };
 
   editorQueueUrl: string;
-
 };
 
-
-
 export type SubmissionDecisionEvent = {
-
   type: 'SubmissionDecision';
 
   occurredAt: string;
@@ -301,12 +269,10 @@ export type SubmissionDecisionEvent = {
 
   submissionUrl: string;
 
+  messageForAuthor?: string;
 };
 
-
-
 export type ReviewSubmittedEvent = {
-
   type: 'ReviewSubmitted';
 
   occurredAt: string;
@@ -324,23 +290,17 @@ export type ReviewSubmittedEvent = {
   reviewer: { id: string; displayName: string };
 
   editor: {
-
     id: string;
 
     email: string;
 
     displayName: string;
-
   };
 
   submissionUrl: string;
-
 };
 
-
-
 export type ReviewInvitationAcceptedEvent = {
-
   type: 'ReviewInvitationAccepted';
 
   occurredAt: string;
@@ -358,23 +318,17 @@ export type ReviewInvitationAcceptedEvent = {
   reviewer: { id: string; displayName: string };
 
   editor: {
-
     id: string;
 
     email: string;
 
     displayName: string;
-
   };
 
   submissionUrl: string;
-
 };
 
-
-
 export type ReviewInvitationDeclinedEvent = {
-
   type: 'ReviewInvitationDeclined';
 
   occurredAt: string;
@@ -392,23 +346,45 @@ export type ReviewInvitationDeclinedEvent = {
   reviewer: { id: string; displayName: string };
 
   editor: {
-
     id: string;
 
     email: string;
 
     displayName: string;
-
   };
 
   submissionUrl: string;
-
 };
 
+export type SubmissionUnderReviewTrigger = 'editor' | 'reviewer_accept';
 
+export type SubmissionUnderReviewEvent = {
+  type: 'SubmissionUnderReview';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  submissionSlug: string;
+
+  submissionTitle: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  author: AuthorIdentity;
+
+  submissionUrl: string;
+
+  /** ISO timestamp of submission.updatedAt while still submitted (idempotency cycle). */
+
+  submittedCycleAt: string;
+
+  trigger: SubmissionUnderReviewTrigger;
+
+  initiatedByDisplayName: string;
+};
 
 export type SubmissionPublishedEvent = {
-
   type: 'SubmissionPublished';
 
   occurredAt: string;
@@ -424,13 +400,9 @@ export type SubmissionPublishedEvent = {
   author: AuthorIdentity;
 
   publicationUrl: string;
-
 };
 
-
-
 export type RoleInvitationCreatedEvent = {
-
   type: 'RoleInvitationCreated';
 
   occurredAt: string;
@@ -448,42 +420,85 @@ export type RoleInvitationCreatedEvent = {
   invitedBy: EditorIdentity;
 
   dashboardUrl: string;
-
 };
 
+export type AuthVerificationOtpEvent = {
+  type: 'AuthVerificationOtp';
 
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  challengeId: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  user: AuthorIdentity;
+
+  otpCode: string;
+
+  verifyUrl: string;
+};
+
+export type AuthPasswordResetEvent = {
+  type: 'AuthPasswordReset';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  challengeId: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  user: AuthorIdentity;
+
+  resetUrl: string;
+};
+
+export type AuthRegistrationWelcomeEvent = {
+  type: 'AuthRegistrationWelcome';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  userId: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  user: AuthorIdentity;
+
+  dashboardUrl: string;
+
+  newSubmissionUrl: string;
+
+  willingToReview: boolean;
+};
 
 export type FolioEvent =
-
   | ReviewerInvitedEvent
-
+  | ReviewerRespondedEvent
   | ReminderDueEvent
-
   | CopyeditAssignedEvent
-
   | CopyeditQueriesSentEvent
-
   | CopyeditAuthorReadyEvent
-
   | SubmissionSubmittedEvent
-
   | SubmissionDecisionEvent
-
+  | SubmissionUnderReviewEvent
   | ReviewSubmittedEvent
-
   | ReviewInvitationAcceptedEvent
-
   | ReviewInvitationDeclinedEvent
-
   | SubmissionPublishedEvent
-
-  | RoleInvitationCreatedEvent;
-
-
+  | RoleInvitationCreatedEvent
+  | AuthVerificationOtpEvent
+  | AuthPasswordResetEvent
+  | AuthRegistrationWelcomeEvent;
 
 export const ROUTING_KEY = {
-
   reviewerInvited: 'reviewer.invited',
+
+  reviewerResponded: 'reviewer.responded',
 
   reminderDue: 'reminder.due',
 
@@ -497,6 +512,8 @@ export const ROUTING_KEY = {
 
   submissionDecision: 'submission.decision',
 
+  submissionUnderReview: 'submission.under_review',
+
   submissionPublished: 'submission.published',
 
   reviewSubmitted: 'review.submitted',
@@ -507,9 +524,11 @@ export const ROUTING_KEY = {
 
   roleInvitation: 'role.invitation',
 
+  authVerificationOtp: 'auth.verification_otp',
+
+  authPasswordReset: 'auth.password_reset',
+
+  authRegistrationWelcome: 'auth.registration_welcome',
 } as const;
 
-
-
 export type RoutingKey = (typeof ROUTING_KEY)[keyof typeof ROUTING_KEY];
-

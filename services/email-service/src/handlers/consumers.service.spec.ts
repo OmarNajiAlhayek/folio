@@ -3,23 +3,28 @@ import type { ConsumeMessage } from 'amqplib';
 import { ConsumersService } from './consumers.service';
 import { RabbitMqConnection } from '../amqp/rabbitmq.connection';
 import { ReviewerInvitedHandler } from './reviewer-invited.handler';
+import { ReviewerRespondedHandler } from './reviewer-responded.handler';
 import { ReminderDueHandler } from './reminder-due.handler';
 import { CopyeditAssignedHandler } from './copyedit-assigned.handler';
 import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
 import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
 import { SubmissionSubmittedHandler } from './submission-submitted.handler';
 import { SubmissionDecisionHandler } from './submission-decision.handler';
+import { SubmissionUnderReviewHandler } from './submission-under-review.handler';
 import { Phase3WorkflowHandlers } from './phase3-workflow.handlers';
-import { DEFAULT_TOPOLOGY } from '../shared/topology';
+import { AuthEmailHandler } from './auth-email.handler';
+import { DEFAULT_TOPOLOGY } from '@folio/shared/messaging/topology';
 
 const consumerHandlerProviders = () => [
   { provide: ReviewerInvitedHandler, useValue: { handle: jest.fn() } },
+  { provide: ReviewerRespondedHandler, useValue: { handle: jest.fn() } },
   { provide: ReminderDueHandler, useValue: { handle: jest.fn() } },
   { provide: CopyeditAssignedHandler, useValue: { handle: jest.fn() } },
   { provide: CopyeditQueriesSentHandler, useValue: { handle: jest.fn() } },
   { provide: CopyeditAuthorReadyHandler, useValue: { handle: jest.fn() } },
   { provide: SubmissionSubmittedHandler, useValue: { handle: jest.fn() } },
   { provide: SubmissionDecisionHandler, useValue: { handle: jest.fn() } },
+  { provide: SubmissionUnderReviewHandler, useValue: { handle: jest.fn() } },
   {
     provide: Phase3WorkflowHandlers,
     useValue: {
@@ -28,6 +33,14 @@ const consumerHandlerProviders = () => [
       handleReviewInvitationDeclined: jest.fn(),
       handleSubmissionPublished: jest.fn(),
       handleRoleInvitation: jest.fn(),
+    },
+  },
+  {
+    provide: AuthEmailHandler,
+    useValue: {
+      handleVerificationOtp: jest.fn(),
+      handlePasswordReset: jest.fn(),
+      handleRegistrationWelcome: jest.fn(),
     },
   },
 ];
@@ -91,10 +104,14 @@ describe('ConsumersService', () => {
           useValue: { handle: reviewerHandle },
         },
         {
+          provide: ReviewerRespondedHandler,
+          useValue: { handle: jest.fn().mockResolvedValue({ kind: 'ack' }) },
+        },
+        {
           provide: ReminderDueHandler,
           useValue: { handle: reminderHandle },
         },
-        ...consumerHandlerProviders().slice(2),
+        ...consumerHandlerProviders().slice(3),
       ],
     }).compile();
 
@@ -212,6 +229,10 @@ describe('ConsumersService', () => {
     await fresh.onModuleInit();
     expect(rabbit.consume).toHaveBeenCalledWith(
       DEFAULT_TOPOLOGY.reviewerInvitedQueue,
+      expect.any(Function),
+    );
+    expect(rabbit.consume).toHaveBeenCalledWith(
+      DEFAULT_TOPOLOGY.reviewerRespondedQueue,
       expect.any(Function),
     );
     expect(rabbit.consume).toHaveBeenCalledWith(

@@ -1,17 +1,19 @@
 import 'reflect-metadata';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { Logger } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
+import { initTelemetry, shutdownTelemetry } from '@folio/nest-observability';
 import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
-import { RabbitMqConnection } from './amqp/rabbitmq.connection';
 import {
   RuntimeConfigError,
   validateEmailServiceRuntimeConfig,
 } from './common/validate-runtime-config';
-import { startHealthServer } from './health/health.server';
 
 async function bootstrap(): Promise<void> {
-  const logger = new Logger('EmailService');
+  initTelemetry({
+    serviceName: process.env.OTEL_SERVICE_NAME ?? 'folio-email-service',
+  });
 
   try {
     validateEmailServiceRuntimeConfig();
@@ -22,11 +24,21 @@ async function bootstrap(): Promise<void> {
         : err instanceof Error
           ? err.message
           : String(err);
-    logger.error(`Configuration invalid: ${message}`);
+    // eslint-disable-next-line no-console
+    console.error(`Configuration invalid: ${message}`);
     process.exit(1);
   }
 
-  const app = await NestFactory.createApplicationContext(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   const dataSource = app.get(DataSource);
   try {
@@ -40,36 +52,27 @@ async function bootstrap(): Promise<void> {
     process.exit(1);
   }
 
-  const rabbit = app.get(RabbitMqConnection);
-  await rabbit.connect();
-
-  const healthHost = (process.env.HEALTH_BIND_HOST ?? '127.0.0.1').trim();
-  const healthPort = parseInt(process.env.HEALTH_PORT ?? '5244', 10);
-  startHealthServer(healthPort, async () => {
-    let dbOk = false;
-    try {
-      await dataSource.query('SELECT 1');
-      dbOk = true;
-    } catch {
-      dbOk = false;
-    }
-    const amqpOk = rabbit.isConnected();
-    const checks = { database: dbOk, amqp: amqpOk };
-    return { ok: dbOk && amqpOk, checks };
-  }, healthHost);
+  const bindHost = (
+    process.env.HTTP_BIND_HOST ??
+    process.env.HEALTH_BIND_HOST ??
+    '127.0.0.1'
+  ).trim();
+  const port = parseInt(
+    process.env.HTTP_PORT ?? process.env.HEALTH_PORT ?? '5244',
+    10,
+  );
+  await app.listen(port, bindHost);
   logger.log(
-    `health listening on ${healthHost}:${healthPort} (/health, /ready)`,
+    `email-service listening on ${bindHost}:${port} (/health, /ready, /internal/*)`,
   );
 
   const shutdown = async () => {
-    logger.log('shutting down email-service');
     await app.close();
+    await shutdownTelemetry();
     process.exit(0);
   };
-  process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
-
-  logger.log('email-service ready');
+  process.on('SIGINT', () => void shutdown());
 }
 
 void bootstrap();

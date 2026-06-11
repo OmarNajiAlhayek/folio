@@ -17,7 +17,30 @@ function isProduction(): boolean {
   return (process.env.NODE_ENV ?? 'development') === 'production';
 }
 
+function isLoopbackBindHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  return (
+    h === '127.0.0.1' ||
+    h === 'localhost' ||
+    h === '::1' ||
+    h === '0:0:0:0:0:0:0:1'
+  );
+}
+
 export function validateEmailServiceRuntimeConfig(): void {
+  const bindHost = (
+    process.env.HTTP_BIND_HOST ??
+    process.env.HEALTH_BIND_HOST ??
+    '127.0.0.1'
+  ).trim();
+  const token = (process.env.EMAIL_SERVICE_TOKEN ?? '').trim();
+
+  if (!isLoopbackBindHost(bindHost) && !token) {
+    throw new RuntimeConfigError(
+      'EMAIL_SERVICE_TOKEN must be set when HTTP_BIND_HOST is not loopback. Use 127.0.0.1 for same-machine dev.',
+    );
+  }
+
   if (!isProduction()) {
     return;
   }
@@ -52,6 +75,12 @@ export function validateEmailServiceRuntimeConfig(): void {
   if (rabbitUrl.includes('guest:guest@')) {
     throw new RuntimeConfigError(
       'RABBITMQ_URL must not use guest:guest in production.',
+    );
+  }
+
+  if (!token) {
+    throw new RuntimeConfigError(
+      'EMAIL_SERVICE_TOKEN must be set in production. Nest must authenticate internal admin API calls.',
     );
   }
 }

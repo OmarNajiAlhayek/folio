@@ -7,8 +7,8 @@ import { RabbitMqConnection } from '../amqp/rabbitmq.connection';
 import {
   ReminderDueEvent,
   ROUTING_KEY,
-} from '../contracts/email-events';
-import { reminderDueKey } from '../shared/idempotency';
+} from '@folio/shared/contracts/email-events';
+import { reminderDueKey } from '@folio/shared/messaging/idempotency';
 import { normalizeEmailLocale } from '../common/email-locale';
 import { unwrapPgQueryRows } from '../common/unwrap-pg-query-rows';
 

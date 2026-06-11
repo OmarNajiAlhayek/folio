@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { OutboundEvent } from '../entities/outbound-event.entity';
-import { redactEventPayload } from './shared/redactor';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
 
 /**
  * Publishes events through the transactional outbox. Callers MUST run
@@ -80,7 +80,7 @@ export class EventPublisherService {
     );
     await repo.save(rows);
     this.logger.debug(
-      `outbox.enqueueMany count=${events.length} routing=${events[0]!.routingKey}`,
+      `outbox.enqueueMany count=${events.length} routing=${events[0].routingKey}`,
     );
   }
 }

@@ -5,7 +5,8 @@ import { DataSource, Repository } from 'typeorm';
 import { OutboundEvent } from '../entities/outbound-event.entity';
 import { RabbitMqConnection } from './rabbitmq.connection';
 import { unwrapPgQueryRows } from '../common/unwrap-pg-query-rows';
-import { redactEventPayload } from './shared/redactor';
+import { withRootSpan } from '@folio/nest-observability';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
 
 const MAX_ATTEMPTS = 8;
 const BASE_BACKOFF_MS = 60_000;
@@ -45,7 +46,7 @@ export class OutboxDrainerService implements OnModuleInit {
     private readonly rabbit: RabbitMqConnection,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     void this.tick();
   }
 
@@ -54,10 +55,16 @@ export class OutboxDrainerService implements OnModuleInit {
     if (this.running) return;
     this.running = true;
     try {
-      const due = await this.claimDueBatch();
-      for (const row of due) {
-        await this.publishOne(row);
-      }
+      await withRootSpan(
+        'outbox.drain',
+        { 'folio.batch_size': DRAIN_BATCH },
+        async () => {
+          const due = await this.claimDueBatch();
+          for (const row of due) {
+            await this.publishOne(row);
+          }
+        },
+      );
     } catch (err) {
       this.logger.warn(
         `outbox drain batch failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -68,7 +75,7 @@ export class OutboxDrainerService implements OnModuleInit {
   }
 
   private async claimDueBatch(): Promise<OutboundEvent[]> {
-    const raw = await this.dataSource.query(
+    const raw: unknown = await this.dataSource.query(
       `UPDATE "outbound_event_outbox" AS o
           SET "claimed_at" = now()
         WHERE o."id" IN (

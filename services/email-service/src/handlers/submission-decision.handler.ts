@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { SubmissionDecisionEvent } from '../contracts/email-events';
-import { submissionDecisionKey } from '../shared/idempotency';
-import { redactEventPayload } from '../shared/redactor';
+import { SubmissionDecisionEvent } from '@folio/shared/contracts/email-events';
+import { submissionDecisionKey } from '@folio/shared/messaging/idempotency';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
 import {
   EMAIL_PROVIDER_TOKEN,
   EmailProvider,
@@ -80,6 +80,8 @@ export class SubmissionDecisionHandler {
           isAccepted: decision === 'accepted',
           isRejected: decision === 'rejected',
           isRevisionsRequested: decision === 'revisions_requested',
+          messageForAuthor: event.messageForAuthor ?? '',
+          hasMessageForAuthor: Boolean(event.messageForAuthor?.trim()),
         },
       },
     );

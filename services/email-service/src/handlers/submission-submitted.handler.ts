@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { SubmissionSubmittedEvent } from '../contracts/email-events';
-import { submissionSubmittedKey } from '../shared/idempotency';
-import { redactEventPayload } from '../shared/redactor';
+import { SubmissionSubmittedEvent } from '@folio/shared/contracts/email-events';
+import { submissionSubmittedKey } from '@folio/shared/messaging/idempotency';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
 import {
   EMAIL_PROVIDER_TOKEN,
   EmailProvider,

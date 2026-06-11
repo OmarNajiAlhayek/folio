@@ -10,8 +10,8 @@ import {
 } from '../providers/email-provider';
 import { EmailLog } from '../email-log/email-log.entity';
 import { Reminder } from '../reminders/reminder.entity';
-import { reviewerInvitedKey } from '../shared/idempotency';
-import type { ReviewerInvitedEvent } from '../contracts/email-events';
+import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
+import type { ReviewerInvitedEvent } from '@folio/shared/contracts/email-events';
 
 const LOG_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -46,7 +46,9 @@ describe('ReviewerInvitedHandler', () => {
   let reminderSave: jest.Mock;
 
   beforeEach(async () => {
-    mockProvider = { send: jest.fn().mockResolvedValue({ messageId: 'mid-1' }) };
+    mockProvider = {
+      send: jest.fn().mockResolvedValue({ messageId: 'mid-1' }),
+    };
 
     reminderSave = jest.fn().mockResolvedValue(undefined);
 
@@ -68,19 +70,23 @@ describe('ReviewerInvitedHandler', () => {
     };
 
     const txLogRepo = {
-      findOne: jest.fn().mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
-        if (where.id === LOG_ID) {
-          return {
-            id: LOG_ID,
-            idempotencyKey: reviewerInvitedKey('asg-test'),
-            status: 'pending',
-            recipient: 'r@test.dev',
-            template: 'reviewer-invited',
-            context: {},
-          };
-        }
-        return null;
-      }),
+      findOne: jest
+        .fn()
+        .mockImplementation(
+          async ({ where }: { where: Record<string, unknown> }) => {
+            if (where.id === LOG_ID) {
+              return {
+                id: LOG_ID,
+                idempotencyKey: reviewerInvitedKey('asg-test'),
+                status: 'pending',
+                recipient: 'r@test.dev',
+                template: 'reviewer-invited',
+                context: {},
+              };
+            }
+            return null;
+          },
+        ),
     };
 
     const mockManager = {
@@ -173,10 +179,8 @@ describe('ReviewerInvitedHandler', () => {
       'reviewer-invited',
       'ar',
       expect.objectContaining({
-        acceptUrl:
-          'http://localhost:5240/ar/assignments/asg-test/invite',
-        declineUrl:
-          'http://localhost:5240/ar/assignments/asg-test/invite',
+        acceptUrl: 'http://localhost:5240/ar/assignments/asg-test/invite',
+        declineUrl: 'http://localhost:5240/ar/assignments/asg-test/invite',
       }),
     );
   });

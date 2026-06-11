@@ -2,7 +2,12 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
 import type { Channel, ChannelModel, GetMessage } from 'amqplib';
-import { assertTopology, DEFAULT_TOPOLOGY, TopologyNames } from './shared/topology';
+import { injectTraceContextIntoAmqpHeaders } from '@folio/shared/observability';
+import {
+  assertTopology,
+  DEFAULT_TOPOLOGY,
+  TopologyNames,
+} from '@folio/shared/messaging/topology';
 
 /**
  * Thin wrapper around amqplib that owns the single connection + channel
@@ -116,9 +121,11 @@ export class RabbitMqConnection implements OnModuleDestroy {
   ): Promise<void> {
     const ch = await this.getChannel();
     const buffer = Buffer.from(JSON.stringify(payload));
+    const headers = injectTraceContextIntoAmqpHeaders({});
     const ok = ch.publish(this.topology.exchange, routingKey, buffer, {
       persistent: true,
       contentType: 'application/json',
+      headers,
     });
     if (!ok) {
       await new Promise<void>((resolve) => ch.once('drain', () => resolve()));

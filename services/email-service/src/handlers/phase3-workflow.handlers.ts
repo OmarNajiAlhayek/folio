@@ -7,15 +7,15 @@ import {
   ReviewSubmittedEvent,
   RoleInvitationCreatedEvent,
   SubmissionPublishedEvent,
-} from '../contracts/email-events';
+} from '@folio/shared/contracts/email-events';
 import {
   reviewInvitationAcceptedEmailKey,
   reviewInvitationDeclinedEmailKey,
   reviewSubmittedEmailKey,
   roleInvitationEmailKey,
   submissionPublishedKey,
-} from '../shared/idempotency';
-import { redactEventPayload } from '../shared/redactor';
+} from '@folio/shared/messaging/idempotency';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
 import {
   EMAIL_PROVIDER_TOKEN,
   EmailProvider,

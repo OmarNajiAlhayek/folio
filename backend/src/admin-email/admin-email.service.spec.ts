@@ -1,159 +1,59 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
-import { DataSource, QueryFailedError } from 'typeorm';
+import { EmailServiceClient } from '../email-client/email-client.service';
 import { AdminEmailService } from './admin-email.service';
 
 describe('AdminEmailService', () => {
-  let ds: jest.Mocked<Pick<DataSource, 'query'>>;
+  let client: jest.Mocked<
+    Pick<
+      EmailServiceClient,
+      | 'getReminderPolicy'
+      | 'patchReminderPolicy'
+      | 'getTemplate'
+      | 'patchTemplate'
+      | 'previewTemplate'
+    >
+  >;
   let svc: AdminEmailService;
 
   beforeEach(() => {
-    ds = { query: jest.fn() };
-    svc = new AdminEmailService(ds as unknown as DataSource);
-  });
-
-  it('assertTemplateKey throws 422 for unknown key', () => {
-    expect(() => svc.assertTemplateKey('not-a-key')).toThrow(
-      UnprocessableEntityException,
-    );
-  });
-
-  it('patchReminderPolicy throws Conflict when no row updated', async () => {
-    ds.query.mockResolvedValueOnce([]);
-    await expect(
-      svc.patchReminderPolicy(21, new Date().toISOString()),
-    ).rejects.toThrow(ConflictException);
-  });
-
-  it('patchTemplate throws UnprocessableEntity when Handlebars invalid', async () => {
-    await expect(
-      svc.patchTemplate(
-        'reviewer-invited',
-        undefined,
-        '{{bad',
-        'x',
-        'y',
-        new Date().toISOString(),
-      ),
-    ).rejects.toThrow(UnprocessableEntityException);
-    expect(ds.query).not.toHaveBeenCalled();
-  });
-
-  it('patchTemplate throws Conflict when optimistic lock fails', async () => {
-    ds.query.mockResolvedValueOnce([]);
-    await expect(
-      svc.patchTemplate(
-        'reviewer-invited',
-        undefined,
-        'ok {{submissionTitle}}',
-        '<p>x</p>',
-        'x',
-        new Date().toISOString(),
-      ),
-    ).rejects.toThrow(ConflictException);
-  });
-
-  it('patchTemplate uses millisecond date_trunc for optimistic lock (not exact timestamptz)', async () => {
-    const iso = '2026-05-05T08:42:43.581Z';
-    ds.query.mockResolvedValueOnce([
-      {
-        template_key: 'reviewer-invited',
-        locale: 'ar',
-        subject_template: 'ok {{submissionTitle}}',
-        html_body: '<p>x</p>',
-        text_body: 't',
-        updated_at: new Date('2026-05-05T08:42:43.581456Z'),
-      },
-    ]);
-    await svc.patchTemplate(
-      'reviewer-invited',
-      'ar',
-      'ok {{submissionTitle}}',
-      '<p>x</p>',
-      't',
-      iso,
-    );
-    const [sql] = ds.query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("date_trunc('milliseconds', \"updated_at\")");
-    expect(sql).toContain("date_trunc('milliseconds', $6::timestamptz)");
-  });
-
-  it('patchTemplate accepts RETURNING row with ISO string updatedAt (camelCase)', async () => {
-    const iso = '2026-05-05T12:00:00.000Z';
-    ds.query.mockResolvedValueOnce([
-      {
-        template_key: 'reviewer-invited',
-        locale: 'ar',
-        subject_template: 's',
-        html_body: '<p>x</p>',
-        text_body: 't',
-        updatedAt: iso,
-      },
-    ]);
-    const out = await svc.patchTemplate(
-      'reviewer-invited',
-      'ar',
-      'ok {{submissionTitle}}',
-      '<p>x</p>',
-      't',
-      iso,
-    );
-    expect(out.updatedAt).toBe(iso);
-  });
-
-  it('patchTemplate unwraps TypeORM Postgres UPDATE result tuple [rows, rowCount]', async () => {
-    const iso = '2026-05-05T12:00:00.000Z';
-    const row = {
-      template_key: 'reviewer-invited',
-      locale: 'ar',
-      subject_template: 'ok {{submissionTitle}}',
-      html_body: '<p>x</p>',
-      text_body: 't',
-      updated_at: new Date(iso),
+    client = {
+      getReminderPolicy: jest.fn(),
+      patchReminderPolicy: jest.fn(),
+      getTemplate: jest.fn(),
+      patchTemplate: jest.fn(),
+      previewTemplate: jest.fn(),
     };
-    ds.query.mockResolvedValueOnce([[row], 1]);
-    const out = await svc.patchTemplate(
-      'reviewer-invited',
-      'ar',
-      row.subject_template,
-      row.html_body,
-      row.text_body,
-      iso,
-    );
-    expect(out.updatedAt).toBe(iso);
+    svc = new AdminEmailService(client as unknown as EmailServiceClient);
   });
 
-  it('patchTemplate maps Postgres permission denied to ForbiddenException', async () => {
-    ds.query.mockRejectedValueOnce(
-      new QueryFailedError('', [], {
-        code: '42501',
-        message: 'permission denied for table email_template',
-      }),
-    );
+  it('getReminderPolicy delegates to email client', async () => {
+    const policy = {
+      id: 1,
+      reviewDueInDays: 21,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    client.getReminderPolicy.mockResolvedValue(policy);
+    await expect(svc.getReminderPolicy()).resolves.toEqual(policy);
+  });
+
+  it('patchTemplate delegates to email client', async () => {
+    const tpl = {
+      templateKey: 'reviewer-invited',
+      locale: 'en',
+      subjectTemplate: 's',
+      htmlBody: '<p>x</p>',
+      textBody: 't',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    client.patchTemplate.mockResolvedValue(tpl);
     await expect(
       svc.patchTemplate(
         'reviewer-invited',
-        undefined,
-        'ok {{submissionTitle}}',
+        'en',
+        's',
         '<p>x</p>',
-        'x',
-        new Date().toISOString(),
+        't',
+        tpl.updatedAt,
       ),
-    ).rejects.toThrow(ForbiddenException);
-  });
-
-  it('patchReminderPolicy maps Postgres permission denied to ForbiddenException', async () => {
-    ds.query.mockRejectedValueOnce(
-      new QueryFailedError('', [], {
-        code: '42501',
-        message: 'permission denied for table email_reminder_policy',
-      }),
-    );
-    await expect(
-      svc.patchReminderPolicy(21, new Date().toISOString()),
-    ).rejects.toThrow(ForbiddenException);
+    ).resolves.toEqual(tpl);
   });
 });

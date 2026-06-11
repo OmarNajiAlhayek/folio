@@ -9,9 +9,9 @@ import {
   EMAIL_PROVIDER_TOKEN,
   EmailProvider,
 } from '../providers/email-provider';
-import { ReminderDueEvent } from '../contracts/email-events';
-import { redactEventPayload } from '../shared/redactor';
-import { reminderDueKey } from '../shared/idempotency';
+import { ReminderDueEvent } from '@folio/shared/contracts/email-events';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
+import { reminderDueKey } from '@folio/shared/messaging/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { normalizeEmailLocale } from '../common/email-locale';
 import { assignmentReviewPageUrl } from '../common/folio-frontend-urls';
@@ -23,11 +23,10 @@ import { assignmentReviewPageUrl } from '../common/folio-frontend-urls';
  * `reminder` row → `sent` uses one DB transaction so both commit or
  * neither does.
  *
- * v1 fallback for "assignment may have been completed before send":
- * before publishing the email, we re-load the Reminder row and only
- * proceed if it's still `status='pending'`. Once we have a
- * `ReviewerResponded` event upstream, the cron can flip these rows to
- * `cancelled` proactively.
+ * Safety net when status changed between scheduler claim and send:
+ * re-load the Reminder row and only proceed if still `pending`.
+ * Proactive cancellation is handled by `ReviewerRespondedHandler`
+ * (`reviewer.responded` on decline/complete).
  */
 @Injectable()
 export class ReminderDueHandler {
@@ -158,10 +157,9 @@ export class ReminderDueHandler {
             allowed: ['pending', 'failed'],
           })
           .execute();
-        await manager.getRepository(Reminder).update(
-          { id: reminder.id },
-          { status: 'sent', sentAt: new Date() },
-        );
+        await manager
+          .getRepository(Reminder)
+          .update({ id: reminder.id }, { status: 'sent', sentAt: new Date() });
       });
       return ACK;
     } catch (err) {

@@ -1,6 +1,6 @@
 import { RemindersScheduler } from './reminders.scheduler';
-import { ROUTING_KEY } from '../contracts/email-events';
-import { reminderDueKey } from '../shared/idempotency';
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
+import { reminderDueKey } from '@folio/shared/messaging/idempotency';
 
 describe('RemindersScheduler', () => {
   it('tick does not publish when no due reminders', async () => {

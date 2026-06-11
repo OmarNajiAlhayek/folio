@@ -9,8 +9,8 @@ import {
 } from '../providers/email-provider';
 import { EmailLog } from '../email-log/email-log.entity';
 import { Reminder } from '../reminders/reminder.entity';
-import { reminderDueKey } from '../shared/idempotency';
-import type { ReminderDueEvent } from '../contracts/email-events';
+import { reminderDueKey } from '@folio/shared/messaging/idempotency';
+import type { ReminderDueEvent } from '@folio/shared/contracts/email-events';
 
 const REMINDER_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const LOG_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
@@ -46,7 +46,9 @@ describe('ReminderDueHandler', () => {
   };
 
   beforeEach(async () => {
-    mockProvider = { send: jest.fn().mockResolvedValue({ messageId: 'mid-r' }) };
+    mockProvider = {
+      send: jest.fn().mockResolvedValue({ messageId: 'mid-r' }),
+    };
 
     mockReminderUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
@@ -86,22 +88,20 @@ describe('ReminderDueHandler', () => {
         throw new Error('unexpected entity');
       }),
       query: jest.fn().mockResolvedValue([{ id: LOG_ID }]),
-      transaction: jest.fn(
-        async (fn: (em: EntityManager) => Promise<void>) => {
-          const em = {
-            getRepository: (entity: unknown) => {
-              if (entity === EmailLog) {
-                return logRepo;
-              }
-              if (entity === Reminder) {
-                return { update: mockReminderUpdate };
-              }
-              throw new Error('unexpected entity in tx');
-            },
-          } as unknown as EntityManager;
-          await fn(em);
-        },
-      ),
+      transaction: jest.fn(async (fn: (em: EntityManager) => Promise<void>) => {
+        const em = {
+          getRepository: (entity: unknown) => {
+            if (entity === EmailLog) {
+              return logRepo;
+            }
+            if (entity === Reminder) {
+              return { update: mockReminderUpdate };
+            }
+            throw new Error('unexpected entity in tx');
+          },
+        } as unknown as EntityManager;
+        await fn(em);
+      }),
     };
 
     const templates = {
@@ -148,9 +148,7 @@ describe('ReminderDueHandler', () => {
   });
 
   it('nacks on idempotency mismatch', async () => {
-    const out = await handler.handle(
-      baseEvent({ idempotencyKey: 'bad' }),
-    );
+    const out = await handler.handle(baseEvent({ idempotencyKey: 'bad' }));
     expect(out).toEqual({
       kind: 'nack-no-requeue',
       reason: 'bad idempotency key',

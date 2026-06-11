@@ -1,3 +1,4 @@
+import { EmailServiceClient } from '../email-client/email-client.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
 import { RabbitMqQueueMetricsService } from '../messaging/rabbitmq-queue-metrics.service';
 
@@ -8,19 +9,21 @@ describe('EmailPipelineObservabilityService', () => {
     getCachedMetrics: jest.fn(),
   };
 
-  const makeService = (
-    outboxRepo: {
-      count: jest.Mock;
-      findOne: jest.Mock;
-      find: jest.Mock;
-      createQueryBuilder: jest.Mock;
-    },
-    dataSource: { query: jest.Mock },
-  ) =>
+  const emailClient: jest.Mocked<Pick<EmailServiceClient, 'getPipelineSlice'>> =
+    {
+      getPipelineSlice: jest.fn(),
+    };
+
+  const makeService = (outboxRepo: {
+    count: jest.Mock;
+    findOne: jest.Mock;
+    find: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  }) =>
     new EmailPipelineObservabilityService(
-      dataSource as never,
       outboxRepo as never,
       rabbitMetrics as unknown as RabbitMqQueueMetricsService,
+      emailClient as unknown as EmailServiceClient,
     );
 
   beforeEach(() => {
@@ -35,9 +38,27 @@ describe('EmailPipelineObservabilityService', () => {
         'email.reminder_due': { messageCount: 0, consumerCount: 1 },
       },
     });
+    emailClient.getPipelineSlice.mockResolvedValue({
+      emailLog: {
+        counts: { pending: 1, sent: 5, failed: 2 },
+        failedSample: [
+          {
+            id: 'f1',
+            idempotencyKey: 'reviewer_invited:asg-1',
+            template: 'reviewer-invited',
+            createdAt: '2026-05-03T00:00:00.000Z',
+            errorRedacted: 'SMTP [host] timeout',
+          },
+        ],
+      },
+      reminders: {
+        counts: { pending: 4, sent: 10, cancelled: 1 },
+        stuckPendingPastDue: 0,
+      },
+    });
   });
 
-  it('aggregates outbox, email_log, reminders, and rabbitMq', async () => {
+  it('aggregates outbox, email client slice, and rabbitMq', async () => {
     const outboxRepo = {
       count: jest
         .fn()
@@ -56,7 +77,8 @@ describe('EmailPipelineObservabilityService', () => {
           routingKey: 'reviewer.invited',
           attempts: 10,
           createdAt: new Date('2026-05-02T12:00:00.000Z'),
-          lastError: 'Error: connect ECONNREFUSED smtp.internal.example.com:587',
+          lastError:
+            'Error: connect ECONNREFUSED smtp.internal.example.com:587',
         },
       ]),
       createQueryBuilder: jest.fn().mockReturnValue({
@@ -66,32 +88,7 @@ describe('EmailPipelineObservabilityService', () => {
       }),
     };
 
-    const dataSource = {
-      query: jest
-        .fn()
-        .mockResolvedValueOnce([
-          { status: 'pending', c: 1 },
-          { status: 'sent', c: 5 },
-          { status: 'failed', c: 2 },
-        ])
-        .mockResolvedValueOnce([
-          {
-            id: 'f1',
-            idempotency_key: 'reviewer_invited:asg-1',
-            template: 'reviewer-invited',
-            created_at: new Date('2026-05-03T00:00:00.000Z'),
-            error: 'SMTP [host] timeout',
-          },
-        ])
-        .mockResolvedValueOnce([
-          { status: 'pending', c: 4 },
-          { status: 'sent', c: 10 },
-          { status: 'cancelled', c: 1 },
-        ])
-        .mockResolvedValueOnce([{ c: 0 }]),
-    };
-
-    const svc = makeService(outboxRepo, dataSource);
+    const svc = makeService(outboxRepo);
     const res = await svc.getPipelineStatus();
 
     expect(res.outbox.pending).toBe(3);
@@ -104,5 +101,6 @@ describe('EmailPipelineObservabilityService', () => {
     expect(res.reminders.counts.pending).toBe(4);
     expect(res.reminders.stuckPendingPastDue).toBe(0);
     expect(res.rabbitMq.available).toBe(true);
+    expect(emailClient.getPipelineSlice).toHaveBeenCalled();
   });
 });

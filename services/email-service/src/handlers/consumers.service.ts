@@ -5,27 +5,35 @@ import {
   FolioEvent,
   ReminderDueEvent,
   ReviewerInvitedEvent,
+  ReviewerRespondedEvent,
   CopyeditAssignedEvent,
   CopyeditQueriesSentEvent,
   CopyeditAuthorReadyEvent,
   SubmissionSubmittedEvent,
   SubmissionDecisionEvent,
+  SubmissionUnderReviewEvent,
   ReviewSubmittedEvent,
   ReviewInvitationAcceptedEvent,
   ReviewInvitationDeclinedEvent,
   SubmissionPublishedEvent,
   RoleInvitationCreatedEvent,
+  AuthVerificationOtpEvent,
+  AuthPasswordResetEvent,
+  AuthRegistrationWelcomeEvent,
   ROUTING_KEY,
-} from '../contracts/email-events';
-import { redactEventPayload } from '../shared/redactor';
+} from '@folio/shared/contracts/email-events';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
 import { ReviewerInvitedHandler } from './reviewer-invited.handler';
+import { ReviewerRespondedHandler } from './reviewer-responded.handler';
 import { ReminderDueHandler } from './reminder-due.handler';
 import { CopyeditAssignedHandler } from './copyedit-assigned.handler';
 import { CopyeditQueriesSentHandler } from './copyedit-queries-sent.handler';
 import { CopyeditAuthorReadyHandler } from './copyedit-author-ready.handler';
 import { SubmissionSubmittedHandler } from './submission-submitted.handler';
 import { SubmissionDecisionHandler } from './submission-decision.handler';
+import { SubmissionUnderReviewHandler } from './submission-under-review.handler';
 import { Phase3WorkflowHandlers } from './phase3-workflow.handlers';
+import { AuthEmailHandler } from './auth-email.handler';
 import { HandlerOutcome } from './handler-result';
 
 @Injectable()
@@ -35,13 +43,16 @@ export class ConsumersService implements OnModuleInit {
   constructor(
     private readonly rabbit: RabbitMqConnection,
     private readonly reviewerInvited: ReviewerInvitedHandler,
+    private readonly reviewerResponded: ReviewerRespondedHandler,
     private readonly reminderDue: ReminderDueHandler,
     private readonly copyeditAssigned: CopyeditAssignedHandler,
     private readonly copyeditQueriesSent: CopyeditQueriesSentHandler,
     private readonly copyeditAuthorReady: CopyeditAuthorReadyHandler,
     private readonly submissionSubmitted: SubmissionSubmittedHandler,
     private readonly submissionDecision: SubmissionDecisionHandler,
+    private readonly submissionUnderReview: SubmissionUnderReviewHandler,
     private readonly phase3: Phase3WorkflowHandlers,
+    private readonly authEmail: AuthEmailHandler,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -49,6 +60,9 @@ export class ConsumersService implements OnModuleInit {
 
     await this.rabbit.consume(topology.reviewerInvitedQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.reviewerInvited),
+    );
+    await this.rabbit.consume(topology.reviewerRespondedQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.reviewerResponded),
     );
     await this.rabbit.consume(topology.reminderDueQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.reminderDue),
@@ -68,6 +82,9 @@ export class ConsumersService implements OnModuleInit {
     await this.rabbit.consume(topology.submissionDecisionQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.submissionDecision),
     );
+    await this.rabbit.consume(topology.submissionUnderReviewQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.submissionUnderReview),
+    );
     await this.rabbit.consume(topology.submissionPublishedQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.submissionPublished),
     );
@@ -82,6 +99,15 @@ export class ConsumersService implements OnModuleInit {
     );
     await this.rabbit.consume(topology.roleInvitationQueue, (msg) =>
       this.dispatch(msg, ROUTING_KEY.roleInvitation),
+    );
+    await this.rabbit.consume(topology.authVerificationOtpQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.authVerificationOtp),
+    );
+    await this.rabbit.consume(topology.authPasswordResetQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.authPasswordReset),
+    );
+    await this.rabbit.consume(topology.authRegistrationWelcomeQueue, (msg) =>
+      this.dispatch(msg, ROUTING_KEY.authRegistrationWelcome),
     );
   }
 
@@ -111,6 +137,13 @@ export class ConsumersService implements OnModuleInit {
       ) {
         outcome = await this.reviewerInvited.handle(
           event as ReviewerInvitedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.reviewerResponded &&
+        event.type === 'ReviewerResponded'
+      ) {
+        outcome = await this.reviewerResponded.handle(
+          event as ReviewerRespondedEvent,
         );
       } else if (
         routingKey === ROUTING_KEY.reminderDue &&
@@ -153,6 +186,13 @@ export class ConsumersService implements OnModuleInit {
           event as SubmissionDecisionEvent,
         );
       } else if (
+        routingKey === ROUTING_KEY.submissionUnderReview &&
+        event.type === 'SubmissionUnderReview'
+      ) {
+        outcome = await this.submissionUnderReview.handle(
+          event as SubmissionUnderReviewEvent,
+        );
+      } else if (
         routingKey === ROUTING_KEY.submissionPublished &&
         event.type === 'SubmissionPublished'
       ) {
@@ -186,6 +226,27 @@ export class ConsumersService implements OnModuleInit {
       ) {
         outcome = await this.phase3.handleRoleInvitation(
           event as RoleInvitationCreatedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.authVerificationOtp &&
+        event.type === 'AuthVerificationOtp'
+      ) {
+        outcome = await this.authEmail.handleVerificationOtp(
+          event as AuthVerificationOtpEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.authPasswordReset &&
+        event.type === 'AuthPasswordReset'
+      ) {
+        outcome = await this.authEmail.handlePasswordReset(
+          event as AuthPasswordResetEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.authRegistrationWelcome &&
+        event.type === 'AuthRegistrationWelcome'
+      ) {
+        outcome = await this.authEmail.handleRegistrationWelcome(
+          event as AuthRegistrationWelcomeEvent,
         );
       } else {
         outcome = {

@@ -9,11 +9,9 @@ import {
   EMAIL_PROVIDER_TOKEN,
   EmailProvider,
 } from '../providers/email-provider';
-import {
-  ReviewerInvitedEvent,
-} from '../contracts/email-events';
-import { redactEventPayload } from '../shared/redactor';
-import { reviewerInvitedKey } from '../shared/idempotency';
+import { ReviewerInvitedEvent } from '@folio/shared/contracts/email-events';
+import { redactEventPayload } from '@folio/shared/messaging/redactor';
+import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { ReminderPolicyService } from '../policy/reminder-policy.service';
 import { normalizeEmailLocale } from '../common/email-locale';
@@ -182,12 +180,16 @@ export class ReviewerInvitedHandler {
     const logRepo = this.dataSource.getRepository(EmailLog);
     const emailLocale = normalizeEmailLocale(event.emailLocale);
     const { acceptUrl, declineUrl } = this.inviteUrlsForEvent(event);
-    const rendered = await this.templates.render('reviewer-invited', emailLocale, {
-      reviewerDisplayName: event.reviewer.displayName,
-      submissionTitle: event.submissionTitle,
-      acceptUrl,
-      declineUrl,
-    });
+    const rendered = await this.templates.render(
+      'reviewer-invited',
+      emailLocale,
+      {
+        reviewerDisplayName: event.reviewer.displayName,
+        submissionTitle: event.submissionTitle,
+        acceptUrl,
+        declineUrl,
+      },
+    );
     try {
       const result = await this.provider.send({
         to: event.reviewer.email,

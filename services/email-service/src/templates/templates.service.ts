@@ -6,7 +6,7 @@ import { join } from 'path';
 import { Repository } from 'typeorm';
 import { normalizeEmailLocale } from '../common/email-locale';
 import { EmailTemplateEntity } from '../entities/email-template.entity';
-import { registerFolioEmailPartials } from '../shared/register-folio-email-partials';
+import { registerFolioEmailPartials } from '@folio/shared/email/register-folio-email-partials';
 
 const TEMPLATES_DIR = join(__dirname, '..', '..', 'templates');
 
@@ -33,6 +33,9 @@ const FILE_FALLBACK: Record<string, { subject: string }> = {
   'submission-decision': {
     subject: 'Editorial decision: {{submissionTitle}}',
   },
+  'submission-under-review': {
+    subject: 'Under peer review: {{submissionTitle}}',
+  },
   'review-submitted': {
     subject: 'Review submitted: {{submissionTitle}}',
   },
@@ -48,6 +51,15 @@ const FILE_FALLBACK: Record<string, { subject: string }> = {
   'role-invitation': {
     subject: 'Invitation to join Folio as {{roleLabel}}',
   },
+  'auth-verification-otp': {
+    subject: 'Your Folio verification code: {{otpCode}}',
+  },
+  'auth-password-reset': {
+    subject: 'Reset your Folio password',
+  },
+  'auth-registration-welcome': {
+    subject: 'Welcome to Folio',
+  },
 };
 
 /** Must match `email.email_template` CHECK + transactional handlers. */
@@ -59,11 +71,15 @@ const ALLOWED = new Set([
   'copyedit-author-ready',
   'submission-submitted',
   'submission-decision',
+  'submission-under-review',
   'review-submitted',
   'review-invitation-accepted',
   'review-invitation-declined',
   'submission-published',
   'role-invitation',
+  'auth-verification-otp',
+  'auth-password-reset',
+  'auth-registration-welcome',
 ]);
 
 /**

@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RabbitMqConnection } from './rabbitmq.connection';
-import { DEFAULT_TOPOLOGY, TopologyNames } from './shared/topology';
+import {
+  DEFAULT_TOPOLOGY,
+  TopologyNames,
+} from '@folio/shared/messaging/topology';
 
 export type QueueDepthEntry = {
   messageCount: number;
@@ -55,17 +58,21 @@ export class RabbitMqQueueMetricsService {
     const queueNames = [
       this.topology.dlq,
       this.topology.reviewerInvitedQueue,
+      this.topology.reviewerRespondedQueue,
       this.topology.reminderDueQueue,
       this.topology.copyeditAssignedQueue,
       this.topology.copyeditQueriesSentQueue,
       this.topology.copyeditAuthorReadyQueue,
       this.topology.submissionSubmittedQueue,
       this.topology.submissionDecisionQueue,
+      this.topology.submissionUnderReviewQueue,
       this.topology.submissionPublishedQueue,
       this.topology.reviewSubmittedQueue,
       this.topology.reviewInvitationAcceptedQueue,
       this.topology.reviewInvitationDeclinedQueue,
       this.topology.roleInvitationQueue,
+      this.topology.aiSimilarityIndexQueue,
+      this.topology.aiCorpusSimilarityQueue,
     ] as const;
 
     const queues: Record<string, QueueDepthEntry> = {};

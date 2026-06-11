@@ -7,7 +7,7 @@ Design record: [`docs/plans/email-service.md`](../../docs/plans/email-service.md
 ## Prerequisites
 
 - Node.js LTS
-- PostgreSQL (same database as the backend; this app uses schema **`email`**)
+- PostgreSQL **`folio_email`** (dedicated instance; default host port **5433** via `docker compose -f docker-compose.dev.yml up -d postgres-email`)
 - RabbitMQ (local: `docker compose -f docker-compose.dev.yml up -d` from repo root)
 
 ## Setup
@@ -18,15 +18,13 @@ npm install
 cp .env.example .env
 ```
 
-Set `DB_*` to match [`backend/.env`](../../backend/.env) (database name must be the same). Set `RABBITMQ_URL` / `RABBITMQ_EXCHANGE` to match the backend. Default `EMAIL_PROVIDER=noop` logs would-be sends — no SMTP required in dev.
+Set `DB_*` for the email Postgres instance (`DB_PORT=5433` when using docker-compose `postgres-email`). Set `RABBITMQ_URL` / `RABBITMQ_EXCHANGE` to match the backend. Set `EMAIL_SERVICE_TOKEN` to match `backend/.env` when binding beyond loopback. Default `EMAIL_PROVIDER=noop` logs would-be sends — no SMTP required in dev.
 
 **Mail config lives only here** — never put `SMTP_*` or `EMAIL_PROVIDER` in `backend/.env`.
 
-If the backend DB user is restricted, apply [`backend/scripts/grant-email-reminder-admin.sql`](../../backend/scripts/grant-email-reminder-admin.sql) after the first startup so journal-manager email admin APIs can read `email.*`.
-
 ## Run locally
 
-Start **RabbitMQ**, then the **backend**, then this worker:
+Start **postgres-email**, **RabbitMQ**, then the **backend**, then this worker:
 
 ```bash
 npm run start:dev
@@ -38,7 +36,7 @@ On startup the worker:
 2. Runs TypeORM migrations (templates, reminder policy, `email_log`, etc.)
 3. Connects to RabbitMQ and starts consuming
 4. Starts the reminder scheduler (`@Cron` every minute)
-5. Exposes health on **`http://127.0.0.1:5244`**
+5. Listens on **`http://127.0.0.1:5244`** — health probes and **`/internal/*`** admin API (called by Nest with `x-folio-service-token`)
 
 Health checks:
 
@@ -47,20 +45,20 @@ curl http://127.0.0.1:5244/health
 curl http://127.0.0.1:5244/ready
 ```
 
-There is no product HTTP API — only health probes and background consumption.
+Journal managers use the backend BFF (`/api/v1/admin/email/*`); the browser never calls email-service directly.
 
 ## What it consumes
 
 Events on exchange `folio.events` (see [`packages/shared/messaging/topology.ts`](../../packages/shared/messaging/topology.ts)):
 
-| Routing key | Effect |
-|-------------|--------|
-| `reviewer.invited` | Invite email + schedule due-soon / overdue reminders |
-| `reminder.due` | Send reminder email |
-| `copyedit.*` | Copyeditor assignment, author queries, author-ready |
-| `submission.submitted` / `submission.decision` / `submission.published` | Editorial workflow mail |
-| `review.submitted` / `review.invitation_*` | Review activity → editors and journal managers |
-| `role.invitation` | Staff role invite |
+| Routing key                                                             | Effect                                               |
+| ----------------------------------------------------------------------- | ---------------------------------------------------- |
+| `reviewer.invited`                                                      | Invite email + schedule due-soon / overdue reminders |
+| `reminder.due`                                                          | Send reminder email                                  |
+| `copyedit.*`                                                            | Copyeditor assignment, author queries, author-ready  |
+| `submission.submitted` / `submission.decision` / `submission.published` | Editorial workflow mail                              |
+| `review.submitted` / `review.invitation_*`                              | Review activity → editors and journal managers       |
+| `role.invitation`                                                       | Staff role invite                                    |
 
 Full producer/consumer matrix: [`docs/API-NOTES.md`](../../docs/API-NOTES.md) § Eventing.
 
@@ -75,8 +73,7 @@ npm run migrate
 After editing shared contracts under `packages/shared/`, sync mirrors:
 
 ```bash
-npm run sync:shared    # from repo root: npm run sync:shared
-npm run check:shared   # CI drift check
+npm run build:shared   # from repo root, after editing packages/shared
 ```
 
 ## Tests
@@ -89,13 +86,13 @@ RabbitMQ is mocked in unit tests. For a real broker smoke test from the backend,
 
 ## Shared code
 
-Event types and RabbitMQ topology are authored in [`packages/shared/`](../../packages/shared/) and mirrored into `src/shared/` in this app. Edit the canonical package first, then `npm run sync:shared` from the repo root.
+Event types and RabbitMQ topology are imported from [`@folio/shared`](../../packages/shared/). Edit the canonical package, then `npm run build:shared` from the repo root.
 
 ## Documentation
 
-| Topic | Doc |
-|-------|-----|
-| Architecture & handler state machine | [`docs/plans/email-service.md`](../../docs/plans/email-service.md) |
-| Phase 2 submission/decision design | [`docs/plans/email-phase-2-events.md`](../../docs/plans/email-phase-2-events.md) |
-| Admin templates & pipeline ops | [`docs/testing-email-pipeline.md`](../../docs/testing-email-pipeline.md) |
-| Monorepo run order | [`README.md`](../../README.md) |
+| Topic                                | Doc                                                                              |
+| ------------------------------------ | -------------------------------------------------------------------------------- |
+| Architecture & handler state machine | [`docs/plans/email-service.md`](../../docs/plans/email-service.md)               |
+| Phase 2 submission/decision design   | [`docs/plans/email-phase-2-events.md`](../../docs/plans/email-phase-2-events.md) |
+| Admin templates & pipeline ops       | [`docs/testing-email-pipeline.md`](../../docs/testing-email-pipeline.md)         |
+| Monorepo run order                   | [`README.md`](../../README.md)                                                   |

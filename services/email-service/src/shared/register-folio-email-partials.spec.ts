@@ -2,7 +2,7 @@ import * as Handlebars from 'handlebars';
 import {
   registerFolioEmailPartials,
   resetFolioEmailPartialsForTests,
-} from './register-folio-email-partials';
+} from '@folio/shared/email/register-folio-email-partials';
 
 describe('registerFolioEmailPartials', () => {
   afterEach(() => {

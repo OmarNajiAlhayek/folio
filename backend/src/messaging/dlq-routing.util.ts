@@ -1,5 +1,6 @@
 import type { GetMessage } from 'amqplib';
-import { ROUTING_KEY } from './contracts/email-events';
+import { AI_ROUTING_KEY } from '@folio/shared/contracts/ai-events';
+import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 
 const EVENT_TYPE_TO_ROUTING: Record<string, string> = {
   ReviewerInvited: ROUTING_KEY.reviewerInvited,
@@ -9,11 +10,17 @@ const EVENT_TYPE_TO_ROUTING: Record<string, string> = {
   CopyeditAuthorReady: ROUTING_KEY.copyeditAuthorReady,
   SubmissionSubmitted: ROUTING_KEY.submissionSubmitted,
   SubmissionDecision: ROUTING_KEY.submissionDecision,
+  SubmissionUnderReview: ROUTING_KEY.submissionUnderReview,
   SubmissionPublished: ROUTING_KEY.submissionPublished,
   ReviewSubmitted: ROUTING_KEY.reviewSubmitted,
   ReviewInvitationAccepted: ROUTING_KEY.reviewInvitationAccepted,
   ReviewInvitationDeclined: ROUTING_KEY.reviewInvitationDeclined,
   RoleInvitationCreated: ROUTING_KEY.roleInvitation,
+  AuthVerificationOtp: ROUTING_KEY.authVerificationOtp,
+  AuthPasswordReset: ROUTING_KEY.authPasswordReset,
+  AuthRegistrationWelcome: ROUTING_KEY.authRegistrationWelcome,
+  SimilarityIndexRequested: AI_ROUTING_KEY.similarityIndexRequested,
+  CorpusSimilarityRequested: AI_ROUTING_KEY.corpusSimilarityRequested,
 };
 
 type XDeathEntry = {
