@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -18,6 +20,7 @@ import {
 } from '../entities/role-invitation.entity';
 import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
+import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_TYPE } from '../notifications/notification-types';
 import { roleInvitationCreatedKey } from '../notifications/notification-idempotency';
@@ -95,6 +98,8 @@ export class UsersService {
     @InjectRepository(RoleInvitation)
     private readonly roleInvRepo: Repository<RoleInvitation>,
     private readonly rbacService: RbacService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
     private readonly notifications: NotificationsService,
     private readonly eventPublisher: EventPublisherService,
     private readonly config: ConfigService,
@@ -223,6 +228,9 @@ export class UsersService {
 
   async listForRoleAdmin(query: {
     q?: string;
+    role?: string;
+    joinedFrom?: string;
+    joinedTo?: string;
     limit: number;
     offset: number;
   }): Promise<AdminUserListResult> {
@@ -249,6 +257,29 @@ export class UsersService {
             .orWhere('u.display_name ILIKE :pattern', { pattern });
         }),
       );
+    }
+
+    if (query.role) {
+      qb.andWhere(
+        `u.id IN (
+          SELECT ur.user_id FROM user_roles ur
+          INNER JOIN roles r ON r.id = ur.role_id
+          WHERE r.slug = :roleSlug
+        )`,
+        { roleSlug: query.role },
+      );
+    }
+
+    if (query.joinedFrom) {
+      qb.andWhere('u.created_at >= :joinedFrom', {
+        joinedFrom: new Date(`${query.joinedFrom}T00:00:00.000Z`),
+      });
+    }
+
+    if (query.joinedTo) {
+      qb.andWhere('u.created_at <= :joinedTo', {
+        joinedTo: new Date(`${query.joinedTo}T23:59:59.999Z`),
+      });
     }
 
     const [users, total] = await qb.getManyAndCount();
@@ -478,15 +509,8 @@ export class UsersService {
         });
       }
     }
-    try {
-      await this.rbacService.assignRoles(targetUserId, unique);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Invalid roles';
-      throw new BadRequestException({
-        message: msg,
-        code: 'VALIDATION_ERROR',
-      });
-    }
+    await this.rbacService.assignRoles(targetUserId, unique);
+    await this.authService.revokeAllSessionsForUser(targetUserId);
     const profile = await this.toPublicProfile(targetUserId);
     if (!profile) {
       throw new NotFoundException({
@@ -697,15 +721,7 @@ export class UsersService {
     const { roleSlugs } =
       await this.rbacService.getEffectiveForUser(inviteeUserId);
     const next = [...new Set([...roleSlugs, inv.roleSlug])];
-    try {
-      await this.rbacService.assignRoles(inviteeUserId, next);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Invalid roles';
-      throw new BadRequestException({
-        message: msg,
-        code: 'VALIDATION_ERROR',
-      });
-    }
+    await this.rbacService.assignRoles(inviteeUserId, next);
     inv.status = RoleInvitationStatus.ACCEPTED;
     inv.resolvedAt = new Date();
     await this.roleInvRepo.save(inv);

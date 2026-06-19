@@ -22,8 +22,7 @@ export class RevokedTokensService {
   }
 
   async isRevoked(jti: string): Promise<boolean> {
-    const count = await this.repo.count({ where: { jti } });
-    return count > 0;
+    return this.repo.exists({ where: { jti } });
   }
 
   async purgeExpired(): Promise<void> {

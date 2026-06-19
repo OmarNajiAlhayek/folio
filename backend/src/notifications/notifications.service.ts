@@ -1,7 +1,5 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { generateEntityId } from '@folio/shared';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   EntityManager,
@@ -11,11 +9,7 @@ import {
   type QueryDeepPartialEntity,
 } from 'typeorm';
 import { Notification } from '../entities/notification.entity';
-import {
-  NOTIFICATION_I18N,
-  NOTIFICATION_TYPE,
-  type NotificationType,
-} from './notification-types';
+import { NOTIFICATION_I18N, type NotificationType } from './notification-types';
 import {
   NotificationHub,
   type NotificationSsePayload,
@@ -62,8 +56,10 @@ function notificationFromInsertRaw(raw: Record<string, unknown>): Notification {
         ? null
         : readAtRaw instanceof Date
           ? readAtRaw
-          : new Date(String(readAtRaw)),
-  };
+          : typeof readAtRaw === 'string' || typeof readAtRaw === 'number'
+            ? new Date(readAtRaw)
+            : null,
+  } as Notification;
 }
 
 @Injectable()
@@ -136,6 +132,7 @@ export class NotificationsService {
     const values = toInsert.map((input) => {
       const i18n = NOTIFICATION_I18N[input.type];
       return {
+        id: generateEntityId(),
         userId: input.userId,
         type: input.type,
         titleKey: i18n.titleKey,
@@ -213,9 +210,7 @@ export class NotificationsService {
       qb.andWhere('n.read_at IS NOT NULL');
     }
 
-    const decoded = options.cursor
-      ? this.decodeCursor(options.cursor)
-      : null;
+    const decoded = options.cursor ? this.decodeCursor(options.cursor) : null;
     if (options.cursor && !decoded) {
       return { items: [], nextCursor: null };
     }
@@ -229,14 +224,16 @@ export class NotificationsService {
       );
     }
 
-    qb.orderBy('n.created_at', 'DESC').addOrderBy('n.id', 'DESC').take(limit + 1);
+    qb.orderBy('n.created_at', 'DESC')
+      .addOrderBy('n.id', 'DESC')
+      .take(limit + 1);
 
     const rows = await qb.getMany();
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? this.encodeCursor(page[page.length - 1]!)
+        ? this.encodeCursor(page[page.length - 1])
         : null;
 
     return {
@@ -245,7 +242,10 @@ export class NotificationsService {
     };
   }
 
-  async markRead(userId: string, notificationId: string): Promise<NotificationDto> {
+  async markRead(
+    userId: string,
+    notificationId: string,
+  ): Promise<NotificationDto> {
     const row = await this.repo.findOne({
       where: { id: notificationId, userId },
     });

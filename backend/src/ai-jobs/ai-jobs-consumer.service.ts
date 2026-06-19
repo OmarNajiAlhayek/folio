@@ -1,9 +1,15 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ConsumeMessage } from 'amqplib';
 import { AiJobsProcessor } from './ai-jobs.processor';
 import { AiJobsRabbitMqConnection } from './ai-jobs-rabbitmq.connection';
 import { AiJobsService } from './ai-jobs.service';
+import { AiJob } from '../entities/ai-job.entity';
 import {
   AI_ROUTING_KEY,
   type AiJobEvent,
@@ -64,7 +70,11 @@ export class AiJobsConsumerService implements OnModuleInit {
       return;
     }
 
-    await this.jobsService.markQueued(jobId);
+    const queued = await this.jobsService.markQueued(jobId);
+    if (!queued) {
+      this.rabbit.ack(msg);
+      return;
+    }
 
     try {
       if (event.type === 'SimilarityIndexRequested') {
@@ -80,7 +90,17 @@ export class AiJobsConsumerService implements OnModuleInit {
       }
       this.rabbit.ack(msg);
     } catch {
-      const job = await this.jobsService.getJob(jobId).catch(() => null);
+      let job: AiJob | null = null;
+      try {
+        job = await this.jobsService.getJob(jobId);
+      } catch (getJobErr) {
+        if (getJobErr instanceof NotFoundException) {
+          this.rabbit.nack(msg, false);
+        } else {
+          this.rabbit.nack(msg, true);
+        }
+        return;
+      }
       if (this.processor.shouldRequeue(job)) {
         this.rabbit.nack(msg, true);
       } else {

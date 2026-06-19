@@ -468,7 +468,7 @@ export class AiClientService implements OnModuleDestroy {
     return new Promise((resolve) => {
       client.suggestReviewers(
         {
-          queryText: input.queryText.trim(),
+          queryText: input.queryText?.trim() ?? '',
           limit: input.limit,
           candidateIds: input.candidateIds ?? [],
           excludeReviewerIds: input.excludeReviewerIds ?? [],

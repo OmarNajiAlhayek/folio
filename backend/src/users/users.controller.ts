@@ -34,6 +34,9 @@ export class UsersController {
   listForRoleAdmin(@Query() query: ListUsersQueryDto) {
     return this.usersService.listForRoleAdmin({
       q: query.q,
+      role: query.role,
+      joinedFrom: query.joinedFrom,
+      joinedTo: query.joinedTo,
       limit: query.limit ?? 20,
       offset: query.offset ?? 0,
     });
@@ -64,11 +67,7 @@ export class UsersController {
     @Body() dto: CreateRoleInvitationDto,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.usersService.createRoleInvitation(
-      user.sub,
-      id,
-      dto.roleSlug,
-    );
+    return this.usersService.createRoleInvitation(user.sub, id, dto.roleSlug);
   }
 
   @Patch(':id/roles')
@@ -76,8 +75,9 @@ export class UsersController {
   updateRoles(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserRolesDto,
-    @CurrentUser() _actor: RequestUser,
+    @CurrentUser() actor: RequestUser,
   ) {
+    void actor;
     return this.usersService.setRolesForUser(id, dto.roleSlugs);
   }
 }

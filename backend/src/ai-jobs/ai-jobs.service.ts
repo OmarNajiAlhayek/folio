@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { generateEntityId } from '@folio/shared';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, IsNull, Repository } from 'typeorm';
@@ -106,7 +106,10 @@ export class AiJobsService {
     submissionId: string,
     manager: EntityManager | null = null,
   ): Promise<AiJob | null> {
-    const submission = await this.submissionsRepo.findOne({
+    const submissionsRepo = manager
+      ? manager.getRepository(Submission)
+      : this.submissionsRepo;
+    const submission = await submissionsRepo.findOne({
       where: { id: submissionId },
     });
     if (!submission || submission.status !== SubmissionStatus.PUBLISHED) {
@@ -132,7 +135,7 @@ export class AiJobsService {
       return existing;
     }
 
-    const jobId = randomUUID();
+    const jobId = generateEntityId();
     const job = jobsRepo.create({
       id: jobId,
       jobType: 'similarity_index',
@@ -163,39 +166,50 @@ export class AiJobsService {
     submissionSlug: string;
     requestedByUserId: string;
   }): Promise<AiJob> {
-    const active = await this.findActiveCorpusJob(args.submissionSlug);
-    if (active) {
-      return active;
-    }
+    return this.jobsRepo.manager.transaction(async (manager) => {
+      const jobsRepo = manager.getRepository(AiJob);
 
-    const jobId = randomUUID();
-    const idempotencyKey = corpusSimilarityKey(jobId);
-    const job = this.jobsRepo.create({
-      id: jobId,
-      jobType: 'corpus_similarity',
-      status: 'pending',
-      idempotencyKey,
-      submissionId: args.submissionId,
-      submissionSlug: args.submissionSlug,
-      requestedByUserId: args.requestedByUserId,
+      const active = await jobsRepo.findOne({
+        where: {
+          submissionSlug: args.submissionSlug,
+          jobType: 'corpus_similarity',
+          status: In(ACTIVE_STATUSES),
+        },
+        order: { createdAt: 'DESC' },
+      });
+      if (active) {
+        return active;
+      }
+
+      const jobId = generateEntityId();
+      const idempotencyKey = corpusSimilarityKey(jobId);
+      const job = jobsRepo.create({
+        id: jobId,
+        jobType: 'corpus_similarity',
+        status: 'pending',
+        idempotencyKey,
+        submissionId: args.submissionId,
+        submissionSlug: args.submissionSlug,
+        requestedByUserId: args.requestedByUserId,
+      });
+      await jobsRepo.save(job);
+
+      const event: CorpusSimilarityRequestedEvent = {
+        type: 'CorpusSimilarityRequested',
+        jobId,
+        idempotencyKey,
+        submissionId: args.submissionId,
+        submissionSlug: args.submissionSlug,
+        requestedByUserId: args.requestedByUserId,
+      };
+      await this.eventPublisher.enqueue(
+        AI_ROUTING_KEY.corpusSimilarityRequested,
+        event,
+        manager,
+      );
+
+      return job;
     });
-    await this.jobsRepo.save(job);
-
-    const event: CorpusSimilarityRequestedEvent = {
-      type: 'CorpusSimilarityRequested',
-      jobId,
-      idempotencyKey,
-      submissionId: args.submissionId,
-      submissionSlug: args.submissionSlug,
-      requestedByUserId: args.requestedByUserId,
-    };
-    await this.eventPublisher.enqueue(
-      AI_ROUTING_KEY.corpusSimilarityRequested,
-      event,
-      null,
-    );
-
-    return job;
   }
 
   /**
@@ -210,21 +224,26 @@ export class AiJobsService {
       },
       select: ['id'],
     });
+
     let created = 0;
-    for (const row of rows) {
-      const job = await this.enqueueSimilarityIndex(row.id);
-      if (job) created += 1;
-    }
+    await this.jobsRepo.manager.transaction(async (manager) => {
+      for (const row of rows) {
+        const job = await this.enqueueSimilarityIndex(row.id, manager);
+        if (job) created += 1;
+      }
+    });
+
     if (created > 0) {
       this.logger.log(`Enqueued ${created} similarity index job(s)`);
     }
     return created;
   }
 
-  async markQueued(jobId: string): Promise<void> {
-    await this.jobsRepo.update(
+  async markQueued(jobId: string): Promise<boolean> {
+    const result = await this.jobsRepo.update(
       { id: jobId, status: In(['pending', 'queued']) },
       { status: 'queued' },
     );
+    return (result.affected ?? 0) > 0;
   }
 }

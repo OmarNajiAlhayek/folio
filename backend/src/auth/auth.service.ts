@@ -30,6 +30,7 @@ import {
   authVerificationOtpKey,
 } from '@folio/shared/messaging/idempotency';
 import { UsersService } from '../users/users.service';
+import { RbacService } from '../rbac/rbac.service';
 import { AuthChallengesService } from './auth-challenges.service';
 import { RegisterDto } from './dto/register.dto';
 import { jwtFromCookieOrBearer } from './jwt-from-request.util';
@@ -58,6 +59,7 @@ export class AuthService {
 
   constructor(
     private readonly usersService: UsersService,
+    private readonly rbacService: RbacService,
     private readonly jwtService: JwtService,
     private readonly revokedTokens: RevokedTokensService,
     private readonly refreshSessions: RefreshSessionsService,
@@ -178,7 +180,15 @@ export class AuthService {
         code: 'UNAUTHORIZED',
       });
     }
-    const accessToken = this.sign(user.id, user.email, rotated.accessJti);
+    const { roleSlugs, permissionSlugs } =
+      await this.rbacService.getEffectiveForUser(user.id);
+    const accessToken = this.sign(
+      user.id,
+      user.email,
+      rotated.accessJti,
+      roleSlugs,
+      permissionSlugs,
+    );
     return {
       accessToken,
       refreshToken: rotated.refreshToken,
@@ -351,6 +361,59 @@ export class AuthService {
     }
   }
 
+  /** Revoke every active session for a user (e.g. after role demotion). */
+  async revokeAllSessionsForUser(userId: string): Promise<number> {
+    return this.refreshSessions.revokeAllForUser(userId);
+  }
+
+  /**
+   * Re-sign the current access token with fresh RBAC claims (same jti).
+   * Used after permission grants so the caller keeps the same session.
+   */
+  async reissueAccessForRequest(
+    req: Request,
+    userId: string,
+  ): Promise<{ accessToken: string }> {
+    const token = jwtFromCookieOrBearer(req);
+    if (!token) {
+      throw new UnauthorizedException({
+        message: 'Access token required',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    let payload: VerifiedJwt;
+    try {
+      payload = this.jwtService.verify<VerifiedJwt>(token);
+    } catch {
+      throw new UnauthorizedException({
+        message: 'Invalid token',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    if (payload.sub !== userId || !payload.jti) {
+      throw new UnauthorizedException({
+        message: 'Invalid token',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    if (await this.revokedTokens.isRevoked(payload.jti)) {
+      throw new UnauthorizedException({
+        message: 'Session ended',
+        code: 'UNAUTHORIZED',
+      });
+    }
+    const { roleSlugs, permissionSlugs } =
+      await this.rbacService.getEffectiveForUser(userId);
+    const accessToken = this.sign(
+      userId,
+      payload.email,
+      payload.jti,
+      roleSlugs,
+      permissionSlugs,
+    );
+    return { accessToken };
+  }
+
   verifyAccessToken(token: string): JwtPayload & { exp: number } {
     return this.jwtService.verify<JwtPayload & { exp: number }>(token);
   }
@@ -385,7 +448,15 @@ export class AuthService {
       accessJti,
       meta,
     );
-    const accessToken = this.sign(userId, email, accessJti);
+    const { roleSlugs, permissionSlugs } =
+      await this.rbacService.getEffectiveForUser(userId);
+    const accessToken = this.sign(
+      userId,
+      email,
+      accessJti,
+      roleSlugs,
+      permissionSlugs,
+    );
     return {
       accessToken,
       refreshToken: created.refreshToken,
@@ -394,8 +465,20 @@ export class AuthService {
     };
   }
 
-  private sign(sub: string, email: string, jti: string): string {
-    const payload: JwtPayload = { sub, email, jti };
+  private sign(
+    sub: string,
+    email: string,
+    jti: string,
+    roleSlugs: string[],
+    permissionSlugs: string[],
+  ): string {
+    const payload: JwtPayload = {
+      sub,
+      email,
+      jti,
+      roleSlugs,
+      permissionSlugs,
+    };
     return this.jwtService.sign(payload);
   }
 

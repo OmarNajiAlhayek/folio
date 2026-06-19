@@ -4,6 +4,7 @@ import { AiJob } from '../entities/ai-job.entity';
 import { Submission } from '../entities/submission.entity';
 import { MessagingModule } from '../messaging/messaging.module';
 import { AiModule } from '../ai/ai.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AiJobsConsumerService } from './ai-jobs-consumer.service';
 import { AiJobsProcessor } from './ai-jobs.processor';
 import { AiJobsRabbitMqConnection } from './ai-jobs-rabbitmq.connection';
@@ -15,6 +16,7 @@ import { AiJobsHealthController } from './ai-jobs-health.controller';
     TypeOrmModule.forFeature([AiJob, Submission]),
     MessagingModule,
     AiModule,
+    NotificationsModule,
   ],
   controllers: [AiJobsHealthController],
   providers: [

@@ -15,7 +15,7 @@ describe('RevokedTokensService', () => {
   };
   const repo = {
     createQueryBuilder: jest.fn(() => qb),
-    count: jest.fn(),
+    exists: jest.fn(),
     delete: jest.fn(),
   };
 
@@ -42,12 +42,13 @@ describe('RevokedTokensService', () => {
   });
 
   it('isRevoked returns true when row exists', async () => {
-    repo.count.mockResolvedValue(1);
+    repo.exists.mockResolvedValue(true);
     await expect(service.isRevoked('jti-1')).resolves.toBe(true);
+    expect(repo.exists).toHaveBeenCalledWith({ where: { jti: 'jti-1' } });
   });
 
   it('isRevoked returns false when row missing', async () => {
-    repo.count.mockResolvedValue(0);
+    repo.exists.mockResolvedValue(false);
     await expect(service.isRevoked('jti-1')).resolves.toBe(false);
   });
 

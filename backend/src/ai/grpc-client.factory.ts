@@ -1,4 +1,4 @@
-import { credentials, type ChannelCredentials } from '@grpc/grpc-js';
+import { credentials } from '@grpc/grpc-js';
 import { ClassifierServiceClient } from './grpc/gen/folio/ai/v1/classifier';
 import { CopyeditServiceClient } from './grpc/gen/folio/ai/v1/copyedit';
 import { KeywordServiceClient } from './grpc/gen/folio/ai/v1/keywords';
@@ -32,15 +32,13 @@ export function getClassifierGrpcClient(
   if (client && clientTarget === target) {
     return client;
   }
-  if (client) {
-    client.close();
-    client = null;
-  }
-  clientTarget = target;
+  const prevClassifier = client;
   client = new ClassifierServiceClient(
     target,
     credentials.createInsecure() as ChannelCredentials,
   );
+  clientTarget = target;
+  prevClassifier?.close();
   return client;
 }
 
@@ -52,15 +50,13 @@ export function getKeywordGrpcClient(
   if (keywordClient && keywordClientTarget === target) {
     return keywordClient;
   }
-  if (keywordClient) {
-    keywordClient.close();
-    keywordClient = null;
-  }
-  keywordClientTarget = target;
+  const prevKeyword = keywordClient;
   keywordClient = new KeywordServiceClient(
     target,
     credentials.createInsecure() as ChannelCredentials,
   );
+  keywordClientTarget = target;
+  prevKeyword?.close();
   return keywordClient;
 }
 
@@ -72,15 +68,13 @@ export function getPlagiarismGrpcClient(
   if (plagiarismClient && plagiarismClientTarget === target) {
     return plagiarismClient;
   }
-  if (plagiarismClient) {
-    plagiarismClient.close();
-    plagiarismClient = null;
-  }
-  plagiarismClientTarget = target;
+  const prevPlagiarism = plagiarismClient;
   plagiarismClient = new PlagiarismServiceClient(
     target,
     credentials.createInsecure() as ChannelCredentials,
   );
+  plagiarismClientTarget = target;
+  prevPlagiarism?.close();
   return plagiarismClient;
 }
 
@@ -116,15 +110,13 @@ export function getSimilarityGrpcClient(
   if (similarityClient && similarityClientTarget === target) {
     return similarityClient;
   }
-  if (similarityClient) {
-    similarityClient.close();
-    similarityClient = null;
-  }
-  similarityClientTarget = target;
+  const prevSimilarity = similarityClient;
   similarityClient = new SimilarityServiceClient(
     target,
     credentials.createInsecure() as ChannelCredentials,
   );
+  similarityClientTarget = target;
+  prevSimilarity?.close();
   return similarityClient;
 }
 
@@ -144,15 +136,13 @@ export function getReviewerMatchingGrpcClient(
   if (reviewerClient && reviewerClientTarget === target) {
     return reviewerClient;
   }
-  if (reviewerClient) {
-    reviewerClient.close();
-    reviewerClient = null;
-  }
-  reviewerClientTarget = target;
+  const prevReviewer = reviewerClient;
   reviewerClient = new ReviewerMatchingServiceClient(
     target,
     credentials.createInsecure() as ChannelCredentials,
   );
+  reviewerClientTarget = target;
+  prevReviewer?.close();
   return reviewerClient;
 }
 
@@ -172,15 +162,13 @@ export function getCopyeditGrpcClient(
   if (copyeditClient && copyeditClientTarget === target) {
     return copyeditClient;
   }
-  if (copyeditClient) {
-    copyeditClient.close();
-    copyeditClient = null;
-  }
-  copyeditClientTarget = target;
+  const prevCopyedit = copyeditClient;
   copyeditClient = new CopyeditServiceClient(
     target,
     credentials.createInsecure() as ChannelCredentials,
   );
+  copyeditClientTarget = target;
+  prevCopyedit?.close();
   return copyeditClient;
 }
 

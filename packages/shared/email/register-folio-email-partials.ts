@@ -67,24 +67,30 @@ export const FOLIO_EMAIL_BUTTON_SECONDARY_PARTIAL = `<table role="presentation" 
 export const FOLIO_EMAIL_LINK_STYLE =
   'color:#3d5a4a;text-decoration:underline;';
 
-let registered = false;
+type HandlebarsRuntime = typeof Handlebars;
 
-/** Idempotent; safe to call before every compile in tests. */
-export function registerFolioEmailPartials(): void {
-  if (registered) return;
-  Handlebars.registerPartial('folio-email-layout', FOLIO_EMAIL_LAYOUT_PARTIAL);
-  Handlebars.registerPartial('folio-email-button', FOLIO_EMAIL_BUTTON_PARTIAL);
-  Handlebars.registerPartial(
+const registeredRuntimes = new WeakSet<object>();
+
+/** Idempotent; pass the caller's Handlebars instance to avoid duplicate-module partial misses. */
+export function registerFolioEmailPartials(
+  hbs: HandlebarsRuntime = Handlebars,
+): void {
+  if (registeredRuntimes.has(hbs)) return;
+  hbs.registerPartial('folio-email-layout', FOLIO_EMAIL_LAYOUT_PARTIAL);
+  hbs.registerPartial('folio-email-button', FOLIO_EMAIL_BUTTON_PARTIAL);
+  hbs.registerPartial(
     'folio-email-button-secondary',
     FOLIO_EMAIL_BUTTON_SECONDARY_PARTIAL,
   );
-  registered = true;
+  registeredRuntimes.add(hbs);
 }
 
 /** @internal Test helper */
-export function resetFolioEmailPartialsForTests(): void {
-  registered = false;
-  delete Handlebars.partials['folio-email-layout'];
-  delete Handlebars.partials['folio-email-button'];
-  delete Handlebars.partials['folio-email-button-secondary'];
+export function resetFolioEmailPartialsForTests(
+  hbs: HandlebarsRuntime = Handlebars,
+): void {
+  registeredRuntimes.delete(hbs);
+  delete hbs.partials['folio-email-layout'];
+  delete hbs.partials['folio-email-button'];
+  delete hbs.partials['folio-email-button-secondary'];
 }

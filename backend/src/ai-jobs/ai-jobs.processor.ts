@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
-import { AiJob } from '../entities/ai-job.entity';
+import { AiJob, type AiJobStatus } from '../entities/ai-job.entity';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import {
@@ -15,9 +15,18 @@ import {
   isCorpusPlainTextSufficient,
 } from '../submissions/submission-corpus-text.util';
 import { publicationSimilarityIndexPayload } from '../submissions/publication-similarity.util';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_TYPE } from '../notifications/notification-types';
 
 const CORPUS_SIMILARITY_THRESHOLD = 0.85;
 const MAX_JOB_ATTEMPTS = 3;
+
+class PermanentJobError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PermanentJobError';
+  }
+}
 
 @Injectable()
 export class AiJobsProcessor {
@@ -29,19 +38,30 @@ export class AiJobsProcessor {
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
     private readonly aiClient: AiClientService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async processSimilarityIndex(jobId: string): Promise<void> {
+    const claimed = await this.jobsRepo
+      .createQueryBuilder()
+      .update(AiJob)
+      .set({ status: 'running' as AiJobStatus })
+      .where('id = :id AND status IN (:...statuses)', {
+        id: jobId,
+        statuses: ['pending', 'queued'],
+      })
+      .execute();
+
+    if ((claimed.affected ?? 0) === 0) {
+      return;
+    }
+
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) {
       this.logger.warn(`similarity_index job missing id=${jobId}`);
       return;
     }
-    if (job.status === 'completed') {
-      return;
-    }
 
-    job.status = 'running';
     job.startedAt = job.startedAt ?? new Date();
     job.attempts += 1;
     await this.jobsRepo.save(job);
@@ -51,10 +71,10 @@ export class AiJobsProcessor {
         where: { id: job.submissionId ?? '' },
       });
       if (!submission) {
-        throw new Error('Submission not found');
+        throw new PermanentJobError('Submission not found');
       }
       if (submission.status !== SubmissionStatus.PUBLISHED) {
-        throw new Error('Submission is not published');
+        throw new PermanentJobError('Submission is not published');
       }
 
       const payload = publicationSimilarityIndexPayload(submission);
@@ -66,6 +86,11 @@ export class AiJobsProcessor {
         return;
       }
 
+      if (!this.aiClient.isSimilarityEnabled()) {
+        await this.completeJob(job, { status: 'skipped', reason: 'disabled' });
+        return;
+      }
+
       const ok = await this.aiClient.upsertSimilarityArticle({
         articleId: submission.id,
         abstract: payload.abstract,
@@ -74,7 +99,7 @@ export class AiJobsProcessor {
         fullText: payload.fullText,
       });
       if (!ok) {
-        throw new Error('ai-service UpsertArticle failed or is disabled');
+        throw new Error('ai-service UpsertArticle failed');
       }
 
       submission.similarityIndexedAt = new Date();
@@ -90,16 +115,26 @@ export class AiJobsProcessor {
   }
 
   async processCorpusSimilarity(jobId: string): Promise<void> {
+    const claimed = await this.jobsRepo
+      .createQueryBuilder()
+      .update(AiJob)
+      .set({ status: 'running' as AiJobStatus })
+      .where('id = :id AND status IN (:...statuses)', {
+        id: jobId,
+        statuses: ['pending', 'queued'],
+      })
+      .execute();
+
+    if ((claimed.affected ?? 0) === 0) {
+      return;
+    }
+
     const job = await this.jobsRepo.findOne({ where: { id: jobId } });
     if (!job) {
       this.logger.warn(`corpus_similarity job missing id=${jobId}`);
       return;
     }
-    if (job.status === 'completed') {
-      return;
-    }
 
-    job.status = 'running';
     job.startedAt = job.startedAt ?? new Date();
     job.attempts += 1;
     await this.jobsRepo.save(job);
@@ -120,7 +155,7 @@ export class AiJobsProcessor {
       where: { id: job.submissionId ?? '' },
     });
     if (!submission) {
-      throw new Error('Submission not found');
+      throw new PermanentJobError('Submission not found');
     }
 
     if (!this.aiClient.isCorpusSimilarityEnabled()) {
@@ -136,7 +171,7 @@ export class AiJobsProcessor {
     const matches = await this.aiClient.detectCorpusSimilarity({
       submissionText: plainText,
       threshold,
-      category: submission.discipline?.trim() || undefined,
+      category: submission.disciplines?.[0]?.trim() || undefined,
     });
     if (matches === null) {
       return { status: 'unavailable' };
@@ -183,12 +218,13 @@ export class AiJobsProcessor {
     job.errorMessage = null;
     job.completedAt = new Date();
     await this.jobsRepo.save(job);
+    await this.notifyJobDone(job, true);
   }
 
   private async failJob(job: AiJob, err: unknown): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     job.errorMessage = message.slice(0, 500);
-    if (job.attempts >= MAX_JOB_ATTEMPTS) {
+    if (err instanceof PermanentJobError || job.attempts >= MAX_JOB_ATTEMPTS) {
       job.status = 'failed';
       job.completedAt = new Date();
     } else {
@@ -198,6 +234,39 @@ export class AiJobsProcessor {
     this.logger.warn(
       `AI job ${job.id} (${job.jobType}) attempt ${job.attempts}/${MAX_JOB_ATTEMPTS}: ${message}`,
     );
+    if (job.status === 'failed') {
+      await this.notifyJobDone(job, false);
+    }
+  }
+
+  private async notifyJobDone(job: AiJob, succeeded: boolean): Promise<void> {
+    if (
+      job.jobType !== 'corpus_similarity' ||
+      !job.requestedByUserId ||
+      !job.submissionSlug
+    ) {
+      return;
+    }
+    const submission = job.submissionId
+      ? await this.submissionsRepo.findOne({
+          where: { id: job.submissionId },
+          select: ['id', 'title'],
+        })
+      : null;
+    const submissionTitle = submission?.title ?? job.submissionSlug;
+    const type = succeeded
+      ? NOTIFICATION_TYPE.AI_CORPUS_SIMILARITY_COMPLETED
+      : NOTIFICATION_TYPE.AI_CORPUS_SIMILARITY_FAILED;
+    const notification = await this.notificationsService.createIfAbsent({
+      userId: job.requestedByUserId,
+      type,
+      params: { submissionTitle },
+      href: `/submissions/${job.submissionSlug}`,
+      idempotencyKey: `ai-job-notify:${job.id}`,
+    });
+    if (notification) {
+      this.notificationsService.emitCreated([notification]);
+    }
   }
 
   shouldRequeue(job: AiJob | null): boolean {

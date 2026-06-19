@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -26,7 +26,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       AuthChallenge,
       OAuthIdentity,
     ]),
-    UsersModule,
+    forwardRef(() => UsersModule),
     RbacModule,
     MessagingModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),

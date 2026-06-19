@@ -1,6 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 function trimOptional(value: unknown): string | undefined {
   if (typeof value !== 'string') {
@@ -12,7 +20,8 @@ function trimOptional(value: unknown): string | undefined {
 
 export class ListUsersQueryDto {
   @ApiPropertyOptional({
-    description: 'Search by email or display name (substring, case-insensitive).',
+    description:
+      'Search by email or display name (substring, case-insensitive).',
     maxLength: 120,
   })
   @IsOptional()
@@ -20,6 +29,41 @@ export class ListUsersQueryDto {
   @MaxLength(120)
   @Transform(({ value }) => trimOptional(value))
   q?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter by role slug (e.g. reviewer, copyeditor, editor, journal_manager).',
+    maxLength: 50,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => trimOptional(value))
+  role?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter to users who joined on or after this date (YYYY-MM-DD, UTC).',
+    example: '2024-01-01',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'joinedFrom must be a YYYY-MM-DD date string',
+  })
+  joinedFrom?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter to users who joined on or before this date (YYYY-MM-DD, UTC).',
+    example: '2024-12-31',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'joinedTo must be a YYYY-MM-DD date string',
+  })
+  joinedTo?: string;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 20 })
   @IsOptional()

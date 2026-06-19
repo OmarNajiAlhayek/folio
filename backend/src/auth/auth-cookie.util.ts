@@ -33,6 +33,20 @@ function refreshMaxAgeMs(config: ConfigService): number {
   return parseDurationMs(raw);
 }
 
+export function setAccessCookie(
+  res: Response,
+  config: ConfigService,
+  accessToken: string,
+): void {
+  res.cookie(FOLIO_ACCESS_COOKIE, accessToken, {
+    sameSite: 'lax' as const,
+    secure: cookieSecure(config),
+    path: ACCESS_COOKIE_PATH,
+    httpOnly: true,
+    maxAge: accessMaxAgeMs(config),
+  });
+}
+
 export function setAuthCookies(
   res: Response,
   config: ConfigService,

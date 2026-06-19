@@ -9,6 +9,7 @@ import {
   RoleInvitationStatus,
 } from '../entities/role-invitation.entity';
 import { RbacService } from '../rbac/rbac.service';
+import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventPublisherService } from '../messaging/event-publisher.service';
 import { ROLE_SLUGS } from '../rbac/permission-slugs';
@@ -53,6 +54,10 @@ describe('UsersService', () => {
         {
           provide: RbacService,
           useValue: { getEffectiveForUser },
+        },
+        {
+          provide: AuthService,
+          useValue: { revokeAllSessionsForUser: jest.fn() },
         },
         {
           provide: NotificationsService,

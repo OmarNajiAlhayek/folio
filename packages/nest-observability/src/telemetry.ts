@@ -3,6 +3,7 @@ import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-ho
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { GrpcInstrumentation } from '@opentelemetry/instrumentation-grpc';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import {
@@ -54,6 +55,7 @@ export function initTelemetry(options: InitTelemetryOptions): void {
     instrumentations: [
       new HttpInstrumentation(),
       new GrpcInstrumentation(),
+      new PgInstrumentation(),
       // AMQP: manual inject/extract in RabbitMQ wrappers (no amqplib auto-instrumentation).
     ],
   });
