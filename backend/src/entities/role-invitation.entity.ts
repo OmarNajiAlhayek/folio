@@ -4,8 +4,8 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 
 export enum RoleInvitationStatus {
@@ -15,10 +15,7 @@ export enum RoleInvitationStatus {
 }
 
 @Entity('role_invitations')
-export class RoleInvitation {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class RoleInvitation extends BaseEntity {
   @Column({ name: 'invitee_user_id' })
   inviteeUserId: string;
 

@@ -30,6 +30,34 @@ export const dataSourceOptions: DataSourceOptions = {
   ],
   migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
   synchronize: false,
+  extra: {
+    max: parseInt(process.env.DB_POOL_MAX ?? '30', 10),
+    ...(process.env.DB_POOL_IDLE_TIMEOUT_MS
+      ? { idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT_MS, 10) }
+      : {}),
+    ...(process.env.DB_POOL_CONNECTION_TIMEOUT_MS
+      ? {
+          connectionTimeoutMillis: parseInt(
+            process.env.DB_POOL_CONNECTION_TIMEOUT_MS,
+            10,
+          ),
+        }
+      : {}),
+    ...(process.env.DB_STATEMENT_TIMEOUT_MS
+      ? {
+          options: `-c statement_timeout=${parseInt(process.env.DB_STATEMENT_TIMEOUT_MS, 10)}`,
+        }
+      : {}),
+  },
+  ...(process.env.TYPEORM_MAX_QUERY_EXECUTION_TIME_MS
+    ? {
+        maxQueryExecutionTime: parseInt(
+          process.env.TYPEORM_MAX_QUERY_EXECUTION_TIME_MS,
+          10,
+        ),
+        logging: ['warn' as const],
+      }
+    : {}),
 };
 
 export const AppDataSource = new DataSource(dataSourceOptions);

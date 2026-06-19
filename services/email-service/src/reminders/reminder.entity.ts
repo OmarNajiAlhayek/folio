@@ -1,10 +1,5 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 
 export type ReminderKind = 'review_due_soon' | 'review_overdue';
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled';
@@ -21,10 +16,7 @@ export type ReminderStatus = 'pending' | 'sent' | 'cancelled';
  */
 @Entity({ name: 'reminder', schema: 'email' })
 @Index('ix_reminder_due', ['status', 'sendAt'])
-export class Reminder {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Reminder extends BaseEntity {
   @Column({ name: 'assignment_slug', type: 'varchar', length: 260 })
   assignmentSlug: string;
 

@@ -5,18 +5,15 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 
 export type AuthChallengePurpose = 'email_verification' | 'password_reset';
 
 @Entity('auth_challenges')
 @Index(['userId', 'purpose', 'consumedAt'])
-export class AuthChallenge {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class AuthChallenge extends BaseEntity {
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 

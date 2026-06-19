@@ -3,9 +3,9 @@ import {
   CreateDateColumn,
   Entity,
   Index,
-  PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 
 export type AiJobType = 'similarity_index' | 'corpus_similarity';
 
@@ -19,10 +19,7 @@ export type AiJobStatus =
 @Entity('ai_jobs')
 @Index('ix_ai_jobs_submission_status', ['submissionId', 'status'])
 @Index('ix_ai_jobs_slug_type_status', ['submissionSlug', 'jobType', 'status'])
-export class AiJob {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class AiJob extends BaseEntity {
   @Column({ name: 'job_type', type: 'varchar', length: 32 })
   jobType: AiJobType;
 

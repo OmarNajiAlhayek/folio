@@ -2,12 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
-  PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 import { SubmissionStatus } from './submission-status.enum';
 import { SubmissionArticleType } from './submission-article-type.enum';
@@ -22,10 +23,13 @@ import type { ConstructorContent } from '../submissions/constructor-content.type
 import type { ReviewManuscriptPresentation } from '../submissions/review-manuscript-presentation.types';
 
 @Entity('submissions')
-export class Submission {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+@Index('ix_submissions_status_updated_at', ['status', 'updatedAt'])
+@Index('ix_submissions_author_updated_at', ['authorId', 'updatedAt'])
+@Index('ix_submissions_status_published_at', ['status', 'publishedAt'])
+@Index('ix_submissions_editor_queue', ['updatedAt'], {
+  where: `"status" <> 'draft'`,
+})
+export class Submission extends BaseEntity {
   @Column({ name: 'author_id' })
   authorId: string;
 
@@ -91,9 +95,9 @@ export class Submission {
   @Column({ name: 'ai_usage_statement', type: 'text', nullable: true })
   aiUsageStatement: string | null;
 
-  /** Confirmed academic field (Arabic label from AraBERT taxonomy). */
-  @Column({ type: 'varchar', length: 120, nullable: true })
-  discipline: string | null;
+  /** Confirmed academic fields (Arabic labels from AraBERT taxonomy, max 3). */
+  @Column({ type: 'text', array: true, default: [] })
+  disciplines: string[];
 
   @Column({
     name: 'discipline_source',
@@ -104,12 +108,12 @@ export class Submission {
   disciplineSource: SubmissionDisciplineSource | null;
 
   @Column({
-    name: 'discipline_suggested',
-    type: 'varchar',
-    length: 120,
-    nullable: true,
+    name: 'discipline_suggested_labels',
+    type: 'text',
+    array: true,
+    default: [],
   })
-  disciplineSuggested: string | null;
+  disciplineSuggestedLabels: string[];
 
   @Column({
     name: 'discipline_suggested_confidence',

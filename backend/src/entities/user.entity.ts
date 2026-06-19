@@ -3,19 +3,16 @@ import {
   CreateDateColumn,
   Entity,
   OneToMany,
-  PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { Submission } from './submission.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
 import { UserRole } from './user-role.entity';
 
 @Entity('users')
-export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class User extends BaseEntity {
   @Column({ unique: true })
   email: string;
 

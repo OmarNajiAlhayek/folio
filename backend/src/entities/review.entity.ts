@@ -1,10 +1,5 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  OneToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, OneToOne } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 
 export enum ReviewRecommendation {
@@ -14,10 +9,7 @@ export enum ReviewRecommendation {
 }
 
 @Entity('reviews')
-export class Review {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Review extends BaseEntity {
   @Column({ name: 'assignment_id', unique: true })
   assignmentId: string;
 

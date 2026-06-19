@@ -5,8 +5,8 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 import { Submission } from './submission.entity';
 import { CopyeditNote } from './copyedit-note.entity';
@@ -18,10 +18,7 @@ export enum CopyeditAssignmentStatus {
 }
 
 @Entity('copyedit_assignments')
-export class CopyeditAssignment {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class CopyeditAssignment extends BaseEntity {
   @Column({ type: 'varchar', length: 260, unique: true, nullable: true })
   slug: string | null;
 

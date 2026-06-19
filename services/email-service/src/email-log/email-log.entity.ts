@@ -1,10 +1,6 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
+import { MAX_RETRY_COUNT } from '../common/email-retry.constants';
 
 export type EmailLogStatus = 'pending' | 'sent' | 'failed';
 
@@ -17,10 +13,7 @@ export type EmailLogStatus = 'pending' | 'sent' | 'failed';
  */
 @Entity({ name: 'email_log', schema: 'email' })
 @Index('ux_email_log_idempotency_key', ['idempotencyKey'], { unique: true })
-export class EmailLog {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class EmailLog extends BaseEntity {
   @Column({ name: 'idempotency_key', type: 'varchar', length: 200 })
   idempotencyKey: string;
 
@@ -50,6 +43,31 @@ export class EmailLog {
   @Column({ name: 'sent_at', type: 'timestamptz', nullable: true })
   sentAt: Date | null;
 
+  /** Number of cron-based retry attempts made so far. */
+  @Column({ name: 'retry_count', type: 'integer', default: 0 })
+  retryCount: number;
+
+  /** When the next cron retry is eligible. NULL = no retry scheduled. */
+  @Column({ name: 'next_retry_at', type: 'timestamptz', nullable: true })
+  nextRetryAt: Date | null;
+
+  /** Rendered subject line stored before the first send attempt. */
+  @Column({ name: 'rendered_subject', type: 'text', nullable: true })
+  renderedSubject: string | null;
+
+  /** Rendered HTML body stored before the first send attempt. */
+  @Column({ name: 'rendered_html', type: 'text', nullable: true })
+  renderedHtml: string | null;
+
+  /** Rendered plain-text body stored before the first send attempt. */
+  @Column({ name: 'rendered_text', type: 'text', nullable: true })
+  renderedText: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  /** True when this row has exhausted all retry attempts. */
+  get isRetryExhausted(): boolean {
+    return this.retryCount >= MAX_RETRY_COUNT;
+  }
 }

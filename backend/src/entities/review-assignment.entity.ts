@@ -2,11 +2,12 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToOne,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 import { Submission } from './submission.entity';
 import { Review } from './review.entity';
@@ -19,10 +20,9 @@ export enum AssignmentStatus {
 }
 
 @Entity('review_assignments')
-export class ReviewAssignment {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+@Index('ix_review_assignments_reviewer_assigned', ['reviewerId', 'assignedAt'])
+@Index('ix_review_assignments_submission_id', ['submissionId'])
+export class ReviewAssignment extends BaseEntity {
   @Column({ type: 'varchar', length: 260, unique: true, nullable: true })
   slug: string | null;
 

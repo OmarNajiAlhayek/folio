@@ -1,19 +1,11 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 
 @Entity('refresh_sessions')
 @Index('ix_refresh_sessions_user_id', ['userId'])
 @Index('ix_refresh_sessions_family_id', ['familyId'])
 @Index('ix_refresh_sessions_expires_at', ['expiresAt'])
-export class RefreshSession {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class RefreshSession extends BaseEntity {
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 

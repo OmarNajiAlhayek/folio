@@ -4,16 +4,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { Submission } from './submission.entity';
 import { SubmissionFileStage } from './submission-file-stage.enum';
 
 @Entity('submission_files')
-export class SubmissionFile {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class SubmissionFile extends BaseEntity {
   @Column({ name: 'submission_id' })
   submissionId: string;
 

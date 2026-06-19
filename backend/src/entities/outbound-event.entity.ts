@@ -1,10 +1,5 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 
 export type OutboundEventStatus = 'pending' | 'published' | 'dead';
 
@@ -19,10 +14,7 @@ export type OutboundEventStatus = 'pending' | 'published' | 'dead';
  */
 @Entity('outbound_event_outbox')
 @Index('ix_outbox_pending_next_attempt', ['status', 'nextAttemptAt'])
-export class OutboundEvent {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class OutboundEvent extends BaseEntity {
   @Column({ name: 'routing_key', type: 'varchar', length: 128 })
   routingKey: string;
 

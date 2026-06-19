@@ -1,17 +1,9 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
 
 @Entity('copyedit_notes')
-export class CopyeditNote {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class CopyeditNote extends BaseEntity {
   @Column({ name: 'assignment_id' })
   assignmentId: string;
 

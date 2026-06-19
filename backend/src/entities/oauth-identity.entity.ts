@@ -5,9 +5,9 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 
 export const OAUTH_PROVIDER_ORCID = 'orcid' as const;
@@ -16,10 +16,7 @@ export type OAuthProvider = typeof OAUTH_PROVIDER_ORCID;
 @Entity('oauth_identities')
 @Index(['provider', 'providerSubjectId'], { unique: true })
 @Index(['userId', 'provider'], { unique: true })
-export class OAuthIdentity {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class OAuthIdentity extends BaseEntity {
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 

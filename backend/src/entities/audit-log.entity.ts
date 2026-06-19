@@ -1,13 +1,14 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index } from 'typeorm';
+import type { AuditActionType, AuditResourceType } from '../audit/audit-action';
+import { BaseEntity } from '../common/base.entity';
 
 @Entity('audit_log')
 @Index('ix_audit_log_user_occurred', ['userId', 'occurredAt'])
 @Index('ix_audit_log_occurred', ['occurredAt'])
 @Index('ix_audit_log_route_occurred', ['routePattern', 'occurredAt'])
-export class AuditLog {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+@Index('ix_audit_log_action_occurred', ['actionType', 'occurredAt'])
+@Index('ix_audit_log_resource', ['resourceType', 'resourceId', 'occurredAt'])
+export class AuditLog extends BaseEntity {
   @Column({ name: 'user_id', type: 'varchar', nullable: true })
   userId: string | null;
 
@@ -54,4 +55,18 @@ export class AuditLog {
 
   @Column({ type: 'text', nullable: true })
   error: string | null;
+
+  @Column({ name: 'action_type', type: 'varchar', length: 32, nullable: true })
+  actionType: AuditActionType | null;
+
+  @Column({
+    name: 'resource_type',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+  })
+  resourceType: AuditResourceType | null;
+
+  @Column({ name: 'resource_id', type: 'varchar', length: 512, nullable: true })
+  resourceId: string | null;
 }
