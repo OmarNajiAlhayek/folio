@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EmailServiceClient } from '../email-client/email-client.service';
@@ -10,7 +6,6 @@ import type { ReminderAdminDto } from '../email-client/email-client.types';
 import { Submission } from '../entities/submission.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
 import type { RequestUser } from '../common/types/request-user';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 
 export type { ReminderAdminDto };
 
@@ -24,21 +19,13 @@ export class RemindersService {
     private readonly assignmentsRepo: Repository<ReviewAssignment>,
   ) {}
 
-  private hasPerm(user: RequestUser, slug: string): boolean {
-    return user.permissionSlugs.includes(slug);
-  }
-
+  /** Resource scope only — caller auth is enforced by `AssignmentRemindersController`. */
   private async assertAssignmentScope(
     submissionSlug: string,
     assignmentSlug: string,
     user: RequestUser,
   ): Promise<void> {
-    if (!this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS)) {
-      throw new ForbiddenException({
-        message: 'Editor role required',
-        code: 'FORBIDDEN',
-      });
-    }
+    void user;
     const sub = await this.submissionsRepo.findOne({
       where: { slug: submissionSlug },
     });

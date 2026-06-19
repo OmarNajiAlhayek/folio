@@ -10,7 +10,7 @@
  *   set EMAIL_PIPELINE_INTEGRATION=1   # PowerShell: $env:EMAIL_PIPELINE_INTEGRATION='1'
  *   npm run test:pipeline
  */
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -32,6 +32,7 @@ import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
 import { UsersService } from '../src/users/users.service';
 import { RbacService } from '../src/rbac/rbac.service';
 import { ROLE_SLUGS } from '../src/rbac/permission-slugs';
+import { configureNestTestApp } from './configure-nest-test-app';
 
 const ENABLED = process.env.EMAIL_PIPELINE_INTEGRATION === '1';
 const RABBIT_URL = process.env.RABBITMQ_URL ?? 'amqp://localhost:5672';
@@ -70,14 +71,7 @@ function sleep(ms: number): Promise<void> {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    configureNestTestApp(app);
     await app.init();
 
     outboxRepo = app.get(getRepositoryToken(OutboundEvent));

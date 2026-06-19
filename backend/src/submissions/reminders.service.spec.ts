@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -47,14 +46,18 @@ describe('RemindersService', () => {
     );
   });
 
-  it('listForAssignment forbids without list-assignments permission', async () => {
+  it('listForAssignment allows journal managers (caller auth is on the controller)', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.findOne.mockResolvedValue({ id: 'a1', slug: 'asg-1' });
+    emailClient.listReminders.mockResolvedValue([]);
+
     await expect(
       service.listForAssignment(
         'sub-1',
         'asg-1',
         user([PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS]),
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toEqual([]);
   });
 
   it('listForAssignment returns rows from email client', async () => {
@@ -79,10 +82,7 @@ describe('RemindersService', () => {
     const out = await service.listForAssignment(
       'sub-1',
       'asg-1',
-      user([
-        PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-      ]),
+      user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
     );
 
     expect(out).toHaveLength(1);
@@ -113,10 +113,7 @@ describe('RemindersService', () => {
         'sub-1',
         'asg-1',
         'r1',
-        user([
-          PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-          PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-        ]),
+        user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
         tooSoon,
       ),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -143,10 +140,7 @@ describe('RemindersService', () => {
       'sub-1',
       'asg-1',
       'r1',
-      user([
-        PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-      ]),
+      user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
       sendAt,
     );
 
@@ -179,10 +173,7 @@ describe('RemindersService', () => {
       'sub-1',
       'asg-1',
       'r1',
-      user([
-        PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-        PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-      ]),
+      user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
     );
 
     expect(out.status).toBe('cancelled');
@@ -202,10 +193,7 @@ describe('RemindersService', () => {
         'sub-1',
         'asg-1',
         '00000000-0000-0000-0000-000000000001',
-        user([
-          PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
-          PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-        ]),
+        user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });

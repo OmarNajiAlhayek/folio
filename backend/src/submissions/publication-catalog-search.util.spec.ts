@@ -112,8 +112,11 @@ describe('publication-catalog-search.util', () => {
       PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
       'DESC',
     );
-    expect(andWhere).toHaveBeenCalledWith('s.discipline = :pubDiscipline', {
-      pubDiscipline: 'العلوم الأساسية',
-    });
+    expect(andWhere).toHaveBeenCalledWith(
+      ':pubDiscipline = ANY(s.disciplines)',
+      {
+        pubDiscipline: 'العلوم الأساسية',
+      },
+    );
   });
 });

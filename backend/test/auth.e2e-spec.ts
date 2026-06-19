@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import cookieParser from 'cookie-parser';
@@ -6,6 +6,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
+import { configureNestTestApp } from './configure-nest-test-app';
 import {
   FOLIO_ACCESS_COOKIE,
   FOLIO_REFRESH_COOKIE,
@@ -26,6 +27,17 @@ function extractCookie(
   const hit = list.find((c) => c.startsWith(`${name}=`));
   if (!hit) return undefined;
   return hit.split(';')[0]?.split('=').slice(1).join('=');
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const part = token.split('.')[1];
+  if (!part) {
+    throw new Error('invalid JWT');
+  }
+  return JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) as Record<
+    string,
+    unknown
+  >;
 }
 
 async function latestOutboxOtp(
@@ -77,21 +89,40 @@ describe('Auth sessions (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
+    configureNestTestApp(app);
     app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
     await app.init();
     outboxRepo = app.get(getRepositoryToken(OutboundEvent));
   });
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it('issues access tokens with embedded RBAC claims', async () => {
+    const email = `rbac-claims-${Date.now()}@folio.local`;
+    const registerRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        email,
+        password: 'TestPass123!',
+        displayName: 'RBAC Claims E2E',
+      })
+      .expect(201);
+
+    const { accessToken } = registerRes.body as { accessToken: string };
+    const payload = decodeJwtPayload(accessToken);
+    expect(payload.sub).toBeDefined();
+    expect(payload.jti).toBeDefined();
+    expect(payload.roleSlugs).toEqual(expect.arrayContaining(['author']));
+    expect(payload.permissionSlugs).toEqual(
+      expect.arrayContaining(['submission.manage_own']),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
   });
 
   it('revokes the current JWT on logout so reuse returns 401', async () => {
@@ -148,7 +179,7 @@ describe('Auth sessions (e2e)', () => {
     const second = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({ email, password })
-      .expect(201);
+      .expect(200);
     const tokenB = (second.body as { accessToken: string }).accessToken;
 
     expect(tokenA).not.toBe(tokenB);
@@ -288,7 +319,7 @@ describe('Auth sessions (e2e)', () => {
     await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({ email, password: newPassword })
-      .expect(201);
+      .expect(200);
   });
 
   it('revokes the refresh token family when a rotated token is reused', async () => {
@@ -339,7 +370,7 @@ describe('Auth sessions (e2e)', () => {
     const second = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({ email, password })
-      .expect(201);
+      .expect(200);
     const tokenB = (
       second.body as { accessToken: string; refreshToken: string }
     ).accessToken;
@@ -385,15 +416,8 @@ describe('ORCID OAuth (e2e, mock)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
+    configureNestTestApp(app);
     app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
     await app.init();
   });
 

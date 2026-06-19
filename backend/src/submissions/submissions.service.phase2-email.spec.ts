@@ -5,6 +5,16 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionAccessService } from './submission-access.service';
+import { PublicationCatalogService } from './publication-catalog.service';
+import { SubmissionFileService } from './submission-file.service';
+import { SubmissionEventsService } from './submission-events.service';
+import { ReviewWorkflowService } from './review-workflow.service';
+import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import { SubmissionAiService } from './submission-ai.service';
+import { mockSubmissionsRepoFindBySlug } from './submissions-service.testing';
+
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
@@ -32,8 +42,11 @@ import type { RequestUser } from '../common/types/request-user';
 
 describe('SubmissionsService phase2 email (outbox)', () => {
   let service: SubmissionsService;
+  let lifecycle: SubmissionLifecycleService;
+  let files: SubmissionFileService;
   let eventPublisher: { enqueue: jest.Mock; enqueueMany: jest.Mock };
   let submissionsRepo: {
+    findOne: jest.Mock;
     manager: { transaction: jest.Mock };
     save: jest.Mock;
   };
@@ -71,6 +84,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       enqueueMany: jest.fn().mockResolvedValue(undefined),
     };
     submissionsRepo = {
+      findOne: jest.fn(),
       save: jest.fn(async (s: Submission) => s),
       manager: {
         transaction: jest.fn(
@@ -97,6 +111,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
         ),
       },
     };
+    mockSubmissionsRepoFindBySlug(submissionsRepo, () => submission);
     usersRepo = {
       findOne: jest.fn().mockResolvedValue(author),
       find: jest.fn(),
@@ -106,6 +121,14 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         SubmissionsService,
+        SubmissionAccessService,
+        PublicationCatalogService,
+        SubmissionFileService,
+        SubmissionEventsService,
+        ReviewWorkflowService,
+        CopyeditWorkflowService,
+        SubmissionLifecycleService,
+        SubmissionAiService,
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         {
           provide: getRepositoryToken(SubmissionFile),
@@ -163,12 +186,16 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     }).compile();
 
     service = moduleRef.get(SubmissionsService);
+    lifecycle = moduleRef.get(SubmissionLifecycleService);
+    files = moduleRef.get(SubmissionFileService);
     submission.status = SubmissionStatus.UNDER_REVIEW;
     submission.messageForAuthor = null;
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submission);
+    jest
+      .spyOn(files, 'assertHasReviewManuscriptPackage')
+      .mockResolvedValue(undefined);
     jest
       .spyOn(
-        service as unknown as { assertReadyForSubmit: () => Promise<void> },
+        lifecycle as unknown as { assertReadyForSubmit: () => Promise<void> },
         'assertReadyForSubmit',
       )
       .mockResolvedValue(undefined);
@@ -241,15 +268,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       ...submission,
       status: SubmissionStatus.SUBMITTED,
     } as Submission;
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submitted);
-    jest
-      .spyOn(
-        service as unknown as {
-          assertHasReviewManuscriptPackage: () => Promise<void>;
-        },
-        'assertHasReviewManuscriptPackage',
-      )
-      .mockResolvedValue(undefined);
+    submissionsRepo.findOne.mockResolvedValueOnce(submitted);
 
     await expect(
       service.updateStatus(
@@ -270,15 +289,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       status: SubmissionStatus.SUBMITTED,
       updatedAt: submittedAt,
     } as Submission;
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submitted);
-    jest
-      .spyOn(
-        service as unknown as {
-          assertHasReviewManuscriptPackage: () => Promise<void>;
-        },
-        'assertHasReviewManuscriptPackage',
-      )
-      .mockResolvedValue(undefined);
+    submissionsRepo.findOne.mockResolvedValueOnce(submitted);
     usersRepo.findOne.mockImplementation(
       async ({ where }: { where: { id: string } }) => {
         if (where.id === author.id) return author;
@@ -322,7 +333,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       ...submission,
       status: SubmissionStatus.DRAFT,
     } as Submission;
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(draft);
+    submissionsRepo.findOne.mockResolvedValueOnce(draft);
 
     const editors = [
       {

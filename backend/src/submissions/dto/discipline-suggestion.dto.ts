@@ -7,6 +7,9 @@ export class DisciplineSuggestionResponseDto {
   @ApiProperty()
   topConfidence: number;
 
+  @ApiProperty({ type: [String] })
+  suggestedLabels: string[];
+
   @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
   probabilities: Record<string, number>;
 
@@ -16,9 +19,6 @@ export class DisciplineSuggestionResponseDto {
   @ApiPropertyOptional({ nullable: true })
   scopeWarning: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
-  discipline: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  disciplineSuggested: string | null;
+  @ApiProperty({ type: [String] })
+  disciplines: string[];
 }

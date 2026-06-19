@@ -10,10 +10,11 @@
  * (email-service down, 404 policy, 503 unavailable), DB-backed `it` blocks
  * return immediately (no assertions) so CI stays green; see console warning.
  *
- * Always runs: 401 (no JWT), 403 (authenticated author), 422 (invalid template key).
+ * Always runs: 401 on unauthenticated GET, 403 on unauthenticated mutating POST (CSRF),
+ * 403 (authenticated author), 422 (invalid template key).
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -21,6 +22,7 @@ import { AppModule } from '../src/app.module';
 import { UsersService } from '../src/users/users.service';
 import { RbacService } from '../src/rbac/rbac.service';
 import { ROLE_SLUGS } from '../src/rbac/permission-slugs';
+import { configureNestTestApp } from './configure-nest-test-app';
 
 describe('Admin email (e2e)', () => {
   let app: INestApplication<App>;
@@ -35,14 +37,7 @@ describe('Admin email (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    configureNestTestApp(app);
     await app.init();
 
     const usersService = app.get(UsersService);
@@ -203,12 +198,16 @@ describe('Admin email (e2e)', () => {
     expect(typeof b.text).toBe('string');
   });
 
-  it('POST /admin/email/outbox/:id/requeue without auth returns 401', () => {
+  it('POST /admin/email/outbox/:id/requeue without auth returns 403', () => {
     return request(app.getHttpServer())
       .post(
         '/api/v1/admin/email/outbox/00000000-0000-4000-8000-000000000001/requeue',
       )
-      .expect(401);
+      .expect(403)
+      .expect((res) => {
+        const code = (res.body as { code?: string }).code;
+        expect(['CSRF_TOKEN_INVALID', 'FORBIDDEN']).toContain(code);
+      });
   });
 
   it('POST /admin/email/outbox/:id/requeue as author returns 403', () => {

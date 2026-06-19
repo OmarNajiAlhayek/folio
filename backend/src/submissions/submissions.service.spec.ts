@@ -1,40 +1,31 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return */
 import { Test } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
-import { SubmissionsService } from './submissions.service';
-import { aiClientServiceMock } from '../ai/ai-client.service.mock';
-import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
-import { languageToolServiceMock } from './language-tool.service.mock';
+import {
+  mockSubmissionsRepoFindBySlug,
+  submissionsServiceTestProviders,
+} from './submissions-service.testing';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
-import { SubmissionFile } from '../entities/submission-file.entity';
 import {
   ReviewAssignment,
   AssignmentStatus,
 } from '../entities/review-assignment.entity';
-import { Review } from '../entities/review.entity';
-import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
-import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
-import { RbacService } from '../rbac/rbac.service';
-import { DocxGeneratorService } from './docx-generator.service';
-import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
-import { EventPublisherService } from '../messaging/event-publisher.service';
-import { notificationsServiceMock } from '../notifications/notifications.service.mock';
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import type { RequestUser } from '../common/types/request-user';
+import { SubmissionsService } from './submissions.service';
 
 describe('SubmissionsService.assignReviewer (outbox)', () => {
   let service: SubmissionsService;
   let eventPublisher: { enqueue: jest.Mock };
+  let submissionsRepo: { findOne?: jest.Mock };
   let assignmentsRepo: {
     findOne: jest.Mock;
     exist: jest.Mock;
@@ -81,6 +72,9 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
       findOne: jest.fn().mockResolvedValue(reviewer),
     };
 
+    submissionsRepo = {};
+    mockSubmissionsRepoFindBySlug(submissionsRepo, () => submission);
+
     assignmentsRepo = {
       findOne: jest.fn().mockResolvedValue(null),
       exist: jest.fn().mockResolvedValue(false),
@@ -112,55 +106,19 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     };
 
     const moduleRef = await Test.createTestingModule({
-      providers: [
-        SubmissionsService,
-        { provide: getRepositoryToken(Submission), useValue: {} },
-        { provide: getRepositoryToken(SubmissionFile), useValue: {} },
-        {
-          provide: getRepositoryToken(ReviewAssignment),
-          useValue: assignmentsRepo,
+      providers: submissionsServiceTestProviders({
+        submissionsRepo,
+        assignmentsRepo,
+        usersRepo,
+        rbacService: {
+          userHasPermission: (...args: unknown[]) =>
+            rbacUserHasPermission(...args),
         },
-        { provide: getRepositoryToken(Review), useValue: {} },
-        { provide: getRepositoryToken(CopyeditAssignment), useValue: {} },
-        { provide: getRepositoryToken(CopyeditNote), useValue: {} },
-        { provide: getRepositoryToken(User), useValue: usersRepo },
-        {
-          provide: RbacService,
-          useValue: {
-            userHasPermission: (...args: unknown[]) =>
-              rbacUserHasPermission(...args),
-          },
-        },
-        { provide: DocxGeneratorService, useValue: {} },
-        {
-          provide: ManuscriptStyleRegistryService,
-          useValue: {
-            assertConstructorContentStyleKnown: jest.fn(),
-            resolveEffectiveStyleId: jest
-              .fn()
-              .mockReturnValue('damascus-university-journal-v1'),
-            getProfile: jest.fn(),
-          },
-        },
-        { provide: EventPublisherService, useValue: eventPublisher },
-        notificationsServiceMock,
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn((key: string, def?: string) => {
-              if (key === 'APP_BASE_URL') return 'http://localhost:5240';
-              return def;
-            }),
-          },
-        },
-        aiClientServiceMock,
-        aiJobsServiceMock,
-        languageToolServiceMock,
-      ],
+        eventPublisher,
+      }),
     }).compile();
 
     service = moduleRef.get(SubmissionsService);
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(submission);
   });
 
   afterEach(() => {
@@ -255,7 +213,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
   });
 
   it('rejects when submission is published', async () => {
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValueOnce({
+    submissionsRepo.findOne!.mockResolvedValueOnce({
       ...submission,
       status: SubmissionStatus.PUBLISHED,
     } as Submission);

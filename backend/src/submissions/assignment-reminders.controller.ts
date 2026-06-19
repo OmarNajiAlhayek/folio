@@ -15,7 +15,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/types/request-user';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { ASSIGNMENT_REMINDER_PERMISSIONS } from '../rbac/permission-slugs';
 import { PatchReminderDto } from './dto/patch-reminder.dto';
 
 @ApiTags('reminders')
@@ -26,10 +26,7 @@ export class AssignmentRemindersController {
   constructor(private readonly reminders: RemindersService) {}
 
   @Get('reminders')
-  @Permissions(
-    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
-  )
+  @Permissions(...ASSIGNMENT_REMINDER_PERMISSIONS)
   list(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,
@@ -43,10 +40,7 @@ export class AssignmentRemindersController {
   }
 
   @Get('reminders/:reminderId')
-  @Permissions(
-    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
-  )
+  @Permissions(...ASSIGNMENT_REMINDER_PERMISSIONS)
   getOne(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,
@@ -62,10 +56,7 @@ export class AssignmentRemindersController {
   }
 
   @Patch('reminders/:reminderId')
-  @Permissions(
-    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
-  )
+  @Permissions(...ASSIGNMENT_REMINDER_PERMISSIONS)
   patch(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,
@@ -83,10 +74,7 @@ export class AssignmentRemindersController {
   }
 
   @Post('reminders/:reminderId/cancel')
-  @Permissions(
-    PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-    PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
-  )
+  @Permissions(...ASSIGNMENT_REMINDER_PERMISSIONS)
   cancel(
     @Param('submissionSlug') submissionSlug: string,
     @Param('assignmentSlug') assignmentSlug: string,

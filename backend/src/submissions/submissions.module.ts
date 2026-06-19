@@ -8,6 +8,14 @@ import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionAccessService } from './submission-access.service';
+import { PublicationCatalogService } from './publication-catalog.service';
+import { SubmissionFileService } from './submission-file.service';
+import { SubmissionEventsService } from './submission-events.service';
+import { ReviewWorkflowService } from './review-workflow.service';
+import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import { SubmissionAiService } from './submission-ai.service';
 import { SubmissionsController } from './submissions.controller';
 import { AssignmentsController } from './assignments.controller';
 import { CopyeditAssignmentsController } from './copyedit-assignments.controller';
@@ -56,6 +64,14 @@ import { AuthModule } from '../auth/auth.module';
     AssignmentRemindersController,
   ],
   providers: [
+    SubmissionAccessService,
+    PublicationCatalogService,
+    SubmissionFileService,
+    SubmissionEventsService,
+    ReviewWorkflowService,
+    CopyeditWorkflowService,
+    SubmissionLifecycleService,
+    SubmissionAiService,
     SubmissionsService,
     RemindersService,
     DocxGeneratorService,
@@ -66,6 +82,12 @@ import { AuthModule } from '../auth/auth.module';
     LanguageToolService,
     PermissionsGuard,
   ],
-  exports: [SubmissionsService],
+  exports: [
+    SubmissionsService,
+    PublicationCatalogService,
+    SubmissionAccessService,
+    ReviewWorkflowService,
+    CopyeditWorkflowService,
+  ],
 })
 export class SubmissionsModule {}

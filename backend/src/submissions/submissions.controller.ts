@@ -54,6 +54,7 @@ import {
   PERMISSION_SLUGS,
   SUBMISSION_LIST_PERMISSIONS,
   SUBMISSION_READ_PERMISSIONS,
+  EDITOR_REVIEW_CONFIG_PERMISSIONS,
 } from '../rbac/permission-slugs';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SUBMISSION_FILE_KINDS } from './submission-file-kinds';
@@ -198,10 +199,7 @@ export class SubmissionsController {
   }
 
   @Patch(':slug/review-method')
-  @Permissions(
-    PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
-    PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
-  )
+  @Permissions(...EDITOR_REVIEW_CONFIG_PERMISSIONS)
   updateReviewMethod(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
@@ -215,10 +213,7 @@ export class SubmissionsController {
   }
 
   @Patch(':slug/files/:fileId/stage')
-  @Permissions(
-    PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
-    PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
-  )
+  @Permissions(...EDITOR_REVIEW_CONFIG_PERMISSIONS)
   updateSubmissionFileStage(
     @Param('slug') slug: string,
     @Param('fileId', ParseUUIDPipe) fileId: string,
@@ -256,7 +251,10 @@ export class SubmissionsController {
   }
 
   @Patch(':slug/discipline')
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  @Permissions(
+    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+  )
   patchDiscipline(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
@@ -265,7 +263,7 @@ export class SubmissionsController {
     return this.submissionsService.setDisciplineForUser(
       slug,
       user,
-      dto.discipline,
+      dto.disciplines,
     );
   }
 

@@ -176,7 +176,7 @@ export function applyPublicationCatalogQuery(
   }
 
   if (filters.discipline) {
-    qb.andWhere('s.discipline = :pubDiscipline', {
+    qb.andWhere(':pubDiscipline = ANY(s.disciplines)', {
       pubDiscipline: filters.discipline,
     });
   }
@@ -207,7 +207,7 @@ export function publicationCatalogBoundParamNames(): string[] {
     PUBLICATION_QUICK_SEARCH_RANK_SQL,
     PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
     's.status = :pubStatus',
-    's.discipline = :pubDiscipline',
+    ':pubDiscipline = ANY(s.disciplines)',
     's.articleType = :pubArticleType',
     's.publishedAt >= :pubFrom',
     's.publishedAt <= :pubTo',

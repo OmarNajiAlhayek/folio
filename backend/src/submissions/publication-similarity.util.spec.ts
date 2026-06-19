@@ -13,7 +13,7 @@ function stubSubmission(overrides: Partial<Submission>): Submission {
     abstractAr: null,
     keywords: 'kw',
     keywordsAr: null,
-    discipline: 'العلوم الطبية',
+    disciplines: ['العلوم الطبية'],
     ...overrides,
   } as Submission;
 }

@@ -1,6 +1,8 @@
 import { Submission } from '../entities/submission.entity';
 import {
-  isDisciplineInJournalScope,
+  anyDisciplineInJournalScope,
+  anyDisciplineOutOfJournalScope,
+  labelsFromProbabilities,
   parseJournalAllowedDisciplines,
 } from '../ai/discipline-labels';
 import type {
@@ -12,30 +14,31 @@ export function classificationMetadataForSubmission(
   submission: Submission,
   allowedDisciplines: string[],
 ): {
-  discipline: string | null;
+  disciplines: string[];
   disciplineSource: string | null;
-  disciplineSuggested: string | null;
+  disciplineSuggestedLabels: string[];
   disciplineSuggestedConfidence: number | null;
   disciplineClassification: DisciplineClassificationJson | null;
   disciplineScopeInJournal: boolean | null;
   disciplineScopeWarning: string | null;
 } {
-  const suggested = submission.disciplineSuggested;
+  const suggested = submission.disciplineSuggestedLabels ?? [];
   const confidence = submission.disciplineSuggestedConfidence;
   const classification = submission.disciplineClassification;
   const scopeInJournal =
-    suggested != null
-      ? isDisciplineInJournalScope(suggested, allowedDisciplines)
+    suggested.length > 0
+      ? anyDisciplineInJournalScope(suggested, allowedDisciplines)
       : null;
   const scopeWarning =
-    suggested != null && scopeInJournal === false
+    suggested.length > 0 &&
+    anyDisciplineOutOfJournalScope(suggested, allowedDisciplines)
       ? 'suggested_out_of_journal_scope'
       : null;
 
   return {
-    discipline: submission.discipline,
+    disciplines: submission.disciplines ?? [],
     disciplineSource: submission.disciplineSource,
-    disciplineSuggested: suggested,
+    disciplineSuggestedLabels: suggested,
     disciplineSuggestedConfidence:
       confidence != null ? Number(confidence) : null,
     disciplineClassification: classification,
@@ -48,8 +51,12 @@ export function buildClassificationJson(
   result: ClassifyArticleResponse,
   allowedDisciplines: string[],
 ): DisciplineClassificationJson {
-  const scopeInJournal = isDisciplineInJournalScope(
+  const suggestedLabels = labelsFromProbabilities(
     result.top_label,
+    result.probabilities,
+  );
+  const scopeInJournal = anyDisciplineInJournalScope(
+    suggestedLabels,
     allowedDisciplines,
   );
   return {

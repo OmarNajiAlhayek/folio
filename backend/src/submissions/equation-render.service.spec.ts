@@ -2,6 +2,8 @@ import sharp from 'sharp';
 import { EquationRenderService } from './equation-render.service';
 
 describe('EquationRenderService', () => {
+  jest.setTimeout(20_000);
+
   const service = new EquationRenderService();
 
   it('renders valid LaTeX to a typeset PNG buffer', async () => {

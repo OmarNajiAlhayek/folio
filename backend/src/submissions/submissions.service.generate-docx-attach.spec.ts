@@ -7,6 +7,15 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionAccessService } from './submission-access.service';
+import { PublicationCatalogService } from './publication-catalog.service';
+import { SubmissionFileService } from './submission-file.service';
+import { SubmissionEventsService } from './submission-events.service';
+import { ReviewWorkflowService } from './review-workflow.service';
+import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import { SubmissionAiService } from './submission-ai.service';
+
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
@@ -84,6 +93,14 @@ describe('SubmissionsService.generateDocx (attach)', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         SubmissionsService,
+        SubmissionAccessService,
+        PublicationCatalogService,
+        SubmissionFileService,
+        SubmissionEventsService,
+        ReviewWorkflowService,
+        CopyeditWorkflowService,
+        SubmissionLifecycleService,
+        SubmissionAiService,
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         { provide: getRepositoryToken(SubmissionFile), useValue: filesRepo },
         { provide: getRepositoryToken(ReviewAssignment), useValue: {} },

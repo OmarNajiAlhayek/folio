@@ -1,9 +1,22 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/require-await */
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionAccessService } from './submission-access.service';
+import { PublicationCatalogService } from './publication-catalog.service';
+import { SubmissionFileService } from './submission-file.service';
+import { SubmissionEventsService } from './submission-events.service';
+import { ReviewWorkflowService } from './review-workflow.service';
+import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import { SubmissionAiService } from './submission-ai.service';
+import {
+  getSubmissionTestServices,
+  mockSubmissionsRepoFindBySlug,
+} from './submissions-service.testing';
+
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
@@ -25,7 +38,14 @@ import type { ConstructorContent } from './constructor-content.types';
 
 describe('SubmissionsService.submit (constructor files)', () => {
   let service: SubmissionsService;
+  let events: SubmissionEventsService;
+  let lifecycle: SubmissionLifecycleService;
   let filesRepo: { find: jest.Mock; save: jest.Mock };
+  let submissionsRepo: {
+    findOne: jest.Mock;
+    save: jest.Mock;
+    manager: { transaction: jest.Mock };
+  };
   let generateDocx: jest.SpyInstance;
 
   const authorUser: RequestUser = {
@@ -50,6 +70,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
         kind: 'abstract',
         lang: 'en',
         text: 'Abstract text here for validation.',
+        keywords: 'one, two, three',
         dir: 'ltr',
         dirSource: 'manual',
       },
@@ -58,6 +79,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
         kind: 'abstract',
         lang: 'ar',
         text: 'ملخص عربي.',
+        keywords: 'واحد, اثنان',
         dir: 'rtl',
         dirSource: 'manual',
       },
@@ -96,7 +118,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
       aiUsageStatement: 'None used',
       abstract: 'English abstract text.',
       abstractAr: 'ملخص.',
-    } as Submission;
+    } as unknown as Submission;
   }
 
   beforeEach(async () => {
@@ -105,7 +127,8 @@ describe('SubmissionsService.submit (constructor files)', () => {
       save: jest.fn().mockResolvedValue(undefined),
     };
 
-    const submissionsRepo = {
+    submissionsRepo = {
+      findOne: jest.fn(),
       save: jest.fn(async (row: Submission) => row),
       manager: {
         transaction: jest.fn(async (fn: (em: unknown) => unknown) => {
@@ -118,10 +141,19 @@ describe('SubmissionsService.submit (constructor files)', () => {
         }),
       },
     };
+    mockSubmissionsRepoFindBySlug(submissionsRepo, () => draftConstructorRow());
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         SubmissionsService,
+        SubmissionAccessService,
+        PublicationCatalogService,
+        SubmissionFileService,
+        SubmissionEventsService,
+        ReviewWorkflowService,
+        CopyeditWorkflowService,
+        SubmissionLifecycleService,
+        SubmissionAiService,
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         { provide: getRepositoryToken(SubmissionFile), useValue: filesRepo },
         { provide: getRepositoryToken(ReviewAssignment), useValue: {} },
@@ -169,16 +201,13 @@ describe('SubmissionsService.submit (constructor files)', () => {
       ],
     }).compile();
 
-    service = moduleRef.get(SubmissionsService);
-    jest
-      .spyOn(service, 'getBySlugOrThrow')
-      .mockImplementation(async () => draftConstructorRow());
-    generateDocx = jest.spyOn(service, 'generateDocx').mockResolvedValue({
+    ({ service, events, lifecycle } = getSubmissionTestServices(moduleRef));
+    generateDocx = jest.spyOn(lifecycle, 'generateDocx').mockResolvedValue({
       kind: 'attached',
       file: { id: 'file-m', kind: 'manuscript' } as SubmissionFile,
     });
     jest
-      .spyOn(service, 'enqueueSubmissionSubmittedForEditors')
+      .spyOn(events, 'enqueueSubmissionSubmittedForEditors')
       .mockResolvedValue([]);
   });
 
@@ -222,7 +251,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
       ...draftConstructorRow(),
       constructorContent: null,
     } as Submission;
-    jest.spyOn(service, 'getBySlugOrThrow').mockResolvedValue(uploadDraft);
+    submissionsRepo.findOne.mockResolvedValueOnce(uploadDraft);
     filesRepo.find.mockResolvedValue([
       { kind: 'manuscript' },
     ] as SubmissionFile[]);

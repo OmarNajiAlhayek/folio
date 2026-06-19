@@ -5,6 +5,7 @@ import { AdminEmailController } from './admin-email.controller';
 import { AdminEmailService } from './admin-email.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
 import { OutboxRepairService } from '../messaging/outbox-repair.service';
+import { DlqReplayService } from '../messaging/dlq-replay.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 
 class AllowGuard implements CanActivate {
@@ -53,6 +54,10 @@ describe('AdminEmailController (integration)', () => {
           provide: OutboxRepairService,
           useValue: { requeueDead: jest.fn() },
         },
+        {
+          provide: DlqReplayService,
+          useValue: { replayBatch: jest.fn() },
+        },
       ],
     })
       .overrideGuard(AuthGuard('jwt'))
@@ -98,11 +103,7 @@ describe('AdminEmailController (integration)', () => {
       html: '<p>b</p>',
       text: 'c',
     });
-    const out = await controller.previewTemplate(
-      'reviewer-invited',
-      {},
-      'ar',
-    );
+    const out = await controller.previewTemplate('reviewer-invited', {}, 'ar');
     expect(out.subject).toBe('a');
     expect(adminEmail.previewTemplate).toHaveBeenCalledWith(
       'reviewer-invited',

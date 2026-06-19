@@ -25,6 +25,10 @@ import { EmailClientModule } from './email-client/email-client.module';
 import { folioClsRootOptions } from '@folio/nest-observability';
 import { ClsModule } from 'nestjs-cls';
 import { SearchModule } from './search/search.module';
+import {
+  buildTypeOrmExtra,
+  typeOrmSlowQueryOptions,
+} from './common/db-pool.util';
 
 @Module({
   imports: [
@@ -56,9 +60,8 @@ import { SearchModule } from './search/search.module';
         migrations: [join(__dirname, 'db', 'migrations', '*.{js,ts}')],
         migrationsRun:
           config.get<string>('DB_MIGRATE_ON_START', 'true') !== 'false',
-        extra: {
-          max: parseInt(config.get<string>('DB_POOL_MAX', '30'), 10),
-        },
+        extra: buildTypeOrmExtra(config),
+        ...typeOrmSlowQueryOptions(config),
       }),
     }),
     ScheduleModule.forRoot(),

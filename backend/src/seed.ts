@@ -27,7 +27,10 @@ import {
   ReviewAssignment,
 } from './entities/review-assignment.entity';
 import { Review, ReviewRecommendation } from './entities/review.entity';
-import { CopyeditAssignment } from './entities/copyedit-assignment.entity';
+import {
+  CopyeditAssignment,
+  CopyeditAssignmentStatus,
+} from './entities/copyedit-assignment.entity';
 import { CopyeditNote } from './entities/copyedit-note.entity';
 import { SubmissionStatus } from './entities/submission-status.enum';
 import { SubmissionArticleType } from './entities/submission-article-type.enum';
@@ -37,7 +40,10 @@ import type { CreateSubmissionDto } from './submissions/dto/create-submission.dt
 import { AiClientService } from './ai/ai-client.service';
 import { SubmissionDisciplineSource } from './entities/submission-discipline-source.enum';
 import type { DisciplineClassificationJson } from './ai/ai-client.types';
-import { parseJournalAllowedDisciplines } from './ai/discipline-labels';
+import {
+  labelsFromProbabilities,
+  parseJournalAllowedDisciplines,
+} from './ai/discipline-labels';
 import { ensurePublicationSearchSchema } from './common/ensure-publication-search-schema';
 
 config({ path: join(__dirname, '..', '.env') });
@@ -229,13 +235,15 @@ function sampleDisciplineClassification(
 /**
  * Dev-only: ensure discipline suggestion exists for UI demos.
  * When submit() already stored AI output, still applies `confirmAsAuthor` so
- * `discipline` is set for catalog filters and public API responses.
+ * `disciplines` are set for catalog filters and public API responses.
  */
 async function syncSampleDiscipline(
   dataSource: DataSource,
   submissionId: string,
   options: {
     topLabel?: string;
+    suggestedLabels?: string[];
+    disciplines?: string[];
     confidence?: number;
     confirmAsAuthor?: boolean;
     force?: boolean;
@@ -249,14 +257,20 @@ async function syncSampleDiscipline(
 
   const topLabel = options.topLabel ?? SAMPLE_DISCIPLINE_DEFAULT;
   const confidence = options.confidence ?? 88.5;
+  const suggestedLabels =
+    options.suggestedLabels ??
+    labelsFromProbabilities(topLabel, {
+      [topLabel]: confidence,
+      'غير محدد': Math.max(0, 100 - confidence - 2),
+    });
 
-  if (row.discipline?.trim() && !options.force) {
+  if ((row.disciplines?.length ?? 0) > 0 && !options.force) {
     return;
   }
 
-  if (row.disciplineSuggested?.trim() && !options.force) {
+  if ((row.disciplineSuggestedLabels?.length ?? 0) > 0 && !options.force) {
     if (options.confirmAsAuthor) {
-      row.discipline = topLabel;
+      row.disciplines = options.disciplines ?? suggestedLabels;
       row.disciplineSource = SubmissionDisciplineSource.AUTHOR;
       await subRepo.save(row);
     }
@@ -266,9 +280,11 @@ async function syncSampleDiscipline(
     process.env.JOURNAL_ALLOWED_DISCIPLINES,
   );
   const scopeInJournal =
-    allowed.length === 0 ? true : allowed.includes(topLabel);
+    allowed.length === 0
+      ? true
+      : suggestedLabels.some((label) => allowed.includes(label));
 
-  row.disciplineSuggested = topLabel;
+  row.disciplineSuggestedLabels = suggestedLabels;
   row.disciplineSuggestedConfidence = confidence.toFixed(2);
   row.disciplineClassification = sampleDisciplineClassification(
     topLabel,
@@ -276,7 +292,7 @@ async function syncSampleDiscipline(
     scopeInJournal,
   );
   if (options.confirmAsAuthor) {
-    row.discipline = topLabel;
+    row.disciplines = options.disciplines ?? suggestedLabels;
     row.disciplineSource = SubmissionDisciplineSource.AUTHOR;
   }
   await subRepo.save(row);
@@ -332,6 +348,106 @@ async function attachStandardFilePackage(
 }
 
 /** Full workflow: create → submit → accept → copyedit → publish (public catalog). */
+/** Ensure revision manuscript `created_at` is strictly after the copyedit note. */
+async function sleepForRevisionTimestamp(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 25));
+}
+
+async function addRevisionManuscriptAfterNote(options: {
+  submissionsService: SubmissionsService;
+  submissionSlug: string;
+  authorReq: RequestUser;
+  revisionFilename: string;
+  pdfBytes: Buffer;
+}): Promise<void> {
+  const {
+    submissionsService,
+    submissionSlug,
+    authorReq,
+    revisionFilename,
+    pdfBytes,
+  } = options;
+
+  await sleepForRevisionTimestamp();
+  await submissionsService.addFile(
+    submissionSlug,
+    authorReq,
+    sampleMulterFile(revisionFilename, pdfBytes),
+    'manuscript',
+  );
+}
+
+async function resumePublishedSampleSeed(options: {
+  dataSource: DataSource;
+  submissionsService: SubmissionsService;
+  author: User;
+  authorReq: RequestUser;
+  copyeditorReq: RequestUser;
+  pdfBytes: Buffer;
+  revisionFilename: string;
+  existing: Submission;
+  logLabel: string;
+}): Promise<void> {
+  const {
+    dataSource,
+    submissionsService,
+    author,
+    authorReq,
+    copyeditorReq,
+    pdfBytes,
+    revisionFilename,
+    existing,
+    logLabel,
+  } = options;
+
+  if (!existing.slug) {
+    throw new Error(
+      `Cannot resume published sample without slug: ${existing.title}`,
+    );
+  }
+
+  if (existing.status === SubmissionStatus.PUBLISHED) {
+    return;
+  }
+
+  if (existing.status !== SubmissionStatus.COPYEDITING) {
+    throw new Error(
+      `Cannot resume published sample "${existing.title}" from status ${existing.status}`,
+    );
+  }
+
+  const assignment = await dataSource
+    .getRepository(CopyeditAssignment)
+    .findOne({
+      where: { submissionId: existing.id },
+      order: { assignedAt: 'DESC' },
+    });
+  if (!assignment?.slug) {
+    throw new Error(`Missing copyedit assignment for "${existing.title}"`);
+  }
+
+  if (assignment.status === CopyeditAssignmentStatus.AWAITING_AUTHOR) {
+    await addRevisionManuscriptAfterNote({
+      submissionsService,
+      submissionSlug: existing.slug,
+      authorReq,
+      revisionFilename,
+      pdfBytes,
+    });
+    await submissionsService.markCopyeditAuthorReady(
+      assignment.slug,
+      author.id,
+    );
+  } else if (assignment.status !== CopyeditAssignmentStatus.READY_FOR_REVIEW) {
+    throw new Error(
+      `Cannot resume published sample "${existing.title}" from assignment status ${assignment.status}`,
+    );
+  }
+
+  await submissionsService.publishSubmission(existing.slug, copyeditorReq);
+  console.log(`Resumed: ${existing.title} (${logLabel})`);
+}
+
 async function seedPublishedSample(options: {
   dataSource: DataSource;
   submissionsService: SubmissionsService;
@@ -346,7 +462,12 @@ async function seedPublishedSample(options: {
   publicationMeta: SampleMetaOverrides;
   manuscriptFilename: string;
   revisionFilename: string;
-  discipline: { topLabel: string; confidence: number };
+  discipline: {
+    topLabel: string;
+    confidence: number;
+    suggestedLabels?: string[];
+    disciplines?: string[];
+  };
   logLabel: string;
 }): Promise<void> {
   const {
@@ -372,7 +493,23 @@ async function seedPublishedSample(options: {
     await syncSampleDiscipline(dataSource, existing.id, {
       topLabel: discipline.topLabel,
       confidence: discipline.confidence,
+      suggestedLabels: discipline.suggestedLabels,
+      disciplines: discipline.disciplines,
       confirmAsAuthor: true,
+    });
+    if (existing.status === SubmissionStatus.PUBLISHED) {
+      return;
+    }
+    await resumePublishedSampleSeed({
+      dataSource,
+      submissionsService,
+      author,
+      authorReq,
+      copyeditorReq,
+      pdfBytes,
+      revisionFilename,
+      existing,
+      logLabel,
     });
     return;
   }
@@ -393,6 +530,8 @@ async function seedPublishedSample(options: {
   await syncSampleDiscipline(dataSource, s.id, {
     topLabel: discipline.topLabel,
     confidence: discipline.confidence,
+    suggestedLabels: discipline.suggestedLabels,
+    disciplines: discipline.disciplines,
     confirmAsAuthor: true,
   });
   await submissionsService.updateStatus(
@@ -411,14 +550,13 @@ async function seedPublishedSample(options: {
     'Ready for catalog.',
     '',
   );
-  await submissionsService.addFile(
-    s.slug!,
+  await addRevisionManuscriptAfterNote({
+    submissionsService,
+    submissionSlug: s.slug!,
     authorReq,
-    sampleMulterFile(revisionFilename, pdfBytes),
-    'manuscript',
-  );
-  // Revision file must have createdAt strictly after the copyedit note timestamp.
-  await new Promise((r) => setTimeout(r, 5));
+    revisionFilename,
+    pdfBytes,
+  });
   await submissionsService.markCopyeditAuthorReady(
     ceAssignment.slug!,
     author.id,
@@ -520,6 +658,10 @@ type PerfFixturesFile = {
   };
   corpusSimilarity: { submissionSlug: string };
   aiGrpcHost: string;
+  editorQueue: { slugs: string[]; count: number };
+  publishedCatalog: { count: number };
+  uploadDraft: { slug: string };
+  searchTerms: string[];
 };
 
 async function resetPerfSubmissions(dataSource: DataSource): Promise<void> {
@@ -566,6 +708,14 @@ async function seedPerfFixtures(options: {
     1,
     parseInt(process.env.SEED_PERF_EMAIL_COUNT ?? '50', 10),
   );
+  const queueCount = Math.max(
+    0,
+    parseInt(process.env.SEED_PERF_QUEUE_COUNT ?? '200', 10),
+  );
+  const publishedCount = Math.max(
+    0,
+    parseInt(process.env.SEED_PERF_PUBLISHED_COUNT ?? '100', 10),
+  );
 
   const perfAuthor = await ensureUser(usersService, rbacService, {
     email: PERF_AUTHOR_EMAIL,
@@ -602,6 +752,7 @@ async function seedPerfFixtures(options: {
 
   const reviewSubmit: PerfFixturesFile['reviewSubmit'] = [];
   const emailInvites: PerfFixturesFile['emailPipeline']['invites'] = [];
+  const editorQueueSlugs: string[] = [];
   const reviewerUsers: User[] = [];
 
   const totalReviewers = Math.max(reviewCount, emailCount);
@@ -719,6 +870,60 @@ async function seedPerfFixtures(options: {
   );
   await submissionsService.submit(corpusSubmission.slug!, authorReq);
 
+  for (let i = 0; i < queueCount; i += 1) {
+    const title = `${PERF_TITLE_PREFIX} Editor queue load ${i}`;
+    const created = await submissionsService.create(perfAuthor.id, {
+      title,
+      abstract: 'Perf fixture for editor queue list benchmarks. '.repeat(4),
+      ...perfSubmissionMetadata(
+        `قائمة المحرر ${i}`,
+        'ملخص عربي لاختبار قائمة المحرر. '.repeat(3),
+        'perf, editor, queue',
+        'أداء, محرر, قائمة, مجلة, بحث, نشر',
+      ),
+    });
+    await attachStandardFilePackage(
+      submissionsService,
+      created.slug!,
+      authorReq,
+      pdfBytes,
+      `perf-queue-${i}.pdf`,
+    );
+    await submissionsService.submit(created.slug!, authorReq);
+    await promoteManuscriptsToReviewPackage(dataSource, created.id);
+    editorQueueSlugs.push(created.slug!);
+  }
+
+  const subRepo = dataSource.getRepository(Submission);
+  for (let i = 0; i < publishedCount; i += 1) {
+    const title = `${PERF_TITLE_PREFIX} Published catalog ${i}`;
+    const created = await submissionsService.create(perfAuthor.id, {
+      title,
+      abstract: 'Perf fixture for public catalog search benchmarks. '.repeat(4),
+      ...perfSubmissionMetadata(
+        `منشور اختبار ${i}`,
+        'ملخص عربي لاختبار البحث في الكتالوج. '.repeat(3),
+        'perf, published, catalog',
+        'أداء, منشور, كتالوج, مجلة, بحث, نشر',
+      ),
+    });
+    await subRepo.update(created.id, {
+      status: SubmissionStatus.PUBLISHED,
+      publishedAt: new Date(),
+    });
+  }
+
+  const uploadDraft = await submissionsService.create(perfAuthor.id, {
+    title: `${PERF_TITLE_PREFIX} Upload draft`,
+    abstract: 'Draft submission for file-upload perf benchmarks.',
+    ...perfSubmissionMetadata(
+      'مسودة رفع الملفات',
+      'ملخص عربي لاختبار رفع الملفات.',
+      'perf, upload',
+      'أداء, رفع, ملف, مجلة',
+    ),
+  });
+
   const fixtures: PerfFixturesFile = {
     editor: { email: PERF_EDITOR_EMAIL, password: PERF_EDITOR_PASSWORD },
     manager: { email: PERF_MANAGER_EMAIL, password: PERF_MANAGER_PASSWORD },
@@ -731,6 +936,18 @@ async function seedPerfFixtures(options: {
       const port = process.env.AI_SERVICE_GRPC_PORT ?? '5246';
       return host.includes(':') ? host : `${host}:${port}`;
     })(),
+    editorQueue: { slugs: editorQueueSlugs, count: editorQueueSlugs.length },
+    publishedCatalog: { count: publishedCount },
+    uploadDraft: { slug: uploadDraft.slug! },
+    searchTerms: [
+      'education',
+      'machine',
+      'research',
+      'journal',
+      'peer',
+      'catalog',
+      'perf',
+    ],
   };
 
   const perfDir = existsSync(join(process.cwd(), '..', 'perf'))
@@ -742,7 +959,7 @@ async function seedPerfFixtures(options: {
   }
   writeFileSync(outPath, JSON.stringify(fixtures, null, 2));
   console.log(
-    `Perf fixtures: wrote ${outPath} (${reviewCount} review-submit, ${emailCount} email invites)`,
+    `Perf fixtures: wrote ${outPath} (${reviewCount} review-submit, ${emailCount} email invites, ${queueCount} editor-queue, ${publishedCount} published)`,
   );
 }
 
@@ -794,8 +1011,15 @@ async function resetAllDevData(dataSource: DataSource): Promise<void> {
       revoked_tokens,
       submissions,
       user_roles,
-      users
-    RESTART IDENTITY
+      users,
+      ai_jobs,
+      auth_challenges,
+      refresh_sessions,
+      oauth_identities,
+      article_summary_embeddings,
+      article_chunk_embeddings,
+      reviewer_bio_embeddings
+    RESTART IDENTITY CASCADE
   `);
   console.log(
     'SEED_RESET_ALL: truncated users, submissions, notifications, uploads, and related rows',
@@ -1453,7 +1677,12 @@ async function run() {
       publicationMeta: SAMPLE_PUB3_META,
       manuscriptFilename: 'published-medical.pdf',
       revisionFilename: 'published-medical-revision.pdf',
-      discipline: { topLabel: SAMPLE_DISCIPLINE_MEDICAL, confidence: 85 },
+      discipline: {
+        topLabel: SAMPLE_DISCIPLINE_MEDICAL,
+        confidence: 85,
+        suggestedLabels: [SAMPLE_DISCIPLINE_MEDICAL, 'العلوم الأساسية'],
+        disciplines: [SAMPLE_DISCIPLINE_MEDICAL, 'العلوم الأساسية'],
+      },
       logLabel: 'published, related-articles distant peer',
     });
 

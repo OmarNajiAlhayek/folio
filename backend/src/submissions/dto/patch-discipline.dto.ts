@@ -1,10 +1,27 @@
-import { IsIn, IsString } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { ARABIC_DISCIPLINE_LABELS } from '../../ai/discipline-labels';
+import {
+  MAX_DISCIPLINES,
+  SELECTABLE_DISCIPLINE_LABELS,
+} from '../../ai/discipline-labels';
 
 export class PatchDisciplineDto {
-  @ApiProperty({ enum: ARABIC_DISCIPLINE_LABELS })
-  @IsString()
-  @IsIn([...ARABIC_DISCIPLINE_LABELS])
-  discipline: string;
+  @ApiProperty({
+    type: [String],
+    enum: SELECTABLE_DISCIPLINE_LABELS,
+    minItems: 1,
+    maxItems: MAX_DISCIPLINES,
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_DISCIPLINES)
+  @IsString({ each: true })
+  @IsIn([...SELECTABLE_DISCIPLINE_LABELS], { each: true })
+  disciplines: string[];
 }

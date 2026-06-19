@@ -9,7 +9,8 @@ import {
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { createReadStream } from 'fs';
-import { SubmissionsService } from '../submissions/submissions.service';
+import { PublicationCatalogService } from '../submissions/publication-catalog.service';
+import { SubmissionFileService } from '../submissions/submission-file.service';
 import { AuthorSuggestionsQueryDto } from './dto/author-suggestions.query.dto';
 import {
   ListPublicSubmissionsQueryDto,
@@ -26,7 +27,10 @@ import { ARABIC_DISCIPLINE_LABELS } from '../ai/discipline-labels';
 @Controller('public/submissions')
 @Throttle({ public: {} })
 export class PublicSubmissionsController {
-  constructor(private readonly submissionsService: SubmissionsService) {}
+  constructor(
+    private readonly catalog: PublicationCatalogService,
+    private readonly files: SubmissionFileService,
+  ) {}
 
   @Get()
   @ApiQuery({ name: 'q', required: false, description: 'Quick catalog search' })
@@ -75,8 +79,10 @@ export class PublicSubmissionsController {
         query.semanticLimit != null
           ? Math.min(30, Math.max(1, query.semanticLimit))
           : 20;
-      const items =
-        await this.submissionsService.findPublishedSemanticList(filters, limit);
+      const items = await this.catalog.findPublishedSemanticList(
+        filters,
+        limit,
+      );
       return {
         items,
         total: items.length,
@@ -88,14 +94,12 @@ export class PublicSubmissionsController {
       query.limit,
       query.offset,
     );
-    const { items, total } = await this.submissionsService.findPublishedList(
+    const { items, total } = await this.catalog.findPublishedList(
       filters,
       pagination,
     );
     return {
-      items: items.map((s) =>
-        this.submissionsService.toPublicationListItem(s),
-      ),
+      items: items.map((s) => this.catalog.toPublicationListItem(s)),
       total,
       limit: pagination.limit,
       offset: pagination.offset,
@@ -115,27 +119,19 @@ export class PublicSubmissionsController {
   })
   async authorSuggestions(@Query() query: AuthorSuggestionsQueryDto) {
     const limit = query.limit ?? PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT;
-    return this.submissionsService.findPublishedAuthorSuggestions(
-      query.q,
-      limit,
-    );
+    return this.catalog.findPublishedAuthorSuggestions(query.q, limit);
   }
 
   @Get(':slug/related')
-  async related(
-    @Param('slug') slug: string,
-    @Query('limit') limit?: string,
-  ) {
+  async related(@Param('slug') slug: string, @Query('limit') limit?: string) {
     const parsed = limit != null ? parseInt(limit, 10) : 5;
-    const lim = Number.isFinite(parsed)
-      ? Math.min(10, Math.max(1, parsed))
-      : 5;
-    return this.submissionsService.findRelatedPublications(slug, lim);
+    const lim = Number.isFinite(parsed) ? Math.min(10, Math.max(1, parsed)) : 5;
+    return this.catalog.findRelatedPublications(slug, lim);
   }
 
   @Get(':slug')
   async detail(@Param('slug') slug: string) {
-    const s = await this.submissionsService.findPublishedOne(slug);
+    const s = await this.catalog.findPublishedOne(slug);
     const files = (s.files ?? []).filter((f) => f.isPublic);
     return {
       id: s.id,
@@ -146,7 +142,7 @@ export class PublicSubmissionsController {
       abstractAr: s.abstractAr,
       keywords: s.keywords,
       keywordsAr: s.keywordsAr,
-      discipline: s.discipline,
+      disciplines: s.disciplines,
       articleType: s.articleType,
       publishedAt: s.publishedAt,
       author: s.author
@@ -167,11 +163,7 @@ export class PublicSubmissionsController {
     @Param('slug') slug: string,
     @Param('fileId', ParseUUIDPipe) fileId: string,
   ) {
-    const { file, path } = await this.submissionsService.getFileForUser(
-      slug,
-      fileId,
-      null,
-    );
+    const { file, path } = await this.files.getFileForUser(slug, fileId, null);
     return new StreamableFile(createReadStream(path), {
       type: file.mimeType,
       disposition: `inline; filename="${encodeURIComponent(file.originalName)}"`,

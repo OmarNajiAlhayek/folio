@@ -16,7 +16,7 @@ function mockContext(
     switchToHttp: () => ({
       getRequest: () => ({ user }),
     }),
-  } as ExecutionContext;
+  } as unknown as ExecutionContext;
 }
 
 describe('SubmissionsController permissions guard', () => {

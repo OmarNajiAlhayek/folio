@@ -8,43 +8,63 @@ import {
 import type { ConstructorContent } from './constructor-content.types';
 
 const sampleContent: ConstructorContent = {
+  defaultDir: 'ltr',
   sections: [
-    { kind: 'abstract', lang: 'en', text: 'English abstract.' },
-    { kind: 'abstract', lang: 'ar', text: 'ملخص عربي.' },
     {
+      id: 'abs-en',
+      kind: 'abstract',
+      lang: 'en',
+      text: 'English abstract.',
+      keywords: '',
+    },
+    {
+      id: 'abs-ar',
+      kind: 'abstract',
+      lang: 'ar',
+      text: 'ملخص عربي.',
+      keywords: '',
+    },
+    {
+      id: 'h-intro',
       kind: 'heading1',
       text: 'Introduction',
       presetSourceId: 'introduction',
     },
     {
+      id: 'h-lit',
       kind: 'heading1',
       text: 'Literature Review',
       presetSourceId: 'literatureReview',
     },
     {
+      id: 'h-methods',
       kind: 'heading1',
       text: 'Materials and Methods',
       presetSourceId: 'materialsAndMethods',
     },
     {
+      id: 'h-results',
       kind: 'heading1',
       text: 'Results and Discussion',
       presetSourceId: 'resultsAndDiscussion',
     },
     {
+      id: 'h-concl',
       kind: 'heading1',
       text: 'Conclusions',
       presetSourceId: 'conclusions',
     },
     {
+      id: 'p1',
       kind: 'paragraph',
       html: '<p>Prior work (Smith, 2020) is cited. See also [2].</p>',
     },
     {
+      id: 'refs',
       kind: 'references',
       items: [
-        { html: '<p>Smith J. Example. 2020.</p>' },
-        { html: '<p>Jones A. Other. 2019.</p>' },
+        { lang: 'en', html: '<p>Smith J. Example. 2020.</p>' },
+        { lang: 'en', html: '<p>Jones A. Other. 2019.</p>' },
       ],
     },
   ],
@@ -71,9 +91,20 @@ describe('submission-copyedit-text.util', () => {
 
   it('flags missing Arabic abstract', () => {
     const partial: ConstructorContent = {
+      defaultDir: 'ltr',
       sections: [
-        { kind: 'abstract', lang: 'en', text: 'Only English.' },
-        { kind: 'references', items: [{ html: '<p>Ref</p>' }] },
+        {
+          id: 'abs-en',
+          kind: 'abstract',
+          lang: 'en',
+          text: 'Only English.',
+          keywords: '',
+        },
+        {
+          id: 'refs',
+          kind: 'references',
+          items: [{ lang: 'en', html: '<p>Ref</p>' }],
+        },
       ],
     };
     const issues = damascusFormatIssues(checkDamascusStructure(partial));

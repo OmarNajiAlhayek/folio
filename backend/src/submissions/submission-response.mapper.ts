@@ -92,9 +92,9 @@ export function submissionToViewerJson(
   if (viewer === 'author' || viewer === 'editor') {
     base.messageForAuthor = s.messageForAuthor;
     base.reviewManuscriptPresentation = s.reviewManuscriptPresentation;
-    base.discipline = s.discipline;
+    base.disciplines = s.disciplines;
     base.disciplineSource = s.disciplineSource;
-    base.disciplineSuggested = s.disciplineSuggested;
+    base.disciplineSuggestedLabels = s.disciplineSuggestedLabels;
     base.disciplineSuggestedConfidence =
       s.disciplineSuggestedConfidence != null
         ? Number(s.disciplineSuggestedConfidence)

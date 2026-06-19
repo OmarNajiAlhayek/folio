@@ -10,7 +10,7 @@
  *   set AUTH_RETURN_BEARER=true
  *   npm run test:ai-jobs
  */
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -32,6 +32,7 @@ import { UsersService } from '../src/users/users.service';
 import { RbacService } from '../src/rbac/rbac.service';
 import { ROLE_SLUGS } from '../src/rbac/permission-slugs';
 import { MIN_CORPUS_PLAIN_TEXT_CHARS } from '../src/submissions/submission-corpus-text.util';
+import { configureNestTestApp } from './configure-nest-test-app';
 
 const ENABLED = process.env.AI_JOBS_PIPELINE_INTEGRATION === '1';
 const RABBIT_URL = process.env.RABBITMQ_URL ?? 'amqp://localhost:5672';
@@ -72,14 +73,7 @@ function sleep(ms: number): Promise<void> {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    configureNestTestApp(app);
     await app.init();
 
     outboxRepo = app.get(getRepositoryToken(OutboundEvent));

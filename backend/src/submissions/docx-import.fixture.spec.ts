@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Test } from '@nestjs/testing';
 import { DocxImportService } from './docx-import.service';
+import type { AbstractSection } from './constructor-content.types';
 
 /**
  * Real Mammoth parse of the Playwright fixture (not mocked).
@@ -34,10 +35,10 @@ describe('DocxImportService (minimal-import fixture)', () => {
       true,
     );
     const enAbstract = result.content.sections.find(
-      (s) => s.kind === 'abstract' && s.lang === 'en',
+      (s): s is AbstractSection => s.kind === 'abstract' && s.lang === 'en',
     );
     const arAbstract = result.content.sections.find(
-      (s) => s.kind === 'abstract' && s.lang === 'ar',
+      (s): s is AbstractSection => s.kind === 'abstract' && s.lang === 'ar',
     );
     expect(enAbstract?.text).toMatch(/Grate Abstract/i);
     expect(arAbstract?.text).toBeTruthy();

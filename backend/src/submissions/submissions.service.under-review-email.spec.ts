@@ -4,6 +4,15 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionAccessService } from './submission-access.service';
+import { PublicationCatalogService } from './publication-catalog.service';
+import { SubmissionFileService } from './submission-file.service';
+import { SubmissionEventsService } from './submission-events.service';
+import { ReviewWorkflowService } from './review-workflow.service';
+import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import { SubmissionAiService } from './submission-ai.service';
+
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
@@ -28,6 +37,7 @@ import { submissionUnderReviewKey } from '@folio/shared/messaging/idempotency';
 
 describe('SubmissionsService under_review author email', () => {
   let service: SubmissionsService;
+  let files: SubmissionFileService;
   let eventPublisher: { enqueue: jest.Mock; enqueueMany: jest.Mock };
   let assignmentsRepo: {
     findOne: jest.Mock;
@@ -121,6 +131,14 @@ describe('SubmissionsService under_review author email', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         SubmissionsService,
+        SubmissionAccessService,
+        PublicationCatalogService,
+        SubmissionFileService,
+        SubmissionEventsService,
+        ReviewWorkflowService,
+        CopyeditWorkflowService,
+        SubmissionLifecycleService,
+        SubmissionAiService,
         { provide: getRepositoryToken(Submission), useValue: {} },
         {
           provide: getRepositoryToken(SubmissionFile),
@@ -179,13 +197,9 @@ describe('SubmissionsService under_review author email', () => {
     }).compile();
 
     service = moduleRef.get(SubmissionsService);
+    files = moduleRef.get(SubmissionFileService);
     jest
-      .spyOn(
-        service as unknown as {
-          assertHasReviewManuscriptPackage: () => Promise<void>;
-        },
-        'assertHasReviewManuscriptPackage',
-      )
+      .spyOn(files, 'assertHasReviewManuscriptPackage')
       .mockResolvedValue(undefined);
   });
 

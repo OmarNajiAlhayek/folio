@@ -1,20 +1,22 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * Opt-in integration: publication catalog FTS + trigram search.
  *
  * Requires Postgres (same `DB_*` as backend `.env`) and search columns:
  *
  *   cd backend
- *   npm run seed
+ *   npm run seed          # [Demo] published catalog (seed:perf alone skips it)
  *   # PowerShell: $env:PUBLICATION_SEARCH_INTEGRATION='1'
- *   npm run test:integration -- --testPathPatterns=publication-catalog-search
+ *   npm run test:publication-search
  */
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../app.module';
 import { ensurePublicationSearchSchema } from '../common/ensure-publication-search-schema';
+import { configureNestTestApp } from '../../test/configure-nest-test-app';
 
 const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
 
@@ -29,14 +31,7 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
       }).compile();
 
       app = moduleFixture.createNestApplication();
-      app.setGlobalPrefix('api/v1');
-      app.useGlobalPipes(
-        new ValidationPipe({
-          whitelist: true,
-          forbidNonWhitelisted: true,
-          transform: true,
-        }),
-      );
+      configureNestTestApp(app);
       await app.init();
 
       const dataSource = app.get(DataSource);
@@ -81,11 +76,11 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
     it('finds sample by quick search q', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/public/submissions')
-        .query({ q: '[SAMPLE]' })
+        .query({ q: '[Demo]' })
         .expect(200);
       expect(res.body.items.length).toBeGreaterThanOrEqual(1);
       for (const row of res.body.items as { title: string }[]) {
-        expect(row.title).toContain('[SAMPLE]');
+        expect(row.title).toContain('[Demo]');
       }
     });
 

@@ -21,7 +21,7 @@ describe('submissionToViewerJson messageForAuthor', () => {
     files: [],
     authorId: 'author-1',
     messageForAuthor: 'Please revise section 2.',
-  } as Submission;
+  } as unknown as Submission;
 
   it('exposes messageForAuthor to author and editor viewers', () => {
     expect(submissionToViewerJson(base, 'author').messageForAuthor).toBe(

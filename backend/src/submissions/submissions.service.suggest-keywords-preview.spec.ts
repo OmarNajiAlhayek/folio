@@ -3,6 +3,15 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionsService } from './submissions.service';
+import { SubmissionAccessService } from './submission-access.service';
+import { PublicationCatalogService } from './publication-catalog.service';
+import { SubmissionFileService } from './submission-file.service';
+import { SubmissionEventsService } from './submission-events.service';
+import { ReviewWorkflowService } from './review-workflow.service';
+import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import { SubmissionAiService } from './submission-ai.service';
+
 import { AiClientService } from '../ai/ai-client.service';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
 import { languageToolServiceMock } from './language-tool.service.mock';
@@ -49,6 +58,14 @@ describe('SubmissionsService.suggestKeywordsPreview', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         SubmissionsService,
+        SubmissionAccessService,
+        PublicationCatalogService,
+        SubmissionFileService,
+        SubmissionEventsService,
+        ReviewWorkflowService,
+        CopyeditWorkflowService,
+        SubmissionLifecycleService,
+        SubmissionAiService,
         { provide: getRepositoryToken(Submission), useValue: {} },
         { provide: getRepositoryToken(SubmissionFile), useValue: {} },
         { provide: getRepositoryToken(ReviewAssignment), useValue: {} },
