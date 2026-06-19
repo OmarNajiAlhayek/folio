@@ -1,6 +1,8 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NextFunction, Request, Response } from 'express';
 import type { RequestUser } from '../common/types/request-user';
+import { classifyAuditAction } from './audit-action';
 import { AuditLogService } from './audit-log.service';
 
 const REDACTED_KEYS = new Set([
@@ -66,7 +68,17 @@ type AugmentedRequest = Request & {
 
 @Injectable()
 export class AuditMiddleware implements NestMiddleware {
-  constructor(private readonly auditLogService: AuditLogService) {}
+  private readonly sampleRate: number;
+
+  constructor(
+    private readonly auditLogService: AuditLogService,
+    config: ConfigService,
+  ) {
+    const raw = config.get<string>('AUDIT_SAMPLE_RATE', '1');
+    const parsed = parseFloat(raw);
+    this.sampleRate =
+      Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 1;
+  }
 
   use(req: AugmentedRequest, res: Response, next: NextFunction): void {
     if (
@@ -91,13 +103,25 @@ export class AuditMiddleware implements NestMiddleware {
       const user = req.user;
       const rawParams = (req.params ?? {}) as Record<string, unknown>;
       const params = Object.keys(rawParams).length > 0 ? rawParams : null;
+      const routePattern = routePatternFromRequest(req);
+      const { actionType, resourceType, resourceId } = classifyAuditAction(
+        method,
+        routePattern,
+        path,
+        res.statusCode,
+        params,
+      );
+
+      if (this.sampleRate < 1 && Math.random() >= this.sampleRate) {
+        return;
+      }
 
       void this.auditLogService.record({
         userId: user?.sub ?? null,
         userEmail: user?.email ?? null,
         userRoles: user?.roleSlugs ?? null,
         method,
-        routePattern: routePatternFromRequest(req),
+        routePattern,
         path,
         statusCode: res.statusCode,
         ipAddress,
@@ -106,6 +130,9 @@ export class AuditMiddleware implements NestMiddleware {
         params,
         durationMs: Date.now() - startTime,
         error: res.statusCode >= 400 ? `HTTP ${res.statusCode}` : null,
+        actionType,
+        resourceType,
+        resourceId,
       });
     });
 

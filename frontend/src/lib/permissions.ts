@@ -14,6 +14,7 @@ export const PERMISSION_SLUGS = {
   USERS_MANAGE_ROLES: 'users.manage_roles',
   EMAIL_MANAGE_REMINDERS: 'email.manage_reminders',
   EMAIL_MANAGE_ASSIGNMENT_REMINDERS: 'email.manage_assignment_reminders',
+  AUDIT_LOG_VIEW: 'audit_log.view',
 } as const;
 
 export const ROLE_SLUGS = {

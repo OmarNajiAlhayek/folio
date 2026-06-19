@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsEnum,
   IsISO8601,
   IsInt,
   IsOptional,
@@ -15,6 +16,7 @@ import {
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { AuditActionType, AuditResourceType } from './audit-action';
 import { AuditLogService } from './audit-log.service';
 
 function parseIntParam(value: unknown, fallback: number): number {
@@ -51,6 +53,19 @@ class AuditLogQueryDto {
   @IsString()
   @MaxLength(512)
   routePattern?: string;
+
+  @IsOptional()
+  @IsEnum(AuditActionType)
+  actionType?: string;
+
+  @IsOptional()
+  @IsEnum(AuditResourceType)
+  resourceType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  resourceId?: string;
 
   @IsOptional()
   @Transform(({ value }) => parseIntParam(value, 1))

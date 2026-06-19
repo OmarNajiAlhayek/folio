@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { hasAnyPermission } from '../authorization/permission-checks';
 import { ALLOW_AUTHENTICATED_KEY } from '../decorators/allow-authenticated.decorator';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import type { RequestUser } from '../types/request-user';
@@ -39,9 +40,8 @@ export class PermissionsGuard implements CanActivate {
         code: 'FORBIDDEN',
       });
     }
-    const set = new Set(user.permissionSlugs);
-    // OR: see JSDoc on @Permissions()
-    const ok = required.some((p) => set.has(p));
+    // OR: see JSDoc on @Permissions() and docs/authorization.md
+    const ok = hasAnyPermission(user, required);
     if (!ok) {
       throw new ForbiddenException({
         message: 'Insufficient permissions',

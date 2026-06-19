@@ -1,5 +1,5 @@
-import { routing } from "@/i18n/routing";
-import { PERMISSION_SLUGS } from "./permissions";
+import { routing } from '@/i18n/routing';
+import { PERMISSION_SLUGS } from './permissions';
 
 const LOCALES = routing.locales;
 
@@ -8,11 +8,11 @@ const LOCALES = routing.locales;
  * next-intl `usePathname` is usually unprefixed; this handles `/en/...` if present.
  */
 export function normalizePathname(pathname: string): string {
-  const p = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  const parts = p.split("/").filter(Boolean);
+  const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const parts = p.split('/').filter(Boolean);
   if (parts[0] && LOCALES.includes(parts[0] as (typeof LOCALES)[number])) {
-    const rest = parts.slice(1).join("/");
-    return rest ? `/${rest}` : "/";
+    const rest = parts.slice(1).join('/');
+    return rest ? `/${rest}` : '/';
   }
   return p;
 }
@@ -37,6 +37,14 @@ export const ROUTE_ACCESS_RULES: Array<{
   {
     pattern: /^\/journal-manager\/users(\/|$)/,
     permissions: PERMISSION_SLUGS.USERS_MANAGE_ROLES,
+  },
+  {
+    pattern: /^\/journal-manager\/audit-log(\/|$)/,
+    permissions: PERMISSION_SLUGS.AUDIT_LOG_VIEW,
+  },
+  {
+    pattern: /^\/journal-manager\/search-curation(\/|$)/,
+    permissions: PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   },
   {
     pattern: /^\/editor(\/|$)/,

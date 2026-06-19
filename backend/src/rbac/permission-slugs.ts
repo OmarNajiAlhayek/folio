@@ -37,6 +37,27 @@ export const SUBMISSION_LIST_PERMISSIONS = [
   PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
 ] as const;
 
+/** OR list for peer-review configuration routes (review method, file stage). */
+export const EDITOR_REVIEW_CONFIG_PERMISSIONS = [
+  PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
+  PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
+] as const;
+
+/** OR list for assignment reminder admin — mirrors `AssignmentRemindersController`. */
+export const ASSIGNMENT_REMINDER_PERMISSIONS = [
+  PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+  PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
+] as const;
+
+/**
+ * AND list for reviewer matching — guard checks assign only; service enforces both.
+ * See docs/authorization.md.
+ */
+export const SUGGESTED_REVIEWERS_CALLER_PERMISSIONS = [
+  PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
+  PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+] as const;
+
 export const ROLE_SLUGS = {
   AUTHOR: 'author',
   /** Handling editor — peer review and editorial decisions (OJS section editor). */

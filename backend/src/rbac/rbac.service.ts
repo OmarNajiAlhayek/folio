@@ -1,4 +1,5 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { generateEntityId } from '@folio/shared';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Permission } from '../entities/permission.entity';
@@ -91,11 +92,7 @@ export class RbacService implements OnModuleInit {
       },
     ];
 
-    for (const p of permissionDefs) {
-      await this.permRepo.upsert({ slug: p.slug, description: p.description }, [
-        'slug',
-      ]);
-    }
+    const permBySlug = await this.batchUpsertPermissions(permissionDefs);
 
     const roleDefs: { slug: string; name: string }[] = [
       { slug: ROLE_SLUGS.AUTHOR, name: 'Author' },
@@ -105,9 +102,7 @@ export class RbacService implements OnModuleInit {
       { slug: ROLE_SLUGS.COPYEDITOR, name: 'Copyeditor' },
     ];
 
-    for (const r of roleDefs) {
-      await this.roleRepo.upsert({ slug: r.slug, name: r.name }, ['slug']);
-    }
+    const roleBySlug = await this.batchUpsertRoles(roleDefs);
 
     const editorPerms = [
       PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
@@ -137,49 +132,143 @@ export class RbacService implements OnModuleInit {
 
     const authorPerms = [PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN];
 
-    await this.syncRolePermissions(ROLE_SLUGS.AUTHOR, authorPerms);
-    await this.syncRolePermissions(ROLE_SLUGS.EDITOR, editorPerms);
-    await this.syncRolePermissions(
-      ROLE_SLUGS.JOURNAL_MANAGER,
-      journalManagerPerms,
+    await this.batchSyncRolePermissions(
+      [
+        { roleSlug: ROLE_SLUGS.AUTHOR, permissionSlugs: authorPerms },
+        { roleSlug: ROLE_SLUGS.EDITOR, permissionSlugs: editorPerms },
+        {
+          roleSlug: ROLE_SLUGS.JOURNAL_MANAGER,
+          permissionSlugs: journalManagerPerms,
+        },
+        { roleSlug: ROLE_SLUGS.REVIEWER, permissionSlugs: reviewerPerms },
+        { roleSlug: ROLE_SLUGS.COPYEDITOR, permissionSlugs: copyeditorPerms },
+      ],
+      roleBySlug,
+      permBySlug,
     );
-    await this.syncRolePermissions(ROLE_SLUGS.REVIEWER, reviewerPerms);
-    await this.syncRolePermissions(ROLE_SLUGS.COPYEDITOR, copyeditorPerms);
   }
 
-  /** Upsert links for `permissionSlugs` and remove any other permissions on the role. */
-  private async syncRolePermissions(
-    roleSlug: string,
-    permissionSlugs: string[],
-  ): Promise<void> {
-    const role = await this.roleRepo.findOne({ where: { slug: roleSlug } });
-    if (!role) return;
+  private async batchUpsertPermissions(
+    defs: { slug: string; description: string }[],
+  ): Promise<Map<string, Permission>> {
+    if (defs.length === 0) return new Map();
 
-    const desiredPermIds: string[] = [];
-    for (const slug of permissionSlugs) {
-      const perm = await this.permRepo.findOne({ where: { slug } });
-      if (!perm) continue;
-      desiredPermIds.push(perm.id);
-      const exists = await this.rpRepo.findOne({
-        where: { roleId: role.id, permissionId: perm.id },
-      });
-      if (!exists) {
-        await this.rpRepo.save({
-          roleId: role.id,
-          permissionId: perm.id,
+    const existing = await this.permRepo.find({
+      where: { slug: In(defs.map((d) => d.slug)) },
+    });
+    const bySlug = new Map(existing.map((p) => [p.slug, p]));
+
+    const toInsert: Permission[] = [];
+    const toUpdate: Permission[] = [];
+    for (const def of defs) {
+      const row = bySlug.get(def.slug);
+      if (!row) {
+        const created = this.permRepo.create({
+          id: generateEntityId(),
+          slug: def.slug,
+          description: def.description,
         });
+        toInsert.push(created);
+        bySlug.set(def.slug, created);
+        continue;
+      }
+      if (row.description !== def.description) {
+        row.description = def.description;
+        toUpdate.push(row);
       }
     }
 
-    const existing = await this.rpRepo.find({ where: { roleId: role.id } });
-    const desiredSet = new Set(desiredPermIds);
-    for (const rp of existing) {
-      if (!desiredSet.has(rp.permissionId)) {
-        await this.rpRepo.delete({
-          roleId: role.id,
-          permissionId: rp.permissionId,
+    if (toInsert.length > 0) await this.permRepo.save(toInsert);
+    if (toUpdate.length > 0) await this.permRepo.save(toUpdate);
+    return bySlug;
+  }
+
+  private async batchUpsertRoles(
+    defs: { slug: string; name: string }[],
+  ): Promise<Map<string, Role>> {
+    if (defs.length === 0) return new Map();
+
+    const existing = await this.roleRepo.find({
+      where: { slug: In(defs.map((d) => d.slug)) },
+    });
+    const bySlug = new Map(existing.map((r) => [r.slug, r]));
+
+    const toInsert: Role[] = [];
+    const toUpdate: Role[] = [];
+    for (const def of defs) {
+      const row = bySlug.get(def.slug);
+      if (!row) {
+        const created = this.roleRepo.create({
+          id: generateEntityId(),
+          slug: def.slug,
+          name: def.name,
         });
+        toInsert.push(created);
+        bySlug.set(def.slug, created);
+        continue;
       }
+      if (row.name !== def.name) {
+        row.name = def.name;
+        toUpdate.push(row);
+      }
+    }
+
+    if (toInsert.length > 0) await this.roleRepo.save(toInsert);
+    if (toUpdate.length > 0) await this.roleRepo.save(toUpdate);
+    return bySlug;
+  }
+
+  private rolePermissionKey(roleId: string, permissionId: string): string {
+    return `${roleId}\0${permissionId}`;
+  }
+
+  /** Upsert links for each role and remove stale permissions in bulk. */
+  private async batchSyncRolePermissions(
+    matrix: { roleSlug: string; permissionSlugs: string[] }[],
+    roleBySlug: Map<string, Role>,
+    permBySlug: Map<string, Permission>,
+  ): Promise<void> {
+    const roleIds = matrix
+      .map((entry) => roleBySlug.get(entry.roleSlug)?.id)
+      .filter((id): id is string => Boolean(id));
+    if (roleIds.length === 0) return;
+
+    const desiredKeys = new Set<string>();
+    for (const { roleSlug, permissionSlugs } of matrix) {
+      const role = roleBySlug.get(roleSlug);
+      if (!role) continue;
+      for (const permSlug of permissionSlugs) {
+        const perm = permBySlug.get(permSlug);
+        if (!perm) continue;
+        desiredKeys.add(this.rolePermissionKey(role.id, perm.id));
+      }
+    }
+
+    const existing = await this.rpRepo.find({
+      where: { roleId: In([...new Set(roleIds)]) },
+    });
+    const existingKeys = new Set(
+      existing.map((rp) => this.rolePermissionKey(rp.roleId, rp.permissionId)),
+    );
+
+    const toInsert = [...desiredKeys]
+      .filter((key) => !existingKeys.has(key))
+      .map((key) => {
+        const [roleId, permissionId] = key.split('\0');
+        return { roleId, permissionId };
+      });
+    if (toInsert.length > 0) await this.rpRepo.save(toInsert);
+
+    const staleByRole = new Map<string, string[]>();
+    for (const rp of existing) {
+      const key = this.rolePermissionKey(rp.roleId, rp.permissionId);
+      if (desiredKeys.has(key)) continue;
+      const permissionIds = staleByRole.get(rp.roleId) ?? [];
+      permissionIds.push(rp.permissionId);
+      staleByRole.set(rp.roleId, permissionIds);
+    }
+    for (const [roleId, permissionIds] of staleByRole) {
+      await this.rpRepo.delete({ roleId, permissionId: In(permissionIds) });
     }
   }
 
@@ -207,7 +296,14 @@ export class RbacService implements OnModuleInit {
     return { roleSlugs, permissionSlugs: [...permissionSlugs] };
   }
 
-  async assignRoles(userId: string, roleSlugs: string[]): Promise<void> {
+  async assignRoles(
+    userId: string,
+    roleSlugs: string[],
+  ): Promise<{
+    before: { roleSlugs: string[]; permissionSlugs: string[] };
+    after: { roleSlugs: string[]; permissionSlugs: string[] };
+  }> {
+    const before = await this.getEffectiveForUser(userId);
     const unique = [...new Set(roleSlugs)];
     const roles = await this.roleRepo.find({
       where: { slug: In(unique) },
@@ -215,12 +311,17 @@ export class RbacService implements OnModuleInit {
     if (roles.length !== unique.length) {
       const found = new Set(roles.map((r) => r.slug));
       const missing = unique.filter((s) => !found.has(s));
-      throw new Error(`Unknown role slugs: ${missing.join(', ')}`);
+      throw new BadRequestException({
+        message: `Unknown role slugs: ${missing.join(', ')}`,
+        code: 'VALIDATION_ERROR',
+      });
     }
     await this.userRoleRepo.delete({ userId });
     for (const role of roles) {
       await this.userRoleRepo.save({ userId, roleId: role.id });
     }
+    const after = await this.getEffectiveForUser(userId);
+    return { before, after };
   }
 
   async addAuthorRoleIfNone(userId: string): Promise<void> {

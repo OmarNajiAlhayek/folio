@@ -15,6 +15,8 @@ export const PERMISSIONS_KEY = 'permissions';
  *
  * To require every slug (AND), enforce in the service layer or add a dedicated
  * decorator when a route needs it.
+ *
+ * Route-level policy: see docs/authorization.md.
  */
 export const Permissions = (...permissions: string[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
