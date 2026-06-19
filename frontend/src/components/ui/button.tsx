@@ -8,6 +8,7 @@ import { Spinner } from '@/components/ui/spinner';
 export type ButtonVariant =
   | 'primary'
   | 'secondary'
+  | 'outline'
   | 'ghost'
   | 'danger'
   | 'danger-soft';
@@ -24,6 +25,8 @@ const variantCls: Record<ButtonVariant, string> = {
   primary:
     'bg-accent text-white shadow-xs hover:brightness-105 active:scale-[0.98] disabled:opacity-60',
   secondary:
+    'border border-ink/20 bg-paper text-ink shadow-xs hover:bg-ink/8 disabled:opacity-60',
+  outline:
     'border border-ink/20 bg-paper text-ink shadow-xs hover:bg-ink/8 disabled:opacity-60',
   ghost: 'text-ink/75 hover:bg-ink/6 hover:text-ink disabled:opacity-50',
   danger:
@@ -57,35 +60,50 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ) {
     const isLight =
       variant === 'secondary' ||
+      variant === 'outline' ||
       variant === 'ghost' ||
       variant === 'danger-soft';
-    const Comp = asChild ? Slot : 'button';
+    const classes = cn(
+      buttonStyles,
+      variantCls[variant],
+      sizeCls[size],
+      className,
+    );
+
+    if (asChild) {
+      return (
+        <Slot
+          ref={ref}
+          aria-busy={loading || undefined}
+          className={classes}
+          {...props}
+        >
+          {children}
+        </Slot>
+      );
+    }
+
     return (
-      <Comp
+      <button
         ref={ref}
-        disabled={asChild ? undefined : disabled || loading}
+        disabled={disabled || loading}
         aria-busy={loading || undefined}
-        className={cn(
-          buttonStyles,
-          variantCls[variant],
-          sizeCls[size],
-          className,
-        )}
+        className={classes}
         {...props}
       >
-        {loading && !asChild ? (
+        {loading ? (
           <Spinner
             size="sm"
-            className={
+            className={cn(
+              'me-2 shrink-0',
               isLight
                 ? 'border-ink/20 border-t-ink/60'
-                : 'border-ink/30 border-t-white'
-            }
+                : 'border-ink/30 border-t-white',
+            )}
           />
-        ) : (
-          children
-        )}
-      </Comp>
+        ) : null}
+        {children}
+      </button>
     );
   },
 );

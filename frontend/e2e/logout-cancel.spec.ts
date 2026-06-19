@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { workerCredentials } from './helpers/e2e-api';
+import { navLogoutButton } from './helpers/waits';
 
 test('logout cancel closes dialog', async ({ page }) => {
   const creds = workerCredentials(0);
@@ -9,7 +10,7 @@ test('logout cancel closes dialog', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/en\/login/, { timeout: 30_000 });
 
-  await page.getByRole('button', { name: /log out/i }).click();
+  await navLogoutButton(page).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 5_000 });

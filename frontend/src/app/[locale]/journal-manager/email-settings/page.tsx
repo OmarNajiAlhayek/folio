@@ -2,6 +2,19 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
+import {
+  Archive,
+  BarChart3,
+  Check,
+  ChevronLeft,
+  ClipboardCheck,
+  Clock,
+  Mail,
+  Plus,
+  RotateCw,
+  SlidersHorizontal,
+  TriangleAlert,
+} from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { apiJson, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/queries/auth';
@@ -11,6 +24,12 @@ import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PERMISSION_SLUGS } from '@/lib/permissions';
 import { submissionQueueShellCls } from '@/lib/submission-list-ui';
 import { LoadingCenter, Spinner } from '@/components/ui/spinner';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 
 type ReminderPolicy = {
   id: number;
@@ -617,19 +636,11 @@ export default function EmailSettingsPage() {
               href="/dashboard"
               className="inline-flex items-center gap-1 hover:underline transition"
             >
-              <svg
-                className="size-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15.75 19.5L8.25 12l7.5-7.5"
-                />
-              </svg>
+              <ChevronLeft
+                className="size-3 rtl:rotate-180"
+                strokeWidth={2.5}
+                aria-hidden
+              />
               {t('backToDashboard')}
             </Link>
           </p>
@@ -656,19 +667,7 @@ export default function EmailSettingsPage() {
               : 'border-transparent text-ink/60 hover:text-ink hover:bg-ink/5'
           }`}
         >
-          <svg
-            className="size-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"
-            />
-          </svg>
+          <BarChart3 className="size-4" strokeWidth={2} aria-hidden />
           {t('pipelineSection')}
         </button>
         <button
@@ -680,19 +679,7 @@ export default function EmailSettingsPage() {
               : 'border-transparent text-ink/60 hover:text-ink hover:bg-ink/5'
           }`}
         >
-          <svg
-            className="size-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-            />
-          </svg>
+          <SlidersHorizontal className="size-4" strokeWidth={2} aria-hidden />
           {t('policySection')}
         </button>
         <button
@@ -704,19 +691,7 @@ export default function EmailSettingsPage() {
               : 'border-transparent text-ink/60 hover:text-ink hover:bg-ink/5'
           }`}
         >
-          <svg
-            className="size-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
+          <Mail className="size-4" strokeWidth={2} aria-hidden />
           {t('templatesReviewSection')}
         </button>
       </div>
@@ -740,19 +715,11 @@ export default function EmailSettingsPage() {
               {pipelineLoading ? (
                 <Spinner size="sm" />
               ) : (
-                <svg
+                <RotateCw
                   className="size-4 text-ink/60"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.228 10H18.228"
-                  />
-                </svg>
+                  strokeWidth={2}
+                  aria-hidden
+                />
               )}
               {t('pipelineRefresh')}
             </button>
@@ -907,19 +874,11 @@ export default function EmailSettingsPage() {
                 {/* RabbitMQ Status Card */}
                 <div className="rounded-2xl border border-border/60 bg-surface/50 p-6 shadow-sm">
                   <h3 className="text-base font-semibold text-ink mb-3 flex items-center gap-2">
-                    <svg
+                    <Archive
                       className="size-4 text-accent"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                      />
-                    </svg>
+                      strokeWidth={2}
+                      aria-hidden
+                    />
                     {t('rabbitLabel')}
                   </h3>
                   {!pipeline.rabbitMq.available ? (
@@ -989,19 +948,11 @@ export default function EmailSettingsPage() {
                   <div>
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-semibold text-warning flex items-center gap-2">
-                        <svg
+                        <TriangleAlert
                           className="size-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                          />
-                        </svg>
+                          strokeWidth={2}
+                          aria-hidden
+                        />
                         {t('dlqLabel')}
                       </h3>
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-warning/10 text-warning">
@@ -1039,19 +990,11 @@ export default function EmailSettingsPage() {
                           <Spinner size="sm" />
                         ) : (
                           <>
-                            <svg
+                            <RotateCw
                               className="size-4 mr-1.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.228 10H18.228"
-                              />
-                            </svg>
+                              strokeWidth={2}
+                              aria-hidden
+                            />
                             {t('replayDlq')}
                           </>
                         )}
@@ -1176,19 +1119,11 @@ export default function EmailSettingsPage() {
         <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
           <div className="rounded-2xl border border-border/60 bg-surface/50 p-6 md:p-8 shadow-sm">
             <h2 className="text-xl font-semibold text-ink flex items-center gap-2">
-              <svg
+              <SlidersHorizontal
                 className="size-5 text-accent"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                />
-              </svg>
+                strokeWidth={2}
+                aria-hidden
+              />
               {t('policySection')}
             </h2>
             <p className="text-sm text-ink/65 mt-2 leading-relaxed">
@@ -1252,19 +1187,11 @@ export default function EmailSettingsPage() {
                     {/* Step 1: Invited (Day 0) */}
                     <div className="relative flex flex-row md:flex-col items-center gap-4 md:gap-3 text-left md:text-center max-w-xs z-10 w-full md:w-1/4 group">
                       <div className="size-12 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-110 transition duration-300">
-                        <svg
+                        <Plus
                           className="size-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 4.5v15m7.5-7.5h-15"
-                          />
-                        </svg>
+                          strokeWidth={2.5}
+                          aria-hidden
+                        />
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-ink/60 uppercase tracking-wider">
@@ -1282,19 +1209,11 @@ export default function EmailSettingsPage() {
                     {/* Step 2: Due Soon (Day N - 3) */}
                     <div className="relative flex flex-row md:flex-col items-center gap-4 md:gap-3 text-left md:text-center max-w-xs z-10 w-full md:w-1/4 group">
                       <div className="size-12 rounded-full bg-amber-500/10 border border-amber-500/40 text-amber-600 flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-110 transition duration-300">
-                        <svg
+                        <Clock
                           className="size-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
+                          strokeWidth={2.5}
+                          aria-hidden
+                        />
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-amber-600 uppercase tracking-wider">
@@ -1312,19 +1231,11 @@ export default function EmailSettingsPage() {
                     {/* Step 3: Due Date (Day N) */}
                     <div className="relative flex flex-row md:flex-col items-center gap-4 md:gap-3 text-left md:text-center max-w-xs z-10 w-full md:w-1/4 group">
                       <div className="size-12 rounded-full bg-accent/10 border border-accent/40 text-accent flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-110 transition duration-300">
-                        <svg
+                        <ClipboardCheck
                           className="size-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                          />
-                        </svg>
+                          strokeWidth={2.5}
+                          aria-hidden
+                        />
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-accent uppercase tracking-wider">
@@ -1343,19 +1254,11 @@ export default function EmailSettingsPage() {
                     <div className="relative flex flex-row md:flex-col items-center gap-4 md:gap-3 text-left md:text-center max-w-xs z-10 w-full md:w-1/4 group">
                       <div className="size-12 rounded-full bg-red-500/10 border border-red-500/40 text-red-600 flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-110 transition duration-300 relative">
                         <span className="absolute inset-0 rounded-full bg-red-500/10 animate-ping opacity-60" />
-                        <svg
+                        <TriangleAlert
                           className="size-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                          />
-                        </svg>
+                          strokeWidth={2.5}
+                          aria-hidden
+                        />
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider">
@@ -1415,151 +1318,103 @@ export default function EmailSettingsPage() {
               </div>
             </div>
 
-            {/* Sidebar list items */}
-            <div className="space-y-5">
-              {/* Category: Peer Review */}
-              <div className="space-y-1.5">
-                <h3 className="text-[10px] font-bold text-accent uppercase tracking-widest px-2">
-                  {t('templatesReviewSection')}
-                </h3>
-                <div className="space-y-1">
-                  {REVIEW_TEMPLATE_KEYS.map((key) => {
-                    const meta = TEMPLATE_I18N[key];
-                    const isSelected = selectedTemplateKey === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={templatesLoading}
-                        onClick={() => setSelectedTemplateKey(key)}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-surface border-accent shadow-sm text-accent'
-                            : 'bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink'
-                        }`}
-                      >
-                        <span className="truncate">{t(meta.title)}</span>
-                        <span className="size-1.5 rounded-full bg-accent/40" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Category: Editorial Workflow */}
-              <div className="space-y-1.5">
-                <h3 className="text-[10px] font-bold text-accent-2 uppercase tracking-widest px-2">
-                  {t('templatesWorkflowSection')}
-                </h3>
-                <div className="space-y-1">
-                  {WORKFLOW_TEMPLATE_KEYS.map((key) => {
-                    const meta = TEMPLATE_I18N[key];
-                    const isSelected = selectedTemplateKey === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={templatesLoading}
-                        onClick={() => setSelectedTemplateKey(key)}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-surface border-accent-2 shadow-sm text-accent-2'
-                            : 'bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink'
-                        }`}
-                      >
-                        <span className="truncate">{t(meta.title)}</span>
-                        <span className="size-1.5 rounded-full bg-accent-2/40" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-[10px] font-bold text-accent-2 uppercase tracking-widest px-2">
-                  {t('templatesReviewEditorSection')}
-                </h3>
-                <div className="space-y-1">
-                  {REVIEW_EDITOR_TEMPLATE_KEYS.map((key) => {
-                    const meta = TEMPLATE_I18N[key];
-                    const isSelected = selectedTemplateKey === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={templatesLoading}
-                        onClick={() => setSelectedTemplateKey(key)}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-surface border-accent-2 shadow-sm text-accent-2'
-                            : 'bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink'
-                        }`}
-                      >
-                        <span className="truncate">{t(meta.title)}</span>
-                        <span className="size-1.5 rounded-full bg-accent-2/40" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-[10px] font-bold text-accent uppercase tracking-widest px-2">
-                  {t('templatesRoleSection')}
-                </h3>
-                <div className="space-y-1">
-                  {ROLE_TEMPLATE_KEYS.map((key) => {
-                    const meta = TEMPLATE_I18N[key];
-                    const isSelected = selectedTemplateKey === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={templatesLoading}
-                        onClick={() => setSelectedTemplateKey(key)}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-surface border-accent shadow-sm text-accent'
-                            : 'bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink'
-                        }`}
-                      >
-                        <span className="truncate">{t(meta.title)}</span>
-                        <span className="size-1.5 rounded-full bg-accent/40" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Category: Copyediting */}
-              <div className="space-y-1.5">
-                <h3 className="text-[10px] font-bold text-accent uppercase tracking-widest px-2">
-                  {t('templatesCopyeditSection')}
-                </h3>
-                <div className="space-y-1">
-                  {COPYEDIT_TEMPLATE_KEYS.map((key) => {
-                    const meta = TEMPLATE_I18N[key];
-                    const isSelected = selectedTemplateKey === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={templatesLoading}
-                        onClick={() => setSelectedTemplateKey(key)}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-surface border-accent shadow-sm text-accent'
-                            : 'bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink'
-                        }`}
-                      >
-                        <span className="truncate">{t(meta.title)}</span>
-                        <span className="size-1.5 rounded-full bg-accent/40" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            {/* Sidebar list items — collapsible by category */}
+            <Accordion
+              type="multiple"
+              defaultValue={[
+                'review',
+                'workflow',
+                'review-editor',
+                'role',
+                'copyedit',
+              ]}
+            >
+              {(
+                [
+                  {
+                    value: 'review',
+                    label: t('templatesReviewSection'),
+                    keys: REVIEW_TEMPLATE_KEYS,
+                    accent: 'text-accent',
+                    dot: 'bg-accent/40',
+                    activeBorder: 'border-accent',
+                    activeText: 'text-accent',
+                  },
+                  {
+                    value: 'workflow',
+                    label: t('templatesWorkflowSection'),
+                    keys: WORKFLOW_TEMPLATE_KEYS,
+                    accent: 'text-accent-2',
+                    dot: 'bg-accent-2/40',
+                    activeBorder: 'border-accent-2',
+                    activeText: 'text-accent-2',
+                  },
+                  {
+                    value: 'review-editor',
+                    label: t('templatesReviewEditorSection'),
+                    keys: REVIEW_EDITOR_TEMPLATE_KEYS,
+                    accent: 'text-accent-2',
+                    dot: 'bg-accent-2/40',
+                    activeBorder: 'border-accent-2',
+                    activeText: 'text-accent-2',
+                  },
+                  {
+                    value: 'role',
+                    label: t('templatesRoleSection'),
+                    keys: ROLE_TEMPLATE_KEYS,
+                    accent: 'text-accent',
+                    dot: 'bg-accent/40',
+                    activeBorder: 'border-accent',
+                    activeText: 'text-accent',
+                  },
+                  {
+                    value: 'copyedit',
+                    label: t('templatesCopyeditSection'),
+                    keys: COPYEDIT_TEMPLATE_KEYS,
+                    accent: 'text-accent',
+                    dot: 'bg-accent/40',
+                    activeBorder: 'border-accent',
+                    activeText: 'text-accent',
+                  },
+                ] as const
+              ).map((group) => (
+                <AccordionItem key={group.value} value={group.value}>
+                  <AccordionTrigger
+                    className={`text-[10px] font-bold uppercase tracking-widest px-2 ${group.accent}`}
+                  >
+                    {group.label}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-1 px-0">
+                      {(group.keys as readonly EmailTemplateKey[]).map(
+                        (key) => {
+                          const meta = TEMPLATE_I18N[key];
+                          const isSelected = selectedTemplateKey === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              disabled={templatesLoading}
+                              onClick={() => setSelectedTemplateKey(key)}
+                              className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex items-center justify-between cursor-pointer ${
+                                isSelected
+                                  ? `bg-surface ${group.activeBorder} shadow-sm ${group.activeText}`
+                                  : 'bg-surface/35 border-transparent text-ink/80 hover:bg-ink/5 hover:text-ink'
+                              }`}
+                            >
+                              <span className="truncate">{t(meta.title)}</span>
+                              <span
+                                className={`size-1.5 rounded-full ${group.dot}`}
+                              />
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </div>
 
           {/* Right Components: Workspace Editor (5 cols) & Live Preview (4 cols) */}
@@ -1702,19 +1557,11 @@ export default function EmailSettingsPage() {
                             >
                               {isCopied ? (
                                 <>
-                                  <svg
+                                  <Check
                                     className="size-2.5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
+                                    strokeWidth={3}
+                                    aria-hidden
+                                  />
                                   Copied
                                 </>
                               ) : (
@@ -1741,19 +1588,11 @@ export default function EmailSettingsPage() {
                           />
                         ) : (
                           <>
-                            <svg
+                            <Check
                               className="size-3.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth="2.5"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
+                              strokeWidth={2.5}
+                              aria-hidden
+                            />
                             {t('saveTemplate')}
                           </>
                         )}
@@ -1768,19 +1607,11 @@ export default function EmailSettingsPage() {
                           <Spinner size="sm" />
                         ) : (
                           <>
-                            <svg
+                            <RotateCw
                               className="size-3.5 text-ink/60"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.228 10H18.228"
-                              />
-                            </svg>
+                              strokeWidth={2}
+                              aria-hidden
+                            />
                             Refresh
                           </>
                         )}
@@ -1885,19 +1716,11 @@ export default function EmailSettingsPage() {
                         )
                       ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-ink/40 text-center space-y-1.5 py-12">
-                          <svg
+                          <Mail
                             className="size-8 text-ink/20"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                            />
-                          </svg>
+                            strokeWidth={1.5}
+                            aria-hidden
+                          />
                           <p className="font-semibold text-xs text-ink/55">
                             No compiled preview.
                           </p>

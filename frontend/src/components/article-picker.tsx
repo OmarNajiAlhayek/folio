@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
 import { publicJson } from '@/lib/public-api';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,8 @@ type Props = {
   onAdd: (article: ArticleHit) => void;
   onRemove: (slug: string) => void;
   placeholder?: string;
+  searchingLabel?: string;
+  noResultsLabel?: string;
 };
 
 export function ArticlePicker({
@@ -32,6 +35,8 @@ export function ArticlePicker({
   onAdd,
   onRemove,
   placeholder,
+  searchingLabel = 'Searching…',
+  noResultsLabel = 'No results',
 }: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -101,19 +106,7 @@ export function ArticlePicker({
       {/* Search input */}
       <div className="relative">
         <div className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink/35">
-          <svg
-            className="size-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z"
-            />
-          </svg>
+          <Search className="size-4" aria-hidden />
         </div>
         <input
           type="search"
@@ -137,9 +130,9 @@ export function ArticlePicker({
             className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-ink/15 dark:border-white/15 bg-surface py-1 text-sm shadow-lg"
           >
             {loading ? (
-              <li className="px-3 py-2 text-ink/50">Searching…</li>
+              <li className="px-3 py-2 text-ink/50">{searchingLabel}</li>
             ) : hits.length === 0 ? (
-              <li className="px-3 py-2 text-ink/50">No results</li>
+              <li className="px-3 py-2 text-ink/50">{noResultsLabel}</li>
             ) : (
               hits.map((h) => {
                 const already = selectedSlugs.has(h.slug);

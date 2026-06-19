@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Controller, useForm } from 'react-hook-form';
+import { Building2, Lock, Mail, User } from 'lucide-react';
 import { apiJson } from '@/lib/api';
 import { sanitizeNextParam } from '@/lib/auth-redirect';
 import { toast } from '@/lib/toast';
@@ -17,19 +18,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormField } from '@/components/ui/form-field';
+import { Input, inputFieldClass } from '@/components/ui/input';
 import { type KeywordAddFailure, serializeKeywords } from '@/lib/keywords';
 import { type z } from 'zod';
 import { registerSchema, translatedZodResolver } from '@/lib/validation';
 import { OrcidButton, OrcidDivider } from '@/components/auth/orcid-button';
-
-function fieldCls(err: boolean, extra = '') {
-  const base =
-    'w-full rounded-xl border ps-10 pe-3 py-2.5 text-sm text-ink outline-hidden transition bg-paper/60 focus:border-accent focus:ring-2 focus:ring-accent/15 dark:focus:ring-accent/20';
-  const errCls = err
-    ? 'border-red-400 focus:border-red-400 focus:ring-red-500/15'
-    : 'border-ink/15 dark:border-white/15';
-  return [base, errCls, extra].filter(Boolean).join(' ');
-}
 
 const REGISTER_KEYWORD_TOAST_ID = 'register-keyword-add';
 
@@ -37,6 +30,7 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 
 function RegisterForm() {
   const t = useTranslations('Register');
+  const tMarketing = useTranslations('AuthMarketing');
   const tNav = useTranslations('Nav');
   const tv = useTranslations('Validation');
   const tWf = useTranslations('SubmissionWorkflow');
@@ -137,8 +131,6 @@ function RegisterForm() {
     }
   }
 
-  const isAr = locale === 'ar';
-
   return (
     <main className={PAGE_SHELL}>
       {/* Background Canvas Grid Texture */}
@@ -178,9 +170,7 @@ function RegisterForm() {
           {/* Interactive Feature checklist to maintain cohesive visual with login page */}
           <div className="rounded-2xl border border-accent-2/15 bg-surface/65 backdrop-blur-md px-5 py-5 shadow-xs">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink/40 mb-3.5">
-              {isAr
-                ? 'مميزات البوابة الأكاديمية'
-                : 'Scholarly Portal Key Pillars'}
+              {tMarketing('pillarsHeading')}
             </h3>
             <ul className="space-y-3.5 text-xs text-ink/70">
               <li className="flex gap-2.5 items-start">
@@ -189,11 +179,9 @@ function RegisterForm() {
                 </span>
                 <div>
                   <strong className="text-ink">
-                    {isAr ? 'منشئ النصوص العلمي' : 'Word Constructor:'}
+                    {tMarketing('pillar1Title')}
                   </strong>{' '}
-                  {isAr
-                    ? 'ابنِ بحثك ونسّقه تلقائياً قسماً بقسم.'
-                    : 'Create formatted, journal-compliant drafts block-by-block.'}
+                  {tMarketing('pillar1Body')}
                 </div>
               </li>
               <li className="flex gap-2.5 items-start">
@@ -202,11 +190,9 @@ function RegisterForm() {
                 </span>
                 <div>
                   <strong className="text-ink">
-                    {isAr ? 'تحكيم أقران معمي' : 'Double-Blind Review:'}
+                    {tMarketing('pillar2Title')}
                   </strong>{' '}
-                  {isAr
-                    ? 'تدفقات عمل سرية وآمنة بالكامل لحفظ الرصانة العلمية.'
-                    : 'Secure review queues and anonymized evaluation packages.'}
+                  {tMarketing('pillar2Body')}
                 </div>
               </li>
               <li className="flex gap-2.5 items-start">
@@ -215,11 +201,9 @@ function RegisterForm() {
                 </span>
                 <div>
                   <strong className="text-ink">
-                    {isAr ? 'كتالوج النشر المفتوح' : 'Open Access Indexing:'}
+                    {tMarketing('pillar3Title')}
                   </strong>{' '}
-                  {isAr
-                    ? 'فهرسة شاملة وأرشفة دائمة للمقالات المقبولة.'
-                    : 'Stable links, indexing, and discoverability for published papers.'}
+                  {tMarketing('pillar3Body')}
                 </div>
               </li>
             </ul>
@@ -248,33 +232,19 @@ function RegisterForm() {
             <div>
               <h3 className="font-serif text-sm font-semibold text-accent mb-3.5 flex items-center gap-1.5 pb-1 border-b border-ink/[0.06] dark:border-white/[0.06]">
                 <span className="text-accent">👤</span>
-                {isAr ? 'إعداد الحساب الأساسي' : 'Core Account Setup'}
+                {t('sectionCoreAccount')}
               </h3>
               <div className="space-y-3.5">
                 <FormField
                   label={t('displayName')}
                   error={errors.displayName}
-                  icon={
-                    <svg
-                      className="size-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-                      />
-                    </svg>
-                  }
+                  icon={<User className="size-4" aria-hidden />}
                 >
-                  <input
+                  <Input
                     {...register('displayName')}
                     autoComplete="name"
                     aria-invalid={!!errors.displayName}
-                    className={fieldCls(!!errors.displayName)}
+                    error={!!errors.displayName}
                   />
                 </FormField>
 
@@ -282,56 +252,28 @@ function RegisterForm() {
                   label={t('email')}
                   error={errors.email}
                   hint={t('emailInstitutionalHint')}
-                  icon={
-                    <svg
-                      className="size-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-                      />
-                    </svg>
-                  }
+                  icon={<Mail className="size-4" aria-hidden />}
                 >
-                  <input
+                  <Input
                     {...register('email')}
                     type="text"
                     inputMode="email"
                     autoComplete="email"
                     aria-invalid={!!errors.email}
-                    className={fieldCls(!!errors.email)}
+                    error={!!errors.email}
                   />
                 </FormField>
 
                 <FormField
                   label={t('passwordMin')}
                   error={errors.password}
-                  icon={
-                    <svg
-                      className="size-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-                      />
-                    </svg>
-                  }
+                  icon={<Lock className="size-4" aria-hidden />}
                 >
                   <PasswordInputWithToggle
                     {...register('password')}
                     autoComplete="new-password"
                     aria-invalid={!!errors.password}
-                    inputClassName={fieldCls(!!errors.password)}
+                    inputClassName={inputFieldClass(!!errors.password)}
                     showLabel={t('showPassword')}
                     hideLabel={t('hidePassword')}
                   />
@@ -343,38 +285,20 @@ function RegisterForm() {
             <div className="mt-4 pt-4 border-t border-ink/[0.08] dark:border-white/[0.08]">
               <h3 className="font-serif text-sm font-semibold text-accent mb-3.5 flex items-center gap-1.5 pb-1 border-b border-ink/[0.06] dark:border-white/[0.06]">
                 <span className="text-accent">🎓</span>
-                {isAr
-                  ? 'الملف الأكاديمي وتفضيلات التحكيم'
-                  : 'Academic Profile & Preferences'}
+                {t('sectionAcademicProfile')}
               </h3>
               <div className="space-y-3.5">
                 <FormField
                   label={t('affiliation')}
                   error={errors.affiliation}
-                  icon={
-                    <svg
-                      className="size-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z"
-                      />
-                    </svg>
-                  }
+                  icon={<Building2 className="size-4" aria-hidden />}
                 >
-                  <input
+                  <Input
                     {...register('affiliation')}
                     placeholder={t('affiliationPlaceholder')}
                     aria-invalid={!!errors.affiliation}
-                    className={fieldCls(
-                      !!errors.affiliation,
-                      'placeholder:text-ink/35',
-                    )}
+                    error={!!errors.affiliation}
+                    extraCls="placeholder:text-ink/35"
                   />
                 </FormField>
 
@@ -388,14 +312,12 @@ function RegisterForm() {
                     </div>
                   }
                 >
-                  <input
+                  <Input
                     {...register('orcid')}
                     placeholder="0000-0000-0000-0000"
                     aria-invalid={!!errors.orcid}
-                    className={fieldCls(
-                      !!errors.orcid,
-                      'font-mono text-sm placeholder:text-ink/35 !ps-10',
-                    )}
+                    error={!!errors.orcid}
+                    extraCls="font-mono text-sm placeholder:text-ink/35"
                   />
                 </FormField>
 
@@ -428,7 +350,7 @@ function RegisterForm() {
                       aria-describedby="register-review-keywords-hint"
                       maxTags={50}
                       maxSerializedLength={2000}
-                      locale={isAr ? 'ar' : 'en'}
+                      locale={locale === 'ar' ? 'ar' : 'en'}
                       onCommitFailure={onReviewKeywordCommitFailure}
                     />
                   </div>

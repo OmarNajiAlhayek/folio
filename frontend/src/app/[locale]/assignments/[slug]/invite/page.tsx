@@ -11,6 +11,7 @@ import { useApiErrorMessages } from '@/lib/use-api-error-messages';
 import { toast } from '@/lib/toast';
 import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PAGE_SHELL } from '@/lib/page-shell';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 
@@ -182,9 +183,9 @@ export default function AssignmentInvitePage() {
       </Link>
 
       {loading && (
-        <div className="mt-8 animate-pulse space-y-4">
-          <div className="h-8 w-2/3 max-w-md rounded bg-ink/10" />
-          <div className="h-24 rounded-xl border border-ink/10 bg-surface" />
+        <div className="mt-8 space-y-4" aria-hidden>
+          <Skeleton className="h-8 w-2/3 max-w-md rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
         </div>
       )}
 

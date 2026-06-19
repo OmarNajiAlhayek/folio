@@ -1,15 +1,11 @@
-"use client";
+'use client';
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { apiJson } from "@/lib/api";
-import { ApiError } from "@/lib/api-response";
-import { queryKeys } from "@/lib/query-keys";
-import { PERMISSION_SLUGS } from "@/lib/permissions";
-import type { MeProfile } from "@/lib/permissions";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiJson } from '@/lib/api';
+import { ApiError } from '@/lib/api-response';
+import { queryKeys } from '@/lib/query-keys';
+import { PERMISSION_SLUGS } from '@/lib/permissions';
+import type { MeProfile } from '@/lib/permissions';
 
 export type SubmissionListItem = {
   id: string;
@@ -19,7 +15,7 @@ export type SubmissionListItem = {
   updatedAt: string;
 };
 
-import type { SubmissionArticleType } from "@/lib/validation/constants";
+import type { SubmissionArticleType } from '@/lib/validation/constants';
 export type { SubmissionArticleType };
 
 export type SubmissionSummary = {
@@ -33,9 +29,91 @@ export type SubmissionSummary = {
   files?: Array<{ id: string; kind: string; originalName: string }>;
 };
 
+export type SubmissionFileRow = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  kind?: string;
+  fileStage?: string;
+  isPublic?: boolean;
+};
+
+export type SubmissionRecord = {
+  id: string;
+  slug: string;
+  title: string;
+  titleAr?: string | null;
+  abstract: string;
+  abstractAr?: string | null;
+  status: string;
+  authorId: string;
+  updatedAt: string;
+  reviewMethod?: string;
+  articleType?: string | null;
+  keywords?: string | null;
+  keywordsAr?: string | null;
+  contributors?: Array<{
+    fullName: string;
+    email?: string;
+    affiliation: string;
+    sortOrder: number;
+    isCorresponding: boolean;
+  }> | null;
+  fundingStatement?: string | null;
+  conflictOfInterestStatement?: string | null;
+  ethicalApprovalReference?: string | null;
+  originalityConfirmed?: boolean;
+  aiUsageStatement?: string | null;
+  messageForAuthor?: string | null;
+  files?: SubmissionFileRow[];
+  constructorContent?: unknown | null;
+  reviewManuscriptPresentation?: {
+    presentUploaded: boolean;
+    presentConstructor: boolean;
+  } | null;
+  disciplines?: string[];
+  disciplineSource?: string | null;
+  disciplineSuggestedLabels?: string[];
+  disciplineSuggestedConfidence?: number | null;
+  disciplineScopeInJournal?: boolean | null;
+  disciplineScopeWarning?: string | null;
+};
+
+export type ReviewForEditor = {
+  id: string;
+  commentsForAuthor: string;
+  commentsToEditorOnly: string;
+  recommendation: string;
+  submittedAt: string;
+  assignment?: {
+    reviewer?: { displayName?: string; email?: string };
+  };
+};
+
+export type ReviewForAuthor = {
+  id: string;
+  commentsForAuthor: string;
+  submittedAt: string;
+};
+
+export type ReminderRow = {
+  id: string;
+  kind: string;
+  sendAt: string;
+  status: string;
+};
+
+export type AssignmentRow = {
+  id: string;
+  slug?: string | null;
+  reviewerId: string;
+  status: string;
+  reviewer?: { displayName?: string; email?: string };
+};
+
 export type SubmissionDetailPayload = {
   me: { id: string; permissions: string[] };
-  sub: Record<string, unknown>;
+  sub: SubmissionRecord;
   isEditorView: boolean;
   isOwner: boolean;
   reviewerCandidates: Array<{
@@ -44,26 +122,12 @@ export type SubmissionDetailPayload = {
     email: string;
   }>;
   reviewersLoadError: string | null;
-  editorReviews: unknown[];
-  authorReviews: unknown[];
+  editorReviews: ReviewForEditor[];
+  authorReviews: ReviewForAuthor[];
   reviewsLoadFailed: boolean;
-  editorAssignmentRows: Array<{
-    id: string;
-    slug?: string | null;
-    reviewerId: string;
-    status: string;
-    reviewer?: { displayName?: string; email?: string };
-  }>;
-  assignmentReminders: Record<
-    string,
-    Array<{
-      id: string;
-      kind: string;
-      sendAt: string;
-      status: string;
-    }>
-  >;
-  /** True when GET …/reminders failed for that assignment slug (not “empty list”). */
+  editorAssignmentRows: AssignmentRow[];
+  assignmentReminders: Record<string, ReminderRow[]>;
+  /** True when GET …/reminders failed for that assignment slug (not "empty list"). */
   reminderLoadFailedByAssignment: Record<string, boolean>;
 };
 
@@ -71,106 +135,103 @@ export async function fetchSubmissionDetail(
   slug: string,
 ): Promise<SubmissionDetailPayload> {
   const enc = encodeURIComponent(slug);
+
+  // Round 1: identity + submission base (always needed)
   const [m, s] = await Promise.all([
-    apiJson<MeProfile>("/auth/me"),
-    apiJson<Record<string, unknown>>(`/submissions/${enc}`),
+    apiJson<MeProfile>('/auth/me'),
+    apiJson<SubmissionRecord>(`/submissions/${enc}`),
   ]);
+
   const permissions = m.permissions ?? [];
   const isEditorView = permissions.includes(
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   );
   const isOwner = s.authorId === m.id;
-
-  let candidates: SubmissionDetailPayload["reviewerCandidates"] = [];
-  let reviewErr: string | null = null;
-  let assignmentRows: SubmissionDetailPayload["editorAssignmentRows"] = [];
-
-  if (
+  const canListAssignments =
     isEditorView &&
-    permissions.includes(PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS)
-  ) {
-    try {
-      assignmentRows = await apiJson(
-        `/submissions/${enc}/assignments`,
-      );
-    } catch {
-      assignmentRows = [];
-    }
-  }
-
-  if (
+    permissions.includes(PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS);
+  const canAssignReviewer =
     isEditorView &&
-    permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER)
-  ) {
-    try {
-      const allCandidates = await apiJson<
-        SubmissionDetailPayload["reviewerCandidates"]
-      >("/users/reviewer-candidates");
-      const busyReviewerIds = new Set(
-        assignmentRows
-          .filter(
-            (a) => a.status === "invited" || a.status === "accepted",
-          )
-          .map((a) => a.reviewerId),
-      );
-      candidates = allCandidates.filter((c) => !busyReviewerIds.has(c.id));
-    } catch (err) {
-      reviewErr =
-        err instanceof ApiError ? err.message : "reviewers_load_failed";
-    }
-  }
+    permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER);
 
-  let editorReviews: unknown[] = [];
-  let authorReviews: unknown[] = [];
+  // Round 2: assignments + reviews in parallel (neither depends on the other)
+  const [assignmentRows, reviewsResult] = await Promise.all([
+    canListAssignments
+      ? apiJson<AssignmentRow[]>(`/submissions/${enc}/assignments`).catch(
+          () => [] as AssignmentRow[],
+        )
+      : Promise.resolve([] as AssignmentRow[]),
+    isEditorView || isOwner
+      ? apiJson<ReviewForEditor[] | ReviewForAuthor[]>(
+          `/submissions/${enc}/reviews`,
+        )
+          .then((rows) => ({ ok: true as const, rows }))
+          .catch(() => ({ ok: false as const }))
+      : Promise.resolve(null),
+  ]);
+
+  let editorReviews: ReviewForEditor[] = [];
+  let authorReviews: ReviewForAuthor[] = [];
   let reviewsLoadFailed = false;
 
-  if (isEditorView || isOwner) {
-    try {
-      const revs = await apiJson<unknown[]>(`/submissions/${enc}/reviews`);
-      if (isEditorView) {
-        editorReviews = revs;
-      } else {
-        authorReviews = revs;
-      }
-    } catch {
+  if (reviewsResult !== null) {
+    if (!reviewsResult.ok) {
       reviewsLoadFailed = true;
+    } else if (isEditorView) {
+      editorReviews = reviewsResult.rows as ReviewForEditor[];
+    } else {
+      authorReviews = reviewsResult.rows as ReviewForAuthor[];
     }
   }
 
-  let reminderMap: SubmissionDetailPayload["assignmentReminders"] = {};
-  let reminderLoadFailedByAssignment: SubmissionDetailPayload["reminderLoadFailedByAssignment"] =
-    {};
-  if (
-    isEditorView &&
-    permissions.includes(PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS) &&
-    assignmentRows.length > 0
-  ) {
-    const entries = await Promise.all(
-      assignmentRows
-        .filter((a) => a.slug)
-        .map(async (a) => {
-          const asg = String(a.slug);
-          try {
-            const rows = await apiJson<
-              SubmissionDetailPayload["assignmentReminders"][string]
-            >(
-              `/submissions/${enc}/assignments/${encodeURIComponent(asg)}/reminders`,
-            );
-            return { asg, rows, failed: false };
-          } catch {
-            return {
-              asg,
-              rows: [] as Array<{ id: string; kind: string; sendAt: string; status: string }>,
-              failed: true,
-            };
-          }
-        }),
-    );
-    reminderMap = Object.fromEntries(entries.map((e) => [e.asg, e.rows]));
-    reminderLoadFailedByAssignment = Object.fromEntries(
-      entries.filter((e) => e.failed).map((e) => [e.asg, true]),
-    );
+  // Round 3: reviewer-candidates (needs assignment rows for busy-filter) + all reminders in parallel
+  const busyReviewerIds = new Set(
+    assignmentRows
+      .filter((a) => a.status === 'invited' || a.status === 'accepted')
+      .map((a) => a.reviewerId),
+  );
+  const assignmentsWithSlug = assignmentRows.filter((a) => a.slug);
+
+  const [candidatesResult, ...reminderEntries] = await Promise.all([
+    canAssignReviewer
+      ? apiJson<SubmissionDetailPayload['reviewerCandidates']>(
+          '/users/reviewer-candidates',
+        )
+          .then((data) => ({ ok: true as const, data }))
+          .catch((err: unknown) => ({ ok: false as const, err }))
+      : Promise.resolve(null),
+    ...assignmentsWithSlug.map((a) => {
+      const asg = String(a.slug);
+      return apiJson<ReminderRow[]>(
+        `/submissions/${enc}/assignments/${encodeURIComponent(asg)}/reminders`,
+      )
+        .then((rows) => ({ asg, rows, failed: false }))
+        .catch(() => ({ asg, rows: [] as ReminderRow[], failed: true }));
+    }),
+  ]);
+
+  let candidates: SubmissionDetailPayload['reviewerCandidates'] = [];
+  let reviewErr: string | null = null;
+
+  if (candidatesResult !== null) {
+    if (!candidatesResult.ok) {
+      reviewErr =
+        candidatesResult.err instanceof ApiError
+          ? candidatesResult.err.message
+          : 'reviewers_load_failed';
+    } else {
+      candidates = candidatesResult.data.filter(
+        (c) => !busyReviewerIds.has(c.id),
+      );
+    }
   }
+
+  const reminderMap = Object.fromEntries(
+    reminderEntries.map((e) => [e.asg, e.rows]),
+  );
+  const reminderLoadFailedByAssignment = Object.fromEntries(
+    reminderEntries.filter((e) => e.failed).map((e) => [e.asg, true]),
+  );
 
   return {
     me: { id: m.id, permissions },
@@ -191,8 +252,7 @@ export async function fetchSubmissionDetail(
 export function useSubmissionsList() {
   return useQuery({
     queryKey: queryKeys.submissions(),
-    queryFn: () => apiJson<SubmissionListItem[]>("/submissions"),
-    enabled: true,
+    queryFn: () => apiJson<SubmissionListItem[]>('/submissions'),
     retry: false,
   });
 }
@@ -201,9 +261,7 @@ export function useSubmission(slug: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.submission(slug),
     queryFn: () =>
-      apiJson<SubmissionSummary>(
-        `/submissions/${encodeURIComponent(slug)}`,
-      ),
+      apiJson<SubmissionSummary>(`/submissions/${encodeURIComponent(slug)}`),
     enabled: enabled && !!slug,
     retry: false,
   });
@@ -240,11 +298,11 @@ export function usePatchSubmission(slug: string) {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       apiJson(`/submissions/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: JSON.stringify(body),
       }),
     onSuccess: (_data, variables) => {
-      if ("constructorContent" in variables) {
+      if ('constructorContent' in variables) {
         queryClient.setQueryData(
           queryKeys.submission(slug),
           (old: SubmissionSummary | undefined) =>

@@ -4,22 +4,16 @@ import { Suspense, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useForm } from 'react-hook-form';
+import { Mail } from 'lucide-react';
 import { apiJson } from '@/lib/api';
 import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PAGE_SHELL } from '@/lib/page-shell';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import { forgotPasswordSchema, translatedZodResolver } from '@/lib/validation';
 import { toast } from 'sonner';
-
-function inputCls(err: boolean) {
-  return `w-full rounded-xl border ps-10 pe-3 py-2.5 text-sm text-ink outline-hidden transition bg-paper/60 focus:border-accent focus:ring-2 focus:ring-accent/15 dark:focus:ring-accent/20 ${
-    err
-      ? 'border-red-400 focus:border-red-400 focus:ring-red-500/15'
-      : 'border-ink/15 dark:border-white/15'
-  }`;
-}
 
 type ForgotFormData = { email: string };
 
@@ -65,29 +59,15 @@ function ForgotPasswordForm() {
           <FormField
             label={t('email')}
             error={errors.email}
-            icon={
-              <svg
-                className="size-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-                />
-              </svg>
-            }
+            icon={<Mail className="size-4" aria-hidden />}
           >
-            <input
+            <Input
               {...register('email')}
               type="text"
               inputMode="email"
               autoComplete="email"
               aria-invalid={!!errors.email}
-              className={inputCls(!!errors.email)}
+              error={!!errors.email}
             />
           </FormField>
 

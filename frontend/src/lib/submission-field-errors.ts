@@ -332,6 +332,7 @@ export const METADATA_UI_KEY_TO_FORM_FIELD: Record<string, string> = {
   coi: 'conflictOfInterestStatement',
   ethics: 'ethicalApprovalReference',
   aiUsage: 'aiUsageStatement',
+  originality: 'originalityConfirmed',
 };
 
 export function metadataFormFieldForUiKey(key: string): string {

@@ -11,6 +11,7 @@ type OrcidButtonProps = {
 };
 
 function OrcidIcon() {
+  // ORCID brand mark — must stay inline SVG (official colors + “iD” glyph; not in Lucide).
   return (
     <svg className="size-5 shrink-0" viewBox="0 0 256 256" aria-hidden>
       <circle cx="128" cy="128" r="118" fill="#A6CE39" />

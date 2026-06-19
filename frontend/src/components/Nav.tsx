@@ -4,6 +4,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Search, Menu, X, LogOut, ChevronRight } from 'lucide-react';
 import { apiJson } from '@/lib/api';
 import { broadcastAuthLogout } from '@/components/auth-storage-sync';
 import { clearCsrfToken } from '@/lib/csrf-token';
@@ -25,6 +26,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import {
+  CommandPalette,
+  useCommandPalette,
+} from '@/components/command-palette';
 
 function isNavActive(
   pathname: string,
@@ -84,6 +96,8 @@ export function Nav() {
   const meQuery = useMe();
   const perms = new Set(meQuery.data?.permissions ?? []);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
 
   async function confirmLogout() {
     setLogoutDialogOpen(false);
@@ -118,7 +132,25 @@ export function Nav() {
           >
             {t('brand')}
           </Link>
-          <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+
+          {/* Desktop nav */}
+          <nav className="hidden sm:flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              className={cn(
+                navLinkBase,
+                'inline-flex items-center gap-2 text-ink/55 hover:bg-ink/6 hover:text-ink border border-ink/10 px-3 py-1.5',
+              )}
+              aria-label="Open command palette"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="text-xs">Search</span>
+              <kbd className="ms-1 hidden text-[10px] font-sans font-medium text-ink/30 md:inline-flex items-center gap-0.5">
+                <span>⌘</span>
+                <span>K</span>
+              </kbd>
+            </button>
             <ThemeToggle />
             <LocaleSwitcher />
             <div className="mx-1 h-4 w-px shrink-0 bg-ink/12" aria-hidden />
@@ -151,6 +183,19 @@ export function Nav() {
                     match="prefix"
                   >
                     {t('emailSettings')}
+                  </NavTextLink>
+                )}
+                {perms.has(PERMISSION_SLUGS.AUDIT_LOG_VIEW) && (
+                  <NavTextLink href="/journal-manager/audit-log" match="prefix">
+                    {t('auditLog')}
+                  </NavTextLink>
+                )}
+                {perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE) && (
+                  <NavTextLink
+                    href="/journal-manager/search-curation"
+                    match="prefix"
+                  >
+                    {t('searchCuration')}
                   </NavTextLink>
                 )}
                 {perms.has(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN) && (
@@ -201,8 +246,201 @@ export function Nav() {
               </>
             )}
           </nav>
+
+          {/* Mobile controls */}
+          <div className="flex sm:hidden items-center gap-2">
+            {meQuery.data && <NotificationBell />}
+            <ThemeToggle />
+            <button
+              type="button"
+              aria-label="Open navigation menu"
+              onClick={() => setMobileDrawerOpen(true)}
+              className={cn(
+                navLinkBase,
+                'p-2 text-ink/70 hover:bg-ink/6 hover:text-ink',
+              )}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Mobile navigation drawer */}
+      <Drawer open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader className="flex items-center justify-between">
+            <DrawerTitle>{t('brand')}</DrawerTitle>
+            <DrawerClose asChild>
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="rounded-md p-1.5 text-ink/50 hover:bg-ink/6"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </DrawerClose>
+          </DrawerHeader>
+
+          <nav
+            className="px-4 pb-6 flex flex-col gap-1"
+            aria-label="Mobile navigation"
+          >
+            {/* Search shortcut */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileDrawerOpen(false);
+                setCmdOpen(true);
+              }}
+              className="flex items-center gap-3 rounded-xl border border-ink/10 bg-ink/2 px-4 py-3 text-sm font-medium text-ink/70 mb-3"
+            >
+              <Search className="h-4 w-4 text-ink/40" />
+              Search pages & actions…
+              <kbd className="ms-auto text-[10px] font-sans text-ink/30">
+                ⌘K
+              </kbd>
+            </button>
+
+            {/* Nav links */}
+            {[
+              {
+                href: '/publications',
+                label: t('publications'),
+                show: true,
+                match: 'prefix' as const,
+              },
+              {
+                href: '/dashboard',
+                label: t('dashboard'),
+                show: !!meQuery.data,
+                match: 'exact' as const,
+              },
+              {
+                href: '/submissions',
+                label: t('submissions'),
+                show: !!meQuery.data && canBrowseAuthorSubmissionsNav(perms),
+                match: 'prefix' as const,
+              },
+              {
+                href: '/editor',
+                label: t('editor'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE),
+                match: 'exact' as const,
+              },
+              {
+                href: '/assignments',
+                label: t('myReviews'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN),
+                match: 'prefix' as const,
+              },
+              {
+                href: '/copyedit-assignments',
+                label: t('copyediting'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE),
+                match: 'prefix' as const,
+              },
+              {
+                href: '/journal-manager/users',
+                label: t('users'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.USERS_MANAGE_ROLES),
+                match: 'prefix' as const,
+              },
+              {
+                href: '/journal-manager/email-settings',
+                label: t('emailSettings'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS),
+                match: 'prefix' as const,
+              },
+              {
+                href: '/journal-manager/audit-log',
+                label: t('auditLog'),
+                show:
+                  !!meQuery.data && perms.has(PERMISSION_SLUGS.AUDIT_LOG_VIEW),
+                match: 'prefix' as const,
+              },
+              {
+                href: '/journal-manager/search-curation',
+                label: t('searchCuration'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE),
+                match: 'prefix' as const,
+              },
+            ]
+              .filter((l) => l.show)
+              .map(({ href, label, match }) => {
+                const active = isNavActive(pathname, href, match);
+                return (
+                  <DrawerClose key={href} asChild>
+                    <Link
+                      href={href as '/'}
+                      className={cn(
+                        'flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition-colors',
+                        active
+                          ? 'bg-accent/10 text-accent'
+                          : 'text-ink/80 hover:bg-ink/5 hover:text-ink',
+                      )}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      {label}
+                      <ChevronRight className="h-4 w-4 opacity-40" />
+                    </Link>
+                  </DrawerClose>
+                );
+              })}
+
+            {/* Auth actions */}
+            <div className="mt-3 pt-3 border-t border-ink/[0.07] flex flex-col gap-1">
+              {meQuery.data ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileDrawerOpen(false);
+                    setLogoutDialogOpen(true);
+                  }}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-danger/80 hover:bg-danger/5 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {t('logout')}
+                </button>
+              ) : (
+                <>
+                  <DrawerClose asChild>
+                    <Link
+                      href="/login"
+                      className="flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-ink/80 hover:bg-ink/5"
+                    >
+                      {t('login')}{' '}
+                      <ChevronRight className="h-4 w-4 opacity-40" />
+                    </Link>
+                  </DrawerClose>
+                  <DrawerClose asChild>
+                    <Link
+                      href="/register"
+                      className="flex items-center justify-center rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white hover:brightness-105"
+                    >
+                      {t('register')}
+                    </Link>
+                  </DrawerClose>
+                </>
+              )}
+            </div>
+          </nav>
+        </DrawerContent>
+      </Drawer>
+
+      <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
 
       <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
         <DialogContent>

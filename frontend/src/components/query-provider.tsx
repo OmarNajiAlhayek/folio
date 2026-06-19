@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
-import { ApiError } from "@/lib/api";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { useState, type ReactNode } from 'react';
+import { ApiError } from '@/lib/api';
 
 function shouldRetry(failureCount: number, error: unknown): boolean {
   if (error instanceof ApiError && error.status != null && error.status < 500) {
@@ -28,6 +29,14 @@ export function QueryProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      {children}
+      {process.env.NODE_ENV === 'development' ? (
+        <ReactQueryDevtools
+          initialIsOpen={false}
+          buttonPosition="bottom-left"
+        />
+      ) : null}
+    </QueryClientProvider>
   );
 }

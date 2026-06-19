@@ -1,6 +1,7 @@
 'use client';
 
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type CheckboxProps = {
@@ -48,20 +49,7 @@ export function Checkbox({
         )}
       >
         <CheckboxPrimitive.Indicator>
-          <svg
-            className="size-3 text-white"
-            viewBox="0 0 12 12"
-            fill="none"
-            aria-hidden
-          >
-            <path
-              d="M2.5 6l2.5 2.5 4.5-5"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <Check className="size-3 text-white" aria-hidden />
         </CheckboxPrimitive.Indicator>
       </CheckboxPrimitive.Root>
       <span className="select-none">

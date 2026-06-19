@@ -2,7 +2,8 @@ import type {
   ConstructorContent,
   ConstructorDir,
   ConstructorSection,
-} from "./constructor-content.types";
+} from './constructor-content.types';
+import { getTableCellText } from './constructor-table-utils';
 
 /**
  * If more than `ARABIC_THRESHOLD` of letter characters in `text` fall in the
@@ -24,12 +25,12 @@ const ARABIC_REGEX =
 const LETTER_REGEX = /\p{L}/gu;
 
 export function detectDirection(text: string): ConstructorDir {
-  if (!text) return "ltr";
+  if (!text) return 'ltr';
   const letters = text.match(LETTER_REGEX);
-  if (!letters || letters.length === 0) return "ltr";
+  if (!letters || letters.length === 0) return 'ltr';
   const arabic = text.match(ARABIC_REGEX);
   const ratio = (arabic?.length ?? 0) / letters.length;
-  return ratio > ARABIC_THRESHOLD ? "rtl" : "ltr";
+  return ratio > ARABIC_THRESHOLD ? 'rtl' : 'ltr';
 }
 
 /** Resolved direction for a section: explicit override → document default. */
@@ -37,8 +38,8 @@ export function resolveSectionDir(
   section: ConstructorSection,
   defaultDir: ConstructorDir,
 ): ConstructorDir {
-  if (section.kind === "abstract") {
-    return section.lang === "ar" ? "rtl" : "ltr";
+  if (section.kind === 'abstract') {
+    return section.lang === 'ar' ? 'rtl' : 'ltr';
   }
   return section.dir ?? defaultDir;
 }
@@ -58,49 +59,50 @@ export function estimateWeightedWordCount(content: ConstructorContent): {
   let tableRows = 0;
   for (const section of content.sections) {
     switch (section.kind) {
-      case "title":
-      case "heading1":
-      case "heading2":
-      case "heading3":
+      case 'title':
+      case 'heading1':
+      case 'heading2':
+      case 'heading3':
         words += countWordsInPlain(section.text);
         break;
-      case "abstract":
+      case 'abstract':
         words += countWordsInPlain(section.text);
         words += countWordsInPlain(section.keywords);
         break;
-      case "paragraph":
-      case "acknowledgments":
-      case "funding":
-      case "conflictOfInterest":
-      case "dataAvailability":
+      case 'paragraph':
+      case 'acknowledgments':
+      case 'funding':
+      case 'conflictOfInterest':
+      case 'dataAvailability':
         words += countWordsInPlain(stripHtml(section.html));
         break;
-      case "equation":
+      case 'equation':
         words += countWordsInPlain(section.latex);
         break;
-      case "image":
+      case 'image':
         images += 1;
         words += countWordsInPlain(section.caption);
         break;
-      case "table":
+      case 'table':
         tableRows += section.rows.length;
         words += countWordsInPlain(section.caption);
         words += countWordsInPlain(section.notes);
         for (const row of section.rows) {
-          for (const cell of row) words += countWordsInPlain(cell);
+          for (const cell of row)
+            words += countWordsInPlain(getTableCellText(cell));
         }
         break;
-      case "authors":
+      case 'authors':
         for (const a of section.authors) {
           words += countWordsInPlain(
             `${a.fullName} ${a.title} ${a.affiliation}`,
           );
         }
         break;
-      case "references":
+      case 'references':
         for (const r of section.items) {
           words += countWordsInPlain(
-            (r.html ?? r.text ?? "").replace(/<[^>]+>/g, " "),
+            (r.html ?? r.text ?? '').replace(/<[^>]+>/g, ' '),
           );
         }
         break;
@@ -119,10 +121,10 @@ function countWordsInPlain(s: string | null | undefined): number {
 
 function stripHtml(html: string): string {
   return html
-    .replace(/<br\s*\/?>(\n|\r)?/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/<br\s*\/?>(\n|\r)?/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 }

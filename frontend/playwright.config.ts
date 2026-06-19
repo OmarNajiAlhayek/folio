@@ -47,7 +47,8 @@ export default defineConfig({
       reuseExistingServer: isCI ? false : process.env.REUSE_DEV_SERVER === '1',
       timeout: 180_000,
       env: {
-        NEXT_PUBLIC_API_URL: `http://localhost:${backendPort}`,
+        /** Same-origin `/api/v1` via next.config rewrites — required for httpOnly cookie auth in the browser. */
+        API_PROXY_TARGET: `http://127.0.0.1:${backendPort}`,
         PLAYWRIGHT_WEB_SERVER: '1',
       },
     },

@@ -2,6 +2,8 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Check, CircleCheck, Upload } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/i18n/navigation';
 import { apiJson, apiUpload } from '@/lib/api';
@@ -70,7 +72,6 @@ export default function NewSubmissionPage() {
   const searchParams = useSearchParams();
   const fileInputId = useId();
   const locale = useLocale();
-  const isAr = locale === 'ar';
   const { resolve: resolveApiError } = useApiErrorMessages();
   const showApiError = useToastApiError();
 
@@ -260,6 +261,13 @@ export default function NewSubmissionPage() {
       } catch {
         // ignore
       }
+      confetti({
+        particleCount: 130,
+        spread: 72,
+        origin: { y: 0.55 },
+        colors: ['#c45c3e', '#3d5a4a', '#f4f3ee', '#d4785c', '#6a9b82'],
+        disableForReducedMotion: true,
+      });
       router.replace(`/submissions/${encodeURIComponent(slug)}`);
     },
     [router, showApiError, tConstructor, reviewPresentation],
@@ -493,9 +501,9 @@ export default function NewSubmissionPage() {
         <div className="absolute -left-20 -bottom-20 size-48 rounded-full bg-accent-2/5 blur-3xl" />
 
         <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/50 dark:text-white/40 mb-4 px-1">
-          <span>{isAr ? `الخطوة ${step} من 6` : `Step ${step} of 6`}</span>
+          <span>{t('stepOf', { step, total: 6 })}</span>
           <span>
-            {Math.round(((step - 1) / 5) * 100)}% {isAr ? 'اكتمل' : 'completed'}
+            {Math.round(((step - 1) / 5) * 100)}% {t('percentCompleted')}
           </span>
         </div>
 
@@ -504,7 +512,7 @@ export default function NewSubmissionPage() {
           <div className="absolute left-6 right-6 h-0.5 bg-ink/10 dark:bg-white/10 -z-10" />
           <div
             className={`absolute h-0.5 transition-all duration-300 -z-10 ${
-              isAr
+              locale === 'ar'
                 ? 'right-6 bg-gradient-to-l from-accent to-accent-2'
                 : 'left-6 bg-gradient-to-r from-accent to-accent-2'
             }`}
@@ -530,22 +538,14 @@ export default function NewSubmissionPage() {
                       ? 'bg-paper dark:bg-surface before:absolute before:inset-0 before:rounded-full before:bg-accent/10 before:dark:bg-accent/20 hover:before:bg-accent/20 before:pointer-events-none text-accent border-accent/40 hover:border-accent'
                       : 'bg-paper dark:bg-surface text-ink/40 dark:text-white/30 border-ink/15 dark:border-white/15 cursor-not-allowed'
                 }`}
-                title={isAr ? `الخطوة ${s}` : `Step ${s}`}
+                title={t('stepTitle', { step: s })}
               >
                 {isCompleted ? (
-                  <svg
+                  <Check
                     className="size-4 relative z-10"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
+                    strokeWidth={3}
+                    aria-hidden
+                  />
                 ) : (
                   s
                 )}
@@ -559,12 +559,12 @@ export default function NewSubmissionPage() {
                         : 'text-ink/30 dark:text-white/20'
                   }`}
                 >
-                  {s === 1 && (isAr ? 'المسار والنوع' : 'Path & Type')}
-                  {s === 2 && (isAr ? 'العنوان والكلمات' : 'Title & Keywords')}
-                  {s === 3 && (isAr ? 'المؤلفون' : 'Authors')}
-                  {s === 4 && (isAr ? 'التصريحات' : 'Declarations')}
-                  {s === 5 && (isAr ? 'المستندات' : 'Documents')}
-                  {s === 6 && (isAr ? 'المراجعة والتأكيد' : 'Review')}
+                  {s === 1 && t('wizardStepPathType')}
+                  {s === 2 && t('wizardStepTitleKeywords')}
+                  {s === 3 && t('wizardStepAuthors')}
+                  {s === 4 && t('wizardStepDeclarations')}
+                  {s === 5 && t('wizardStepDocuments')}
+                  {s === 6 && t('wizardStepReview')}
                 </span>
               </button>
             );
@@ -579,7 +579,7 @@ export default function NewSubmissionPage() {
           <section className={`${cardCls} space-y-6`}>
             <div className="space-y-2">
               <h2 className="font-serif text-xl font-semibold text-ink">
-                {isAr ? 'المسار والنوع' : 'Manuscript Path & Type'}
+                {t('pathTypeHeading')}
               </h2>
               <p className="text-sm text-ink/65">
                 {tDetail('chooseManuscriptModeHint')}
@@ -647,11 +647,11 @@ export default function NewSubmissionPage() {
                   {mode === 'upload' ? (
                     <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-500/[0.04] px-2.5 py-1.5 rounded-lg border border-emerald-500/10">
                       <span className="size-1.5 rounded-full bg-emerald-500" />
-                      {isAr ? 'مفعل: مسار رفع الملف' : 'Active: Upload Path'}
+                      {t('activeUploadPath')}
                     </div>
                   ) : (
                     <span className="text-xs font-medium text-accent mt-2 inline-flex items-center gap-1 group-hover:underline">
-                      {isAr ? 'تحديد هذا المسار' : 'Select this path'} →
+                      {t('selectThisPath')} →
                     </span>
                   )}
                 </div>
@@ -681,9 +681,7 @@ export default function NewSubmissionPage() {
                 }))}
               />
               <p className="text-xs text-ink/50 leading-relaxed">
-                {isAr
-                  ? 'يحدد نوع المقالة كيفية معالجة المخطوطة والخيارات الخاصة بعملية المراجعة.'
-                  : 'The article type affects review pipelines and options available during the review.'}
+                {t('articleTypeHint')}
               </p>
             </div>
           </section>
@@ -697,15 +695,9 @@ export default function NewSubmissionPage() {
             {step === 2 && (
               <div className="space-y-2">
                 <h2 className="font-serif text-xl font-semibold text-ink">
-                  {isAr
-                    ? 'العنوان والخلاصة والكلمات المفتاحية'
-                    : 'Titles, Abstracts & Keywords'}
+                  {t('titlesKeywordsHeading')}
                 </h2>
-                <p className="text-sm text-ink/65">
-                  {isAr
-                    ? 'أدخل العنوان والملخص ثم اقترح الكلمات المفتاحية من النص.'
-                    : 'Enter titles and abstracts, then suggest keywords from your text.'}
-                </p>
+                <p className="text-sm text-ink/65">{t('titlesKeywordsHint')}</p>
               </div>
             )}
             {step === 3 && (
@@ -721,7 +713,7 @@ export default function NewSubmissionPage() {
             {step === 4 && (
               <div className="space-y-2">
                 <h2 className="font-serif text-xl font-semibold text-ink">
-                  {isAr ? 'التصريحات' : 'Declarations'}
+                  {t('wizardStepDeclarations')}
                 </h2>
                 <p className="text-sm text-ink/65">
                   {tWf('sectionDeclarationsHint')}
@@ -812,19 +804,11 @@ export default function NewSubmissionPage() {
                     {staged ? (
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.02] p-3 text-sm border-dashed">
                         <div className="flex items-center gap-2 min-w-0">
-                          <svg
+                          <CircleCheck
                             className="size-5 shrink-0 text-emerald-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
+                            strokeWidth={2}
+                            aria-hidden
+                          />
                           <span className="truncate font-semibold text-ink/80">
                             {staged.name}
                           </span>
@@ -863,19 +847,11 @@ export default function NewSubmissionPage() {
                           htmlFor={`${fileInputId}-${kind}`}
                           className={`inline-flex items-center gap-1.5 cursor-pointer rounded-xl border border-ink/15 dark:border-white/15 bg-paper px-4 py-2 text-xs font-bold text-ink shadow-2xs hover:border-accent/40 active:scale-[0.98] transition-all duration-150 ${formSaving ? 'pointer-events-none opacity-50' : ''}`}
                         >
-                          <svg
+                          <Upload
                             className="size-4 opacity-70"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                            />
-                          </svg>
+                            strokeWidth={2}
+                            aria-hidden
+                          />
                           {tDetail('chooseFile')}
                         </label>
                       </div>
@@ -920,15 +896,9 @@ export default function NewSubmissionPage() {
             <div className={`${cardCls}`}>
               <div className="space-y-2 border-b border-ink/[0.06] pb-4 mb-6">
                 <h2 className="font-serif text-xl font-semibold text-ink">
-                  {isAr
-                    ? 'مراجعة الطلب وتأكيده'
-                    : 'Review & Confirm Submission'}
+                  {t('reviewHeading')}
                 </h2>
-                <p className="text-sm text-ink/65">
-                  {isAr
-                    ? 'يرجى مراجعة كافة التفاصيل قبل حفظ مسودة التقديم.'
-                    : 'Please double-check all details. You can save your draft to finish editing anytime.'}
-                </p>
+                <p className="text-sm text-ink/65">{t('reviewHint')}</p>
               </div>
 
               {/* Grid of details */}
@@ -937,13 +907,13 @@ export default function NewSubmissionPage() {
                 <div className="bg-paper/40 p-4 rounded-xl border border-ink/[0.06]">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-accent">
-                      1. {isAr ? 'المسار والنوع' : 'Path & Type'}
+                      1. {t('reviewSectionPathType')}
                     </span>
                     <button
                       onClick={() => setStep(1)}
                       className="text-xs font-bold text-accent hover:underline"
                     >
-                      {isAr ? 'تعديل' : 'Edit'}
+                      {t('edit')}
                     </button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 text-sm">
@@ -959,16 +929,12 @@ export default function NewSubmissionPage() {
                     </div>
                     <div>
                       <span className="text-ink/50 font-semibold">
-                        {isAr ? 'مسار المخطوطة:' : 'Manuscript Source:'}
+                        {t('manuscriptSource')}
                       </span>{' '}
                       <span className="text-ink font-bold">
                         {showConstructorManuscript
-                          ? isAr
-                            ? 'منشئ المخطوطات (Word)'
-                            : 'Word Constructor Draft'
-                          : isAr
-                            ? 'ملف مرفوع'
-                            : 'File Upload Path'}
+                          ? t('sourceConstructor')
+                          : t('sourceUpload')}
                       </span>
                     </div>
                   </div>
@@ -978,23 +944,20 @@ export default function NewSubmissionPage() {
                 <div className="bg-paper/40 p-4 rounded-xl border border-ink/[0.06]">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-accent">
-                      2.{' '}
-                      {isAr
-                        ? 'العناوين والخلاصة والكلمات'
-                        : 'Titles, Abstracts & Keywords'}
+                      2. {t('reviewSectionTitlesKeywords')}
                     </span>
                     <button
                       onClick={() => setStep(2)}
                       className="text-xs font-bold text-accent hover:underline"
                     >
-                      {isAr ? 'تعديل' : 'Edit'}
+                      {t('edit')}
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <span className="text-xs font-bold text-ink/40 uppercase">
-                        English Metadata
+                        {t('englishMetadata')}
                       </span>
                       <h3 className="font-serif text-base font-bold text-ink leading-snug">
                         {reviewSnapshot?.title}
@@ -1010,7 +973,7 @@ export default function NewSubmissionPage() {
                         dir="rtl"
                       >
                         <span className="text-xs font-bold text-ink/40 uppercase">
-                          البيانات باللغة العربية
+                          {t('arabicMetadata')}
                         </span>
                         <h3 className="font-serif text-base font-bold text-ink leading-snug">
                           {reviewSnapshot.titleAr}
@@ -1024,7 +987,7 @@ export default function NewSubmissionPage() {
                     <div className="space-y-2 pt-3 border-t border-ink/[0.04] text-sm">
                       <div>
                         <span className="text-ink/50 font-semibold">
-                          {isAr ? 'الكلمات الإنجليزية:' : 'English Keywords:'}
+                          {t('englishKeywords')}
                         </span>{' '}
                         <span className="text-ink font-medium">
                           {reviewSnapshot?.keywordTags.join(', ')}
@@ -1033,7 +996,7 @@ export default function NewSubmissionPage() {
                       {(reviewSnapshot?.keywordTagsAr.length ?? 0) > 0 && (
                         <div dir="rtl">
                           <span className="text-ink/50 font-semibold">
-                            {isAr ? 'الكلمات العربية:' : 'Arabic Keywords:'}
+                            {t('arabicKeywords')}
                           </span>{' '}
                           <span className="text-ink font-medium">
                             {reviewSnapshot?.keywordTagsAr.join('، ')}
@@ -1054,7 +1017,7 @@ export default function NewSubmissionPage() {
                       onClick={() => setStep(3)}
                       className="text-xs font-bold text-accent hover:underline"
                     >
-                      {isAr ? 'تعديل' : 'Edit'}
+                      {t('edit')}
                     </button>
                   </div>
 
@@ -1091,13 +1054,13 @@ export default function NewSubmissionPage() {
                 <div className="bg-paper/40 p-4 rounded-xl border border-ink/[0.06]">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-accent">
-                      4. {isAr ? 'التصريحات' : 'Declarations'}
+                      4. {t('wizardStepDeclarations')}
                     </span>
                     <button
                       onClick={() => setStep(4)}
                       className="text-xs font-bold text-accent hover:underline"
                     >
-                      {isAr ? 'تعديل' : 'Edit'}
+                      {t('edit')}
                     </button>
                   </div>
 
@@ -1136,7 +1099,7 @@ export default function NewSubmissionPage() {
                       onClick={() => setStep(5)}
                       className="text-xs font-bold text-accent hover:underline"
                     >
-                      {isAr ? 'تعديل' : 'Edit'}
+                      {t('edit')}
                     </button>
                   </div>
 
@@ -1186,7 +1149,7 @@ export default function NewSubmissionPage() {
               onClick={handleBack}
               className="px-6 py-3"
             >
-              {isAr ? '← السابق' : '← Back'}
+              {t('back')}
             </Button>
           ) : (
             <div />
@@ -1199,7 +1162,7 @@ export default function NewSubmissionPage() {
               disabled={formSaving}
               className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-accent to-accent-2 px-6 py-3 text-sm font-semibold text-paper hover:opacity-90 active:scale-[0.98] transition-all duration-150 shadow-sm"
             >
-              {isAr ? 'التالي →' : 'Next →'}
+              {t('next')}
             </button>
           ) : (
             <button
@@ -1210,10 +1173,8 @@ export default function NewSubmissionPage() {
             >
               {formSaving ? (
                 <Spinner size="sm" className="border-ink/30 border-t-paper" />
-              ) : isAr ? (
-                'حفظ مسودة التقديم'
               ) : (
-                'Create Submission Draft'
+                t('createDraft')
               )}
             </button>
           )}

@@ -2,6 +2,13 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, useId } from 'react';
+import {
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  Table,
+  TriangleAlert,
+} from 'lucide-react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useParams } from 'next/navigation';
 import { apiBlob, apiJson, apiUpload, ApiError } from '@/lib/api';
@@ -11,13 +18,14 @@ import {
   ACCEPT_SUPPLEMENTARY,
 } from '@/lib/upload-accept';
 import { ApiErrorState } from '@/components/api-error-state';
-import { LoadingCenter, Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@/components/ui/spinner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonLoadingStatus } from '@/components/ui/skeleton-loading-status';
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import { toast } from '@/lib/toast';
 import { getApiErrorKind } from '@/lib/api-error-message';
 import { useApiErrorMessages } from '@/lib/use-api-error-messages';
-import { useDisciplineLabel } from '@/lib/use-discipline-label';
 import { useToastApiError } from '@/lib/use-toast-api-error';
 import {
   canManageAssignmentReminders,
@@ -31,6 +39,9 @@ import {
 import {
   useSubmissionDetail,
   type SubmissionDetailPayload,
+  type SubmissionRecord,
+  type ReviewForEditor,
+  type ReviewForAuthor,
 } from '@/lib/queries/submissions';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { SimpleSelect } from '@/components/ui/select';
@@ -62,6 +73,7 @@ import {
 import { ConstructorManuscriptRow } from '@/components/constructor/ConstructorManuscriptRow';
 import { ReviewManuscriptPresentationPicker } from '@/components/constructor/ReviewManuscriptPresentationPicker';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { CircularProgress } from '@/components/ui/circular-progress';
 import { constructorDraftHasMeaningfulContent } from '@/lib/constructor-import-merge';
 import { resolveConstructorDocxFileName } from '@/lib/constructor-docx-filename';
 import {
@@ -78,6 +90,7 @@ import {
 } from '@/lib/queries/submissions';
 import { CopyeditSection } from '@/components/copyedit/CopyeditSection';
 import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
+import { DisciplineBadges } from '@/components/discipline-badges';
 import { CorpusSimilarityPanel } from '@/components/corpus-similarity-panel';
 import { ReviewerSuggestionsPanel } from '@/components/reviewer-suggestions-panel';
 import type {
@@ -100,55 +113,11 @@ import {
 } from '@/lib/submission-field-errors';
 import { SUBMISSION_API_ERROR_CODES } from '@/lib/submission-api-error-codes';
 
-type FileRow = {
-  id: string;
-  originalName: string;
-  mimeType: string;
-  kind?: string;
-  /** OJS-style: `review` = visible to reviewers */
-  fileStage?: string;
-  isPublic?: boolean;
-};
+type FileRow = SubmissionRecord['files'] extends Array<infer R> | undefined
+  ? R
+  : never;
 
-type SubmissionDetail = {
-  id: string;
-  slug: string;
-  title: string;
-  titleAr?: string | null;
-  abstract: string;
-  abstractAr?: string | null;
-  status: string;
-  authorId?: string;
-  updatedAt: string;
-  reviewMethod?: string;
-  articleType?: string | null;
-  keywords?: string | null;
-  keywordsAr?: string | null;
-  contributors?: ContributorRow[] | null;
-  fundingStatement?: string | null;
-  conflictOfInterestStatement?: string | null;
-  ethicalApprovalReference?: string | null;
-  originalityConfirmed?: boolean;
-  aiUsageStatement?: string | null;
-  messageForAuthor?: string | null;
-  files?: FileRow[];
-  /**
-   * When non-null, the submission was authored using the Word Constructor.
-   * Affects the manuscript section: the upload UI is hidden and an
-   * "Edit in Constructor" CTA replaces it.
-   */
-  constructorContent?: unknown | null;
-  reviewManuscriptPresentation?: {
-    presentUploaded: boolean;
-    presentConstructor: boolean;
-  } | null;
-  discipline?: string | null;
-  disciplineSource?: string | null;
-  disciplineSuggested?: string | null;
-  disciplineSuggestedConfidence?: number | null;
-  disciplineScopeInJournal?: boolean | null;
-  disciplineScopeWarning?: string | null;
-};
+type SubmissionDetail = SubmissionRecord;
 
 type ReviewerCandidate = SubmissionDetailPayload['reviewerCandidates'][number];
 
@@ -157,89 +126,40 @@ type AssignmentRow = SubmissionDetailPayload['editorAssignmentRows'][number];
 type ReminderAdminRow =
   SubmissionDetailPayload['assignmentReminders'][string][number];
 
-type ReviewForEditor = {
-  id: string;
-  commentsForAuthor: string;
-  commentsToEditorOnly: string;
-  recommendation: string;
-  submittedAt: string;
-  assignment?: {
-    reviewer?: { displayName?: string; email?: string };
-  };
-};
-
-type ReviewForAuthor = {
-  id: string;
-  commentsForAuthor: string;
-  submittedAt: string;
-};
-
 function getFileIcon(kind: string) {
   if (kind === 'table') {
     return (
-      <svg
+      <Table
         className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"
-        />
-      </svg>
+        strokeWidth={2}
+        aria-hidden
+      />
     );
   }
   if (kind === 'figure') {
     return (
-      <svg
+      <ImageIcon
         className="size-5 shrink-0 text-blue-600 dark:text-blue-400"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375 0 11-.75 0 .375 0 01.75 0z"
-        />
-      </svg>
+        strokeWidth={2}
+        aria-hidden
+      />
     );
   }
   if (kind === 'supplementary') {
     return (
-      <svg
+      <Paperclip
         className="size-5 shrink-0 text-amber-600 dark:text-amber-400"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-        />
-      </svg>
+        strokeWidth={2}
+        aria-hidden
+      />
     );
   }
   return (
-    <svg
+    <FileText
       className="size-5 shrink-0 text-accent/80 dark:text-accent/60"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-      />
-    </svg>
+      strokeWidth={2}
+      aria-hidden
+    />
   );
 }
 
@@ -366,6 +286,73 @@ function parseInvalidStatusTransition(
 
 const REMINDER_MIN_LEAD_MS = 120_000;
 
+function SubmissionDetailSkeleton() {
+  const t = useTranslations('SubmissionDetail');
+  return (
+    <main className={PAGE_SHELL_NARROW} aria-busy="true">
+      <SkeletonLoadingStatus label={t('loading')} />
+      {/* Hero header card */}
+      <div className="rounded-2xl border border-ink/10 p-6 sm:p-8 space-y-4">
+        <Skeleton className="h-3 w-16" />
+        <div className="mt-4 space-y-3">
+          <div className="flex gap-2">
+            <Skeleton className="h-5 w-20 rounded" />
+            <Skeleton className="h-5 w-24 rounded-full" />
+          </div>
+          <Skeleton className="h-8 w-3/4 max-w-xl rounded-xl" />
+          <Skeleton className="h-4 w-52" />
+        </div>
+      </div>
+
+      {/* Two-column grid */}
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Main col */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="rounded-xl border border-ink/10 p-6 space-y-4">
+            <Skeleton className="h-5 w-36 rounded-xl" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-4/5" />
+            <Skeleton className="h-3 w-3/5" />
+          </div>
+          <div className="rounded-xl border border-ink/10 p-6 space-y-3">
+            <Skeleton className="h-5 w-28 rounded-xl" />
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 py-3 border-b border-ink/[0.05]"
+              >
+                <Skeleton className="size-9 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-8 w-20 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="rounded-2xl border border-ink/10 p-6 space-y-4">
+            <Skeleton className="h-5 w-32 rounded-xl" />
+            <Skeleton className="size-16 rounded-full mx-auto" />
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="size-5 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-3 w-36" />
+                  <Skeleton className="h-2.5 w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export default function SubmissionDetailPage() {
   const t = useTranslations('SubmissionDetail');
   const tManuscript = useTranslations('ConstructorManuscript');
@@ -376,7 +363,6 @@ export default function SubmissionDetailPage() {
   const tAssign = useTranslations('Assignments');
   const tv = useTranslations('Validation');
   const locale = useLocale();
-  const isAr = locale === 'ar';
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
@@ -386,21 +372,20 @@ export default function SubmissionDetailPage() {
   const invalidateDetail = useInvalidateSubmissionDetail();
   const patchSubmission = usePatchSubmission(slug);
   const { resolve: resolveApiError, codeMessages } = useApiErrorMessages();
-  const { format: formatDiscipline } = useDisciplineLabel();
   const tApi = useTranslations('ApiErrors');
   const showApiError = useToastApiError();
   const detailQuery = useSubmissionDetail(slug, true);
   const detail = detailQuery.data;
   const me = detail?.me ?? null;
-  const sub = detail ? (detail.sub as unknown as SubmissionDetail) : null;
+  const sub = detail?.sub ?? null;
   const reviewerCandidates = detail?.reviewerCandidates ?? [];
   const reviewersLoadError = detail
     ? detail.reviewersLoadError === 'reviewers_load_failed'
       ? t('reviewersLoadFailed')
       : detail.reviewersLoadError
     : null;
-  const editorReviews = (detail?.editorReviews ?? []) as ReviewForEditor[];
-  const authorReviews = (detail?.authorReviews ?? []) as ReviewForAuthor[];
+  const editorReviews = detail?.editorReviews ?? [];
+  const authorReviews = detail?.authorReviews ?? [];
   const reviewsError = detail?.reviewsLoadFailed
     ? t('reviewsLoadFailed')
     : null;
@@ -945,11 +930,7 @@ export default function SubmissionDetailPage() {
   }
 
   if (detailQuery.isPending || !sub || !me) {
-    return (
-      <main className={PAGE_SHELL_NARROW}>
-        <LoadingCenter label={t('loading')} className="text-ink/60" />
-      </main>
-    );
+    return <SubmissionDetailSkeleton />;
   }
 
   const isAuthor =
@@ -1006,9 +987,9 @@ export default function SubmissionDetailPage() {
     ethicalApprovalReference: sub.ethicalApprovalReference ?? null,
     originalityConfirmed: sub.originalityConfirmed === true,
     aiUsageStatement: sub.aiUsageStatement ?? null,
-    discipline: sub.discipline ?? null,
+    disciplines: sub.disciplines ?? [],
     disciplineSource: sub.disciplineSource ?? null,
-    disciplineSuggested: sub.disciplineSuggested ?? null,
+    disciplineSuggestedLabels: sub.disciplineSuggestedLabels ?? [],
     disciplineSuggestedConfidence: sub.disciplineSuggestedConfidence ?? null,
     disciplineScopeInJournal: sub.disciplineScopeInJournal ?? null,
     disciplineScopeWarning: sub.disciplineScopeWarning ?? null,
@@ -1027,9 +1008,10 @@ export default function SubmissionDetailPage() {
     ...(isEditorView
       ? {}
       : {
-          discipline: metadataFormInitial.discipline,
+          disciplines: metadataFormInitial.disciplines,
           disciplineSource: metadataFormInitial.disciplineSource,
-          disciplineSuggested: metadataFormInitial.disciplineSuggested,
+          disciplineSuggestedLabels:
+            metadataFormInitial.disciplineSuggestedLabels,
           disciplineSuggestedConfidence:
             metadataFormInitial.disciplineSuggestedConfidence,
           disciplineScopeInJournal:
@@ -1080,7 +1062,7 @@ export default function SubmissionDetailPage() {
   const hasTitle = sub.title?.trim().length > 0;
   const hasAbstract = sub.abstract?.trim().length > 0;
   const hasManuscript = hasUploadedManuscript || hasConstructorDraft;
-  const hasDiscipline = sub.discipline?.trim() ? true : false;
+  const hasDiscipline = (sub.disciplines?.length ?? 0) > 0;
 
   let completedSteps = 0;
   const totalSteps = 4;
@@ -1090,9 +1072,6 @@ export default function SubmissionDetailPage() {
   if (hasDiscipline) completedSteps++;
 
   const progressPercent = Math.round((completedSteps / totalSteps) * 100);
-  const strokeDasharray = 2 * Math.PI * 24;
-  const strokeDashoffset =
-    strokeDasharray - (progressPercent / 100) * strokeDasharray;
 
   return (
     <main className={mainShellCls}>
@@ -1176,9 +1155,7 @@ export default function SubmissionDetailPage() {
               <span className="rounded bg-accent/8 dark:bg-accent/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent font-semibold">
                 {sub.articleType
                   ? tWfAny(`articleType_${sub.articleType}`)
-                  : isAr
-                    ? 'مخطوطة بحثية'
-                    : 'Manuscript'}
+                  : t('manuscriptBadge')}
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold shadow-2xs ${
@@ -1215,7 +1192,7 @@ export default function SubmissionDetailPage() {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-ink/50 dark:text-white/40">
               <span>
-                {isAr ? 'آخر تحديث:' : 'Last updated:'}{' '}
+                {t('lastUpdated')}{' '}
                 <span className="font-medium text-ink/70 dark:text-white/60">
                   {new Date(sub.updatedAt).toLocaleDateString(locale, {
                     dateStyle: 'medium',
@@ -1226,7 +1203,7 @@ export default function SubmissionDetailPage() {
                 •
               </span>
               <span>
-                {isAr ? 'معرف الطلب:' : 'ID:'}{' '}
+                {t('submissionId')}{' '}
                 <span className="font-mono bg-ink/5 dark:bg-white/5 px-1.5 py-0.5 rounded">
                   {sub.slug}
                 </span>
@@ -1237,19 +1214,11 @@ export default function SubmissionDetailPage() {
 
         {sub.reviewMethod === 'double_anonymous' ? (
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200/40 bg-amber-500/[0.04] px-4 py-3 text-xs text-amber-800 dark:text-amber-400">
-            <svg
+            <TriangleAlert
               className="size-5 shrink-0 text-amber-500 mt-0.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
+              strokeWidth={2}
+              aria-hidden
+            />
             <p className="leading-relaxed">{t('doubleBlindAuthorNotice')}</p>
           </div>
         ) : null}
@@ -1567,9 +1536,10 @@ export default function SubmissionDetailPage() {
                   mode="editor"
                   canEdit={false}
                   fields={{
-                    discipline: sub.discipline ?? null,
+                    disciplines: sub.disciplines ?? [],
                     disciplineSource: sub.disciplineSource ?? null,
-                    disciplineSuggested: sub.disciplineSuggested ?? null,
+                    disciplineSuggestedLabels:
+                      sub.disciplineSuggestedLabels ?? [],
                     disciplineSuggestedConfidence:
                       sub.disciplineSuggestedConfidence ?? null,
                     disciplineScopeInJournal:
@@ -1729,7 +1699,7 @@ export default function SubmissionDetailPage() {
 
                 <div className="flex items-center justify-between border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
                   <h3 className="font-serif text-base font-semibold text-ink">
-                    {isAr ? 'جاهزية تقديم المخطوطة' : 'Submission Readiness'}
+                    {t('readinessTitle')}
                   </h3>
                   <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent uppercase tracking-wider">
                     {progressPercent}%
@@ -1738,42 +1708,16 @@ export default function SubmissionDetailPage() {
 
                 {/* Circular Progress and stats */}
                 <div className="flex items-center gap-4">
-                  <div className="relative size-16 shrink-0">
-                    <svg className="size-full -rotate-90">
-                      <circle
-                        cx="32"
-                        cy="32"
-                        r="24"
-                        className="stroke-ink/5 dark:stroke-white/5"
-                        strokeWidth="5"
-                        fill="none"
-                      />
-                      <circle
-                        cx="32"
-                        cy="32"
-                        r="24"
-                        className="stroke-accent transition-all duration-500 ease-out"
-                        strokeWidth="5"
-                        strokeDasharray={strokeDasharray}
-                        strokeDashoffset={strokeDashoffset}
-                        strokeLinecap="round"
-                        fill="none"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-ink">
-                      {progressPercent}%
-                    </div>
-                  </div>
+                  <CircularProgress value={progressPercent} size={64} />
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="text-xs font-semibold text-ink">
-                      {isAr
-                        ? 'خطوات المتطلبات الأساسية'
-                        : 'Manuscript Requirements'}
+                      {t('readinessRequirements')}
                     </p>
                     <p className="text-[11px] text-ink/50 leading-relaxed">
-                      {isAr
-                        ? `تم إكمال ${completedSteps} من أصل ${totalSteps} متطلبات مطلوبة للتقديم للتقييم.`
-                        : `Completed ${completedSteps} of ${totalSteps} vital manuscript details.`}
+                      {t('readinessProgress', {
+                        completed: completedSteps,
+                        total: totalSteps,
+                      })}
                     </p>
                   </div>
                 </div>
@@ -1792,14 +1736,10 @@ export default function SubmissionDetailPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-ink">
-                        {isAr
-                          ? 'العنوان والملخص بالإنجليزية'
-                          : 'English Title & Abstract'}
+                        {t('readinessEnglishTitleAbstract')}
                       </p>
                       <p className="text-[10px] text-ink/50">
-                        {isAr
-                          ? 'مطلوب لتصنيف المخطوطة'
-                          : 'Required for classification'}
+                        {t('readinessEnglishHint')}
                       </p>
                     </div>
                   </li>
@@ -1816,17 +1756,13 @@ export default function SubmissionDetailPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-ink/80">
-                        {isAr
-                          ? 'العنوان والملخص بالعربية'
-                          : 'Arabic Title & Abstract'}{' '}
+                        {t('readinessArabicTitleAbstract')}{' '}
                         <span className="text-[10px] font-normal text-ink/40">
-                          ({isAr ? 'اختياري' : 'Optional'})
+                          ({t('readinessOptional')})
                         </span>
                       </p>
                       <p className="text-[10px] text-ink/40">
-                        {isAr
-                          ? 'يساعد في التصفح المحلي'
-                          : 'Enhances local discovery'}
+                        {t('readinessArabicHint')}
                       </p>
                     </div>
                   </li>
@@ -1843,20 +1779,14 @@ export default function SubmissionDetailPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-ink">
-                        {isAr ? 'ملف المخطوطة المرفق' : 'Manuscript File'}
+                        {t('readinessManuscriptFile')}
                       </p>
                       <p className="text-[10px] text-ink/50">
                         {hasManuscript
                           ? hasConstructorDraft
-                            ? isAr
-                              ? 'مسودة الوورد منشأة'
-                              : 'Word Constructor Draft'
-                            : isAr
-                              ? 'مرفوعة كمستند'
-                              : 'Uploaded Document'
-                          : isAr
-                            ? 'لم يتم إرفاق ملف بعد'
-                            : 'Document file not uploaded'}
+                            ? t('readinessConstructorDraft')
+                            : t('readinessUploadedDocument')
+                          : t('readinessNoFile')}
                       </p>
                     </div>
                   </li>
@@ -1873,15 +1803,18 @@ export default function SubmissionDetailPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-ink">
-                        {isAr ? 'التخصص والمسار العلمي' : 'Discipline & Fields'}
+                        {t('readinessDiscipline')}
                       </p>
-                      <p className="text-[10px] text-ink/50">
-                        {hasDiscipline
-                          ? formatDiscipline(sub.discipline)
-                          : isAr
-                            ? 'حدد التخصص العلمي للمقال'
-                            : 'Required for editor routing'}
-                      </p>
+                      <div className="text-[10px] text-ink/50">
+                        {hasDiscipline ? (
+                          <DisciplineBadges
+                            labels={sub.disciplines ?? []}
+                            size="sm"
+                          />
+                        ) : (
+                          t('readinessDisciplineRequired')
+                        )}
+                      </div>
                     </div>
                   </li>
                 </ul>
@@ -1926,7 +1859,7 @@ export default function SubmissionDetailPage() {
             ) && (
               <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-5">
                 <h3 className="font-serif text-base font-semibold text-ink border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
-                  {isAr ? 'مسار تقدم المعاملة' : 'Workflow Progress'}
+                  {t('workflowProgress')}
                 </h3>
 
                 <div className="relative ps-6 space-y-6 before:absolute before:start-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-ink/[0.06] dark:before:bg-white/[0.06]">
@@ -1936,12 +1869,10 @@ export default function SubmissionDetailPage() {
                       ✓
                     </span>
                     <p className="text-xs font-bold text-ink">
-                      {isAr ? 'تم تقديم المخطوطة' : 'Manuscript Submitted'}
+                      {t('workflowSubmitted')}
                     </p>
                     <p className="text-[10px] text-ink/50">
-                      {isAr
-                        ? 'تم إرسال الملفات بنجاح'
-                        : 'Files successfully archived'}
+                      {t('workflowSubmittedHint')}
                     </p>
                   </div>
 
@@ -1965,21 +1896,15 @@ export default function SubmissionDetailPage() {
                     <p
                       className={`text-xs font-bold ${sub.status === 'under_review' ? 'text-blue-600 dark:text-blue-400' : 'text-ink'}`}
                     >
-                      {isAr ? 'التقييم والتحكيم النظير' : 'Peer Review Phase'}
+                      {t('workflowPeerReview')}
                     </p>
                     <p className="text-[10px] text-ink/50">
                       {sub.status === 'under_review'
-                        ? isAr
-                          ? 'تخضع المقالة لمراجعة الخبراء حالياً'
-                          : 'Currently being read by peer reviewers'
+                        ? t('workflowPeerReviewActive')
                         : sub.status === 'accepted' ||
                             sub.status === 'published'
-                          ? isAr
-                            ? 'تم الانتهاء من التقييم'
-                            : 'Review process finished'
-                          : isAr
-                            ? 'انتظار بدء التقييم'
-                            : 'Waiting for review assignments'}
+                          ? t('workflowPeerReviewDone')
+                          : t('workflowPeerReviewWaiting')}
                     </p>
                   </div>
 
@@ -1997,20 +1922,14 @@ export default function SubmissionDetailPage() {
                       {sub.status === 'published' ? '✓' : '3'}
                     </span>
                     <p className="text-xs font-bold text-ink">
-                      {isAr ? 'القرار التحريري' : 'Editorial Decision'}
+                      {t('workflowDecision')}
                     </p>
                     <p className="text-[10px] text-ink/50">
                       {sub.status === 'accepted'
-                        ? isAr
-                          ? 'تم قبول البحث للنشر'
-                          : 'Accepted for official publication'
+                        ? t('workflowDecisionAccepted')
                         : sub.status === 'published'
-                          ? isAr
-                            ? 'تمت الموافقة والنشر'
-                            : 'Final approval granted'
-                          : isAr
-                            ? 'في انتظار قرار رئيس التحرير'
-                            : 'Waiting for final editorial outcome'}
+                          ? t('workflowDecisionPublished')
+                          : t('workflowDecisionWaiting')}
                     </p>
                   </div>
 
@@ -2028,16 +1947,12 @@ export default function SubmissionDetailPage() {
                     <p
                       className={`text-xs font-bold ${sub.status === 'published' ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink'}`}
                     >
-                      {isAr ? 'البحث منشور بالكامل' : 'Fully Published'}
+                      {t('workflowPublished')}
                     </p>
                     <p className="text-[10px] text-ink/50">
                       {sub.status === 'published'
-                        ? isAr
-                          ? 'متوفر حالياً للعامة في الكتالوج'
-                          : 'Live in active journal catalog'
-                        : isAr
-                          ? 'سيتم التوزيع فور قبول المعاملة'
-                          : 'Distributed upon production sign-off'}
+                        ? t('workflowPublishedLive')
+                        : t('workflowPublishedPending')}
                     </p>
                   </div>
                 </div>
@@ -2051,10 +1966,10 @@ export default function SubmissionDetailPage() {
 
               <div className="flex items-center justify-between border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
                 <h2 className="font-serif text-base font-semibold text-ink">
-                  {isAr ? 'مركز التحكم بالمحرر' : 'Editor Command Center'}
+                  {t('editorCommandCenter')}
                 </h2>
                 <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[9px] font-bold text-accent uppercase tracking-wider">
-                  {isAr ? 'إشراف' : 'Admin'}
+                  {t('editorAdminBadge')}
                 </span>
               </div>
 
@@ -2095,7 +2010,7 @@ export default function SubmissionDetailPage() {
               {/* Set Status Box */}
               <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                  {isAr ? 'تحديث حالة الطلب' : 'Update Status'}
+                  {t('updateStatus')}
                 </h3>
                 <p className="text-[10px] text-ink/50">
                   {t('editorWorkflowColumnHint')}
@@ -2151,7 +2066,7 @@ export default function SubmissionDetailPage() {
               {/* Assign Reviewer Box */}
               <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                  {isAr ? 'تعيين مراجع' : 'Assign Reviewer'}
+                  {t('assignReviewerSidebar')}
                 </h3>
                 {canAssignReviewer ? (
                   <>

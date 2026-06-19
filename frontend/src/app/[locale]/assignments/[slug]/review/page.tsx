@@ -1,5 +1,6 @@
 'use client';
 
+import { CircleX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
@@ -12,6 +13,7 @@ import { useApiErrorMessages } from '@/lib/use-api-error-messages';
 import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PAGE_SHELL } from '@/lib/page-shell';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -74,29 +76,29 @@ function submissionStatusKey(status: string): SubmissionStatusMsg | null {
 
 function ReviewSkeleton() {
   return (
-    <div className="animate-pulse space-y-6">
-      <div className="h-4 w-32 rounded bg-ink/10" />
-      <div className="h-9 w-2/3 max-w-md rounded bg-ink/10" />
+    <div className="space-y-6">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-9 w-2/3 max-w-md rounded-xl" />
       <div className="flex flex-col gap-6">
-        <div className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm">
-          <div className="h-5 w-24 rounded bg-ink/10" />
-          <div className="mt-4 h-8 w-full rounded bg-ink/10" />
-          <div className="mt-4 h-4 w-28 rounded bg-ink/10" />
-          <div className="mt-3 space-y-2">
-            <div className="h-3 w-full rounded bg-ink/10" />
-            <div className="h-3 w-full rounded bg-ink/10" />
-            <div className="h-3 w-4/5 rounded bg-ink/10" />
+        <div className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-4 w-28" />
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-4/5" />
           </div>
         </div>
-        <div className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm">
-          <div className="h-5 w-32 rounded bg-ink/10" />
-          <div className="mt-6 space-y-3">
-            <div className="h-16 w-full rounded-lg bg-ink/10" />
-            <div className="h-16 w-full rounded-lg bg-ink/10" />
-            <div className="h-16 w-full rounded-lg bg-ink/10" />
+        <div className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm space-y-3">
+          <Skeleton className="h-5 w-32" />
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
           </div>
-          <div className="mt-6 h-32 w-full rounded-lg bg-ink/10" />
-          <div className="mt-6 h-11 w-full rounded-lg bg-ink/10" />
+          <Skeleton className="h-32 w-full rounded-lg" />
+          <Skeleton className="h-11 w-full rounded-lg" />
         </div>
       </div>
     </div>
@@ -503,17 +505,7 @@ export default function ReviewFormPage() {
                     role="alert"
                   >
                     <span className="mt-0.5 shrink-0 text-red-600" aria-hidden>
-                      <svg
-                        className="size-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                      <CircleX className="size-5" aria-hidden />
                     </span>
                     <span>{submitError}</span>
                   </div>

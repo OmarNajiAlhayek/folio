@@ -14,17 +14,10 @@ import { queryKeys } from '@/lib/query-keys';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import { verifyEmailSchema, translatedZodResolver } from '@/lib/validation';
 import { useMe } from '@/lib/queries/auth';
 import { toast } from 'sonner';
-
-function inputCls(err: boolean) {
-  return `w-full rounded-xl border px-3 py-2.5 text-sm text-ink outline-hidden transition bg-paper/60 focus:border-accent focus:ring-2 focus:ring-accent/15 dark:focus:ring-accent/20 tracking-[0.3em] text-center font-mono text-lg ${
-    err
-      ? 'border-red-400 focus:border-red-400 focus:ring-red-500/15'
-      : 'border-ink/15 dark:border-white/15'
-  }`;
-}
 
 type VerifyFormData = { code: string };
 
@@ -98,8 +91,6 @@ function VerifyEmailForm() {
     }
   }
 
-  const isAr = locale === 'ar';
-
   if (meLoading) {
     return (
       <main className={PAGE_SHELL}>
@@ -164,14 +155,15 @@ function VerifyEmailForm() {
             className="mt-6 flex flex-col gap-4"
           >
             <FormField label={t('codeLabel')} error={errors.code}>
-              <input
+              <Input
                 {...register('code')}
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}
                 aria-invalid={!!errors.code}
-                className={inputCls(!!errors.code)}
+                error={!!errors.code}
+                className="!ps-3 px-3 text-center font-mono text-lg tracking-[0.3em]"
                 dir="ltr"
               />
             </FormField>
@@ -200,7 +192,7 @@ function VerifyEmailForm() {
             </Button>
             <Link
               href="/dashboard"
-              className={`text-center font-medium text-accent hover:underline ${isAr ? '' : ''}`}
+              className="text-center font-medium text-accent hover:underline"
             >
               {t('skipToDashboard')}
             </Link>

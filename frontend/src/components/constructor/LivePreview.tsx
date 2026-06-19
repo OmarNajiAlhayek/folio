@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Eye, FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { resolveSectionDir } from '@/lib/constructor-direction';
 import {
@@ -100,24 +101,7 @@ export function LivePreview({
     >
       <header className="border-b border-ink/10 pb-3 mb-4 text-xs font-medium uppercase tracking-wide text-ink/60">
         <div className="flex items-center gap-1.5 text-ink font-extrabold text-sm">
-          <svg
-            className="size-4 text-accent"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2.5"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
+          <Eye className="size-4 text-accent" strokeWidth={2.5} aria-hidden />
           {t('header')}
         </div>
         <p className="mt-1 normal-case font-normal text-ink/50 text-[10px] tracking-normal leading-relaxed">
@@ -131,19 +115,7 @@ export function LivePreview({
           <div className="flex-1 flex items-center justify-center py-16 px-4 text-center select-none animate-pulse">
             <div className="flex flex-col items-center">
               <div className="rounded-2xl bg-accent/5 dark:bg-accent/10 p-4 text-accent mb-4 border border-accent/10 shadow-xs">
-                <svg
-                  className="size-8"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-                  />
-                </svg>
+                <FileText className="size-8" strokeWidth={1.5} aria-hidden />
               </div>
               <h3 className="text-sm font-extrabold text-ink/80 mb-1">
                 No sections committed yet

@@ -1,25 +1,11 @@
-"use client";
+'use client';
 
-import * as Popover from "@radix-ui/react-popover";
-import { Command } from "cmdk";
-import { useId, useState } from "react";
-import { cn } from "@/lib/utils";
-import { selectTriggerClass } from "@/components/ui/select";
-
-const ChevronDown = () => (
-  <svg
-    className="size-4 shrink-0 opacity-60"
-    viewBox="0 0 20 20"
-    fill="currentColor"
-    aria-hidden
-  >
-    <path
-      fillRule="evenodd"
-      d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-      clipRule="evenodd"
-    />
-  </svg>
-);
+import * as Popover from '@radix-ui/react-popover';
+import { Command } from 'cmdk';
+import { useId, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { selectTriggerClass } from '@/components/ui/select';
 
 export type SearchableSelectOption = {
   value: string;
@@ -37,8 +23,8 @@ export function SearchableSelect({
   emptyText,
   disabled,
   className,
-  "aria-label": ariaLabel,
-  "aria-labelledby": ariaLabelledBy,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
 }: {
   options: SearchableSelectOption[];
   value: string;
@@ -48,15 +34,15 @@ export function SearchableSelect({
   emptyText: string;
   disabled?: boolean;
   className?: string;
-  "aria-label"?: string;
-  "aria-labelledby"?: string;
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
 }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
   const selected = options.find((o) => o.value === value);
 
   function optionSearchValue(o: SearchableSelectOption): string {
-    const email = o.keywords?.find((k) => k.includes("@")) ?? "";
+    const email = o.keywords?.find((k) => k.includes('@')) ?? '';
     return email ? `${o.label} — ${email}` : o.label;
   }
 
@@ -74,12 +60,10 @@ export function SearchableSelect({
           disabled={disabled}
           className={cn(selectTriggerClass, className)}
         >
-          <span
-            className={cn("truncate", !selected && "text-ink/45")}
-          >
+          <span className={cn('truncate', !selected && 'text-ink/45')}>
             {selected ? selected.label : placeholder}
           </span>
-          <ChevronDown />
+          <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>

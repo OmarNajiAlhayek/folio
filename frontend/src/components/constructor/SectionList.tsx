@@ -1,6 +1,24 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
+import {
+  AlignLeft,
+  ChartNoAxesColumn,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  Coins,
+  Database,
+  HandHeart,
+  Image as ImageIcon,
+  Newspaper,
+  Plus,
+  Scale,
+  Table,
+  Trash2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { useTranslations } from 'next-intl';
 
@@ -84,6 +102,16 @@ const BACK_MATTER_KINDS: AddableKind[] = [
 
   'dataAvailability',
 ];
+
+const BACK_MATTER_ICONS: Record<
+  (typeof BACK_MATTER_KINDS)[number],
+  LucideIcon
+> = {
+  acknowledgments: HandHeart,
+  funding: Coins,
+  conflictOfInterest: Scale,
+  dataAvailability: Database,
+};
 
 export function SectionList({
   content,
@@ -325,19 +353,11 @@ export function SectionList({
           data-testid="constructor-recommended-presets"
         >
           <div className="flex items-center gap-2 font-semibold">
-            <svg
+            <CircleAlert
               className="size-4 shrink-0 text-amber-600 dark:text-amber-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
-              />
-            </svg>
+              strokeWidth={2.5}
+              aria-hidden
+            />
             <p>{t('recommendedPresetsTitle')}</p>
           </div>
           <ul className="mt-3 flex flex-wrap gap-2">
@@ -436,19 +456,11 @@ export function SectionList({
                       className="rounded-lg border border-ink/15 bg-paper p-1.5 text-xs text-ink/70 hover:bg-ink/5 hover:border-accent/40 hover:text-accent disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-3xs"
                       aria-label={t('moveUp')}
                     >
-                      <svg
+                      <ChevronUp
                         className="size-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M4.5 15.75l7.5-7.5 7.5 7.5"
-                        />
-                      </svg>
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
                     </button>
                   </SimpleTooltip>
                   <SimpleTooltip content={t('moveDown')}>
@@ -459,19 +471,11 @@ export function SectionList({
                       className="rounded-lg border border-ink/15 bg-paper p-1.5 text-xs text-ink/70 hover:bg-ink/5 hover:border-accent/40 hover:text-accent disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-3xs"
                       aria-label={t('moveDown')}
                     >
-                      <svg
+                      <ChevronDown
                         className="size-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-                        />
-                      </svg>
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
                     </button>
                   </SimpleTooltip>
                   <SimpleTooltip content={t('remove')}>
@@ -482,19 +486,11 @@ export function SectionList({
                       className="rounded-lg border border-red-200 bg-red-50/50 p-1.5 text-xs text-red-700 hover:bg-red-100/85 hover:border-red-300 dark:border-red-500/25 dark:bg-red-500/5 dark:text-red-300 dark:hover:bg-red-500/20 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-3xs"
                       aria-label={t('remove')}
                     >
-                      <svg
+                      <Trash2
                         className="size-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                        />
-                      </svg>
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
                     </button>
                   </SimpleTooltip>
                 </div>
@@ -554,19 +550,7 @@ export function SectionList({
                   onClick={() => setAddPickerOpen(false)}
                   className="rounded-full hover:bg-ink/5 p-1 text-ink/50 hover:text-ink cursor-pointer transition-colors"
                 >
-                  <svg
-                    className="size-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+                  <X className="size-4" strokeWidth={2.5} aria-hidden />
                 </button>
               </div>
 
@@ -582,19 +566,11 @@ export function SectionList({
                       className="group/btn flex items-center gap-3 rounded-xl border border-ink/10 bg-surface px-4 py-3 text-start text-xs font-semibold text-ink/80 hover:border-amber-400/50 hover:bg-amber-100/5 hover:-translate-y-0.5 transition-all shadow-3xs cursor-pointer"
                     >
                       <span className="rounded-lg bg-amber-100 dark:bg-amber-500/10 p-2 text-amber-600 dark:text-amber-300 group-hover/btn:scale-110 transition-transform">
-                        <svg
+                        <Newspaper
                           className="size-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24l-.407 1.451a2.25 2.25 0 001.322 2.684l4.9 1.96m-7.815-6.095l-.407 1.45a2.25 2.25 0 001.322 2.684l4.9 1.96m-7.815-6.095v11.625c0 .375-.125.727-.336 1.014m12.336-12.639v11.625c0 .375.125.727.336 1.014M9 9h7.5"
-                          />
-                        </svg>
+                          strokeWidth={2.5}
+                          aria-hidden
+                        />
                       </span>
                       <div>
                         <p className="font-bold text-ink text-sm">
@@ -624,19 +600,11 @@ export function SectionList({
                             H{kind.replace('heading', '')}
                           </span>
                         ) : (
-                          <svg
+                          <AlignLeft
                             className="size-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"
-                            />
-                          </svg>
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
                         )}
                       </span>
                       <div>
@@ -663,47 +631,23 @@ export function SectionList({
                     >
                       <span className="rounded-lg bg-violet-100 dark:bg-violet-500/10 p-2 text-violet-600 dark:text-violet-300 group-hover/btn:scale-110 transition-transform">
                         {kind === 'image' ? (
-                          <svg
+                          <ImageIcon
                             className="size-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-                            />
-                          </svg>
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
                         ) : kind === 'table' ? (
-                          <svg
+                          <Table
                             className="size-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5M3.75 5.25v13.5m16.5-13.5v13.5"
-                            />
-                          </svg>
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
                         ) : (
-                          <svg
+                          <ChartNoAxesColumn
                             className="size-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M15.75 15.75V18m-3-9v9M9 13.5V18m3-12h.008v.008H12V6zm0 0h.008v.008H12V6z"
-                            />
-                          </svg>
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
                         )}
                       </span>
                       <div>
@@ -720,38 +664,33 @@ export function SectionList({
 
                 <PickerGroup
                   title={t('pickerGroup_backMatter')}
-                  buttons={BACK_MATTER_KINDS.map((kind) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={() => addSection(kind)}
-                      className="group/btn flex items-center gap-3 rounded-xl border border-ink/10 bg-surface px-4 py-3 text-start text-xs font-semibold text-ink/80 hover:border-slate-400/50 hover:bg-slate-100/5 hover:-translate-y-0.5 transition-all shadow-3xs cursor-pointer"
-                    >
-                      <span className="rounded-lg bg-slate-100 dark:bg-slate-500/10 p-2 text-slate-600 dark:text-slate-300 group-hover/btn:scale-110 transition-transform">
-                        <svg
-                          className="size-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M11.25 11.25l.041-.02a.75.75 0 11.263 1.302l-.084.017a.75.75 0 00-.77 1.002l.135.338a.75.75 0 01-.777 1.022h-.033a.75.75 0 00-.705.513l-.102.307a.75.75 0 01-1.422-.474l.102-.307a2.25 2.25 0 012.116-1.54h.033a.75.75 0 00.705-.513l.102-.307a.75.75 0 011.422.474l-.102.307a2.25 2.25 0 01-2.116 1.54h-.033a.75.75 0 00-.705.513l-.102.307a.75.75 0 01-1.422-.474l.102-.307a2.25 2.25 0 012.116-1.54h.033"
+                  buttons={BACK_MATTER_KINDS.map((kind) => {
+                    const BackMatterIcon = BACK_MATTER_ICONS[kind];
+                    return (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => addSection(kind)}
+                        className="group/btn flex items-center gap-3 rounded-xl border border-ink/10 bg-surface px-4 py-3 text-start text-xs font-semibold text-ink/80 hover:border-slate-400/50 hover:bg-slate-100/5 hover:-translate-y-0.5 transition-all shadow-3xs cursor-pointer"
+                      >
+                        <span className="rounded-lg bg-slate-100 dark:bg-slate-500/10 p-2 text-slate-600 dark:text-slate-300 group-hover/btn:scale-110 transition-transform">
+                          <BackMatterIcon
+                            className="size-4"
+                            strokeWidth={2.5}
+                            aria-hidden
                           />
-                        </svg>
-                      </span>
-                      <div>
-                        <p className="font-bold text-ink text-sm">
-                          {t(`kind_${kind}` as const)}
-                        </p>
-                        <p className="font-normal text-ink/50 text-[10px] mt-0.5">
-                          Funding and acknowledgments
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                        </span>
+                        <div>
+                          <p className="font-bold text-ink text-sm">
+                            {t(`kind_${kind}` as const)}
+                          </p>
+                          <p className="font-normal text-ink/50 text-[10px] mt-0.5">
+                            Funding and acknowledgments
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 />
               </div>
 
@@ -772,19 +711,11 @@ export function SectionList({
               onClick={() => setAddPickerOpen(true)}
               className="w-full rounded-xl border border-dashed border-accent/40 bg-accent/5 px-4 py-3.5 text-sm font-semibold text-accent hover:bg-accent/10 hover:border-accent/60 transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
             >
-              <svg
+              <Plus
                 className="size-4 animate-pulse"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 4.5v15m7.5-7.5h-15"
-                />
-              </svg>
+                strokeWidth={2.5}
+                aria-hidden
+              />
               {t('addSection')}
             </button>
           )}
