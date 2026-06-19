@@ -8,7 +8,7 @@ export type PublicationDocument = {
   keywords: string;
   keywordsAr: string;
   authorDisplayName: string;
-  discipline: string;
+  disciplines: string[];
   articleType: string;
   publishedAt: number; // unix ms
 };
@@ -34,3 +34,13 @@ export type TypesenseSynonymOneWay = {
 };
 
 export type TypesenseSynonym = TypesenseSynonymMulti | TypesenseSynonymOneWay;
+
+export type SearchAnalyticsEntry = {
+  q: string;
+  count: number;
+};
+
+export type SearchAnalyticsResult = {
+  topQueries: SearchAnalyticsEntry[];
+  noResultQueries: SearchAnalyticsEntry[];
+};

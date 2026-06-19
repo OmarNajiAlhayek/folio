@@ -17,7 +17,7 @@ export function createTypesenseClient(config: ConfigService): Client | null {
     ],
     apiKey: config.get<string>('TYPESENSE_API_KEY', ''),
     connectionTimeoutSeconds: 5,
-    retryIntervalSeconds: 0.1,
-    numRetries: 2,
+    retryIntervalSeconds: 0.5,
+    numRetries: 3,
   });
 }

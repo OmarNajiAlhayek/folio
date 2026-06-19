@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { publicJson } from "@/lib/public-api";
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { publicJson } from '@/lib/public-api';
 import {
   buildPublicSubmissionsQuery,
   publicationCatalogUsesSemanticSearch,
   type PublicationCatalogFilters,
-} from "@/lib/public-submissions-query";
-import { queryKeys } from "@/lib/query-keys";
+} from '@/lib/public-submissions-query';
+import { queryKeys } from '@/lib/query-keys';
 
 export const PUBLICATION_CATALOG_PAGE_SIZE = 20;
 /** Matches backend default for semantic catalog search (max 30). */
@@ -23,7 +23,7 @@ export type PublicationListItem = {
   articleType?: string | null;
   keywords?: string | null;
   keywordsAr?: string | null;
-  discipline?: string | null;
+  disciplines?: string[];
   publishedAt: string | null;
   author?: { displayName: string };
   searchSnippet?: string;
@@ -44,7 +44,7 @@ export type PublicationDetail = {
   titleAr?: string | null;
   abstract: string;
   abstractAr?: string | null;
-  discipline?: string | null;
+  disciplines?: string[];
   articleType?: string | null;
   keywords?: string | null;
   keywordsAr?: string | null;
@@ -53,7 +53,7 @@ export type PublicationDetail = {
   files: { id: string; originalName: string; mimeType: string }[];
 };
 
-import type { RelatedPublication } from "@/components/related-publications";
+import type { RelatedPublication } from '@/components/related-publications';
 
 function catalogListPath(
   filters: PublicationCatalogFilters,
@@ -61,13 +61,13 @@ function catalogListPath(
 ): string {
   const semantic = publicationCatalogUsesSemanticSearch(filters);
   const base = buildPublicSubmissionsQuery(filters);
-  const sp = new URLSearchParams(base.startsWith("?") ? base.slice(1) : "");
+  const sp = new URLSearchParams(base.startsWith('?') ? base.slice(1) : '');
   if (!semantic) {
-    sp.set("limit", String(PUBLICATION_CATALOG_PAGE_SIZE));
-    sp.set("offset", String(offset));
+    sp.set('limit', String(PUBLICATION_CATALOG_PAGE_SIZE));
+    sp.set('offset', String(offset));
   }
   const qs = sp.toString();
-  return qs ? `/public/submissions?${qs}` : "/public/submissions";
+  return qs ? `/public/submissions?${qs}` : '/public/submissions';
 }
 
 export function usePublicationsCatalog(filters: PublicationCatalogFilters) {

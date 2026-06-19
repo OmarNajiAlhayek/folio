@@ -1,13 +1,18 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
 import type { Client } from 'typesense';
 import type { CollectionCreateSchema } from 'typesense/lib/Typesense/Collections';
 import { TYPESENSE_CLIENT } from './typesense.client';
 import type {
   PublicationDocument,
+  SearchAnalyticsEntry,
+  SearchAnalyticsResult,
   TypesenseOverrideRule,
   TypesenseSynonym,
 } from './search.types';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionStatus } from '../entities/submission-status.enum';
 import { User } from '../entities/user.entity';
 import type { PublicationCatalogFilters } from '../submissions/publication-catalog-search.util';
 import { clampPublicationCatalogPagination } from '../submissions/publication-catalog-search.util';
@@ -29,8 +34,8 @@ const COLLECTION_SCHEMA = {
       optional: true as const,
     },
     {
-      name: 'discipline',
-      type: 'string' as const,
+      name: 'disciplines',
+      type: 'string[]' as const,
       facet: true as const,
       optional: true as const,
     },
@@ -64,6 +69,8 @@ export class SearchService {
     private readonly client: Client | null,
     @Inject('TYPESENSE_COLLECTION_NAME')
     private readonly rawCollectionName: string,
+    @InjectRepository(Submission)
+    private readonly submissionsRepo: Repository<Submission>,
   ) {
     this.collectionName = rawCollectionName;
   }
@@ -103,7 +110,7 @@ export class SearchService {
       keywords: submission.keywords ?? '',
       keywordsAr: submission.keywordsAr ?? '',
       authorDisplayName,
-      discipline: submission.discipline ?? '',
+      disciplines: submission.disciplines ?? [],
       articleType: submission.articleType ?? '',
       publishedAt: submission.publishedAt
         ? submission.publishedAt.getTime()
@@ -124,6 +131,149 @@ export class SearchService {
     }
   }
 
+  async getStatus(): Promise<{
+    enabled: boolean;
+    collectionReady: boolean;
+    documentCount?: number;
+  }> {
+    if (!this.client) return { enabled: false, collectionReady: false };
+    try {
+      const col = await this.client.collections(this.collectionName).retrieve();
+      return {
+        enabled: true,
+        collectionReady: true,
+        documentCount: (col as { num_documents?: number }).num_documents,
+      };
+    } catch {
+      return { enabled: true, collectionReady: false };
+    }
+  }
+
+  async dropCollection(): Promise<void> {
+    if (!this.client) return;
+    try {
+      await this.client.collections(this.collectionName).delete();
+      this.collectionReady = false;
+      this.logger.log(`Typesense collection "${this.collectionName}" dropped`);
+    } catch (err) {
+      this.logger.warn(`Failed to drop collection: ${String(err)}`);
+    }
+  }
+
+  // ── Analytics ─────────────────────────────────────────────────────────────
+
+  /** Creates/updates the popular-queries and no-hits analytics rules. */
+  async ensureAnalyticsRules(): Promise<void> {
+    if (!this.client) return;
+    // The typesense-js v3 client types don't fully expose the analytics API,
+    // so we cast to access it.
+    const analytics = (
+      this.client as unknown as {
+        analytics: {
+          rules(): {
+            upsert(name: string, rule: unknown): Promise<unknown>;
+          };
+        };
+      }
+    ).analytics;
+
+    try {
+      await analytics.rules().upsert(`${this.collectionName}-popular-queries`, {
+        type: 'popular_queries',
+        params: {
+          source: { collections: [this.collectionName] },
+          destination: {
+            collection: `${this.collectionName}_popular_queries`,
+          },
+          limit: 1000,
+        },
+      });
+      await analytics.rules().upsert(`${this.collectionName}-nohits-queries`, {
+        type: 'nohits_queries',
+        params: {
+          source: { collections: [this.collectionName] },
+          destination: {
+            collection: `${this.collectionName}_nohits_queries`,
+          },
+          limit: 1000,
+        },
+      });
+      this.logger.log('Typesense analytics rules ensured');
+    } catch (err) {
+      this.logger.warn(`Failed to ensure analytics rules: ${String(err)}`);
+    }
+  }
+
+  /** Records a reader click event so Typesense can compute click-through rates. */
+  async recordClickEvent(
+    q: string,
+    docId: string,
+    userId: string,
+  ): Promise<void> {
+    if (!this.client) return;
+    try {
+      const analytics = (
+        this.client as unknown as {
+          analytics: {
+            events(): {
+              create(event: unknown): Promise<unknown>;
+            };
+          };
+        }
+      ).analytics;
+      await analytics.events().create({
+        type: 'click',
+        name: `${this.collectionName}_click`,
+        data: { q, doc_id: docId, user_id: userId },
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to record click event: ${String(err)}`);
+    }
+  }
+
+  /** Returns top queries and zero-result queries for the editor analytics view. */
+  async getAnalytics(): Promise<SearchAnalyticsResult> {
+    if (!this.client) return { topQueries: [], noResultQueries: [] };
+
+    const popularColl = `${this.collectionName}_popular_queries`;
+    const nohitsColl = `${this.collectionName}_nohits_queries`;
+    const searchParams = {
+      q: '*',
+      query_by: 'q',
+      sort_by: 'count:desc',
+      per_page: 20,
+    };
+
+    const [popularResult, nohitsResult] = await Promise.allSettled([
+      this.client
+        .collections(popularColl)
+        .documents()
+        .search(searchParams as never),
+      this.client
+        .collections(nohitsColl)
+        .documents()
+        .search(searchParams as never),
+    ]);
+
+    const mapHits = (
+      result: PromiseSettledResult<unknown>,
+    ): SearchAnalyticsEntry[] => {
+      if (result.status === 'rejected') return [];
+      const res = result.value as {
+        hits?: Array<{ document: { q: string; count: number } }>;
+      };
+      return (res.hits ?? []).map((h) => ({
+        q: h.document.q,
+        count: h.document.count,
+      }));
+    };
+
+    return {
+      topQueries: mapHits(popularResult),
+      noResultQueries: mapHits(nohitsResult),
+    };
+  }
+
   async searchAsSubmissions(
     filters: PublicationCatalogFilters,
     pagination?: { limit?: number; offset?: number },
@@ -140,7 +290,7 @@ export class SearchService {
 
     const filterParts: string[] = [];
     if (filters.discipline) {
-      filterParts.push(`discipline:=${JSON.stringify(filters.discipline)}`);
+      filterParts.push(`disciplines:=${JSON.stringify(filters.discipline)}`);
     }
     if (filters.articleType) {
       filterParts.push(`articleType:=${JSON.stringify(filters.articleType)}`);
@@ -207,7 +357,7 @@ export class SearchService {
       sub.abstractAr = doc.abstractAr || null;
       sub.keywords = doc.keywords || null;
       sub.keywordsAr = doc.keywordsAr || null;
-      sub.discipline = doc.discipline || null;
+      sub.disciplines = doc.disciplines ?? [];
       sub.articleType = (doc.articleType as Submission['articleType']) || null;
       sub.publishedAt = doc.publishedAt ? new Date(doc.publishedAt) : null;
       const author = new User();
@@ -218,6 +368,22 @@ export class SearchService {
 
     const total = result.found ?? 0;
     return { items, total };
+  }
+
+  async resolvePublicationLabels(
+    ids: string[],
+  ): Promise<Array<{ id: string; slug: string | null; title: string }>> {
+    const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    if (unique.length === 0) return [];
+    const rows = await this.submissionsRepo.find({
+      where: { id: In(unique), status: SubmissionStatus.PUBLISHED },
+      select: { id: true, slug: true, title: true },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+    }));
   }
 
   async getOverrides(): Promise<TypesenseOverrideRule[]> {

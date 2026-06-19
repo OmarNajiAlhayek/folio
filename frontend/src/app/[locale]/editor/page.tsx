@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { apiJson, ApiError } from '@/lib/api';
 import { ApiErrorState } from '@/components/api-error-state';
@@ -23,7 +24,8 @@ type Submission = {
   title: string;
   status: string;
   updatedAt: string;
-  disciplineSuggested?: string | null;
+  disciplineSuggestedLabels?: string[] | null;
+  disciplines?: string[] | null;
 };
 
 const EDITOR_FILTER_STATUSES = [
@@ -38,6 +40,7 @@ const EDITOR_FILTER_STATUSES = [
 
 export default function EditorPage() {
   const t = useTranslations('Editor');
+  const tCommon = useTranslations('Common');
   const tSub = useTranslations('Submissions');
   const tUi = useTranslations('UI');
   const locale = useLocale();
@@ -123,22 +126,10 @@ export default function EditorPage() {
       {/* Tool links */}
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/editor/search"
+          href="/journal-manager/search-curation"
           className="inline-flex items-center gap-2 rounded-xl border border-ink/15 dark:border-white/15 bg-surface/80 px-4 py-2.5 text-sm font-semibold text-ink/80 transition-all duration-200 hover:border-accent/30 hover:text-accent hover:bg-accent/5"
         >
-          <svg
-            className="size-4 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z"
-            />
-          </svg>
+          <Search className="size-4 shrink-0" strokeWidth={2} aria-hidden />
           {t('searchCuration')}
         </Link>
       </div>
@@ -159,7 +150,7 @@ export default function EditorPage() {
       </div>
 
       {loading ? (
-        <SubmissionListSkeleton />
+        <SubmissionListSkeleton loadingLabel={tCommon('loading')} />
       ) : items.length === 0 || visibleItems.length === 0 ? (
         <div className={EMPTY_STATE_CLS}>
           <p className="font-serif text-base text-ink">{t('empty')}</p>
@@ -178,7 +169,8 @@ export default function EditorPage() {
               updatedAt={s.updatedAt}
               locale={locale}
               t={tSub}
-              disciplineSuggested={s.disciplineSuggested}
+              disciplineSuggestedLabels={s.disciplineSuggestedLabels}
+              disciplines={s.disciplines}
             />
           ))}
         </ul>
