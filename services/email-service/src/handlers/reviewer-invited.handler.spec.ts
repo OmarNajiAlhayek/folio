@@ -185,7 +185,16 @@ describe('ReviewerInvitedHandler', () => {
     );
   });
 
-  it('returns nack-no-requeue when provider throws', async () => {
+  it('returns nack-requeue when provider throws a transient error', async () => {
+    mockProvider.send.mockRejectedValueOnce(new Error('smtp timeout'));
+    const out = await handler.handle(makeEvent());
+    expect(out).toMatchObject({
+      kind: 'nack-requeue',
+      reason: expect.stringContaining('smtp timeout'),
+    });
+  });
+
+  it('returns nack-no-requeue when provider throws a permanent error', async () => {
     mockProvider.send.mockRejectedValueOnce(new Error('smtp down'));
     const out = await handler.handle(makeEvent());
     expect(out).toMatchObject({

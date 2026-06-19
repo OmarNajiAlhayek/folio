@@ -10,7 +10,9 @@ import {
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { unwrapPgQueryRows } from '../common/unwrap-pg-query-rows';
+import { findUnknownHandlebarsVariables } from '../common/handlebars-variables.util';
 import { registerFolioEmailPartials } from '@folio/shared/email/register-folio-email-partials';
+import { TemplatesService } from '../templates/templates.service';
 import {
   type AdminEmailTemplateKey,
   isAdminEmailTemplateKey,
@@ -138,7 +140,10 @@ const PREVIEW_CONTEXT: Record<
 export class AdminEmailService {
   private readonly logger = new Logger(AdminEmailService.name);
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly templatesService: TemplatesService,
+  ) {}
 
   private isoFromRowTimestamptz(row: Record<string, unknown>): string {
     const direct =
@@ -193,7 +198,9 @@ export class AdminEmailService {
     textBody: string,
   ): void {
     const ctx = { ...PREVIEW_CONTEXT[key] };
+    const allowed = Object.keys(ctx);
     try {
+      registerFolioEmailPartials(Handlebars);
       Handlebars.compile(subjectTemplate)(ctx);
       Handlebars.compile(htmlBody)(ctx);
       Handlebars.compile(textBody)(ctx);
@@ -202,6 +209,19 @@ export class AdminEmailService {
       throw new UnprocessableEntityException({
         message: `Template failed to compile: ${msg}`,
         code: 'TEMPLATE_COMPILE_ERROR',
+      });
+    }
+
+    const unknown = [
+      ...findUnknownHandlebarsVariables(subjectTemplate, allowed),
+      ...findUnknownHandlebarsVariables(htmlBody, allowed),
+      ...findUnknownHandlebarsVariables(textBody, allowed),
+    ];
+    const unique = [...new Set(unknown)].sort();
+    if (unique.length > 0) {
+      throw new UnprocessableEntityException({
+        message: `Template references unknown variables: ${unique.join(', ')}`,
+        code: 'TEMPLATE_UNKNOWN_VARIABLE',
       });
     }
   }
@@ -408,17 +428,12 @@ export class AdminEmailService {
         code: 'EMAIL_TEMPLATE_NOT_FOUND',
       });
     }
-    const r = rows[0];
     const base = { ...PREVIEW_CONTEXT[templateKey] };
     if (templateKey === 'reminder-due' && typeof isOverdue === 'boolean') {
       base.isOverdue = isOverdue;
     }
     try {
-      registerFolioEmailPartials();
-      const subject = Handlebars.compile(r.subject_template)(base);
-      const html = Handlebars.compile(r.html_body)(base);
-      const text = Handlebars.compile(r.text_body)(base);
-      return { subject, html, text };
+      return await this.templatesService.render(templateKey, locale, base);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new UnprocessableEntityException({

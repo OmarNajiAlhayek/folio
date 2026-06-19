@@ -1,3 +1,4 @@
+import { generateEntityId } from '@folio/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -15,6 +16,11 @@ import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { ReminderPolicyService } from '../policy/reminder-policy.service';
 import { normalizeEmailLocale } from '../common/email-locale';
+import { providerSendOutcome } from '../common/transient-error.util';
+import {
+  MAX_RETRY_COUNT,
+  RETRY_DELAY_MS,
+} from '../common/email-retry.constants';
 import { assignmentInvitePageUrl } from '../common/folio-frontend-urls';
 
 /**
@@ -110,13 +116,15 @@ export class ReviewerInvitedHandler {
     // _QueryDeepPartialEntity is too strict for arbitrary jsonb shapes.
     // The semantics match plan §6 step 1: 1 row inserted = first
     // delivery, 0 rows = duplicate (caller branches on existing row).
+    const id = generateEntityId();
     const insertResult = (await manager.query(
       `INSERT INTO "email"."email_log" (
-         "idempotency_key", "recipient", "template", "context", "status"
-       ) VALUES ($1, $2, $3, $4::jsonb, $5)
+         "id", "idempotency_key", "recipient", "template", "context", "status"
+       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6)
        ON CONFLICT ("idempotency_key") DO NOTHING
        RETURNING "id"`,
       [
+        id,
         event.idempotencyKey,
         event.reviewer.email,
         'reviewer-invited',
@@ -190,6 +198,17 @@ export class ReviewerInvitedHandler {
         declineUrl,
       },
     );
+
+    // Persist rendered output before touching the provider.
+    await logRepo.update(
+      { id: row.id },
+      {
+        renderedSubject: rendered.subject,
+        renderedHtml: rendered.html,
+        renderedText: rendered.text,
+      },
+    );
+
     try {
       const result = await this.provider.send({
         to: event.reviewer.email,
@@ -219,14 +238,30 @@ export class ReviewerInvitedHandler {
       return ACK;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const outcomeKind = providerSendOutcome(err);
+      const isTransient = outcomeKind === 'nack-requeue';
+      const alreadyFailed = row.status === 'failed';
       this.logger.warn(
-        `provider send failed key=${event.idempotencyKey}: ${message}`,
+        `provider send failed key=${event.idempotencyKey}: ${message} (${outcomeKind})`,
       );
       await logRepo.update(
         { id: row.id },
-        { status: 'failed', error: message.slice(0, 1000) },
+        {
+          status: 'failed',
+          error: message.slice(0, 1000),
+          retryCount: isTransient
+            ? alreadyFailed
+              ? row.retryCount
+              : 0
+            : MAX_RETRY_COUNT,
+          nextRetryAt: isTransient
+            ? alreadyFailed
+              ? row.nextRetryAt
+              : new Date(Date.now() + RETRY_DELAY_MS[0])
+            : null,
+        },
       );
-      return { kind: 'nack-no-requeue', reason: message };
+      return { kind: outcomeKind, reason: message };
     }
   }
 }

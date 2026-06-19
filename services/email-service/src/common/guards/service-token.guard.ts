@@ -6,34 +6,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-function isLoopbackHost(host: string): boolean {
-  const h = host.trim().toLowerCase();
-  return (
-    h === '127.0.0.1' ||
-    h === 'localhost' ||
-    h === '::1' ||
-    h === '0:0:0:0:0:0:0:1'
-  );
-}
-
 @Injectable()
 export class ServiceTokenGuard implements CanActivate {
   constructor(private readonly config: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const token = this.config.get<string>('EMAIL_SERVICE_TOKEN', '').trim();
-    const bindHost = (
-      this.config.get<string>('HTTP_BIND_HOST') ??
-      this.config.get<string>('HEALTH_BIND_HOST', '127.0.0.1')
-    ).trim();
-
     if (!token) {
-      if (isLoopbackHost(bindHost)) {
-        return true;
-      }
       throw new UnauthorizedException({
-        message:
-          'EMAIL_SERVICE_TOKEN is required when bind host is not loopback',
+        message: 'EMAIL_SERVICE_TOKEN is not configured',
         code: 'SERVICE_TOKEN_REQUIRED',
       });
     }

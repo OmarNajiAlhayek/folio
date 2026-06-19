@@ -43,6 +43,7 @@ describe('ReminderDueHandler', () => {
     findOne: jest.Mock;
     createQueryBuilder: jest.Mock;
     update: jest.Mock;
+    delete: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -75,6 +76,7 @@ describe('ReminderDueHandler', () => {
       findOne: jest.fn(),
       createQueryBuilder: jest.fn(() => qb),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     const mockDs = {
@@ -188,12 +190,10 @@ describe('ReminderDueHandler', () => {
     const out = await handler.handle(baseEvent());
     expect(out).toEqual({ kind: 'ack' });
     expect(mockProvider.send).not.toHaveBeenCalled();
-    expect(logRepo.update).toHaveBeenCalledWith(
+    expect(logRepo.delete).toHaveBeenCalledWith({ id: LOG_ID });
+    expect(logRepo.update).not.toHaveBeenCalledWith(
       { id: LOG_ID },
-      expect.objectContaining({
-        status: 'failed',
-        error: 'reminder_no_longer_pending_before_send',
-      }),
+      expect.objectContaining({ status: 'failed' }),
     );
   });
 
@@ -226,16 +226,40 @@ describe('ReminderDueHandler', () => {
     expect(call?.html).toContain('[manuscript]');
   });
 
-  it('nack-no-requeue and marks email_log failed when provider send rejects', async () => {
+  it('nack-requeue and schedules cron retry on transient provider error', async () => {
     mockProvider.send.mockRejectedValueOnce(new Error('smtp timeout'));
     const out = await handler.handle(baseEvent());
     expect(out).toMatchObject({
-      kind: 'nack-no-requeue',
+      kind: 'nack-requeue',
       reason: expect.stringContaining('smtp timeout'),
     });
     expect(logRepo.update).toHaveBeenCalledWith(
       { id: LOG_ID },
-      expect.objectContaining({ status: 'failed' }),
+      expect.objectContaining({
+        status: 'failed',
+        retryCount: 0,
+        nextRetryAt: expect.any(Date),
+        error: expect.stringContaining('smtp timeout'),
+      }),
+    );
+  });
+
+  it('nack-no-requeue and marks email_log failed without retry on permanent error', async () => {
+    mockProvider.send.mockRejectedValueOnce(
+      new Error('550 mailbox unavailable'),
+    );
+    const out = await handler.handle(baseEvent());
+    expect(out).toMatchObject({
+      kind: 'nack-no-requeue',
+      reason: expect.stringContaining('550 mailbox unavailable'),
+    });
+    expect(logRepo.update).toHaveBeenCalledWith(
+      { id: LOG_ID },
+      expect.objectContaining({
+        status: 'failed',
+        retryCount: 4,
+        nextRetryAt: null,
+      }),
     );
   });
 });

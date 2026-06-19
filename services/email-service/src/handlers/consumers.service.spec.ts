@@ -47,6 +47,7 @@ const consumerHandlerProviders = () => [
 
 function makeConsumeMessage(
   body: string | Record<string, unknown>,
+  redelivered = false,
 ): ConsumeMessage {
   const buf = Buffer.from(
     typeof body === 'string' ? body : JSON.stringify(body),
@@ -58,7 +59,7 @@ function makeConsumeMessage(
       consumerTag: 'c',
       deliveryTag: 1,
       exchange: '',
-      redelivered: false,
+      redelivered,
       routingKey: 'ignored',
     },
     properties: {
@@ -209,6 +210,59 @@ describe('ConsumersService', () => {
     expect(ack).toHaveBeenCalledTimes(1);
     expect(nack).not.toHaveBeenCalled();
     expect(reviewerHandle).toHaveBeenCalledTimes(1);
+  });
+
+  it('requeues when handler returns nack-requeue on first delivery', async () => {
+    reviewerHandle.mockResolvedValueOnce({
+      kind: 'nack-requeue',
+      reason: 'smtp timeout',
+    });
+
+    await reviewerCb(
+      makeConsumeMessage({
+        type: 'ReviewerInvited',
+        occurredAt: new Date().toISOString(),
+        idempotencyKey: 'reviewer_invited:asg',
+        assignmentSlug: 'asg',
+        submissionSlug: 'sub',
+        submissionTitle: 'T',
+        reviewer: { id: 'u', email: 'e@test.dev', displayName: 'R' },
+        invitedBy: { id: 'e', displayName: 'Ed' },
+        acceptUrl: 'http://a',
+        declineUrl: 'http://d',
+      }),
+    );
+
+    expect(nack).toHaveBeenCalledWith(expect.anything(), true);
+    expect(ack).not.toHaveBeenCalled();
+  });
+
+  it('dead-letters when handler returns nack-requeue on redelivery', async () => {
+    reviewerHandle.mockResolvedValueOnce({
+      kind: 'nack-requeue',
+      reason: 'smtp timeout',
+    });
+
+    await reviewerCb(
+      makeConsumeMessage(
+        {
+          type: 'ReviewerInvited',
+          occurredAt: new Date().toISOString(),
+          idempotencyKey: 'reviewer_invited:asg',
+          assignmentSlug: 'asg',
+          submissionSlug: 'sub',
+          submissionTitle: 'T',
+          reviewer: { id: 'u', email: 'e@test.dev', displayName: 'R' },
+          invitedBy: { id: 'e', displayName: 'Ed' },
+          acceptUrl: 'http://a',
+          declineUrl: 'http://d',
+        },
+        true,
+      ),
+    );
+
+    expect(nack).toHaveBeenCalledWith(expect.anything(), false);
+    expect(ack).not.toHaveBeenCalled();
   });
 
   it('registers consume for both topology queues', async () => {

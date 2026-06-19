@@ -17,28 +17,28 @@ function isProduction(): boolean {
   return (process.env.NODE_ENV ?? 'development') === 'production';
 }
 
-function isLoopbackBindHost(host: string): boolean {
-  const h = host.trim().toLowerCase();
-  return (
-    h === '127.0.0.1' ||
-    h === 'localhost' ||
-    h === '::1' ||
-    h === '0:0:0:0:0:0:0:1'
-  );
-}
+const MIN_REVIEW_DUE_DAYS = 4;
 
 export function validateEmailServiceRuntimeConfig(): void {
-  const bindHost = (
-    process.env.HTTP_BIND_HOST ??
-    process.env.HEALTH_BIND_HOST ??
-    '127.0.0.1'
-  ).trim();
   const token = (process.env.EMAIL_SERVICE_TOKEN ?? '').trim();
 
-  if (!isLoopbackBindHost(bindHost) && !token) {
+  if (!token) {
     throw new RuntimeConfigError(
-      'EMAIL_SERVICE_TOKEN must be set when HTTP_BIND_HOST is not loopback. Use 127.0.0.1 for same-machine dev.',
+      'EMAIL_SERVICE_TOKEN must be set. Nest must authenticate internal admin API calls (use dev-email-internal-token in docker-compose).',
     );
+  }
+
+  const reviewDueRaw = (process.env.REVIEW_DUE_IN_DAYS ?? '').trim();
+  if (reviewDueRaw) {
+    const reviewDueInDays = parseInt(reviewDueRaw, 10);
+    if (
+      !Number.isFinite(reviewDueInDays) ||
+      reviewDueInDays < MIN_REVIEW_DUE_DAYS
+    ) {
+      throw new RuntimeConfigError(
+        `REVIEW_DUE_IN_DAYS must be an integer >= ${MIN_REVIEW_DUE_DAYS} when set.`,
+      );
+    }
   }
 
   if (!isProduction()) {
@@ -75,12 +75,6 @@ export function validateEmailServiceRuntimeConfig(): void {
   if (rabbitUrl.includes('guest:guest@')) {
     throw new RuntimeConfigError(
       'RABBITMQ_URL must not use guest:guest in production.',
-    );
-  }
-
-  if (!token) {
-    throw new RuntimeConfigError(
-      'EMAIL_SERVICE_TOKEN must be set in production. Nest must authenticate internal admin API calls.',
     );
   }
 }

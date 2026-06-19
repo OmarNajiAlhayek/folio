@@ -77,4 +77,16 @@ describe('ReviewerRespondedHandler', () => {
       'asg-1',
     );
   });
+
+  it('returns nack-requeue on transient DB error', async () => {
+    const err = Object.assign(new Error('connection terminated'), {
+      code: 'ETIMEDOUT',
+    });
+    reminders.cancelAllPendingForAssignment.mockRejectedValue(err);
+    const outcome = await handler.handle(baseEvent());
+    expect(outcome).toEqual({
+      kind: 'nack-requeue',
+      reason: 'connection terminated',
+    });
+  });
 });

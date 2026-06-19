@@ -1,3 +1,4 @@
+import { generateEntityId } from '@folio/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -14,6 +15,11 @@ import { redactEventPayload } from '@folio/shared/messaging/redactor';
 import { reminderDueKey } from '@folio/shared/messaging/idempotency';
 import { ACK, HandlerOutcome } from './handler-result';
 import { normalizeEmailLocale } from '../common/email-locale';
+import { providerSendOutcome } from '../common/transient-error.util';
+import {
+  MAX_RETRY_COUNT,
+  RETRY_DELAY_MS,
+} from '../common/email-retry.constants';
 import { assignmentReviewPageUrl } from '../common/folio-frontend-urls';
 
 /**
@@ -60,13 +66,15 @@ export class ReminderDueHandler {
 
     const logRepo = this.dataSource.getRepository(EmailLog);
 
+    const id = generateEntityId();
     const insertResult = (await this.dataSource.query(
       `INSERT INTO "email"."email_log" (
-         "idempotency_key", "recipient", "template", "context", "status"
-       ) VALUES ($1, $2, $3, $4::jsonb, $5)
+         "id", "idempotency_key", "recipient", "template", "context", "status"
+       ) VALUES ($1, $2, $3, $4, $5::jsonb, $6)
        ON CONFLICT ("idempotency_key") DO NOTHING
        RETURNING "id"`,
       [
+        id,
         event.idempotencyKey,
         event.reviewer.email,
         'reminder-due',
@@ -124,15 +132,21 @@ export class ReminderDueHandler {
       this.logger.debug(
         `reminder ${event.reminderId} no longer pending before send (status=${reminderBeforeSend?.status ?? 'missing'}) — ack`,
       );
-      await logRepo.update(
-        { id: row.id },
-        {
-          status: 'failed',
-          error: 'reminder_no_longer_pending_before_send',
-        },
-      );
+      // Idempotency-safe: redelivery re-inserts a pre-claim row, re-checks
+      // reminder status, and deletes again — no send attempted.
+      await logRepo.delete({ id: row.id });
       return ACK;
     }
+
+    // Persist rendered output before touching the provider.
+    await logRepo.update(
+      { id: row.id },
+      {
+        renderedSubject: rendered.subject,
+        renderedHtml: rendered.html,
+        renderedText: rendered.text,
+      },
+    );
 
     try {
       const result = await this.provider.send({
@@ -164,14 +178,30 @@ export class ReminderDueHandler {
       return ACK;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const outcomeKind = providerSendOutcome(err);
+      const isTransient = outcomeKind === 'nack-requeue';
+      const alreadyFailed = row.status === 'failed';
       this.logger.warn(
-        `provider send failed key=${event.idempotencyKey}: ${message}`,
+        `provider send failed key=${event.idempotencyKey}: ${message} (${outcomeKind})`,
       );
       await logRepo.update(
         { id: row.id },
-        { status: 'failed', error: message.slice(0, 1000) },
+        {
+          status: 'failed',
+          error: message.slice(0, 1000),
+          retryCount: isTransient
+            ? alreadyFailed
+              ? row.retryCount
+              : 0
+            : MAX_RETRY_COUNT,
+          nextRetryAt: isTransient
+            ? alreadyFailed
+              ? row.nextRetryAt
+              : new Date(Date.now() + RETRY_DELAY_MS[0])
+            : null,
+        },
       );
-      return { kind: 'nack-no-requeue', reason: message };
+      return { kind: outcomeKind, reason: message };
     }
   }
 }

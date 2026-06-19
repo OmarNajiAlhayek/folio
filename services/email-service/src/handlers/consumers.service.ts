@@ -264,6 +264,18 @@ export class ConsumersService implements OnModuleInit {
 
     if (outcome.kind === 'ack') {
       this.rabbit.ack(msg);
+    } else if (outcome.kind === 'nack-requeue') {
+      if (msg.fields.redelivered) {
+        this.logger.warn(
+          `dead-letter after retry routingKey=${routingKey} reason=${outcome.reason}`,
+        );
+        this.rabbit.nack(msg, false);
+      } else {
+        this.logger.warn(
+          `requeue routingKey=${routingKey} reason=${outcome.reason}`,
+        );
+        this.rabbit.nack(msg, true);
+      }
     } else {
       this.logger.warn(
         `dead-letter routingKey=${routingKey} reason=${outcome.reason}`,

@@ -10,18 +10,27 @@ describe('validateEmailServiceRuntimeConfig', () => {
     process.env = { ...prev };
   });
 
-  it('allows development with example DB password', () => {
+  it('allows development with example DB password when token is set', () => {
     process.env.NODE_ENV = 'development';
     process.env.DB_PASSWORD = 'changeme';
     process.env.HTTP_BIND_HOST = '127.0.0.1';
-    delete process.env.EMAIL_SERVICE_TOKEN;
+    process.env.EMAIL_SERVICE_TOKEN = 'dev-email-internal-token';
     expect(() => validateEmailServiceRuntimeConfig()).not.toThrow();
   });
 
-  it('rejects non-loopback bind without EMAIL_SERVICE_TOKEN', () => {
+  it('rejects startup without EMAIL_SERVICE_TOKEN', () => {
     process.env.NODE_ENV = 'development';
-    process.env.HTTP_BIND_HOST = '0.0.0.0';
+    process.env.HTTP_BIND_HOST = '127.0.0.1';
     delete process.env.EMAIL_SERVICE_TOKEN;
+    expect(() => validateEmailServiceRuntimeConfig()).toThrow(
+      RuntimeConfigError,
+    );
+  });
+
+  it('rejects REVIEW_DUE_IN_DAYS below minimum', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.EMAIL_SERVICE_TOKEN = 'dev-email-internal-token';
+    process.env.REVIEW_DUE_IN_DAYS = '2';
     expect(() => validateEmailServiceRuntimeConfig()).toThrow(
       RuntimeConfigError,
     );
@@ -29,6 +38,7 @@ describe('validateEmailServiceRuntimeConfig', () => {
 
   it('rejects production with example DB_PASSWORD', () => {
     process.env.NODE_ENV = 'production';
+    process.env.EMAIL_SERVICE_TOKEN = 'prod-email-token';
     process.env.DB_PASSWORD = 'changeme';
     expect(() => validateEmailServiceRuntimeConfig()).toThrow(
       RuntimeConfigError,
@@ -37,6 +47,7 @@ describe('validateEmailServiceRuntimeConfig', () => {
 
   it('rejects production noop provider', () => {
     process.env.NODE_ENV = 'production';
+    process.env.EMAIL_SERVICE_TOKEN = 'prod-email-token';
     process.env.DB_PASSWORD = 'prod-db-secret-value';
     process.env.EMAIL_PROVIDER = 'noop';
     expect(() => validateEmailServiceRuntimeConfig()).toThrow(
@@ -46,6 +57,7 @@ describe('validateEmailServiceRuntimeConfig', () => {
 
   it('rejects production smtp without SMTP_HOST', () => {
     process.env.NODE_ENV = 'production';
+    process.env.EMAIL_SERVICE_TOKEN = 'prod-email-token';
     process.env.DB_PASSWORD = 'prod-db-secret-value';
     process.env.EMAIL_PROVIDER = 'smtp';
     process.env.EMAIL_FROM = 'no-reply@example.com';
@@ -57,6 +69,7 @@ describe('validateEmailServiceRuntimeConfig', () => {
 
   it('rejects production smtp without EMAIL_FROM', () => {
     process.env.NODE_ENV = 'production';
+    process.env.EMAIL_SERVICE_TOKEN = 'prod-email-token';
     process.env.DB_PASSWORD = 'prod-db-secret-value';
     process.env.EMAIL_PROVIDER = 'smtp';
     process.env.SMTP_HOST = 'smtp.example.com';

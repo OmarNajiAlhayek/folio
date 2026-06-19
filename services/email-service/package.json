@@ -4,7 +4,7 @@
   "description": "Folio email microservice: consumes RabbitMQ events, sends transactional + scheduled emails, owns reminder lifecycle.",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run build --prefix ../../packages/shared && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node --transpile-only src/main.ts",
     "migrate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:run -d src/db/data-source.ts",

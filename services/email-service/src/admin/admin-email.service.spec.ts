@@ -4,14 +4,20 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AdminEmailService } from './admin-email.service';
+import { TemplatesService } from '../templates/templates.service';
 
 describe('AdminEmailService', () => {
   let ds: jest.Mocked<Pick<DataSource, 'query'>>;
+  let templates: jest.Mocked<Pick<TemplatesService, 'render'>>;
   let svc: AdminEmailService;
 
   beforeEach(() => {
     ds = { query: jest.fn() };
-    svc = new AdminEmailService(ds as unknown as DataSource);
+    templates = { render: jest.fn() };
+    svc = new AdminEmailService(
+      ds as unknown as DataSource,
+      templates as unknown as TemplatesService,
+    );
   });
 
   it('assertTemplateKey throws 422 for unknown key', () => {
@@ -35,6 +41,20 @@ describe('AdminEmailService', () => {
         '{{bad',
         'x',
         'y',
+        new Date().toISOString(),
+      ),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(ds.query).not.toHaveBeenCalled();
+  });
+
+  it('patchTemplate rejects unknown template variables', async () => {
+    await expect(
+      svc.patchTemplate(
+        'submission-under-review',
+        undefined,
+        'ok {{submissionTitle}}',
+        '<p>{{initiatedByRole}}</p>',
+        'x',
         new Date().toISOString(),
       ),
     ).rejects.toThrow(UnprocessableEntityException);
@@ -78,5 +98,28 @@ describe('AdminEmailService', () => {
     const [sql] = ds.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('date_trunc(\'milliseconds\', "updated_at")');
     expect(sql).toContain("date_trunc('milliseconds', $6::timestamptz)");
+  });
+
+  it('previewTemplate delegates render to TemplatesService', async () => {
+    ds.query.mockResolvedValueOnce([
+      { subject_template: 'x', html_body: 'y', text_body: 'z' },
+    ]);
+    templates.render.mockResolvedValueOnce({
+      subject: 'Invite: Sample',
+      html: '<p>ok</p>',
+      text: 'ok',
+    });
+
+    const out = await svc.previewTemplate('reviewer-invited', undefined, 'en');
+
+    expect(templates.render).toHaveBeenCalledWith(
+      'reviewer-invited',
+      'en',
+      expect.objectContaining({
+        reviewerDisplayName: 'Dr. Example Reviewer',
+        submissionTitle: 'Sample manuscript title (preview)',
+      }),
+    );
+    expect(out.html).toBe('<p>ok</p>');
   });
 });

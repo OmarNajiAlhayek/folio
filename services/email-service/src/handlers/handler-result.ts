@@ -5,6 +5,7 @@
  */
 export type HandlerOutcome =
   | { kind: 'ack' }
+  | { kind: 'nack-requeue'; reason: string }
   | { kind: 'nack-no-requeue'; reason: string };
 
 export const ACK: HandlerOutcome = { kind: 'ack' };

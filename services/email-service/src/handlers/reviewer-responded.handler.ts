@@ -3,6 +3,7 @@ import { ReviewerRespondedEvent } from '@folio/shared/contracts/email-events';
 import { ReminderAdminService } from '../admin/reminder-admin.service';
 import { reviewerRespondedKey } from '@folio/shared/messaging/idempotency';
 import { redactEventPayload } from '@folio/shared/messaging/redactor';
+import { isTransientDbError } from '../common/transient-error.util';
 import { ACK, HandlerOutcome } from './handler-result';
 
 /**
@@ -27,11 +28,24 @@ export class ReviewerRespondedHandler {
       return { kind: 'nack-no-requeue', reason: 'bad idempotency key' };
     }
 
-    const { cancelledCount } =
-      await this.reminders.cancelAllPendingForAssignment(event.assignmentSlug);
-    this.logger.debug(
-      `reviewer.responded assignment=${event.assignmentSlug} outcome=${event.outcome} cancelled=${cancelledCount}`,
-    );
-    return ACK;
+    try {
+      const { cancelledCount } =
+        await this.reminders.cancelAllPendingForAssignment(
+          event.assignmentSlug,
+        );
+      this.logger.debug(
+        `reviewer.responded assignment=${event.assignmentSlug} outcome=${event.outcome} cancelled=${cancelledCount}`,
+      );
+      return ACK;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (isTransientDbError(err)) {
+        this.logger.warn(
+          `transient DB error cancelling reminders assignment=${event.assignmentSlug}: ${message}`,
+        );
+        return { kind: 'nack-requeue', reason: message };
+      }
+      throw err;
+    }
   }
 }

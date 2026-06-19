@@ -14,6 +14,7 @@ import { SubmissionUnderReviewHandler } from './submission-under-review.handler'
 import { Phase3WorkflowHandlers } from './phase3-workflow.handlers';
 import { AuthEmailHandler } from './auth-email.handler';
 import { ConsumersService } from './consumers.service';
+import { FailedEmailRetryerService } from './failed-email-retryer.service';
 
 @Module({
   imports: [TemplatesModule, ProvidersModule, AdminModule],
@@ -30,6 +31,7 @@ import { ConsumersService } from './consumers.service';
     Phase3WorkflowHandlers,
     AuthEmailHandler,
     ConsumersService,
+    FailedEmailRetryerService,
   ],
   exports: [
     ReviewerInvitedHandler,
