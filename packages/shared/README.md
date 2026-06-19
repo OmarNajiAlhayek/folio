@@ -9,6 +9,17 @@ Canonical TypeScript contracts and messaging helpers for the Nest **backend** (p
 | `messaging/idempotency.ts` | Idempotency key builders (must match on both sides) |
 | `messaging/redactor.ts` | PII stripping for logs and DLQ inspection |
 | `email/register-folio-email-partials.ts` | Shared Handlebars email layout partials |
+| `ids/entity-id.ts` | UUID v7 generator for database primary keys and cross-service entity references |
+
+### Entity ID contract
+
+All database primary keys and entity references in RabbitMQ event payloads use **UUID v7** (time-ordered, RFC 4122). Generate them with:
+
+```ts
+import { generateEntityId } from '@folio/shared';
+```
+
+**Request correlation IDs** (`x-request-id`) remain **UUID v4** — see `observability/request-id.ts`.
 
 ### Editing workflow
 
@@ -32,6 +43,7 @@ Import examples:
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import { reviewerInvitedKey } from '@folio/shared/messaging/idempotency';
 import { DEFAULT_TOPOLOGY } from '@folio/shared/messaging/topology';
+import { generateEntityId } from '@folio/shared';
 ```
 
 Email design: [`docs/plans/email-service.md`](../../docs/plans/email-service.md).

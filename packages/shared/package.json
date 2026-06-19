@@ -38,6 +38,12 @@
     "./email/register-folio-email-partials": {
       "types": "./dist/email/register-folio-email-partials.d.ts",
       "default": "./dist/email/register-folio-email-partials.js"
+    },
+    "./ids/entity-id": {
+      "types": "./dist/ids/entity-id.d.ts",
+      "import": "./dist/ids/entity-id.js",
+      "require": "./dist/ids/entity-id.js",
+      "default": "./dist/ids/entity-id.js"
     }
   },
   "scripts": {
@@ -46,7 +52,8 @@
     "test": "jest"
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.0"
+    "@opentelemetry/api": "^1.9.0",
+    "uuidv7": "^1.0.2"
   },
   "peerDependencies": {
     "handlebars": "^4.7.8"
@@ -66,6 +73,6 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "rootDir": ".",
-    "testRegex": "observability/.*\\.spec\\.ts$"
+    "testRegex": "(observability|ids)/.*\\.spec\\.ts$"
   }
 }

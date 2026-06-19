@@ -16,7 +16,8 @@
     "contracts/**/*.ts",
     "messaging/**/*.ts",
     "email/**/*.ts",
-    "observability/**/*.ts"
+    "observability/**/*.ts",
+    "ids/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }
