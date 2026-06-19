@@ -23,10 +23,11 @@ if not exist "%ROOT%services\ai-service\pyproject.toml" (
   exit /b 1
 )
 
-echo Starting RabbitMQ ^(docker compose^)...
+echo Starting dev infrastructure ^(docker-compose.dev.yml^)...
+echo   Postgres 5434, Postgres-email 5433, RabbitMQ 5672, LanguageTool 8010, Typesense 8108
 docker compose -f "%ROOT%docker-compose.dev.yml" up -d
 if errorlevel 1 (
-  echo [WARN] docker compose failed — ensure Docker is running and RabbitMQ is available on localhost:5672 for email-service.
+  echo [WARN] docker compose failed — ensure Docker is running. Apps need Postgres ^(5434/5433^) and RabbitMQ ^(5672^).
   goto launch_apps
 )
 
@@ -67,7 +68,7 @@ if exist "%ROOT%services\ai-service\.venv\Scripts\python.exe" (
 )
 
 echo Launched: backend, frontend, email-service, ai-service ^(separate terminals^).
-echo Infra: docker-compose.dev.yml ^(RabbitMQ 5672 / management UI 15672^).
+echo Infra: docker-compose.dev.yml ^(Postgres 5434, Postgres-email 5433, RabbitMQ 5672/15672, LanguageTool 8010, Typesense 8108^).
 echo Backend: npm run start:dev
 echo Frontend: npm run dev
 echo Email-service: npm run start:dev

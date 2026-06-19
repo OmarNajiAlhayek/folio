@@ -103,7 +103,7 @@
 ### Testing
 - **No Playwright E2E for Arabic UI locale:** RTL/manuscript build flow in `/ar/` locale is untested.
 - **No E2E for full submit-for-review happy path:** Validation path is mocked — not exercised against real backend validation.
-- **No performance/load tests:** No benchmarks for concurrent review submissions, email pipeline throughput, or AI service latency under load.
+- **Performance/load harness:** k6 HTTP suites (review submit, email pipeline, editor queue, auth, search, notifications, upload) + Python gRPC bench; weekly CI in `.github/workflows/perf.yml`. See [`docs/testing-performance.md`](docs/testing-performance.md).
 - **No test for equation PNG generation in DOCX:** The rendered equation image inside downloaded .docx is not byte-inspected.
 
 ### Operations

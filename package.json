@@ -7,8 +7,10 @@
     "prepare": "husky",
     "test:pipeline": "npm run test:pipeline --prefix backend",
     "test:perf": "node perf/run.mjs",
+    "test:perf:ci": "node perf/run.mjs --ci --skip-setup",
     "test:perf:setup": "node perf/setup.mjs",
     "seed:perf": "npm run seed:perf --prefix backend",
+    "seed:all": "npm run seed --prefix backend && npm run seed:perf --prefix backend",
     "proto:gen": "cd proto && buf generate",
     "proto:lint": "cd proto && buf lint"
   },

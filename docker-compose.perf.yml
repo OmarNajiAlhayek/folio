@@ -1,0 +1,11 @@
+# Multi-instance perf overlay — use with docker-compose.local.yml:
+#   docker compose -f docker-compose.local.yml -f docker-compose.perf.yml up -d
+
+services:
+  backend-b:
+    extends:
+      file: docker-compose.local.yml
+      service: backend
+    container_name: folio-backend-b
+    ports:
+      - "5247:5243"

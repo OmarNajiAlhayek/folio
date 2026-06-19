@@ -56,13 +56,13 @@ npm install
 ## Prerequisites
 
 - Node.js LTS
-- PostgreSQL (local). Create a database, e.g. `CREATE DATABASE folio_review;`
-- Docker (only when running the email-service via the bundled compose file)
+- PostgreSQL (local or via Docker). Create a database, e.g. `CREATE DATABASE folio_review;`
+- Docker (optional; `docker-compose.dev.yml` covers all infrastructure dependencies)
 - Python 3.12+ (only when running the ai-service)
 
 ## Configuration
 
-1. **Backend:** copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and set `DB_*`, `JWT_SECRET`, optional `FRONTEND_ORIGIN` (default `http://localhost:5240`), plus the RabbitMQ + `APP_BASE_URL` block (used to publish reviewer-invite events to the email-service). Do **not** put `SMTP_*` or `EMAIL_PROVIDER` here — mail is configured only in the email-service. OpenAPI is on by default in non-production; set `SWAGGER_ENABLED=true` to expose it when `NODE_ENV=production`.
+1. **Backend:** copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and set `DB_*`, `JWT_SECRET`, optional `FRONTEND_ORIGIN` (default `http://localhost:5240`), plus the RabbitMQ + `APP_BASE_URL` block. Do **not** put `SMTP_*` or `EMAIL_PROVIDER` here — mail is configured only in the email-service. OpenAPI is on by default in non-production; set `SWAGGER_ENABLED=true` to expose it when `NODE_ENV=production`. Notable optional vars: `TYPESENSE_ENABLED` + `TYPESENSE_*` (publication search), `ORCID_ENABLED` + `ORCID_*` (Sign in with ORCID), `AUDIT_SAMPLE_RATE` (request audit log sampling, default 1.0).
 2. **Frontend:** copy [`frontend/.env.local.example`](frontend/.env.local.example) to `frontend/.env.local`. Leave `NEXT_PUBLIC_API_URL` empty so the browser calls same-origin `/api/v1` (Next.js rewrites to the API on `API_PROXY_TARGET`, default `http://127.0.0.1:5243`). A direct `NEXT_PUBLIC_API_URL=http://localhost:5243` breaks httpOnly cookie auth and is blocked by CSP (`connect-src 'self'`).
 3. **Email service:** copy [`services/email-service/.env.example`](services/email-service/.env.example) to `services/email-service/.env`. Default `EMAIL_PROVIDER=noop` logs would-be sends and requires no SMTP server.
 4. **AI service** (optional): copy [`services/ai-service/.env.example`](services/ai-service/.env.example) to `services/ai-service/.env`. Enable features per flag (see Terminal 4). Mirror toggles in [`backend/.env.example`](backend/.env.example): `AI_SERVICE_ENABLED`, `AI_SIMILARITY_ENABLED`, `AI_KEYWORDS_ENABLED`, `AI_REVIEWER_MATCHING_ENABLED`, `AI_COPYEDIT_ENABLED`. For copyedit grammar checks, set `LANGUAGE_TOOL_ENABLED=true` and start LanguageTool via Docker (see below).
@@ -77,8 +77,19 @@ npm install
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-- **RabbitMQ** (email pipeline): AMQP `5672`, management UI `http://localhost:15672` (guest/guest).
-- **LanguageTool** (copyedit grammar/spelling): HTTP `http://localhost:8010` — start with `docker compose -f docker-compose.dev.yml up -d languagetool`, then set `LANGUAGE_TOOL_ENABLED=true` in `backend/.env`.
+`docker-compose.dev.yml` provides five named services — start all or individually:
+
+| Service | Port(s) | Purpose |
+|---------|---------|---------|
+| `postgres` | host **5434** → container 5432 | Main app DB (`folio_review`); `pgvector/pgvector:pg17` |
+| `postgres-email` | host **5433** → container 5432 | Email service DB (`folio_email`) |
+| `rabbitmq` | AMQP **5672**, management UI **15672** (guest/guest) | Event bus for email pipeline |
+| `languagetool` | **8010** | Copyedit grammar/spelling; set `LANGUAGE_TOOL_ENABLED=true` |
+| `typesense` | **8108** | Full-text search engine; set `TYPESENSE_ENABLED=true` |
+
+Start a single service: `docker compose -f docker-compose.dev.yml up -d typesense`. Note the API default in `backend/.env.example` uses `DB_PORT=5434` to match.
+
+**Alternative: full-stack in Docker** — `docker compose -f docker-compose.local.yml up` runs infra + all app services together. Do **not** run both compose files simultaneously (they share ports).
 
 **Terminal 1 — API**
 
@@ -151,6 +162,8 @@ In **`backend/.env`**, set `AI_SERVICE_ENABLED=true` and `AI_SERVICE_GRPC_HOST=1
 | `AI_COPYEDIT_ENABLED` | `COPYEDIT_ANALYSIS_ENABLED=true`, `AI_PROVIDER=openai` | Copyeditor reference cross-checking (LLM) |
 | `LANGUAGE_TOOL_ENABLED` | LanguageTool container on `8010` (Nest HTTP, not gRPC) | Copyeditor grammar/spelling suggestions |
 
+**Typesense publication search** is independent of ai-service. Enable with `TYPESENSE_ENABLED=true` + Typesense running on port `8108` (see `docker-compose.dev.yml`). The backend syncs published submissions automatically every 5 minutes and on publish. Editors can trigger a full reindex via `POST /api/v1/editor/search/reindex` (journal manager permission) and manage search overrides/synonyms via the `/editor/search/` curation API.
+
 Default `AI_PROVIDER=noop` needs no API keys for health/gRPC startup. Full runbook: [`services/ai-service/README.md`](services/ai-service/README.md), design: [`docs/plans/ai-service.md`](docs/plans/ai-service.md).
 
 ### Sample accounts (after `npm run seed` in `backend/`)
@@ -183,9 +196,11 @@ To wipe **everything** in the app DB and uploads, then re-seed (dev): `npm run s
 
 ## API surface
 
-Global prefix: **`/api/v1`**. Auth: **Bearer JWT** from `POST /auth/register` or `POST /auth/login`.
+Global prefix: **`/api/v1`**. Auth: **Bearer JWT** from `POST /auth/register` or `POST /auth/login`. ORCID OAuth: `GET /auth/orcid` (enabled via `ORCID_ENABLED=true` in `backend/.env`).
 
 Public catalog: `GET /api/v1/public/submissions` (no auth).
+
+**Audit log:** Every non-health API request is logged to `audit_log` (sampled by `AUDIT_SAMPLE_RATE`, default 1.0). Journal managers with `audit.log.view` permission can query at `GET /api/v1/audit/logs` (filters: userId, startDate, endDate, method, routePattern, actionType, resourceType, resourceId; paginated). Sensitive fields (passwords, tokens, OTPs) are redacted from stored request bodies.
 
 ## Reviewer pool
 

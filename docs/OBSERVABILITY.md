@@ -78,3 +78,24 @@ No collector required. Traces stay in-process for log correlation; export is off
 | backend, email-service | `@folio/nest-observability` + `nestjs-pino` |
 | ai-service | `app/observability/` + `structlog` |
 | Shared headers / AMQP helpers | `@folio/shared/observability` |
+
+## Database spans (PostgreSQL)
+
+When `@opentelemetry/instrumentation-pg` is active (via `@folio/nest-observability`), HTTP request traces include child spans for SQL:
+
+| Attribute | Description |
+|-----------|-------------|
+| `db.system` | `postgresql` |
+| `db.statement` | Parameterized SQL text |
+| `db.operation` | e.g. `SELECT`, `INSERT` |
+
+Enable export during perf investigations:
+
+```env
+OTEL_TRACES_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
+```
+
+For local regression without a collector, use `TYPEORM_MAX_QUERY_EXECUTION_TIME_MS` and `perf/scripts/pg-stat-snapshot.mjs` — see [`testing-performance.md`](./testing-performance.md).
+
+Production SLO targets: [`slo.md`](./slo.md).

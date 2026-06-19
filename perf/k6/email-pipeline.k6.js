@@ -2,15 +2,17 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Counter } from 'k6/metrics';
 import { loadConfig } from './lib/config.js';
+import { suiteThresholds, suiteConfig } from './lib/thresholds.js';
 
 const drainSeconds = new Trend('email_pipeline_drain_seconds', true);
 const throughput = new Trend('email_pipeline_throughput_per_sec', true);
 const invitesSent = new Counter('email_pipeline_invites_sent');
 
 const config = loadConfig();
+const emailCfg = suiteConfig('emailPipeline');
 const invites = config.emailPipeline?.invites ?? [];
 const inviteCount = parseInt(
-  __ENV.PERF_EMAIL_INVITES || String(invites.length || 50),
+  __ENV.PERF_EMAIL_INVITES || String(invites.length || emailCfg.inviteCount || 50),
   10,
 );
 const batch = invites.slice(0, inviteCount);
@@ -18,10 +20,7 @@ const batch = invites.slice(0, inviteCount);
 export const options = {
   vus: 1,
   iterations: 1,
-  thresholds: {
-    email_pipeline_drain_seconds: ['max<120'],
-    email_pipeline_throughput_per_sec: ['min>0.3'],
-  },
+  thresholds: suiteThresholds('emailPipeline'),
 };
 
 function authHeaders(token) {
@@ -67,6 +66,7 @@ export default function () {
 
   const baselineSent = getEmailLogSent() ?? 0;
   const start = Date.now();
+  const drainMaxMs = (emailCfg.drainSecondsMax ?? 120) * 1000;
 
   const requests = batch.map((invite) => ({
     method: 'POST',
@@ -91,7 +91,7 @@ export default function () {
     'all invites accepted': () => okCount === batch.length,
   });
 
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + drainMaxMs;
   let drained = false;
   while (Date.now() < deadline) {
     const pending = getOutboxPending();
@@ -117,10 +117,19 @@ export default function () {
 export function handleSummary(data) {
   const out = {
     suite: 'email-pipeline',
+    startedAt: new Date().toISOString(),
+    passed: true,
     inviteCount: batch.length,
     metrics: data.metrics,
     root_group: data.root_group,
   };
+  for (const t of Object.values(data.metrics ?? {})) {
+    if (t.thresholds) {
+      for (const th of Object.values(t.thresholds)) {
+        if (th.ok === false) out.passed = false;
+      }
+    }
+  }
   return {
     stdout: JSON.stringify(out, null, 2),
     'reports/email-pipeline.json': JSON.stringify(out),

@@ -2,6 +2,8 @@
 
 PostgreSQL as the system of record. Role workflows: [`feature-report.md`](./feature-report.md). API resources: [`API-NOTES.md`](./API-NOTES.md).
 
+**Primary keys:** entity `id` columns are PostgreSQL `uuid`, generated in application code as **UUID v7** (time-ordered, RFC 4122) via `generateEntityId()` from `@folio/shared`. Public workflow URLs use **slugs** on `Submission`, `ReviewAssignment`, `CopyeditAssignment`, `Role`, and `Permission` — not the raw UUID.
+
 ## Entities
 
 ### Journal (optional stub)
@@ -19,7 +21,7 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 - Belongs to one **author** (`User` as `author_id`).
 - Optional `journal_id` if you use the `Journal` table.
 - Metadata: **title**, **abstract**, **article type** (enum), **keywords** (comma/semicolon-separated; 3–6 on submit), **contributors** (JSON array: full name, optional email, affiliation, sort order, corresponding flag), **funding statement**, **declarations** (conflict of interest, ethics/IRB reference, originality confirmation, AI-use statement), **suggested / opposed reviewers** (JSON arrays, max 5 each).
-- **Discipline (Arabic journal scope):** optional **`discipline`** (confirmed label, varchar), **`discipline_source`** (`ai` \| `author` \| `editor`), **`discipline_suggested`** + **`discipline_suggested_confidence`** (from AraBERT on suggest/submit), **`discipline_classification`** (JSONB snapshot of top labels/scores). Authors confirm via API; editors may override. Catalog filter and corpus similarity can scope by `discipline`.
+- **Discipline (Arabic journal scope, OJS category-like):** optional **`disciplines`** (`text[]`, confirmed labels, max 3), **`discipline_source`** (`ai` \| `author` \| `editor`), **`discipline_suggested_labels`** (`text[]`) + **`discipline_suggested_confidence`** (from AraBERT on suggest/submit), **`discipline_classification`** (JSONB snapshot of top labels/scores). Authors confirm via API; editors may override. Catalog filter and corpus similarity can scope by any confirmed label (similarity uses first).
 - **`constructor_content`** (JSONB, nullable): Word Constructor document when the author uses builder mode; omitted from reviewer payloads.
 - **`review_manuscript_presentation`** (JSONB, nullable): Which sources (upload / constructor `.docx`) are in the review package at submit.
 - **`review_method`** (OJS-aligned enum, default `double_anonymous`): `open` | `anonymous` | `double_anonymous`. In UI/docs, label **`anonymous`** as **single-blind** (reviewer identity hidden from author; author identity still visible to reviewer unless `double_anonymous`).
@@ -65,6 +67,24 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 - Belongs to one **recipient** `User` (`user_id`).
 - Fields: `type` (stable string, e.g. `submission_submitted`), `title_key` / `body_key` (frontend i18n keys), `params` (JSONB, no email addresses), `href` (locale-less app path), `idempotency_key` (unique), `read_at` (null = unread), `created_at`.
 - Rows are retained in v1 (no delete); SSE emits only **after** the insert transaction commits.
+
+### OAuthIdentity (ORCID link)
+
+- Belongs to one `User`.
+- Fields: `provider` (e.g. `orcid`), `provider_user_id` (ORCID iD), `display_name`, `access_token` (encrypted), `refresh_token` (encrypted), `token_expiry`, `raw_profile` (JSONB), `created_at`, `updated_at`.
+- Enabled when `ORCID_ENABLED=true` in `backend/.env`. A user may have at most one ORCID identity (`UNIQUE (user_id, provider)`).
+
+### AuditLog
+
+- Records every non-health API request to the backend.
+- Fields: `user_id` (nullable), `user_email`, `user_roles` (text array), `method`, `route_pattern` (controller route, e.g. `/submissions/:slug`), `path` (actual URL), `status_code`, `ip_address`, `user_agent`, `request_body` (JSONB, sensitive keys redacted), `params` (JSONB), `duration_ms`, `action_type` (classified verb, e.g. `CREATE`, `UPDATE`, `DELETE`), `resource_type` (e.g. `SUBMISSION`, `USER`), `resource_id`, `occurred_at`, `error` (text, when applicable).
+- Indexes: `(user_id, occurred_at)`, `(occurred_at)`, `(route_pattern, occurred_at)`, `(action_type, occurred_at)`, `(resource_type, resource_id, occurred_at)`.
+- Sampling controlled by `AUDIT_SAMPLE_RATE` in `backend/.env` (0.0–1.0, default 1.0).
+
+### SearchSyncCheckpoint
+
+- Single-row table (id = 1) tracking the `last_synced_at` timestamp for incremental Typesense publication sync.
+- Enables the `SearchSyncService` to resume from the last checkpoint after restarts without a full reindex.
 
 ---
 
@@ -206,7 +226,15 @@ erDiagram
 
 ## Indexes (implementation hint)
 
-- `Submission(author_id)`, `Submission(status)`, `Submission(published_at)` for lists.
-- `ReviewAssignment(reviewer_id)`, `ReviewAssignment(submission_id)`, `CopyeditAssignment(copyeditor_id)`, `CopyeditAssignment(submission_id)`.
+- `submissions(status, updated_at DESC)` — editor queue (`ix_submissions_status_updated_at`).
+- `submissions(author_id, updated_at DESC)` — author list (`ix_submissions_author_updated_at`).
+- `submissions(status, published_at)` — catalog ordering, search sync (`ix_submissions_status_published_at`).
+- `submissions(status, similarity_indexed_at) WHERE similarity_indexed_at IS NULL` — pending similarity index (`ix_submissions_similarity_pending`).
+- `review_assignments(reviewer_id, assigned_at DESC)` — reviewer inbox (`ix_review_assignments_reviewer_assigned`).
+- `review_assignments(submission_id)` — per-submission assignment list (`ix_review_assignments_submission_id`).
+- `CopyeditAssignment(copyeditor_id)`, `CopyeditAssignment(submission_id)`.
 - `Notification(user_id, read_at)`, `Notification(idempotency_key)` unique.
+- `outbound_event_outbox(status, next_attempt_at)` — outbox drainer.
 - `User(email)` unique; `User(orcid)` unique where not null.
+- `OAuthIdentity(user_id, provider)` unique.
+- `AuditLog(user_id, occurred_at)`, `(occurred_at)`, `(route_pattern, occurred_at)`, `(action_type, occurred_at)`, `(resource_type, resource_id, occurred_at)`.

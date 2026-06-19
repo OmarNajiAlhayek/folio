@@ -1,17 +1,5 @@
 /**
  * Prepare perf fixtures: login accounts and write perf/.env.json for k6.
- *
- * Prerequisites:
- *   - Backend running with AUTH_RETURN_BEARER=true
- *   - SEED_PERF_FIXTURES=1 npm run seed (from backend/) to create perf/fixtures.json
- *
- * Usage:
- *   node perf/setup.mjs
- *
- * Env:
- *   FOLIO_API_BASE     default http://localhost:5243/api/v1
- *   PERF_FIXTURES      default perf/fixtures.json
- *   PERF_OUTPUT        default perf/.env.json
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -55,7 +43,7 @@ function fail(msg) {
 
 if (!existsSync(FIXTURES_PATH)) {
   fail(
-    `missing ${FIXTURES_PATH} — run: cd backend && cross-env SEED_PERF_FIXTURES=1 npm run seed`,
+    `missing ${FIXTURES_PATH} — run: cd backend && npm run seed:perf`,
   );
 }
 
@@ -89,6 +77,9 @@ const editorToken = await loginAccount(fixtures.editor, 'editor');
 const managerToken = fixtures.manager
   ? await loginAccount(fixtures.manager, 'manager')
   : editorToken;
+const authorToken = fixtures.author
+  ? await loginAccount(fixtures.author, 'author')
+  : null;
 
 const reviewers = [];
 for (const entry of fixtures.reviewSubmit ?? []) {
@@ -103,16 +94,37 @@ for (const entry of fixtures.reviewSubmit ?? []) {
   });
 }
 
+const authAccounts = [
+  fixtures.editor,
+  fixtures.manager,
+  fixtures.author,
+  ...(fixtures.reviewSubmit ?? []).map((r) => ({
+    email: r.reviewerEmail,
+    password: r.password,
+  })),
+].filter(Boolean);
+
 const output = {
   baseUrl: BASE,
   editorToken,
   managerToken,
+  authorToken,
   reviewers,
+  authAccounts,
   emailPipeline: {
     invites: fixtures.emailPipeline?.invites ?? [],
   },
   corpusSimilarity: fixtures.corpusSimilarity ?? null,
   aiGrpcHost: fixtures.aiGrpcHost ?? 'localhost:5246',
+  editorQueueSlugs: fixtures.editorQueue?.slugs ?? [],
+  uploadDraftSlug: fixtures.uploadDraft?.slug ?? null,
+  searchTerms: fixtures.searchTerms ?? [
+    'education',
+    'machine',
+    'research',
+    'journal',
+    'peer',
+  ],
   thresholdsPath: join(__dirname, 'thresholds.json'),
 };
 
@@ -121,3 +133,10 @@ writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2));
 console.log(`Wrote ${OUTPUT_PATH}`);
 console.log(`  reviewers ready: ${reviewers.length}`);
 console.log(`  email invites: ${output.emailPipeline.invites.length}`);
+console.log(`  editor queue slugs: ${output.editorQueueSlugs.length}`);
+
+if (!process.env.THROTTLE_UPLOAD_LIMIT) {
+  console.warn(
+    'perf setup: set THROTTLE_UPLOAD_LIMIT=10000 on the backend for file-upload benchmarks (default is 20/min)',
+  );
+}

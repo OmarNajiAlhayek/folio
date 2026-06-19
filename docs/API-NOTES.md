@@ -19,6 +19,7 @@ High-level REST contract for the NestJS app in `backend/`. Implementation follow
 Use stable `code` values for the frontend (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`). Optionally align later with [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) Problem Details (`application/problem+json`).
 
 - **Auth (browser):** httpOnly cookie `folio_access` (JWT) on `Path=/api/v1`, plus double-submit CSRF cookie `folio_csrf` and header `X-CSRF-Token` on `POST`/`PUT`/`PATCH`/`DELETE`. Frontend calls the API same-origin via Next.js rewrite (`/api/v1` → Nest).
+- **RBAC layers:** route `@Permissions()` guard vs service caller/resource checks — see [`authorization.md`](./authorization.md).
 - **Auth (automation):** `Authorization: Bearer <token>` when `AUTH_RETURN_BEARER=true` (Playwright, scripts). Bearer requests skip CSRF.
 - **Rate limits:** Exceeded limits return `429` with `code: TOO_MANY_REQUESTS` and message `Too many requests. Please try again in a minute.` Counters are per **handler** (controller + method name), not per URL pattern alone. In-memory storage (single instance); horizontal scale needs Redis-backed `ThrottlerStorage` (same limitation class as the notifications SSE hub).
   - **Global baseline (`default`, IP):** all routes except health probes.
@@ -28,7 +29,7 @@ Use stable `code` values for the frontend (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NO
   - **DOCX (`docx`, user):** `POST /submissions/generate-docx-standalone`, `POST /submissions/:slug/generate-docx`.
   - **SSE (`sse`, user):** `GET /notifications/stream` new connections — plus global `default` @ IP.
   - **Health:** `GET /health`, `GET /health/outbox` are never throttled.
-  - **Env:** `THROTTLE_TTL_MS`, `THROTTLE_DEFAULT_LIMIT`, `THROTTLE_PUBLIC_LIMIT`, `THROTTLE_UPLOAD_LIMIT`, `THROTTLE_DOCX_LIMIT`, `THROTTLE_SSE_LIMIT`, `THROTTLE_LOGIN_LIMIT`, `THROTTLE_REGISTER_LIMIT` in `backend/.env`.
+  - **Env:** `THROTTLE_TTL_MS`, `THROTTLE_DEFAULT_LIMIT`, `THROTTLE_PUBLIC_LIMIT`, `THROTTLE_UPLOAD_LIMIT`, `THROTTLE_DOCX_LIMIT`, `THROTTLE_SSE_LIMIT`, `THROTTLE_LOGIN_LIMIT`, `THROTTLE_REGISTER_LIMIT`, `THROTTLE_REFRESH_LIMIT`, `THROTTLE_AUTH_OTP_LIMIT`, `THROTTLE_AUTH_PASSWORD_RESET_LIMIT` in `backend/.env`.
   - **Behind a proxy:** set `NODE_ENV=production` so Express `trust proxy` is enabled and IP limits use the client address (see `backend/src/main.ts`).
 - **Uploads:** `POST /submissions/:slug/files` validates extension + magic bytes per `kind`; max 25MB; temp disk then move to `UPLOAD_DIR`.
 
@@ -78,6 +79,15 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | POST | `/auth/logout` | Authenticated | Clears cookies and revokes the current JWT session id (`jti`) server-side; other devices/sessions stay signed in until their tokens expire. Requires CSRF when using cookie session (not when using `Authorization: Bearer`). |
 | GET | `/auth/me` | Authenticated | Current user + roles + `emailVerified`. |
 
+**ORCID OAuth** (enabled with `ORCID_ENABLED=true` in `backend/.env`):
+
+| Method | Path | Who | Notes |
+|--------|------|-----|--------|
+| GET | `/auth/orcid` | Public | Redirects to ORCID authorization page. |
+| GET | `/auth/orcid/callback` | Public (ORCID redirect) | Exchanges code for token; creates or links account; sets auth cookies. |
+| POST | `/auth/orcid/link` | Authenticated | Link current account to an ORCID identity (body: `{ code }`). |
+| DELETE | `/auth/orcid/unlink` | Authenticated | Remove ORCID link from current account. |
+
 ### Users (minimal)
 
 | Method | Path | Who | Notes |
@@ -104,10 +114,10 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | POST | `/submissions/:slug/submit` | Author | `draft` → `submitted` (or resubmit from `revisions_requested`). Validates journal-style checklist; new author uploads default `file_stage = submission`. |
 | PATCH | `/submissions/:slug/status` | Editor | Body: `{ "status": "…", "messageForAuthor"?: string }`. Optional `messageForAuthor` (max 4000 chars) when setting `accepted`, `rejected`, or `revisions_requested`; persisted on the submission and included in the author decision email. `under_review` requires a review-package manuscript (see policy). |
 | GET | `/submissions/discipline-labels` | Author / Editor | Arabic discipline label list; optional journal scope via `JOURNAL_ALLOWED_DISCIPLINES`. |
-| POST | `/submissions/:slug/suggest-discipline` | Author (draft) | Calls ai-service `ClassifierService`; stores `disciplineSuggested*` on submission. Requires `AI_SERVICE_ENABLED` + classifier enabled on ai-service. |
+| POST | `/submissions/:slug/suggest-discipline` | Author (draft) | Calls ai-service `ClassifierService`; stores `disciplineSuggestedLabels` + classification JSON. Returns `topLabel`, `suggestedLabels[]`, `probabilities`. Requires `AI_SERVICE_ENABLED` + classifier enabled on ai-service. |
 | POST | `/submissions/:slug/suggest-keywords` | Author (draft) | Returns suggested EN/AR keyword lists (not persisted). Requires `AI_KEYWORDS_ENABLED`. |
 | POST | `/submissions/suggest-keywords-preview` | Author | Body: optional `title`, `abstract`, `titleAr`, `abstractAr` — same keyword RPC before a slug exists. |
-| PATCH | `/submissions/:slug/discipline` | Author | Body: `{ "discipline": "<label>" }` — confirm or override; sets `discipline_source` to `author`. |
+| PATCH | `/submissions/:slug/discipline` | Author / Editor | Body: `{ "disciplines": ["<label>", ...] }` (1–3 labels) — confirm or override; sets `discipline_source` to `author` or `editor`. |
 | GET | `/submissions/:slug/corpus-similarity` | Editor / assigned reviewer (accepted or completed) | Corpus overlap report via `PlagiarismService`. **Not** available to authors or copyeditors-only. Requires `AI_SIMILARITY_ENABLED`. Returns `{ status: "unavailable" \| "no_text" \| "ok", ... }` when disabled or insufficient text. |
 | GET | `/submissions/:slug/suggested-reviewers` | Editor | Ranked reviewer candidates via `ReviewerMatchingService`. Requires `AI_REVIEWER_MATCHING_ENABLED`. |
 
@@ -171,12 +181,39 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
 | GET | `/public/submissions` | Public | Paginated list of `published` submissions. Response: `{ items, total, limit, offset }`. Query filters: `q`, `author`, `discipline`, `articleType`, `publishedFrom`, `publishedTo`. Keyword mode: optional `limit` (1–100, default 20), `offset` (default 0). |
-| GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`. `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20); returns same paginated envelope with `offset` 0. |
+| GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`; or **Typesense** when `TYPESENSE_ENABLED=true` (weighted multi-field, typo tolerance, prefix match). `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20); returns same paginated envelope with `offset` 0. |
 | GET | `/public/submissions/author-suggestions` | Public | Typeahead for catalog author filter. Query: `q` (min 2 chars), optional `limit` (1–20, default 10). |
 | GET | `/public/submissions/:slug` | Public | Published metadata + downloadable files. |
 | GET | `/public/manuscript-styles` | Public | Constructor / DOCX style profiles. |
+| POST | `/public/search/click` | Public | Record a Typesense click event for search analytics. Body: `{ q, docId, userId? }`. No-op when Typesense is disabled. Fire-and-forget (always 204). |
 
 Legacy alias `GET /publications` may redirect or mirror catalog list depending on deployment; prefer `/public/submissions`.
+
+### Editor search curation (Typesense)
+
+Requires `TYPESENSE_ENABLED=true`. All routes need JWT + `submission.view_editor_queue` permission; `reindex` additionally requires `users.manage_roles` (journal manager).
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/editor/search/status` | Typesense collection health and indexed document count. |
+| GET | `/editor/search/analytics` | Top 20 searched queries and top 20 zero-result queries (from Typesense analytics rules). |
+| POST | `/editor/search/reindex` | Trigger a full background reindex of all published submissions. Returns 202; 409 when already running. |
+| GET | `/editor/search/overrides` | List all search result override rules. |
+| PUT | `/editor/search/overrides/:id` | Create or update an override (pin / exclude documents for a query). Body: `{ rule: { query, match }, includes?: [...], excludes?: [...] }`. |
+| DELETE | `/editor/search/overrides/:id` | Delete an override (204). |
+| GET | `/editor/search/synonyms` | List all synonym rules (multi-way and one-way). |
+| PUT | `/editor/search/synonyms/:id` | Create or update a synonym rule. Body: `{ synonyms: string[], root?: string }`. |
+| DELETE | `/editor/search/synonyms/:id` | Delete a synonym (204). |
+
+**Background sync:** `SearchSyncService` runs every 5 minutes (incremental, checkpoint-based) and bootstraps on startup. Published submissions are automatically upserted; unpublished/deleted ones are removed. Weighted query fields: `title` (4), `titleAr` (3), `keywords` (4), `keywordsAr` (3), `abstract` (2), `abstractAr` (2), `authorDisplayName` (1). Facets: `disciplines` (`string[]`), `articleType`. Catalog `discipline` query param filters by overlap (any-of).
+
+### Audit log
+
+Every non-health API request is recorded in `audit_log` (sampled by `AUDIT_SAMPLE_RATE` in `backend/.env`, default `1.0`). Sensitive fields (password, token, OTP) are automatically redacted in the stored request body.
+
+| Method | Path | Who | Notes |
+|--------|------|-----|--------|
+| GET | `/audit/logs` | `audit.log.view` permission | Query params: `userId`, `startDate` (ISO-8601), `endDate`, `method`, `routePattern`, `actionType`, `resourceType`, `resourceId`, `page` (default 1), `limit` (1–100, default 20). Returns `{ items, total, page, limit }`. |
 
 ---
 
@@ -256,8 +293,9 @@ Persisted per-user inbox (PostgreSQL `notifications`). Live updates via SSE whil
 
 ## Health
 
-| Method | Path | Who |
-|--------|------|-----|
-| GET | `/health` | Public |
+| Method | Path | Who | Notes |
+|--------|------|-----|-------|
+| GET | `/health` | Public | Liveness — always returns 200 with `{ status, db, ... }`. |
+| GET | `/health/outbox` | Public | Outbox stats: pending, published, dead counts + oldest pending row. |
 
-Use for load balancers and first vertical slice smoke tests.
+Use for load balancers and first vertical slice smoke tests. Neither endpoint is throttled. Email-service exposes its own probes at `http://127.0.0.1:5244/health` (liveness) and `http://127.0.0.1:5244/ready` (readiness; checks DB and AMQP; returns 503 if degraded).

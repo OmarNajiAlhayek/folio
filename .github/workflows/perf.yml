@@ -12,7 +12,7 @@ concurrency:
 jobs:
   perf:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +36,10 @@ jobs:
       - name: Install backend dependencies
         run: npm ci
         working-directory: backend
+
+      - name: Install nest-observability
+        run: npm ci
+        working-directory: packages/nest-observability
 
       - name: Install ai-service (dev)
         run: pip install -e ".[dev]"
@@ -73,8 +77,12 @@ jobs:
           AI_SERVICE_GRPC_PORT: '5246'
           AUTH_RETURN_BEARER: 'true'
           THROTTLE_DEFAULT_LIMIT: '10000'
+          THROTTLE_PUBLIC_LIMIT: '10000'
           THROTTLE_LOGIN_LIMIT: '10000'
+          THROTTLE_UPLOAD_LIMIT: '10000'
           SEED_PERF_FIXTURES: '1'
+          SEED_PERF_QUEUE_COUNT: '200'
+          SEED_PERF_PUBLISHED_COUNT: '100'
 
       - name: Prepare perf auth tokens
         run: node perf/setup.mjs
@@ -82,9 +90,17 @@ jobs:
           FOLIO_API_BASE: http://localhost:5243/api/v1
 
       - name: Run performance harness
-        run: node perf/run.mjs --ci --skip-setup
+        run: node perf/run.mjs --ci --skip-setup --skip-advanced
         env:
           FOLIO_API_BASE: http://localhost:5243/api/v1
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USERNAME: postgres
+          DB_PASSWORD: changeme
+          DB_DATABASE: folio_review
+          TYPEORM_MAX_QUERY_EXECUTION_TIME_MS: '200'
+          OTEL_TRACES_EXPORTER: none
+          AUDIT_SAMPLE_RATE: '0.25'
 
       - name: Upload perf reports
         if: always()

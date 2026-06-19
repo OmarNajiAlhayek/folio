@@ -38,6 +38,7 @@
 - View / edit **reminder policy** (due-soon / overdue thresholds)
 - Monitor **email pipeline status** (outbox depth, email log, reminder queue, RabbitMQ queue depths)
 - Preview rendered email templates before saving
+- **Search curation** (Typesense, when `TYPESENSE_ENABLED=true`): view collection status and indexed document count (`GET /editor/search/status`), view search analytics — top queries and zero-result queries (`GET /editor/search/analytics`), manage search result overrides and synonym rules
 - **AI-assisted (optional):** corpus similarity report; suggested reviewers from vector matching
 
 ### 2b. Journal manager
@@ -45,6 +46,8 @@
 - **User onboarding:** assign `reviewer` and `copyeditor` via `PATCH /users/:id/roles`; invite `editor` / `journal_manager` via role invitations
 - **Email platform:** manage templates, reminder policy, pipeline status (same admin surfaces as editors with `email.manage_reminders`)
 - **Queue oversight:** browse editor queue and submission detail (without replacing handling-editor decisions unless also an editor)
+- **Search reindex:** trigger full Typesense reindex via `POST /editor/search/reindex` (requires `users.manage_roles`)
+- **Audit log:** query request audit trail at `GET /audit/logs` (requires `audit.log.view` permission); filters by user, date range, HTTP method, route, action type, resource
 
 ### 3. Reviewer
 - View **pending assignments** (`invited` status)
@@ -75,7 +78,9 @@
 - **Outbox drainer** — polls `OutboundEvent` rows and publishes to RabbitMQ `folio.events` exchange
 - **Email consumer** — `reviewer.invited`, `reminder.due`, copyedit events (`copyedit.assigned`, `copyedit.queries_sent`, `copyedit.author_ready`), editorial events (`submission.submitted`, `submission.decision`, `submission.published`), review events (`review.submitted`, `review.invitation_accepted`, `review.invitation_declined`), `role.invitation`
 - **Reminders scheduler** — `@Cron` every minute; publishes `reminder.due` for past-due reminders → renders + sends reminder email, updates email log
-- **Health checks** — `GET /health`, `GET /health/outbox`
+- **Typesense sync** — `SearchSyncService` bootstraps on startup and runs incremental syncs every 5 minutes (checkpoint-based); upserts published submissions, removes unpublished ones. Analytics rules (popular-queries, nohits-queries) ensured on bootstrap. Reader click events recorded via `POST /public/search/click` (fire-and-forget)
+- **Audit middleware** — records every non-health request to `audit_log` (user, IP, method, path, status, duration, request body with sensitive fields redacted). Sampled at `AUDIT_SAMPLE_RATE` (default 1.0)
+- **Health checks** — `GET /health`, `GET /health/outbox`; email-service: `GET /health` (liveness), `GET /ready` (readiness)
 
 ---
 
@@ -109,5 +114,8 @@ Editors move a submission to `under_review` with `PATCH /submissions/:slug/statu
 | **DOCX export** | Constructor content → `.docx` via manuscript style profile (typography, margins, headings). |
 | **Email microservice** | Decoupled via RabbitMQ; DB-backed templates editable at runtime; SMTP or noop provider. |
 | **AI microservice** | Optional gRPC features: discipline, keywords, similarity, plagiarism/corpus, reviewer matching, copyedit reference cross-check — toggled per env (see [`plans/ai-service.md`](./plans/ai-service.md)). Copyedit grammar uses LanguageTool (Nest HTTP, Docker in `docker-compose.dev.yml`). |
+| **Typesense search** | Optional full-text search for publication catalog (`TYPESENSE_ENABLED=true`). Weighted multi-field matching, typo tolerance, prefix search, facets. Background incremental sync. Editor curation API: overrides, synonyms, analytics. |
+| **ORCID OAuth** | Optional `ORCID_ENABLED=true` — Sign in with ORCID and account linking. Sandbox and production ORCID endpoints supported. |
+| **Audit log** | Every API request sampled at `AUDIT_SAMPLE_RATE` and stored in `audit_log` with user, IP, method, path, status, duration, action/resource classification. Queryable by journal managers with `audit.log.view`. |
 | **In-app notifications** | REST inbox + SSE live updates (header bell); copyedit, review, and editorial events. See [`API-NOTES.md`](./API-NOTES.md) § In-app notifications. |
 | **Tests** | Jest (backend unit + e2e), Vitest (frontend lib), Playwright (frontend e2e + auth cross-tab), pytest (ai-service). |

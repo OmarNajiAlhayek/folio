@@ -1,0 +1,81 @@
+name: Performance smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'perf/**'
+      - 'backend/src/**'
+      - '.github/workflows/perf-smoke.yml'
+
+concurrency:
+  group: perf-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Start stack
+        run: docker compose -f docker-compose.local.yml up -d --wait
+        env:
+          COMPOSE_HTTP_TIMEOUT: 300
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5243/api/v1/health >/dev/null && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - name: Seed perf fixtures (reduced volume)
+        run: npm run seed:perf
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USERNAME: postgres
+          DB_PASSWORD: changeme
+          DB_DATABASE: folio_review
+          AUTH_RETURN_BEARER: 'true'
+          THROTTLE_DEFAULT_LIMIT: '10000'
+          THROTTLE_PUBLIC_LIMIT: '10000'
+          THROTTLE_LOGIN_LIMIT: '10000'
+          THROTTLE_UPLOAD_LIMIT: '10000'
+          SEED_PERF_FIXTURES: '1'
+          SEED_PERF_REVIEW_COUNT: '5'
+          SEED_PERF_EMAIL_COUNT: '5'
+          SEED_PERF_QUEUE_COUNT: '20'
+          SEED_PERF_PUBLISHED_COUNT: '10'
+
+      - name: Run perf smoke suites
+        run: |
+          node perf/setup.mjs
+          node perf/run.mjs --ci --skip-setup --only review-submit
+          node perf/run.mjs --ci --skip-setup --only editor-queue
+        env:
+          FOLIO_API_BASE: http://localhost:5243/api/v1
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USERNAME: postgres
+          DB_PASSWORD: changeme
+          DB_DATABASE: folio_review
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f docker-compose.local.yml down -v

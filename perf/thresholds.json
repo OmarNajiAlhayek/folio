@@ -1,8 +1,18 @@
 {
+  "profiles": {
+    "local": {
+      "emailPipeline": {
+        "drainSecondsMax": 150
+      }
+    },
+    "ci": {}
+  },
   "reviewSubmit": {
+    "vus": 20,
     "httpReqDurationP95Ms": 2000,
     "httpReqDurationP99Ms": 5000,
-    "httpReqFailedRate": 0.01
+    "httpReqFailedRate": 0.01,
+    "checksRateMin": 0.99
   },
   "emailPipeline": {
     "drainSecondsMax": 120,
@@ -13,5 +23,118 @@
     "syncRpcP95Ms": 500,
     "corpusJobsCount": 10,
     "corpusJobsDrainSecondsMax": 180
+  },
+  "editorQueue": {
+    "vus": 10,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 1000,
+    "httpReqFailedRate": 0.01
+  },
+  "reviewerInbox": {
+    "vus": 10,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 1000,
+    "httpReqFailedRate": 0.01
+  },
+  "authLogin": {
+    "vus": 20,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 2000,
+    "httpReqFailedRate": 0.01
+  },
+  "publicSearch": {
+    "vus": 15,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 1500,
+    "httpReqFailedRate": 0.01
+  },
+  "notifications": {
+    "vus": 10,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 1000,
+    "httpReqFailedRate": 0.01
+  },
+  "submissionDetail": {
+    "vus": 10,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 2000,
+    "httpReqFailedRate": 0.01
+  },
+  "fileUpload": {
+    "vus": 5,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 5000,
+    "httpReqFailedRate": 0.05
+  },
+  "auditStress": {
+    "vus": 10,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 1500,
+    "httpReqFailedRate": 0.01
+  },
+  "writeReadConcurrent": {
+    "readerVus": 15,
+    "writerVus": 8,
+    "rampUpSeconds": 20,
+    "sustainSeconds": 90,
+    "rampDownSeconds": 10,
+    "httpReqDurationP95Ms": 1500,
+    "writeDurationP95Ms": 2000,
+    "httpReqFailedRate": 0.01
+  },
+  "poolStress": {
+    "httpReqFailedRate": 0.05,
+    "httpReqDurationMaxMs": 30000,
+    "recoveryP95Ms": 3000
+  },
+  "soak": {
+    "durationMinutes": 30,
+    "arrivalRatePerSecond": 5,
+    "httpReqFailedRate": 0.001,
+    "httpReqDurationP95Ms": 2000,
+    "p95DriftPercentMax": 30
+  },
+  "typesense": {
+    "rps": 50,
+    "concurrency": 5,
+    "durationSeconds": 30,
+    "searchP95Ms": 100
+  },
+  "database": {
+    "slowQueryP95Ms": 500,
+    "maxSeqScanRatio": 0.1,
+    "topQueryCount": 20,
+    "hotTables": [
+      "submissions",
+      "review_assignments",
+      "audit_log",
+      "outbound_event_outbox"
+    ]
+  },
+  "queryBudgets": {
+    "editorQueueList": 50,
+    "reviewerInboxList": 50,
+    "reviewSubmitTx": 200,
+    "assignmentBySlug": 25,
+    "outboxClaim": 100
+  },
+  "regression": {
+    "maxP95DriftPercent": 20
   }
 }

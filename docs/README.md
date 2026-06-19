@@ -11,6 +11,7 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 | [`feature-report.md`](./feature-report.md) | Features and workflows by role |
 | [`DATA-MODEL.md`](./DATA-MODEL.md) | Entities, submission lifecycle, ERD |
 | [`API-NOTES.md`](./API-NOTES.md) | REST contract, auth, rate limits, events, notifications |
+| [`authorization.md`](./authorization.md) | RBAC layers — route guard vs service caller/resource checks |
 | [`PREP-STEPS.md`](./PREP-STEPS.md) | Prerequisites and run-order checklist |
 
 ## Plans and design records
@@ -29,6 +30,8 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 | Document | Purpose |
 |----------|---------|
 | [`OBSERVABILITY.md`](./OBSERVABILITY.md) | Structured JSON logs, trace/request correlation, OTLP export |
+| [`testing-performance.md`](./testing-performance.md) | k6/gRPC perf harness, DB snapshots, thresholds, CI |
+| [`slo.md`](./slo.md) | Production SLO tiers (separate from local perf baselines) |
 | [`testing-email-pipeline.md`](./testing-email-pipeline.md) | Email admin API, pipeline smoke tests, DLQ/requeue runbooks |
 | [`../email-details.md`](../email-details.md) | Informal email walkthrough (may drift — prefer `plans/email-service.md`) |
 
@@ -59,9 +62,19 @@ Central map of specs, runbooks, and design records. For local setup and sample a
 
 ## Local infrastructure (Docker Compose)
 
-[`docker-compose.dev.yml`](../docker-compose.dev.yml) provides:
+[`docker-compose.dev.yml`](../docker-compose.dev.yml) provides five services (start all or individually):
 
-- **RabbitMQ** — AMQP `5672`, management UI `http://localhost:15672` (email pipeline)
-- **LanguageTool** — HTTP `http://localhost:8010` (copyedit grammar/spelling; Nest-only, not ai-service)
+| Service | Port | Purpose |
+|---------|------|---------|
+| `postgres` | host **5434** → container 5432 | Main app DB (`folio_review`); `pgvector/pgvector:pg17` image |
+| `postgres-email` | host **5433** → container 5432 | Email service DB (`folio_email`) |
+| `rabbitmq` | AMQP **5672**, UI **15672** (guest/guest) | Event bus for email pipeline |
+| `languagetool` | **8010** | Copyedit grammar/spelling (`LANGUAGE_TOOL_ENABLED=true`) |
+| `typesense` | **8108** | Full-text publication search (`TYPESENSE_ENABLED=true`; API key `xyz` by default) |
 
-Start all: `docker compose -f docker-compose.dev.yml up -d`. Start LanguageTool alone: `... up -d languagetool`.
+```bash
+docker compose -f docker-compose.dev.yml up -d              # all services
+docker compose -f docker-compose.dev.yml up -d typesense    # single service
+```
+
+**Full stack in Docker:** [`docker-compose.local.yml`](../docker-compose.local.yml) runs infra + all app services together. Do **not** run both compose files at the same time (shared ports).

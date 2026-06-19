@@ -1,8 +1,8 @@
 # Local development infrastructure for Folio.
 #
-# Provides PostgreSQL, RabbitMQ, and LanguageTool so you can run the app
-# services (backend, frontend, email-service, ai-service) natively with hot
-# reload.  Run all infra:
+# Provides PostgreSQL, RabbitMQ, LanguageTool, and Typesense so you can run
+# the app services (backend, frontend, email-service, ai-service) natively
+# with hot reload.  Run all infra:
 #
 #   docker compose -f docker-compose.dev.yml up -d
 #
@@ -11,6 +11,7 @@
 #   docker compose -f docker-compose.dev.yml up -d postgres-email
 #   docker compose -f docker-compose.dev.yml up -d rabbitmq
 #   docker compose -f docker-compose.dev.yml up -d languagetool
+#   docker compose -f docker-compose.dev.yml up -d typesense
 #
 # To run EVERYTHING in Docker (infra + all app services) use the full stack
 # compose instead:
@@ -23,8 +24,9 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: folio-postgres
+    # Host 5434 avoids clashing with a local PostgreSQL install on 5432 (common on Windows).
     ports:
-      - "5432:5432"
+      - "5434:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: changeme
@@ -88,7 +90,28 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Full-text search engine. Enable with TYPESENSE_ENABLED=true in backend/.env.
+  # API key matches the default in backend/.env.example.
+  typesense:
+    image: typesense/typesense:26.0
+    container_name: folio-typesense
+    ports:
+      - "8108:8108"
+    command: >
+      --data-dir /data
+      --api-key=xyz
+      --enable-cors
+    volumes:
+      - folio-typesense-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8108/health | grep -q 'ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   folio-postgres-data:
   folio-postgres-email-data:
   folio-rabbitmq-data:
+  folio-typesense-data:

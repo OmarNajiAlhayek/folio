@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "setup": "node setup.mjs",
-    "run": "node run.mjs"
+    "run": "node run.mjs",
+    "generate-thresholds": "node scripts/generate-k6-thresholds.mjs",
+    "test": "node --test scripts/*.test.mjs"
   }
 }

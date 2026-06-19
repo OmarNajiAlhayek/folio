@@ -1,0 +1,32 @@
+{
+  "editorQueueList": {
+    "maxP95Ms": 50,
+    "queryPattern": "from \"submissions\"",
+    "queryType": "select",
+    "description": "Editor queue list — SELECT from submissions ordered by updated_at"
+  },
+  "reviewerInboxList": {
+    "maxP95Ms": 50,
+    "queryPattern": "from \"review_assignments\"",
+    "queryType": "select",
+    "description": "Reviewer inbox — SELECT from review_assignments filtered by reviewer_id"
+  },
+  "reviewSubmitTx": {
+    "maxP95Ms": 200,
+    "queryPattern": "into \"reviews\"",
+    "queryType": "insert",
+    "description": "Review submission transaction — INSERT into reviews"
+  },
+  "assignmentBySlug": {
+    "maxP95Ms": 25,
+    "queryPattern": "\"review_assignments\" where",
+    "queryType": "select",
+    "description": "Assignment lookup by slug — SELECT from review_assignments WHERE slug = $1"
+  },
+  "outboxClaim": {
+    "maxP95Ms": 100,
+    "queryPattern": "from \"outbound_event_outbox\"",
+    "queryType": "select",
+    "description": "Outbox claim SELECT ... FOR UPDATE SKIP LOCKED"
+  }
+}
