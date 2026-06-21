@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "postapiv1authloginwithvalidcredentials",
+    "description": "Test login endpoint with valid email and password to ensure it returns 200 status with JWT cookies and AuthUser data."
+  },
+  {
+    "id": "TC002",
+    "title": "postapiv1authregisterwithvaliddata",
+    "description": "Test registration endpoint with valid email, password, and displayName to ensure it creates a new user and returns 201 with AuthUser data."
+  },
+  {
+    "id": "TC003",
+    "title": "getapiv1authmewithauthenticatedsession",
+    "description": "Test retrieval of current authenticated user profile with valid session cookie to ensure it returns 200 with user profile data."
+  },
+  {
+    "id": "TC004",
+    "title": "postapiv1submissionscreatesubmissiondraft",
+    "description": "Test creating a new draft submission as an authenticated author to ensure it returns 201 with the new Submission draft."
+  },
+  {
+    "id": "TC005",
+    "title": "postapiv1submissionsslugsubmitwithauthenticatedsession",
+    "description": "Test submitting a manuscript for editorial review with authenticated session to ensure it returns 200 with updated Submission in submitted status."
+  },
+  {
+    "id": "TC006",
+    "title": "patchapiv1submissionsslugstatuswithvalidtransition",
+    "description": "Test editor updating submission workflow status with a valid status transition to ensure it returns 200 with updated Submission status."
+  },
+  {
+    "id": "TC007",
+    "title": "getapiv1assignmentsmewithauthenticatedreviewer",
+    "description": "Test listing review assignments for the current authenticated reviewer to ensure it returns 200 with ReviewAssignment array."
+  },
+  {
+    "id": "TC008",
+    "title": "postapiv1assignmentsslugacceptwithauthenticatedreviewer",
+    "description": "Test accepting a review invitation as an authenticated reviewer to ensure it returns 200 with accepted ReviewAssignment."
+  },
+  {
+    "id": "TC009",
+    "title": "postapiv1assignmentsslugreviewswithvaliddata",
+    "description": "Test submitting a completed peer review with valid recommendation and comments to ensure it returns 201 with created Review."
+  },
+  {
+    "id": "TC010",
+    "title": "getapiv1notificationswithauthenticatedsession",
+    "description": "Test retrieving paginated notifications for the current authenticated user to ensure it returns 200 with NotificationPage data."
+  }
+]

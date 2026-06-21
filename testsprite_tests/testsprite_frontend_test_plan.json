@@ -1,0 +1,1041 @@
+[
+  {
+    "id": "TC001",
+    "title": "Register and reach the authenticated profile",
+    "description": "This verifies that a new user can register, log in, and land on the authenticated profile view with their session active.",
+    "category": "Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /register"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the display name field with a valid name"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authenticated profile is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the current user session is loaded"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Register and begin the author workflow",
+    "description": "An author can register, log in, reach their account session page, and start the draft submission workflow.",
+    "category": "Author submission workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /register"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the registration form with valid author details"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authenticated session page is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Create a draft submission as an author",
+    "description": "This verifies that an authenticated author can create a new draft submission from the submissions area.",
+    "category": "Submissions workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the submissions area"
+      },
+      {
+        "type": "action",
+        "description": "Start a new submission draft"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a draft submission is created"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new submission is visible in the submissions area"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Open a draft submission and submit it for review",
+    "description": "This verifies that an author can open a draft submission, review its detail page, and submit it for editorial review.",
+    "category": "Submissions workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the submissions area"
+      },
+      {
+        "type": "action",
+        "description": "Open the draft submission detail"
+      },
+      {
+        "type": "action",
+        "description": "Submit the manuscript for editorial review"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission detail reflects a submitted state"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission is no longer a draft"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Create, open, and submit a manuscript draft",
+    "description": "An authenticated author can create a draft submission, open its detail page, and submit it for editorial review.",
+    "category": "Author submission workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to create a new draft submission"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the submission title field with a unique manuscript title"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the submission abstract field with a valid abstract"
+      },
+      {
+        "type": "action",
+        "description": "Save the draft submission"
+      },
+      {
+        "type": "action",
+        "description": "Open the submission detail page"
+      },
+      {
+        "type": "action",
+        "description": "Submit the manuscript for editorial review"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission detail view is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission is marked as submitted for review"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Reject invalid login credentials",
+    "description": "This verifies that logging in with incorrect credentials shows an authentication error and does not start a session.",
+    "category": "Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with a valid email value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with an invalid password value"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a login error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authenticated profile is not displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "Accept a review assignment and submit a completed review",
+    "description": "A reviewer can view their assignments, accept an invitation, and post a completed peer review with a recommendation and comments.",
+    "category": "Reviewer assignment inbox -> accept invitation -> submit structured peer review",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open review assignments"
+      },
+      {
+        "type": "action",
+        "description": "Accept a review invitation"
+      },
+      {
+        "type": "action",
+        "description": "Open the accepted assignment"
+      },
+      {
+        "type": "action",
+        "description": "Submit a completed review with a recommendation and comments"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the assignment is marked as accepted"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the completed review is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Reviewer accepts an assignment and submits a completed review",
+    "description": "This verifies that a reviewer can open their assignments, accept an invitation, and submit a full peer review with recommendation and comments.",
+    "category": "Review assignments",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the assignments area"
+      },
+      {
+        "type": "action",
+        "description": "Open an assignment"
+      },
+      {
+        "type": "action",
+        "description": "Accept the review invitation"
+      },
+      {
+        "type": "action",
+        "description": "Start the review form"
+      },
+      {
+        "type": "action",
+        "description": "Select a recommendation value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the author comments field with a valid review comment"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the editor-only comments field with a valid internal note"
+      },
+      {
+        "type": "action",
+        "description": "Submit the review"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the assignment is marked as accepted"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the completed review is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Review and advance a submission status",
+    "description": "An editor can open the submissions queue, review a submission, and move it to the next valid workflow state.",
+    "category": "Editor review queue and workflow transitions",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the submissions queue"
+      },
+      {
+        "type": "action",
+        "description": "Open a submission from the queue"
+      },
+      {
+        "type": "action",
+        "description": "Change the submission to the next valid workflow status"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission detail page is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated workflow status is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "Editor reviews the submissions queue and updates workflow status",
+    "description": "This verifies that an editor can open the submissions queue, review a submission, and move it to the next valid workflow state.",
+    "category": "Submissions workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the submissions queue"
+      },
+      {
+        "type": "action",
+        "description": "Open a submission from the queue"
+      },
+      {
+        "type": "action",
+        "description": "Update the submission to the next valid workflow status"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated submission status is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission remains visible in the editor workflow"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "View unread notifications and open a related item",
+    "description": "An authenticated user can open the notifications inbox, see unread counts, and navigate to a related workflow item from a notification.",
+    "category": "Notifications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open notifications"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the notifications inbox is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an unread notification count is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "Block registration with missing required information",
+    "description": "This verifies that the registration form surfaces validation errors when required fields are omitted or invalid.",
+    "category": "Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /register"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form without entering required details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify registration validation errors are visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the account is not created"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Open the reviewer assignment inbox",
+    "description": "A reviewer can log in and see their assignment inbox with pending review invitations.",
+    "category": "Reviewer assignment inbox -> accept invitation -> submit structured peer review",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open review assignments"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the review assignment inbox is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify pending assignments are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "Browse unread notifications and open the related item",
+    "description": "This verifies that an authenticated user can open the notifications inbox, see unread notifications, and navigate to the related workflow item.",
+    "category": "Notifications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the notifications inbox"
+      },
+      {
+        "type": "action",
+        "description": "Open an unread notification"
+      },
+      {
+        "type": "action",
+        "description": "Click through to the related workflow item"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the notifications inbox is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the related workflow item is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC015",
+    "title": "Open the authenticated notifications page from another workflow",
+    "description": "An authenticated user can open notifications from within the app and return to the related workflow item from the inbox.",
+    "category": "Notifications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open notifications"
+      },
+      {
+        "type": "action",
+        "description": "Click the related workflow item from a notification"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the related workflow page is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the notification remains accessible from the inbox"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC016",
+    "title": "Page through the notifications inbox",
+    "description": "This verifies that an authenticated user can browse paginated notifications and see the unread count reflected in the inbox.",
+    "category": "Notifications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the notifications inbox"
+      },
+      {
+        "type": "action",
+        "description": "Go to the next notifications page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a paginated notifications list is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the unread notifications count is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC017",
+    "title": "Browse notification inbox pages",
+    "description": "An authenticated user can move through multiple pages of notifications and continue seeing inbox content.",
+    "category": "Notifications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open notifications"
+      },
+      {
+        "type": "action",
+        "description": "Go to the next page of notifications"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify notification inbox content is displayed on the next page"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC018",
+    "title": "Open the public publications catalog",
+    "description": "An unauthenticated reader can open the public catalog and browse published submissions.",
+    "category": "Public publications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /publications"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the public publications catalog is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify published submissions are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC019",
+    "title": "Browse the public publications catalog as a visitor",
+    "description": "This verifies that an unauthenticated reader can open the public catalog and browse published submissions.",
+    "category": "Public publications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the public publications catalog"
+      },
+      {
+        "type": "action",
+        "description": "Open a published submission from the catalog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify published submissions are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a publication detail view is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC020",
+    "title": "Require review details before submitting a peer review",
+    "description": "This verifies that the review form shows validation errors when required recommendation or comments are missing.",
+    "category": "Review assignments",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the assignments area"
+      },
+      {
+        "type": "action",
+        "description": "Open an assignment"
+      },
+      {
+        "type": "action",
+        "description": "Start the review form without entering required review details"
+      },
+      {
+        "type": "action",
+        "description": "Submit the review"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify review validation errors are visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the review is not submitted"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC021",
+    "title": "Block submission when the email is not verified",
+    "description": "An authenticated author sees a blocking validation state when attempting to submit a manuscript without a verified email.",
+    "category": "Author submission workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to create a new draft submission"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the submission title field with a unique manuscript title"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the submission abstract field with a valid abstract"
+      },
+      {
+        "type": "action",
+        "description": "Save the draft submission"
+      },
+      {
+        "type": "action",
+        "description": "Submit the manuscript for editorial review"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an email verification blocking message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission remains in draft state"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC022",
+    "title": "Show email verification blocking submission submission",
+    "description": "This verifies that submission is prevented when the author account is not email verified and the UI shows a blocking validation state.",
+    "category": "Submissions workflow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the submissions area"
+      },
+      {
+        "type": "action",
+        "description": "Open a draft submission detail"
+      },
+      {
+        "type": "action",
+        "description": "Submit the manuscript for editorial review"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an email verification blocking message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission remains in draft state"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC023",
+    "title": "View an empty public publications catalog",
+    "description": "An unauthenticated reader can see an empty state when no published submissions are available.",
+    "category": "Public publications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /publications"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an empty state message is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no published submissions are displayed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC024",
+    "title": "View the health status page as ops",
+    "description": "This verifies that an ops user can open the health page and see the service liveness status.",
+    "category": "Health",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /health"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the health status is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the service is reported as healthy"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC025",
+    "title": "Handle an empty public publications catalog",
+    "description": "This verifies that the public catalog shows an empty state when no published submissions are available.",
+    "category": "Public publications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the public publications catalog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an empty state message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no published submissions are listed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC026",
+    "title": "Handle malformed public publication filters",
+    "description": "An unauthenticated reader sees validation feedback when opening the public catalog with malformed query parameters.",
+    "category": "Public publications",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /publications"
+      },
+      {
+        "type": "action",
+        "description": "Apply malformed public catalog filters"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify published submissions are not updated with invalid filters"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC027",
+    "title": "Check service health",
+    "description": "An ops user can open the health page and confirm the service is alive.",
+    "category": "Health",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /health"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the health status is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the service is reported as healthy"
+      }
+    ],
+    "priority": "Low"
+  }
+]
