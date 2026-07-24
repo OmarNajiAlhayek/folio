@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "e2e/**",
+    "**/e2e/**",
   ]),
   {
     files: ["src/**/*.{tsx,jsx}"],
