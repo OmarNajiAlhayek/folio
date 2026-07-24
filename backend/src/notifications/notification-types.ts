@@ -13,6 +13,7 @@ export const NOTIFICATION_TYPE = {
   SUBMISSION_PUBLISHED: 'submission_published',
   AI_CORPUS_SIMILARITY_COMPLETED: 'ai_corpus_similarity_completed',
   AI_CORPUS_SIMILARITY_FAILED: 'ai_corpus_similarity_failed',
+  SECTION_EDITOR_ASSIGNED: 'section_editor_assigned',
 } as const;
 
 export type NotificationType =
@@ -77,5 +78,9 @@ export const NOTIFICATION_I18N: Record<
   [NOTIFICATION_TYPE.AI_CORPUS_SIMILARITY_FAILED]: {
     titleKey: 'Notifications.corpusSimilarityFailed.title',
     bodyKey: 'Notifications.corpusSimilarityFailed.body',
+  },
+  [NOTIFICATION_TYPE.SECTION_EDITOR_ASSIGNED]: {
+    titleKey: 'Notifications.sectionEditorAssigned.title',
+    bodyKey: 'Notifications.sectionEditorAssigned.body',
   },
 };

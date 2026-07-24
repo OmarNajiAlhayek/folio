@@ -11,6 +11,8 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
+import { ManuscriptAnalysisService } from './manuscript-analysis.service';
+import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 
 import { AiClientService } from '../ai/ai-client.service';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
@@ -66,6 +68,8 @@ describe('SubmissionsService.suggestKeywordsPreview', () => {
         CopyeditWorkflowService,
         SubmissionLifecycleService,
         SubmissionAiService,
+        { provide: ManuscriptAnalysisService, useValue: {} },
+        { provide: PreSubmitAnalysisService, useValue: {} },
         { provide: getRepositoryToken(Submission), useValue: {} },
         { provide: getRepositoryToken(SubmissionFile), useValue: {} },
         { provide: getRepositoryToken(ReviewAssignment), useValue: {} },

@@ -51,7 +51,9 @@ export class ManuscriptStyleRegistryService {
    * Content field wins when present and known; otherwise default chain.
    * Unknown non-empty `manuscriptStyleId` → fail loud (do not fall back).
    */
-  resolveEffectiveStyleId(content: ConstructorContent | null | undefined): string {
+  resolveEffectiveStyleId(
+    content: ConstructorContent | null | undefined,
+  ): string {
     const trimmed = content?.manuscriptStyleId?.trim();
     if (trimmed) {
       this.throwIfUnknownStyleId(trimmed);
@@ -87,6 +89,7 @@ export class ManuscriptStyleRegistryService {
           extraMandatorySlots: p.constructor.extraMandatorySlots,
           recommendedPresets: p.constructor.recommendedPresets,
           requiredRichTextKinds: p.constructor.requiredRichTextKinds,
+          defaultDocumentDir: p.constructor.defaultDocumentDir,
         };
       }
       return entry;

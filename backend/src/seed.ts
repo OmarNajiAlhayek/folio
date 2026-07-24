@@ -1238,7 +1238,7 @@ async function run() {
     displayName: 'M. Journal Manager',
     roleSlugs: [ROLE_SLUGS.JOURNAL_MANAGER],
     profile: {
-      affiliation: 'Folio Journal — Editorial office',
+      affiliation: 'Damascus University Journal — Editorial office',
     },
   });
   const editor = await ensureUser(usersService, rbacService, {
@@ -1247,7 +1247,7 @@ async function run() {
     displayName: 'C. Editor',
     roleSlugs: [ROLE_SLUGS.EDITOR],
     profile: {
-      affiliation: 'Folio Journal — Editorial office',
+      affiliation: 'Damascus University Journal — Editorial office',
       reviewKeywords: null,
       willingToReview: false,
     },
@@ -1270,7 +1270,7 @@ async function run() {
     displayName: 'P. Copyeditor',
     roleSlugs: [ROLE_SLUGS.COPYEDITOR],
     profile: {
-      affiliation: 'Folio Journal — Editorial office',
+      affiliation: 'Damascus University Journal — Editorial office',
     },
   });
 

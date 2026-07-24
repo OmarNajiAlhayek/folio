@@ -10,6 +10,7 @@ import { Submission } from './submission.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
 import { UserRole } from './user-role.entity';
+import { UserSectionEditorDiscipline } from './user-section-editor-discipline.entity';
 
 @Entity('users')
 export class User extends BaseEntity {
@@ -68,4 +69,7 @@ export class User extends BaseEntity {
 
   @OneToMany(() => CopyeditAssignment, (a) => a.copyeditor)
   copyeditAssignments: CopyeditAssignment[];
+
+  @OneToMany(() => UserSectionEditorDiscipline, (d) => d.user)
+  sectionEditorDisciplines: UserSectionEditorDiscipline[];
 }

@@ -27,6 +27,8 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
+import { ManuscriptAnalysisService } from './manuscript-analysis.service';
+import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 
 /** Resolve slug lookups via {@link SubmissionAccessService.getBySlugOrThrow}. */
 export function mockSubmissionsRepoFindBySlug(
@@ -84,6 +86,8 @@ export function submissionsServiceTestProviders(
     CopyeditWorkflowService,
     SubmissionLifecycleService,
     SubmissionAiService,
+    ManuscriptAnalysisService,
+    PreSubmitAnalysisService,
     {
       provide: getRepositoryToken(Submission),
       useValue: mocks.submissionsRepo ?? {},

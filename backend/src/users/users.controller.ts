@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { CreateRoleInvitationDto } from './dto/create-role-invitation.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
 import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
+import { SetSectionEditorDisciplinesDto } from './dto/set-section-editor-disciplines.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
@@ -58,6 +60,27 @@ export class UsersController {
   @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR)
   copyeditorCandidates() {
     return this.usersService.listCopyeditorCandidates();
+  }
+
+  @Get('section-editor-candidates')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
+  sectionEditorCandidates() {
+    return this.usersService.listSectionEditorCandidates();
+  }
+
+  @Get(':id/section-editor-disciplines')
+  @AllowAuthenticated()
+  getSectionEditorDisciplines(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getSectionEditorDisciplines(id);
+  }
+
+  @Put(':id/section-editor-disciplines')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  setSectionEditorDisciplines(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetSectionEditorDisciplinesDto,
+  ) {
+    return this.usersService.setSectionEditorDisciplines(id, dto.disciplines);
   }
 
   @Post(':id/role-invitations')

@@ -13,6 +13,10 @@ import { open, readFile, rename, unlink, writeFile } from 'fs/promises';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
+import {
+  ReviewAssignment,
+  AssignmentStatus,
+} from '../entities/review-assignment.entity';
 import type { RequestUser } from '../common/types/request-user';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import {
@@ -25,6 +29,10 @@ import {
 } from './submission-file-upload.policy';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { SubmissionAccessService } from './submission-access.service';
+import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
+import { checkDocxFormat } from './docx-format-checker';
+import { LanguageToolService } from './language-tool.service';
+import mammoth from 'mammoth';
 
 @Injectable()
 export class SubmissionFileService {
@@ -33,7 +41,11 @@ export class SubmissionFileService {
     private readonly submissionsRepo: Repository<Submission>,
     @InjectRepository(SubmissionFile)
     private readonly filesRepo: Repository<SubmissionFile>,
+    @InjectRepository(ReviewAssignment)
+    private readonly assignmentsRepo: Repository<ReviewAssignment>,
     private readonly access: SubmissionAccessService,
+    private readonly manuscriptStyles: ManuscriptStyleRegistryService,
+    private readonly languageTool: LanguageToolService,
   ) {}
 
   uploadRoot(): string {
@@ -244,16 +256,80 @@ export class SubmissionFileService {
     }
 
     try {
-      return await this.persistSubmissionFile({
+      const saved = await this.persistSubmissionFile({
         submissionId: s.id,
         source: { type: 'path', path: tempPath },
         originalName: file.originalname,
         kind,
         sizeBytes: file.size,
       });
+
+      if (
+        kind === 'manuscript' &&
+        file.originalname.toLowerCase().endsWith('.docx')
+      ) {
+        const destPath = join(this.uploadRoot(), saved.storageKey);
+        await this.runDocxFormatCheck(s, destPath);
+        await this.runDocxGrammarCheck(s, destPath);
+      }
+
+      return saved;
     } catch (e) {
       await this.unlinkUploadTemp(file);
       throw e;
+    }
+  }
+
+  private async runDocxFormatCheck(
+    submission: Submission,
+    filePath: string,
+  ): Promise<void> {
+    try {
+      const buffer = await readFile(filePath);
+      const styleId = this.manuscriptStyles.resolveEffectiveStyleId(
+        submission.constructorContent ?? null,
+      );
+      const profile = this.manuscriptStyles.getProfile(styleId);
+      const disciplines = submission.disciplines ?? [];
+      const isEngineering = disciplines.includes('العلوم الهندسية');
+      const isMedical = disciplines.includes('العلوم الطبية');
+      const discipline = isMedical
+        ? 'medical'
+        : isEngineering
+          ? 'engineering'
+          : disciplines.length > 0
+            ? 'other'
+            : undefined;
+      const violations = await checkDocxFormat(buffer, profile, {
+        expectedColumns: isEngineering ? 2 : 1,
+        discipline,
+      });
+      submission.docxManuscriptViolations = violations;
+      await this.submissionsRepo.save(submission);
+    } catch {
+      // Format check is non-fatal — don't block the upload
+    }
+  }
+
+  private async runDocxGrammarCheck(
+    submission: Submission,
+    filePath: string,
+  ): Promise<void> {
+    if (!this.languageTool.isEnabled()) return;
+    try {
+      const buffer = await readFile(filePath);
+      const { value: text } = await mammoth.extractRawText({ buffer });
+      const notes = await this.languageTool.check(text);
+      submission.docxGrammarNotes = notes.map(
+        ({ excerpt, suggestion, rule }) => ({
+          excerpt,
+          suggestion,
+          rule,
+        }),
+      );
+      await this.submissionsRepo.save(submission);
+    } catch {
+      // Grammar check is non-fatal — don't block the upload
     }
   }
 
@@ -299,7 +375,19 @@ export class SubmissionFileService {
     );
     const isAuthor = sub.authorId === user.sub;
     if (!isEditor && !isAuthor) {
-      if (file.fileStage !== SubmissionFileStage.REVIEW) {
+      // Review-response files are only visible to the reviewer who uploaded them
+      if (file.kind === 'review_response' && file.reviewAssignmentId) {
+        const assignment = await this.assignmentsRepo.findOne({
+          where: { id: file.reviewAssignmentId },
+          select: ['reviewerId'],
+        });
+        if (!assignment || assignment.reviewerId !== user.sub) {
+          throw new ForbiddenException({
+            message: 'Access denied',
+            code: 'FORBIDDEN',
+          });
+        }
+      } else if (file.fileStage !== SubmissionFileStage.REVIEW) {
         throw new ForbiddenException({
           message: 'Reviewers may only access files in the review package',
           code: 'FORBIDDEN',
@@ -307,6 +395,78 @@ export class SubmissionFileService {
       }
     }
     return { file, path: join(this.uploadRoot(), file.storageKey) };
+  }
+
+  async listReviewerFiles(
+    assignmentSlug: string,
+    reviewerId: string,
+  ): Promise<SubmissionFile[]> {
+    const assignment = await this.assignmentsRepo.findOne({
+      where: { slug: assignmentSlug, reviewerId },
+    });
+    if (!assignment) {
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    return this.filesRepo.find({
+      where: { reviewAssignmentId: assignment.id, kind: 'review_response' },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async addReviewerFile(
+    assignmentSlug: string,
+    reviewerId: string,
+    file: Express.Multer.File,
+  ): Promise<SubmissionFile> {
+    const assignment = await this.assignmentsRepo.findOne({
+      where: { slug: assignmentSlug, reviewerId },
+    });
+    if (!assignment) {
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    if (assignment.status !== AssignmentStatus.ACCEPTED) {
+      throw new BadRequestException({
+        message: 'Accept the review invitation before uploading files',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const kind: SubmissionFileKind = 'review_response';
+    if (!isExtensionAllowedForKind(file.originalname, kind)) {
+      await this.unlinkUploadTemp(file);
+      throw new BadRequestException({
+        message:
+          'Only PDF and DOCX files are accepted as review response files',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (!file.path) {
+      throw new BadRequestException({
+        message: 'Upload temp file missing',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    try {
+      const saved = await this.persistSubmissionFile({
+        submissionId: assignment.submissionId,
+        source: { type: 'path', path: file.path },
+        originalName: file.originalname,
+        kind,
+        sizeBytes: file.size,
+      });
+      // Link file to this specific assignment and mark as review stage
+      saved.reviewAssignmentId = assignment.id;
+      saved.fileStage = SubmissionFileStage.REVIEW;
+      return this.filesRepo.save(saved);
+    } catch (e) {
+      await this.unlinkUploadTemp(file);
+      throw e;
+    }
   }
 
   async deleteFile(

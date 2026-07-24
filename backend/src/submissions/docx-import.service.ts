@@ -32,7 +32,18 @@ type Element = DefaultTreeAdapterMap['element'];
 type ChildNode = DefaultTreeAdapterMap['childNode'];
 type TextNode = DefaultTreeAdapterMap['textNode'];
 
-const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'table']);
+const BLOCK_TAGS = new Set([
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'ul',
+  'ol',
+  'table',
+]);
 
 const INLINE_ALLOWED = new Set([
   'strong',
@@ -47,11 +58,11 @@ const INLINE_ALLOWED = new Set([
   'li',
 ]);
 
-const ABSTRACT_HEADING_EN = /^\s*abstract\s*$/i;
-const ABSTRACT_HEADING_AR = /^\s*الملخص\s*$/;
+const ABSTRACT_HEADING_EN = /^\s*abstract\s*:?\s*$/i;
+const ABSTRACT_HEADING_AR = /^\s*الملخص\s*:?\s*$/;
 const REFERENCES_HEADING =
-  /^\s*(references|bibliography|works\s+cited|literature\s+cited)\s*$/i;
-const REFERENCES_HEADING_AR = /^\s*(المراجع|المصادر|قائمة\s+المراجع)\s*$/;
+  /^\s*(references|bibliography|works\s+cited|literature\s+cited)\s*:?\s*$/i;
+const REFERENCES_HEADING_AR = /^\s*(المراجع|المصادر|قائمة\s+المراجع)\s*:?\s*$/;
 const ACKNOWLEDGMENTS_HEADING = /^\s*acknowledg(e)?ments?\s*$/i;
 const FUNDING_HEADING = /^\s*funding(\s+statement)?\s*$/i;
 const CONFLICT_HEADING = /^\s*conflict\s+of\s+interest\s*$/i;
@@ -135,12 +146,17 @@ export class DocxImportService {
         'h1',
         'h2',
         'h3',
+        'h4',
+        'h5',
+        'h6',
         'p',
         'strong',
         'b',
         'em',
         'i',
         'u',
+        'sup',
+        'sub',
         'ul',
         'ol',
         'li',
@@ -324,7 +340,7 @@ export class DocxImportService {
       if (!looksLikeAuthorMetadata(text)) return false;
       const email = text.match(EMAIL_RE)?.[0] ?? '';
       const parts = text
-        .split(/\s*[—–-]\s*/)
+        .split(/\s*[—–]\s*|\s+-\s+/)
         .map((p) => p.trim())
         .filter(Boolean);
 
@@ -397,6 +413,12 @@ export class DocxImportService {
       const tag = node.tagName;
 
       if (tag === 'table') {
+        // Skip the Damascus University metadata box (1×1 table with submission
+        // dates / CC licence) that appears between the abstract heading and the
+        // abstract text.
+        if (pendingAbstract && isSingleCellTable(node)) {
+          continue;
+        }
         const tableSection = tableFromElement(node);
         if (tableSection) {
           sections.push(tableSection);
@@ -410,7 +432,14 @@ export class DocxImportService {
       const text = getTextContent(node).trim();
       const dir = textDir(text);
 
-      if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+      if (
+        tag === 'h1' ||
+        tag === 'h2' ||
+        tag === 'h3' ||
+        tag === 'h4' ||
+        tag === 'h5' ||
+        tag === 'h6'
+      ) {
         const backKind = detectBackMatterHeading(text);
         if (backKind) {
           closeAuthorZone();
@@ -420,7 +449,7 @@ export class DocxImportService {
           continue;
         }
 
-        const level = tag === 'h1' ? 1 : tag === 'h2' ? 2 : 3;
+        const level = tag === 'h1' ? 1 : tag === 'h3' ? 3 : 2;
         const headingKey = `${level}:${text}`;
         if (headingKey === lastHeadingKey) continue;
         lastHeadingKey = headingKey;
@@ -432,6 +461,12 @@ export class DocxImportService {
         }
         if (isReferencesHeading(text)) {
           startReferences();
+          continue;
+        }
+        if (isKeywordsLine(text)) {
+          assignKeywordsBackward(sections, stripKeywordsPrefix(text));
+          pendingAbstract = false;
+          pendingAbstractLang = null;
           continue;
         }
       }
@@ -452,8 +487,14 @@ export class DocxImportService {
         continue;
       }
 
-      if (tag === 'h2' || tag === 'h3') {
-        const level = tag === 'h2' ? 2 : 3;
+      if (
+        tag === 'h2' ||
+        tag === 'h3' ||
+        tag === 'h4' ||
+        tag === 'h5' ||
+        tag === 'h6'
+      ) {
+        const level = tag === 'h3' ? 3 : 2;
         const kind = level === 2 ? 'heading2' : 'heading3';
         if (!sectionTextExists(sections, kind, text)) {
           pushHeading(level, text, dir);
@@ -492,10 +533,7 @@ export class DocxImportService {
           continue;
         }
         if (isKeywordsLine(text) && sections.length > 0) {
-          const last = sections[sections.length - 1];
-          if (last.kind === 'abstract') {
-            last.keywords = stripKeywordsPrefix(text);
-          }
+          assignKeywordsBackward(sections, stripKeywordsPrefix(text));
           pendingAbstract = false;
           pendingAbstractLang = null;
           continue;
@@ -511,6 +549,30 @@ export class DocxImportService {
         }
         if (inAuthorZone && looksLikeAuthorMetadata(text)) {
           consumeAuthorLine(text);
+          continue;
+        }
+        // Plain paragraph with superscript numbers while in the author zone —
+        // some Damascus University templates omit bold on the author name line.
+        // Guard: skip paragraphs that START with a superscript — those are
+        // affiliation lines (e.g. "¹Department of…"), not author name lines.
+        if (
+          inAuthorZone &&
+          hasSuperscriptInContent(node) &&
+          !startsWithSuperscript(node)
+        ) {
+          const names = text
+            .split(/[,،]/)
+            .map((s) => s.replace(/\d+/g, '').trim())
+            .filter(Boolean);
+          for (const name of names) {
+            authorEntries.push({
+              fullName: name,
+              title: '',
+              affiliation: '',
+              email: '',
+              isCorresponding: name.includes('*'),
+            });
+          }
           continue;
         }
         if (pendingBackMatter) {
@@ -542,6 +604,62 @@ export class DocxImportService {
         if (/^Table\s+\d+\s*:?\s*$/i.test(text)) {
           continue;
         }
+
+        // Damascus University publishes articles where titles and section headings
+        // are styled as bold normal paragraphs rather than Word heading styles.
+        // Mammoth converts these to <p><strong>…</strong></p> instead of <h1>/<h2>.
+        // Detect them here and route them the same way headings are handled above.
+        if (isAllBoldParagraph(node)) {
+          const hasSup = hasSuperscriptInContent(node);
+          if (!hasSup) {
+            // Clean bold paragraph — title if a language-appropriate slot is still open,
+            // otherwise a section heading. The language guard prevents AR section headings
+            // (المقدمة, etc.) from filling the EN title slot after the AR title is set.
+            const pLang = textLang(text);
+            if (
+              (pLang === 'ar' && !titleArFilled) ||
+              (pLang === 'en' && !titleEnFilled)
+            ) {
+              assignTitle(text);
+            } else {
+              closeAuthorZone();
+              if (!sectionTextExists(sections, 'heading2', text)) {
+                pushHeading(2, text, dir);
+              }
+            }
+            continue;
+          }
+          // Bold paragraph with superscript numbers — Damascus-style author line
+          // (e.g. "نور الدين مصطفى¹، أ.د. سمير خليل²").
+          // Parse names by splitting on Arabic/Latin commas and stripping the digits.
+          if (inAuthorZone) {
+            const names = text
+              .split(/[,،]/)
+              .map((s) => s.replace(/\d+/g, '').trim())
+              .filter(Boolean);
+            for (const name of names) {
+              authorEntries.push({
+                fullName: name,
+                title: '',
+                affiliation: '',
+                email: '',
+                isCorresponding: name.includes('*'),
+              });
+            }
+            continue;
+          }
+          // Outside author zone: body heading that happens to have footnote numbers.
+          closeAuthorZone();
+          const cleanedHeading = getTextWithoutSup(node).trim();
+          if (
+            cleanedHeading &&
+            !sectionTextExists(sections, 'heading2', cleanedHeading)
+          ) {
+            pushHeading(2, cleanedHeading, dir);
+          }
+          continue;
+        }
+
         pushParagraphDeduped(inner, dir);
         continue;
       }
@@ -751,6 +869,21 @@ function isKeywordsLine(text: string): boolean {
   return KEYWORDS_LABEL_EN.test(text) || KEYWORDS_LABEL_AR.test(text);
 }
 
+function assignKeywordsBackward(
+  sections: ConstructorSection[],
+  keywords: string,
+): void {
+  for (let i = sections.length - 1; i >= 0; i--) {
+    const s = sections[i];
+    if (s.kind === 'abstract' && !s.keywords.trim()) {
+      s.keywords = keywords;
+      return;
+    }
+    // Stop when we've gone past any section that could precede keywords
+    if (s.kind === 'references' || s.kind === 'heading1') return;
+  }
+}
+
 function stripKeywordsPrefix(text: string): string {
   return text
     .replace(KEYWORDS_LABEL_EN, '')
@@ -838,4 +971,85 @@ function pruneImportedSections(
   sections: ConstructorSection[],
 ): ConstructorSection[] {
   return sections.filter(sectionHasImportContent);
+}
+
+/**
+ * Returns true when ALL non-whitespace text inside `el` is wrapped in <strong> or <b>.
+ * Used to detect Damascus University-style titles/headings written as bold paragraphs
+ * rather than Word heading styles (which Mammoth would convert to <h1>/<h2>).
+ */
+function getTextOutsideStrong(el: Element): string {
+  let out = '';
+  for (const c of el.childNodes) {
+    if (c.nodeName === '#text') out += (c as TextNode).value;
+    else if (isElement(c)) {
+      const tag = c.tagName;
+      if (tag !== 'strong' && tag !== 'b') out += getTextOutsideStrong(c);
+    }
+  }
+  return out;
+}
+
+function isAllBoldParagraph(el: Element): boolean {
+  const outside = getTextOutsideStrong(el).trim();
+  const total = getTextContent(el).trim();
+  return total.length > 0 && outside.length === 0;
+}
+
+function hasSuperscriptInContent(el: Element): boolean {
+  for (const c of el.childNodes) {
+    if (isElement(c)) {
+      if (c.tagName === 'sup') return true;
+      if (hasSuperscriptInContent(c)) return true;
+    }
+  }
+  return false;
+}
+
+function startsWithSuperscript(el: Element): boolean {
+  for (const c of el.childNodes) {
+    if (isElement(c)) return c.tagName === 'sup';
+    if (c.nodeName === '#text' && c.value.trim()) return false;
+  }
+  return false;
+}
+
+/**
+ * Returns true for a 1-row × 1-column table — the Damascus University journal
+ * template places a metadata box (submission date, CC licence) in a 1×1 table
+ * immediately after the abstract heading but before the abstract text.
+ */
+function isSingleCellTable(el: Element): boolean {
+  let rowCount = 0;
+  let maxCols = 0;
+  for (const child of el.childNodes) {
+    if (!isElement(child)) continue;
+    const tag = child.tagName;
+    const rows =
+      tag === 'tr'
+        ? [child]
+        : tag === 'thead' || tag === 'tbody'
+          ? Array.from(child.childNodes).filter(
+              (n): n is Element => isElement(n) && n.tagName === 'tr',
+            )
+          : [];
+    for (const tr of rows) {
+      rowCount++;
+      const cells = Array.from(tr.childNodes).filter(
+        (n): n is Element =>
+          isElement(n) && (n.tagName === 'td' || n.tagName === 'th'),
+      ).length;
+      if (cells > maxCols) maxCols = cells;
+    }
+  }
+  return rowCount === 1 && maxCols === 1;
+}
+
+function getTextWithoutSup(el: Element): string {
+  let out = '';
+  for (const c of el.childNodes) {
+    if (c.nodeName === '#text') out += (c as TextNode).value;
+    else if (isElement(c) && c.tagName !== 'sup') out += getTextWithoutSup(c);
+  }
+  return out;
 }

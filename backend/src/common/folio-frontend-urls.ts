@@ -91,6 +91,16 @@ export function resetPasswordPageUrl(
   return `${root}/${locale}/reset-password?token=${encoded}`;
 }
 
+/** Section editor queue page. */
+export function sectionEditorQueueUrl(
+  baseUrl: string,
+  emailLocale: string | undefined,
+): string {
+  const root = stripAppBaseUrl(baseUrl);
+  const locale = folioUiLocale(emailLocale);
+  return `${root}/${locale}/section-editor`;
+}
+
 /** Review workbench after the reviewer has accepted. */
 export function assignmentReviewPageUrl(
   baseUrl: string,

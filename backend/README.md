@@ -1,6 +1,6 @@
-# Folio backend (NestJS)
+# Damascus University Journal backend (NestJS)
 
-HTTP API for the Folio peer-review workspace. Global prefix: **`/api/v1`**.
+HTTP API for the Damascus University Journal peer-review workspace. Global prefix: **`/api/v1`**.
 
 ## Quick start
 

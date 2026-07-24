@@ -38,6 +38,8 @@ import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
+import { AssignSectionEditorDto } from './dto/assign-section-editor.dto';
+import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { AssignCopyeditorDto } from './dto/assign-copyeditor.dto';
 import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
 import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage.dto';
@@ -67,6 +69,7 @@ export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
     private readonly docxImportService: DocxImportService,
+    private readonly sectionEditorWorkflowService: SectionEditorWorkflowService,
   ) {}
 
   @Post()
@@ -192,6 +195,47 @@ export class SubmissionsController {
     return this.submissionsService.getSuggestedReviewers(slug, user);
   }
 
+  @Get(':slug/suggested-section-editors')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
+  getSuggestedSectionEditors(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.sectionEditorWorkflowService.getSuggestedSectionEditors(
+      slug,
+      user,
+    );
+  }
+
+  @Post(':slug/section-editor-assignment')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
+  assignSectionEditor(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: AssignSectionEditorDto,
+    @Headers('x-folio-locale') folioLocale?: string,
+  ) {
+    return this.sectionEditorWorkflowService.assignSectionEditor(
+      slug,
+      dto.sectionEditorId,
+      user,
+      folioLocale,
+    );
+  }
+
+  @Delete(':slug/section-editor-assignment')
+  @HttpCode(204)
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
+  removeSectionEditorAssignment(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.sectionEditorWorkflowService.removeSectionEditorAssignment(
+      slug,
+      user,
+    );
+  }
+
   @Get(':slug')
   @Permissions(...SUBMISSION_READ_PERMISSIONS)
   findOne(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
@@ -277,6 +321,26 @@ export class SubmissionsController {
     return this.submissionsService.update(slug, user, dto);
   }
 
+  @Post(':slug/pre-submit-analysis')
+  @HttpCode(200)
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  runPreSubmitAnalysis(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.runPreSubmitAnalysis(slug, user);
+  }
+
+  @Post(':slug/pre-submit-analysis/acknowledge')
+  @HttpCode(200)
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
+  acknowledgePreSubmitAnalysis(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.acknowledgePreSubmitAnalysis(slug, user);
+  }
+
   @Post(':slug/submit')
   @HttpCode(200)
   @UseGuards(EmailVerifiedGuard)
@@ -293,6 +357,7 @@ export class SubmissionsController {
       useUploadedManuscript: dto.useUploadedManuscript,
       presentUploadedManuscript: dto.presentUploadedManuscript,
       presentConstructorManuscript: dto.presentConstructorManuscript,
+      authorResponseToReviewers: dto.authorResponseToReviewers,
     });
   }
 
@@ -326,6 +391,11 @@ export class SubmissionsController {
       dto.reviewerId,
       user,
       folioLocale,
+      {
+        responseDueAt: dto.responseDueAt,
+        reviewDueAt: dto.reviewDueAt,
+        editorInstructions: dto.editorInstructions,
+      },
     );
   }
 

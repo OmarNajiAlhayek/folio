@@ -4,8 +4,11 @@ import { ReviewAssignment } from './review-assignment.entity';
 
 export enum ReviewRecommendation {
   ACCEPT = 'accept',
-  REJECT = 'reject',
   REVISIONS = 'revisions',
+  RESUBMIT_FOR_REVIEW = 'resubmit_for_review',
+  RESUBMIT_ELSEWHERE = 'resubmit_elsewhere',
+  REJECT = 'reject',
+  SEE_COMMENTS = 'see_comments',
 }
 
 @Entity('reviews')

@@ -18,6 +18,10 @@ export const PERMISSION_SLUGS = {
   COPYEDIT_SUBMIT_NOTE: 'copyedit.submit_note',
   COPYEDIT_PUBLISH: 'copyedit.publish',
   AUDIT_LOG_VIEW: 'audit_log.view',
+  /** View submissions assigned to this section editor (section_editor role). */
+  SUBMISSION_VIEW_SECTION_QUEUE: 'submission.view_section_queue',
+  /** Assign a section editor to a submission (chief editor only). */
+  SUBMISSION_ASSIGN_SECTION_EDITOR: 'submission.assign_section_editor',
 } as const;
 
 export type PermissionSlug =
@@ -26,6 +30,7 @@ export type PermissionSlug =
 /** OR list for submission detail reads — mirrors `assertCanRead` entry paths. */
 export const SUBMISSION_READ_PERMISSIONS = [
   PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+  PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
   PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
   PERMISSION_SLUGS.REVIEW_SUBMIT,
   PERMISSION_SLUGS.COPYEDIT_SUBMIT_NOTE,
@@ -35,6 +40,7 @@ export const SUBMISSION_READ_PERMISSIONS = [
 export const SUBMISSION_LIST_PERMISSIONS = [
   PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
   PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+  PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
 ] as const;
 
 /** OR list for peer-review configuration routes (review method, file stage). */
@@ -60,8 +66,10 @@ export const SUGGESTED_REVIEWERS_CALLER_PERMISSIONS = [
 
 export const ROLE_SLUGS = {
   AUTHOR: 'author',
-  /** Handling editor — peer review and editorial decisions (OJS section editor). */
+  /** Chief editor — queue oversight, assigns section editors, editorial decisions. */
   EDITOR: 'editor',
+  /** Discipline-scoped editor — manages peer review for assigned submissions. */
+  SECTION_EDITOR: 'section_editor',
   /** Journal administration — users, email platform, queue oversight. */
   JOURNAL_MANAGER: 'journal_manager',
   REVIEWER: 'reviewer',

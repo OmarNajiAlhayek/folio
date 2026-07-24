@@ -41,3 +41,49 @@ describe('submissionToViewerJson messageForAuthor', () => {
     ).toBeUndefined();
   });
 });
+
+describe('submissionToViewerJson preSubmitAnalysis', () => {
+  const analysis = {
+    id: 'psa-1',
+    analyzedAt: '2026-01-01T00:00:00.000Z',
+    contentHash: 'abc',
+    formatIssues: [],
+    grammarNotes: [],
+    referenceIssues: [],
+    aiUnavailable: false,
+    acknowledged: true,
+    acknowledgedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  const base = {
+    id: 'sub-1',
+    slug: 'paper-one',
+    title: 'Title',
+    titleAr: null,
+    abstract: 'Abstract',
+    abstractAr: null,
+    articleType: null,
+    keywords: null,
+    keywordsAr: null,
+    status: SubmissionStatus.DRAFT,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    publishedAt: null,
+    reviewMethod: 'double_anonymous',
+    files: [],
+    authorId: 'author-1',
+    preSubmitAnalysis: analysis,
+  } as unknown as Submission;
+
+  it('exposes preSubmitAnalysis only to authors', () => {
+    expect(submissionToViewerJson(base, 'author').preSubmitAnalysis).toEqual(
+      analysis,
+    );
+    expect(
+      submissionToViewerJson(base, 'editor').preSubmitAnalysis,
+    ).toBeUndefined();
+    expect(
+      submissionToViewerJson(base, 'reviewer').preSubmitAnalysis,
+    ).toBeUndefined();
+  });
+});

@@ -13,6 +13,7 @@ import {
   AssignmentStatus,
 } from '../entities/review-assignment.entity';
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { hasPermission } from '../common/authorization/permission-checks';
 import type { RequestUser } from '../common/types/request-user';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
@@ -29,6 +30,8 @@ export class SubmissionAccessService {
     private readonly assignmentsRepo: Repository<ReviewAssignment>,
     @InjectRepository(CopyeditAssignment)
     private readonly copyeditAssignmentsRepo: Repository<CopyeditAssignment>,
+    @InjectRepository(SectionEditorAssignment)
+    private readonly seAssignmentsRepo: Repository<SectionEditorAssignment>,
   ) {}
 
   /** Sync caller slug check — same source as {@link PermissionsGuard}. */
@@ -48,6 +51,9 @@ export class SubmissionAccessService {
       submission.copyeditAssignments?.some((a) => a.copyeditorId === user.sub)
     ) {
       return 'copyeditor';
+    }
+    if (this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)) {
+      return 'section_editor';
     }
     return 'reviewer';
   }
@@ -88,6 +94,15 @@ export class SubmissionAccessService {
         where: { submissionId: submission.id, copyeditorId: user.sub },
       });
       if (copyeditAssigned) return;
+    }
+    if (this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)) {
+      const seAssigned = await this.seAssignmentsRepo.exists({
+        where: {
+          submissionId: submission.id,
+          sectionEditorId: user.sub,
+        },
+      });
+      if (seAssigned) return;
     }
     throw new ForbiddenException({
       message: 'Cannot access this submission',
@@ -137,6 +152,8 @@ export class SubmissionAccessService {
         'reviewAssignments',
         'reviewAssignments.reviewer',
         'copyeditAssignments',
+        'sectionEditorAssignment',
+        'sectionEditorAssignment.sectionEditor',
       ],
     });
     if (!s) {

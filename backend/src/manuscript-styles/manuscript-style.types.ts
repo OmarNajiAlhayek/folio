@@ -53,6 +53,8 @@ export interface ManuscriptConstructorGuidance {
   extraMandatorySlots?: ConstructorRichTextKind[];
   recommendedPresets?: ConstructorPresetId[];
   requiredRichTextKinds?: ConstructorRichTextKind[];
+  /** Default text direction for newly created documents using this style. */
+  defaultDocumentDir?: 'ltr' | 'rtl';
 }
 
 export interface ManuscriptStyleProfile {
@@ -105,14 +107,31 @@ export interface ManuscriptStyleProfile {
   };
   /** Safe projection for `GET /public/manuscript-styles` — see {@link ManuscriptPreviewTheme}. */
   previewTheme: ManuscriptPreviewTheme;
+  /**
+   * When true the generated .docx section includes per-line numbering (§1).
+   * Defaults to false when absent.
+   */
+  lineNumbers?: boolean;
+  /**
+   * Font size for footnote / endnote body text in half-points (§2: 10 pt = 20).
+   * Falls back to `sizesHalfPoints.bodyLatin` when absent.
+   */
+  footnoteSizeHalfPoints?: number;
   /** Word constructor editorial rules (optional per profile). */
   constructor?: ManuscriptConstructorGuidance;
+  /**
+   * Minimum number of references that must cite articles already published in
+   * this journal. Checked at submit time against the constructor reference list.
+   * Omit (or set to 0) to disable the check.
+   */
+  minJournalSelfCitations?: number;
 }
 
 export interface ManuscriptConstructorGuidanceDto {
   extraMandatorySlots?: ConstructorRichTextKind[];
   recommendedPresets?: ConstructorPresetId[];
   requiredRichTextKinds?: ConstructorRichTextKind[];
+  defaultDocumentDir?: 'ltr' | 'rtl';
 }
 
 export interface ManuscriptStyleCatalogEntryDto {

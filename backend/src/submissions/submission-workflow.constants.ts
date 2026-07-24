@@ -25,6 +25,31 @@ export const DECISION_STATUS_TO_KIND: Partial<
   [SubmissionStatus.REJECTED]: 'rejected',
 };
 
+export type DetailedDecisionKind =
+  | 'desk_reject'
+  | 'post_review_reject'
+  | 'accepted'
+  | 'revisions_requested';
+
+/**
+ * A rejection is a "desk reject" iff it happens straight out of `submitted`
+ * (before any review round starts) rather than out of `under_review`.
+ * Accept/revisions-requested pass through unchanged; other transitions
+ * (e.g. no decision made) resolve to null.
+ */
+export function resolveDetailedDecisionKind(
+  previousStatus: SubmissionStatus,
+  next: SubmissionStatus,
+): DetailedDecisionKind | null {
+  if (next === SubmissionStatus.REJECTED) {
+    return previousStatus === SubmissionStatus.SUBMITTED
+      ? 'desk_reject'
+      : 'post_review_reject';
+  }
+  const kind = DECISION_STATUS_TO_KIND[next];
+  return kind === 'accepted' || kind === 'revisions_requested' ? kind : null;
+}
+
 /** Statuses where editors may invite reviewers or reconfigure the review package. */
 export const REVIEW_CONFIGURATION_STATUSES: readonly SubmissionStatus[] = [
   SubmissionStatus.SUBMITTED,

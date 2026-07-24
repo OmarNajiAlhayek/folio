@@ -4,6 +4,8 @@ import {
   IsBoolean,
   IsObject,
   IsOptional,
+  IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -57,4 +59,11 @@ export class SubmitSubmissionDto {
   @IsOptional()
   @IsBoolean()
   presentConstructorManuscript?: boolean;
+
+  /** Author's optional reply to reviewer/editor feedback, shown on resubmission. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(8000)
+  authorResponseToReviewers?: string;
 }

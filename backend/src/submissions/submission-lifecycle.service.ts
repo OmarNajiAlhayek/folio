@@ -41,14 +41,20 @@ import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { sanitizeConstructorContent } from './sanitize-constructor-html';
+import {
+  countJournalSelfCitations,
+  extractConstructorReferenceTexts,
+} from './journal-self-citation.util';
 import { AiClientService } from '../ai/ai-client.service';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { SubmissionAiService } from './submission-ai.service';
+import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 import {
   DECISION_STATUS_TO_KIND,
   EDITOR_TRANSITIONS,
+  resolveDetailedDecisionKind,
 } from './submission-workflow.constants';
 
 @Injectable()
@@ -69,6 +75,7 @@ export class SubmissionLifecycleService {
     private readonly files: SubmissionFileService,
     private readonly events: SubmissionEventsService,
     private readonly ai: SubmissionAiService,
+    private readonly preSubmitAnalysis: PreSubmitAnalysisService,
   ) {}
 
   private parseKeywordList(raw: string | null | undefined): string[] {
@@ -111,6 +118,38 @@ export class SubmissionLifecycleService {
     }
   }
 
+  private async assertJournalSelfCitations(
+    content: ConstructorContent,
+  ): Promise<void> {
+    const styleId = this.manuscriptStyles.resolveEffectiveStyleId(content);
+    const profile = this.manuscriptStyles.getProfile(styleId);
+    const minCitations = profile.minJournalSelfCitations ?? 0;
+    if (minCitations <= 0) return;
+
+    const refTexts = extractConstructorReferenceTexts(content);
+    if (refTexts.length === 0) return;
+
+    const publishedRows = await this.submissionsRepo
+      .createQueryBuilder('s')
+      .select(['s.title', 's.titleAr'])
+      .where('s.status = :status', { status: SubmissionStatus.PUBLISHED })
+      .getMany();
+
+    const publishedTitles = publishedRows.flatMap((r) =>
+      [r.title, r.titleAr ?? ''].filter(Boolean),
+    );
+
+    const found = countJournalSelfCitations(refTexts, publishedTitles);
+    if (found < minCitations) {
+      throw new BadRequestException({
+        message: `Your submission must cite at least ${minCitations} article(s) previously published in this journal (found ${found}).`,
+        code: 'SUBMISSION_INSUFFICIENT_JOURNAL_SELF_CITATIONS',
+        required: minCitations,
+        found,
+      });
+    }
+  }
+
   private async assertReadyForSubmit(
     s: Submission,
     presentation: ReviewManuscriptPresentation,
@@ -122,19 +161,39 @@ export class SubmissionLifecycleService {
       });
     }
     const kw = this.parseKeywordList(s.keywords);
-    if (kw.length < 3 || kw.length > 6) {
+    if (kw.length !== 5) {
       throw new BadRequestException({
         message:
-          'Provide between 3 and 6 English keywords, separated by commas or semicolons',
+          'Provide exactly 5 English keywords, separated by commas or semicolons',
         code: 'SUBMISSION_INCOMPLETE_KEYWORDS',
       });
     }
+    const abstractLower = (s.abstract ?? '').toLowerCase();
+    const missingKw = kw.filter(
+      (k) => !abstractLower.includes(k.toLowerCase()),
+    );
+    if (missingKw.length > 0) {
+      throw new BadRequestException({
+        message: `Each keyword must appear in the abstract. Missing: ${missingKw.join(', ')}`,
+        code: 'SUBMISSION_KEYWORDS_NOT_IN_ABSTRACT',
+      });
+    }
     const kwAr = this.parseKeywordList(s.keywordsAr);
-    if (kwAr.length < 3 || kwAr.length > 6) {
+    if (kwAr.length !== 5) {
       throw new BadRequestException({
         message:
-          'Provide between 3 and 6 Arabic keywords, separated by commas or semicolons',
+          'Provide exactly 5 Arabic keywords, separated by commas or semicolons',
         code: 'SUBMISSION_INCOMPLETE_KEYWORDS_AR',
+      });
+    }
+    const abstractArLower = (s.abstractAr ?? '').toLowerCase();
+    const missingKwAr = kwAr.filter(
+      (k) => !abstractArLower.includes(k.toLowerCase()),
+    );
+    if (missingKwAr.length > 0) {
+      throw new BadRequestException({
+        message: `Each Arabic keyword must appear in the Arabic abstract. Missing: ${missingKwAr.join(', ')}`,
+        code: 'SUBMISSION_KEYWORDS_NOT_IN_ABSTRACT_AR',
       });
     }
     if (!s.titleAr?.trim()) {
@@ -230,6 +289,21 @@ export class SubmissionLifecycleService {
           code: 'SUBMISSION_INCOMPLETE_FILES',
         });
       }
+    }
+
+    if (
+      presentation.presentUploaded &&
+      s.docxManuscriptViolations &&
+      s.docxManuscriptViolations.length > 0
+    ) {
+      const messages = s.docxManuscriptViolations
+        .map((v) => v.message)
+        .join('; ');
+      throw new BadRequestException({
+        message: `Uploaded manuscript does not meet formatting requirements: ${messages}`,
+        code: 'DOCX_FORMAT_VIOLATIONS',
+        violations: s.docxManuscriptViolations,
+      });
     }
   }
 
@@ -429,6 +503,7 @@ export class SubmissionLifecycleService {
       useUploadedManuscript?: boolean;
       presentUploadedManuscript?: boolean;
       presentConstructorManuscript?: boolean;
+      authorResponseToReviewers?: string;
     },
   ): Promise<Submission> {
     const s = await this.access.getBySlugOrThrow(slug);
@@ -512,7 +587,13 @@ export class SubmissionLifecycleService {
         attach: true,
         attachKind: 'manuscript_constructor',
       });
+      await this.assertJournalSelfCitations(contentForDoc);
     }
+    this.preSubmitAnalysis.assertReadyForPreSubmit(
+      s,
+      sanitizeConstructorContent(s.constructorContent ?? null),
+      presentation,
+    );
     await this.assertReadyForSubmit(s, presentation);
     await this.applyReviewManuscriptPresentation(s.id, presentation);
     s.reviewManuscriptPresentation = presentation;
@@ -527,10 +608,14 @@ export class SubmissionLifecycleService {
         );
       }
     }
-    await this.submissionsRepo.save(s);
     const previousStatus = s.status;
     const isResubmission =
       previousStatus === SubmissionStatus.REVISIONS_REQUESTED;
+    if (isResubmission) {
+      s.authorResponseToReviewers =
+        options?.authorResponseToReviewers?.trim() || null;
+    }
+    await this.submissionsRepo.save(s);
     const editorIds =
       await this.rbacService.listWorkflowNotificationRecipientIds();
 
@@ -676,6 +761,9 @@ export class SubmissionLifecycleService {
       previousStatus === SubmissionStatus.SUBMITTED
         ? s.updatedAt
         : null;
+    const detailedDecisionKind = decisionKind
+      ? resolveDetailedDecisionKind(previousStatus, next)
+      : null;
 
     const pending: Notification[] = [];
     return this.submissionsRepo.manager
@@ -684,6 +772,7 @@ export class SubmissionLifecycleService {
         s.status = next;
         if (decisionKind) {
           s.messageForAuthor = trimmedMessage || null;
+          s.lastDecisionKind = detailedDecisionKind;
         }
         if (next === SubmissionStatus.PUBLISHED) {
           s.publishedAt = new Date();
@@ -703,6 +792,7 @@ export class SubmissionLifecycleService {
               editorId: user.sub,
               editorFolioLocale,
               messageForAuthor: saved.messageForAuthor,
+              isDeskReject: detailedDecisionKind === 'desk_reject',
             },
             em,
           );

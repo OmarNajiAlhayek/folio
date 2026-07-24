@@ -90,6 +90,15 @@ export class RbacService implements OnModuleInit {
         slug: PERMISSION_SLUGS.AUDIT_LOG_VIEW,
         description: 'View the full audit log of all user actions',
       },
+      {
+        slug: PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
+        description:
+          'View submissions assigned to this section editor (section queue)',
+      },
+      {
+        slug: PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
+        description: 'Assign a section editor to a submission',
+      },
     ];
 
     const permBySlug = await this.batchUpsertPermissions(permissionDefs);
@@ -97,6 +106,7 @@ export class RbacService implements OnModuleInit {
     const roleDefs: { slug: string; name: string }[] = [
       { slug: ROLE_SLUGS.AUTHOR, name: 'Author' },
       { slug: ROLE_SLUGS.EDITOR, name: 'Editor' },
+      { slug: ROLE_SLUGS.SECTION_EDITOR, name: 'Section Editor' },
       { slug: ROLE_SLUGS.JOURNAL_MANAGER, name: 'Journal manager' },
       { slug: ROLE_SLUGS.REVIEWER, name: 'Reviewer' },
       { slug: ROLE_SLUGS.COPYEDITOR, name: 'Copyeditor' },
@@ -106,6 +116,15 @@ export class RbacService implements OnModuleInit {
 
     const editorPerms = [
       PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
+      PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
+      PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
+    ];
+    const sectionEditorPerms = [
+      PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
       PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
       PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
@@ -136,6 +155,10 @@ export class RbacService implements OnModuleInit {
       [
         { roleSlug: ROLE_SLUGS.AUTHOR, permissionSlugs: authorPerms },
         { roleSlug: ROLE_SLUGS.EDITOR, permissionSlugs: editorPerms },
+        {
+          roleSlug: ROLE_SLUGS.SECTION_EDITOR,
+          permissionSlugs: sectionEditorPerms,
+        },
         {
           roleSlug: ROLE_SLUGS.JOURNAL_MANAGER,
           permissionSlugs: journalManagerPerms,

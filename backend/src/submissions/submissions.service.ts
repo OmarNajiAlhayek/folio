@@ -39,6 +39,8 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
+import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
+import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 
 @Injectable()
 export class SubmissionsService implements OnModuleInit {
@@ -56,6 +58,8 @@ export class SubmissionsService implements OnModuleInit {
     private readonly copyeditWorkflow: CopyeditWorkflowService,
     private readonly lifecycle: SubmissionLifecycleService,
     private readonly ai: SubmissionAiService,
+    private readonly preSubmitAnalysis: PreSubmitAnalysisService,
+    private readonly sectionEditorWorkflow: SectionEditorWorkflowService,
   ) {}
 
   listDisciplineLabels(): {
@@ -169,6 +173,11 @@ export class SubmissionsService implements OnModuleInit {
         qb.andWhere('s.status = :status', { status });
       }
       return qb.getMany();
+    }
+    if (
+      this.access.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
+    ) {
+      return this.sectionEditorWorkflow.listSectionQueue(user.sub, status);
     }
     const qb = this.submissionsRepo
       .createQueryBuilder('s')
@@ -299,6 +308,7 @@ export class SubmissionsService implements OnModuleInit {
       useUploadedManuscript?: boolean;
       presentUploadedManuscript?: boolean;
       presentConstructorManuscript?: boolean;
+      authorResponseToReviewers?: string;
     },
   ): Promise<Submission> {
     return this.lifecycle.submit(slug, user, options);
@@ -381,7 +391,13 @@ export class SubmissionsService implements OnModuleInit {
     reviewerId: string,
     editor: RequestUser,
     editorFolioLocale?: string,
-    options?: { assignmentSlug?: string; emitReviewerInvited?: boolean },
+    options?: {
+      assignmentSlug?: string;
+      emitReviewerInvited?: boolean;
+      responseDueAt?: string;
+      reviewDueAt?: string;
+      editorInstructions?: string;
+    },
   ): Promise<ReviewAssignment> {
     return this.reviewWorkflow.assignReviewer(
       submissionSlug,
@@ -607,6 +623,14 @@ export class SubmissionsService implements OnModuleInit {
       );
       await this.assignmentsRepo.save(a);
     }
+  }
+
+  async runPreSubmitAnalysis(slug: string, user: RequestUser) {
+    return this.preSubmitAnalysis.runAnalysis(slug, user);
+  }
+
+  async acknowledgePreSubmitAnalysis(slug: string, user: RequestUser) {
+    return this.preSubmitAnalysis.acknowledge(slug, user);
   }
 
   async runCopyeditAnalysis(

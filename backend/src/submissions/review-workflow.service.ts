@@ -145,7 +145,13 @@ export class ReviewWorkflowService {
     reviewerId: string,
     editor: RequestUser,
     editorFolioLocale?: string,
-    options?: { assignmentSlug?: string; emitReviewerInvited?: boolean },
+    options?: {
+      assignmentSlug?: string;
+      emitReviewerInvited?: boolean;
+      responseDueAt?: string;
+      reviewDueAt?: string;
+      editorInstructions?: string;
+    },
   ): Promise<ReviewAssignment> {
     assertCallerPermission(
       editor,
@@ -203,6 +209,14 @@ export class ReviewWorkflowService {
           reviewerId,
           status: AssignmentStatus.INVITED,
           slug: assignmentSlug,
+          assignedById: editor.sub,
+          responseDueAt: options?.responseDueAt
+            ? new Date(options.responseDueAt)
+            : null,
+          reviewDueAt: options?.reviewDueAt
+            ? new Date(options.reviewDueAt)
+            : null,
+          editorInstructions: options?.editorInstructions ?? '',
         });
         const saved = await assignmentRepo.save(row);
         const emitInvite = options?.emitReviewerInvited !== false;
@@ -444,9 +458,38 @@ export class ReviewWorkflowService {
       slug: a.slug,
       status: a.status,
       assignedAt: a.assignedAt,
+      responseDueAt: a.responseDueAt ?? null,
+      reviewDueAt: a.reviewDueAt ?? null,
+      editorInstructions: a.editorInstructions ?? '',
+      assignedBy: a.assignedBy
+        ? { id: a.assignedBy.id, displayName: a.assignedBy.displayName }
+        : null,
     };
     if (sub) {
       payload.submission = submissionToViewerJson(sub, 'reviewer');
+    }
+    if (a.review) {
+      payload.review = {
+        id: a.review.id,
+        recommendation: a.review.recommendation,
+        submittedAt: a.review.submittedAt,
+      };
+    }
+    if (a.discussions) {
+      payload.discussions = a.discussions.map((d) => ({
+        id: d.id,
+        subject: d.subject,
+        createdAt: d.createdAt,
+        messages:
+          d.messages?.map((m) => ({
+            id: m.id,
+            body: m.body,
+            createdAt: m.createdAt,
+            author: m.author
+              ? { id: m.author.id, displayName: m.author.displayName }
+              : null,
+          })) ?? [],
+      }));
     }
     return payload;
   }
@@ -468,7 +511,16 @@ export class ReviewWorkflowService {
   ): Promise<Record<string, unknown>> {
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug },
-      relations: ['submission', 'submission.files', 'submission.author'],
+      relations: [
+        'submission',
+        'submission.files',
+        'submission.author',
+        'assignedBy',
+        'review',
+        'discussions',
+        'discussions.messages',
+        'discussions.messages.author',
+      ],
     });
     if (!assignment) {
       throw new NotFoundException({

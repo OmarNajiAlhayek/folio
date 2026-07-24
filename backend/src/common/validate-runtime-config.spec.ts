@@ -138,7 +138,23 @@ describe('validateBackendRuntimeConfig', () => {
     );
   });
 
-  it('requires EMAIL_SERVICE_TOKEN in production', () => {
+  it('requires EMAIL_SERVICE_TOKEN when EMAIL_SERVICE_URL is not loopback in production', () => {
+    expect(() =>
+      validateBackendRuntimeConfig(
+        configFromEnv({
+          NODE_ENV: 'production',
+          JWT_SECRET: 'a'.repeat(32),
+          DB_PASSWORD: 'real-prod-password-not-in-blocklist',
+          RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
+          AUTH_COOKIE_SECURE: 'true',
+          EMAIL_SERVICE_URL: 'https://email-service.example.com',
+          EMAIL_SERVICE_TOKEN: '',
+        }),
+      ),
+    ).toThrow(/EMAIL_SERVICE_TOKEN/);
+  });
+
+  it('does not require EMAIL_SERVICE_TOKEN when EMAIL_SERVICE_URL is loopback', () => {
     expect(() =>
       validateBackendRuntimeConfig(
         configFromEnv({
@@ -148,9 +164,10 @@ describe('validateBackendRuntimeConfig', () => {
           RABBITMQ_URL: 'amqp://folio:secret@broker:5672',
           AUTH_COOKIE_SECURE: 'true',
           EMAIL_SERVICE_TOKEN: '',
+          // EMAIL_SERVICE_URL defaults to http://127.0.0.1:5244 (loopback)
         }),
       ),
-    ).toThrow(/EMAIL_SERVICE_TOKEN/);
+    ).not.toThrow(/EMAIL_SERVICE_TOKEN/);
   });
 
   it('requires gRPC host and token when AI is enabled in production', () => {

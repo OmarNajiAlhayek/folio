@@ -5,12 +5,14 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   OneToOne,
 } from 'typeorm';
 import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 import { Submission } from './submission.entity';
 import { Review } from './review.entity';
+import { ReviewDiscussion } from './review-discussion.entity';
 
 export enum AssignmentStatus {
   INVITED = 'invited',
@@ -52,6 +54,25 @@ export class ReviewAssignment extends BaseEntity {
   @CreateDateColumn({ name: 'assigned_at' })
   assignedAt: Date;
 
+  @Column({ name: 'response_due_at', type: 'timestamptz', nullable: true })
+  responseDueAt: Date | null;
+
+  @Column({ name: 'review_due_at', type: 'timestamptz', nullable: true })
+  reviewDueAt: Date | null;
+
+  @Column({ name: 'assigned_by_id', nullable: true })
+  assignedById: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'assigned_by_id' })
+  assignedBy: User | null;
+
+  @Column({ name: 'editor_instructions', type: 'text', default: '' })
+  editorInstructions: string;
+
   @OneToOne(() => Review, (r) => r.assignment)
   review: Review | null;
+
+  @OneToMany(() => ReviewDiscussion, (d) => d.assignment)
+  discussions: ReviewDiscussion[];
 }

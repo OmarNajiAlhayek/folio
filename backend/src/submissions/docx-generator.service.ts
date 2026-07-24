@@ -8,6 +8,7 @@ import {
   HeadingLevel,
   ImageRun,
   LevelFormat,
+  LineNumberRestartFormat,
   Packer,
   PageOrientation,
   Paragraph,
@@ -70,6 +71,8 @@ type InlineMarks = {
   superScript?: boolean;
   subScript?: boolean;
   runDir?: ConstructorDir;
+  /** Override the resolved body font size (in half-points). */
+  sizeOverride?: number;
 };
 
 type ImageResolver = (
@@ -206,7 +209,16 @@ export class DocxGeneratorService {
                 footer: convertMillimetersToTwip(mm.footer),
               },
             },
-            titlePage: false,
+            titlePage: true,
+            ...(profile.lineNumbers
+              ? {
+                  lineNumbers: {
+                    countBy: 1,
+                    restart: LineNumberRestartFormat.NEW_PAGE,
+                    distance: convertMillimetersToTwip(7),
+                  },
+                }
+              : {}),
           },
           children,
         },
@@ -480,6 +492,8 @@ export class DocxGeneratorService {
     profile: ManuscriptStyleProfile,
     defaultDir: ConstructorDir,
   ): Pick<IPropertiesOptions, 'footnotes' | 'endnotes'> {
+    const footnoteSize =
+      profile.footnoteSizeHalfPoints ?? profile.sizesHalfPoints.bodyLatin;
     const footnotes: Record<number, { children: Paragraph[] }> = {};
     const endnotes: Record<number, { children: Paragraph[] }> = {};
     for (const [id, num] of ctx.footnoteNumById) {
@@ -489,11 +503,16 @@ export class DocxGeneratorService {
         children: [
           new Paragraph({
             children: [
-              this.run(
-                fn.text.replace(/<[^>]+>/g, '').trim(),
-                defaultDir,
-                profile,
-              ),
+              new TextRun({
+                text: fn.text.replace(/<[^>]+>/g, '').trim(),
+                size: footnoteSize,
+                rightToLeft: defaultDir === 'rtl',
+                font: {
+                  ascii: profile.fonts.latin,
+                  hAnsi: profile.fonts.latin,
+                  cs: profile.fonts.arabic,
+                },
+              }),
             ],
           }),
         ],
@@ -506,11 +525,16 @@ export class DocxGeneratorService {
         children: [
           new Paragraph({
             children: [
-              this.run(
-                fn.text.replace(/<[^>]+>/g, '').trim(),
-                defaultDir,
-                profile,
-              ),
+              new TextRun({
+                text: fn.text.replace(/<[^>]+>/g, '').trim(),
+                size: footnoteSize,
+                rightToLeft: defaultDir === 'rtl',
+                font: {
+                  ascii: profile.fonts.latin,
+                  hAnsi: profile.fonts.latin,
+                  cs: profile.fonts.arabic,
+                },
+              }),
             ],
           }),
         ],
@@ -667,12 +691,10 @@ export class DocxGeneratorService {
                   alignment:
                     dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
                   children: [
-                    this.run(
-                      getTableCellText(cell),
-                      dir,
-                      profile,
-                      isHeader ? { bold: true } : {},
-                    ),
+                    this.run(getTableCellText(cell), dir, profile, {
+                      bold: isHeader || undefined,
+                      sizeOverride: profile.sizesHalfPoints.caption,
+                    }),
                   ],
                 }),
               ],
@@ -809,9 +831,12 @@ export class DocxGeneratorService {
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
         children: [
-          this.run(profile.references.headingText, 'ltr', profile, {
-            bold: true,
-          }),
+          this.run(
+            profile.references.headingText,
+            profile.references.arabicFirst ? 'rtl' : 'ltr',
+            profile,
+            { bold: true },
+          ),
         ],
       }),
     ];
@@ -1121,7 +1146,7 @@ export class DocxGeneratorService {
       font: isRtl
         ? { ascii: f.latin, hAnsi: f.latin, cs: f.arabic }
         : { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
-      size: isRtl ? s.bodyArabic : s.bodyLatin,
+      size: marks.sizeOverride ?? (isRtl ? s.bodyArabic : s.bodyLatin),
     };
   }
 

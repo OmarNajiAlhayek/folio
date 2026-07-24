@@ -28,16 +28,8 @@ import { submissionToViewerJson } from './submission-response.mapper';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { PublicationCatalogService } from './publication-catalog.service';
-import { AiClientService } from '../ai/ai-client.service';
-import { LanguageToolService } from './language-tool.service';
 import { SearchService } from '../search/search.service';
-import {
-  buildBodyPlainText,
-  checkDamascusStructure,
-  damascusFormatIssues,
-  extractInlineCitations,
-  extractReferenceList,
-} from './submission-copyedit-text.util';
+import { ManuscriptAnalysisService } from './manuscript-analysis.service';
 
 @Injectable()
 export class CopyeditWorkflowService {
@@ -58,8 +50,7 @@ export class CopyeditWorkflowService {
     private readonly access: SubmissionAccessService,
     private readonly events: SubmissionEventsService,
     private readonly catalog: PublicationCatalogService,
-    private readonly aiClient: AiClientService,
-    private readonly languageTool: LanguageToolService,
+    private readonly manuscriptAnalysis: ManuscriptAnalysisService,
     @Optional() private readonly searchService: SearchService | null = null,
   ) {}
 
@@ -635,34 +626,6 @@ export class CopyeditWorkflowService {
       });
     }
 
-    const submission = await this.submissionsRepo.findOne({
-      where: { id: assignment.submissionId },
-      select: ['id', 'constructorContent'],
-    });
-
-    const content = submission?.constructorContent ?? null;
-
-    const structureCheck = checkDamascusStructure(content);
-    const formatIssues = damascusFormatIssues(structureCheck);
-
-    const bodyText = buildBodyPlainText(content);
-    const grammarNotes = await this.languageTool.check(bodyText);
-
-    const referenceList = extractReferenceList(content);
-    const inlineCitations = extractInlineCitations(content);
-    let referenceIssues: string[] = [];
-    let aiUnavailable = false;
-
-    const refOutcome = await this.aiClient.checkReferences({
-      referenceList,
-      inlineCitations,
-    });
-    if (refOutcome.status === 'ok') {
-      referenceIssues = refOutcome.issues;
-    } else {
-      aiUnavailable = true;
-    }
-
-    return { formatIssues, grammarNotes, referenceIssues, aiUnavailable };
+    return this.manuscriptAnalysis.analyzeSubmission(assignment.submissionId);
   }
 }

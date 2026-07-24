@@ -12,7 +12,12 @@ import { OutboundEvent } from '../entities/outbound-event.entity';
 import { Permission } from '../entities/permission.entity';
 import { RefreshSession } from '../entities/refresh-session.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
+import { ReviewDiscussion } from '../entities/review-discussion.entity';
+import { ReviewDiscussionMessage } from '../entities/review-discussion-message.entity';
 import { Review } from '../entities/review.entity';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
+import { JournalSetting } from '../entities/journal-settings.entity';
 import { RevokedToken } from '../entities/revoked-token.entity';
 import { RoleInvitation } from '../entities/role-invitation.entity';
 import { RolePermission } from '../entities/role-permission.entity';
@@ -44,7 +49,12 @@ export const dataSourceOptions: DataSourceOptions = {
     Submission,
     SubmissionFile,
     ReviewAssignment,
+    ReviewDiscussion,
+    ReviewDiscussionMessage,
     Review,
+    SectionEditorAssignment,
+    UserSectionEditorDiscipline,
+    JournalSetting,
     CopyeditAssignment,
     CopyeditNote,
     RoleInvitation,
@@ -58,6 +68,7 @@ export const dataSourceOptions: DataSourceOptions = {
     AuditLog,
   ],
   migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
+  migrationsTransactionMode: 'each',
   synchronize: false,
 };
 

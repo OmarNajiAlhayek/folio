@@ -25,3 +25,12 @@ export function roleInvitationCreatedKey(invitationId: string): string {
   }
   return `role_invitation_created:${invitationId}`;
 }
+
+export function sectionEditorAssignedNotifKey(submissionSlug: string): string {
+  if (!submissionSlug) {
+    throw new Error(
+      'sectionEditorAssignedNotifKey: submissionSlug is required',
+    );
+  }
+  return `section_editor_assigned:${submissionSlug}`;
+}

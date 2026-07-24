@@ -114,7 +114,7 @@ async function bootstrap() {
 
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Folio API')
+      .setTitle('Damascus University Journal API')
       .setDescription(
         'Manuscript submission and peer-review REST API. OpenAPI JSON: /api-docs-json',
       )

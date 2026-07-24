@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import {
   OAuthIdentity,
   OAUTH_PROVIDER_ORCID,
@@ -97,6 +98,8 @@ export class UsersService {
     private readonly oauthRepo: Repository<OAuthIdentity>,
     @InjectRepository(RoleInvitation)
     private readonly roleInvRepo: Repository<RoleInvitation>,
+    @InjectRepository(UserSectionEditorDiscipline)
+    private readonly seDisciplinesRepo: Repository<UserSectionEditorDiscipline>,
     private readonly rbacService: RbacService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
@@ -526,34 +529,32 @@ export class UsersService {
     targetUserId: string,
     roleSlug: string,
   ): Promise<RoleInvitation> {
-    if (
-      roleSlug !== ROLE_SLUGS.EDITOR &&
-      roleSlug !== ROLE_SLUGS.JOURNAL_MANAGER
-    ) {
+    const allowedRoles = [
+      ROLE_SLUGS.EDITOR,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+      ROLE_SLUGS.SECTION_EDITOR,
+    ] as const;
+    if (!allowedRoles.includes(roleSlug as (typeof allowedRoles)[number])) {
       throw new BadRequestException({
         message:
-          'Only editor and journal_manager role invitations are supported',
+          'Only editor, journal_manager, and section_editor role invitations are supported',
         code: 'VALIDATION_ERROR',
       });
-    }
-    if (roleSlug === ROLE_SLUGS.EDITOR) {
-      return this.createPrivilegedRoleInvitation(
-        actorUserId,
-        targetUserId,
-        ROLE_SLUGS.EDITOR,
-      );
     }
     return this.createPrivilegedRoleInvitation(
       actorUserId,
       targetUserId,
-      ROLE_SLUGS.JOURNAL_MANAGER,
+      roleSlug as (typeof allowedRoles)[number],
     );
   }
 
   private async createPrivilegedRoleInvitation(
     actorUserId: string,
     targetUserId: string,
-    roleSlug: typeof ROLE_SLUGS.EDITOR | typeof ROLE_SLUGS.JOURNAL_MANAGER,
+    roleSlug:
+      | typeof ROLE_SLUGS.EDITOR
+      | typeof ROLE_SLUGS.JOURNAL_MANAGER
+      | typeof ROLE_SLUGS.SECTION_EDITOR,
   ): Promise<RoleInvitation> {
     if (actorUserId === targetUserId) {
       throw new BadRequestException({
@@ -758,5 +759,62 @@ export class UsersService {
     inv.resolvedAt = new Date();
     await this.roleInvRepo.save(inv);
     return { ok: true };
+  }
+
+  async listSectionEditorCandidates(): Promise<
+    { id: string; displayName: string; email: string; disciplines: string[] }[]
+  > {
+    const ids = await this.rbacService.listUserIdsWithPermission(
+      PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
+    );
+    if (ids.length === 0) return [];
+    const [users, disciplineRows] = await Promise.all([
+      this.usersRepo.find({
+        where: { id: In(ids) },
+        select: ['id', 'displayName', 'email'],
+        order: { displayName: 'ASC' },
+      }),
+      this.seDisciplinesRepo.find({ where: { userId: In(ids) } }),
+    ]);
+    const disciplineMap = new Map<string, string[]>();
+    for (const row of disciplineRows) {
+      const arr = disciplineMap.get(row.userId) ?? [];
+      arr.push(row.disciplineLabel);
+      disciplineMap.set(row.userId, arr);
+    }
+    return users.map((u) => ({
+      id: u.id,
+      displayName: u.displayName,
+      email: u.email,
+      disciplines: disciplineMap.get(u.id) ?? [],
+    }));
+  }
+
+  async getSectionEditorDisciplines(userId: string): Promise<string[]> {
+    const rows = await this.seDisciplinesRepo.find({
+      where: { userId },
+    });
+    return rows.map((r) => r.disciplineLabel);
+  }
+
+  async setSectionEditorDisciplines(
+    userId: string,
+    disciplines: string[],
+  ): Promise<string[]> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException({
+        message: 'User not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    await this.seDisciplinesRepo.delete({ userId });
+    if (disciplines.length > 0) {
+      const rows = disciplines.map((disciplineLabel) =>
+        this.seDisciplinesRepo.create({ userId, disciplineLabel }),
+      );
+      await this.seDisciplinesRepo.save(rows);
+    }
+    return disciplines;
   }
 }

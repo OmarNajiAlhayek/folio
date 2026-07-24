@@ -7,6 +7,8 @@ export const SUBMISSION_FILE_KINDS = [
   'figure',
   'table',
   'supplementary',
+  /** Annotated manuscript or review document uploaded by the reviewer. */
+  'review_response',
 ] as const;
 
 export type SubmissionFileKind = (typeof SUBMISSION_FILE_KINDS)[number];

@@ -15,7 +15,11 @@ export class CreateReviewDto {
   @MaxLength(50000)
   commentsToEditorOnly?: string;
 
-  @ApiProperty({ enum: ReviewRecommendation })
+  @ApiProperty({
+    enum: ReviewRecommendation,
+    description:
+      'accept | revisions | resubmit_for_review | resubmit_elsewhere | reject | see_comments',
+  })
   @IsEnum(ReviewRecommendation)
   recommendation: ReviewRecommendation;
 }

@@ -8,6 +8,7 @@ import {
 import { BaseEntity } from '../common/base.entity';
 import { Submission } from './submission.entity';
 import { SubmissionFileStage } from './submission-file-stage.enum';
+import { ReviewAssignment } from './review-assignment.entity';
 
 @Entity('submission_files')
 export class SubmissionFile extends BaseEntity {
@@ -43,6 +44,13 @@ export class SubmissionFile extends BaseEntity {
 
   @Column({ name: 'is_public', default: false })
   isPublic: boolean;
+
+  @Column({ name: 'review_assignment_id', nullable: true })
+  reviewAssignmentId: string | null;
+
+  @ManyToOne(() => ReviewAssignment, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'review_assignment_id' })
+  reviewAssignment: ReviewAssignment | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

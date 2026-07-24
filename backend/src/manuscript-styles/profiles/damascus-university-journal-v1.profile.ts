@@ -73,17 +73,21 @@ const damascusUniversityJournalV1Core = {
     },
   ],
   captions: {
-    figureWord: 'Figure',
-    tableWord: 'Table',
+    figureWord: 'شكل',
+    tableWord: 'جدول',
     figureCaptionAfterImage: true,
     tableCaptionBeforeTable: true,
   },
   references: {
     arabicFirst: true,
-    headingText: 'References',
+    headingText: 'المراجع',
     entrySpacing: { before: 60, after: 60 },
   },
+  lineNumbers: true,
+  footnoteSizeHalfPoints: 20,
+  minJournalSelfCitations: 2,
   constructor: {
+    defaultDocumentDir: 'rtl',
     recommendedPresets: [
       'introduction',
       'literatureReview',
@@ -96,14 +100,13 @@ const damascusUniversityJournalV1Core = {
   },
   previewTheme: {
     fontFamilyLatinStack: '"Times New Roman", "Liberation Serif", serif',
-    fontFamilyArabicStack:
-      '"Simplified Arabic", "Noto Naskh Arabic", serif',
+    fontFamilyArabicStack: '"Simplified Arabic", "Noto Naskh Arabic", serif',
     figureCaptionBelowImage: true,
     tableCaptionAboveTable: true,
     referencesArabicFirst: true,
-    figureWord: 'Figure',
-    tableWord: 'Table',
-    referencesHeading: 'References',
+    figureWord: 'شكل',
+    tableWord: 'جدول',
+    referencesHeading: 'المراجع',
   },
 } satisfies ManuscriptStyleProfile;
 

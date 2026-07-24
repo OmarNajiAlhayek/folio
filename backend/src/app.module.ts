@@ -16,6 +16,7 @@ import { RbacModule } from './rbac/rbac.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { AiJobsModule } from './ai-jobs/ai-jobs.module';
 import { AdminEmailModule } from './admin-email/admin-email.module';
+import { JournalSettingsModule } from './journal-settings/journal-settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { FolioThrottlerGuard } from './common/guards/folio-throttler.guard';
@@ -60,6 +61,7 @@ import {
         migrations: [join(__dirname, 'db', 'migrations', '*.{js,ts}')],
         migrationsRun:
           config.get<string>('DB_MIGRATE_ON_START', 'true') !== 'false',
+        migrationsTransactionMode: 'each',
         extra: buildTypeOrmExtra(config),
         ...typeOrmSlowQueryOptions(config),
       }),
@@ -75,6 +77,7 @@ import {
     MessagingModule,
     AiJobsModule,
     SubmissionsModule,
+    JournalSettingsModule,
     PublicModule,
     AdminEmailModule,
     NotificationsModule,

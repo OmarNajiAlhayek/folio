@@ -89,8 +89,14 @@ export function submissionToViewerJson(
     base.constructorContent = sanitizeConstructorContent(s.constructorContent);
   }
 
-  if (viewer === 'author' || viewer === 'editor') {
+  if (
+    viewer === 'author' ||
+    viewer === 'editor' ||
+    viewer === 'section_editor'
+  ) {
     base.messageForAuthor = s.messageForAuthor;
+    base.lastDecisionKind = s.lastDecisionKind;
+    base.authorResponseToReviewers = s.authorResponseToReviewers;
     base.reviewManuscriptPresentation = s.reviewManuscriptPresentation;
     base.disciplines = s.disciplines;
     base.disciplineSource = s.disciplineSource;
@@ -106,8 +112,32 @@ export function submissionToViewerJson(
       s.disciplineClassification?.scopeWarning ?? null;
   }
 
-  if (viewer === 'editor' && s.reviewAssignments?.length) {
+  if (viewer === 'author') {
+    base.preSubmitAnalysis = s.preSubmitAnalysis;
+    base.docxManuscriptViolations = s.docxManuscriptViolations ?? null;
+    base.docxGrammarNotes = s.docxGrammarNotes ?? null;
+  }
+
+  if (
+    (viewer === 'editor' || viewer === 'section_editor') &&
+    s.reviewAssignments?.length
+  ) {
     base.reviewAssignments = s.reviewAssignments;
+  }
+
+  if (viewer === 'editor' && s.sectionEditorAssignment) {
+    base.sectionEditorAssignment = {
+      id: s.sectionEditorAssignment.id,
+      sectionEditorId: s.sectionEditorAssignment.sectionEditorId,
+      assignedAt: s.sectionEditorAssignment.assignedAt,
+      sectionEditor: s.sectionEditorAssignment.sectionEditor
+        ? {
+            id: s.sectionEditorAssignment.sectionEditor.id,
+            displayName: s.sectionEditorAssignment.sectionEditor.displayName,
+            email: s.sectionEditorAssignment.sectionEditor.email,
+          }
+        : undefined,
+    };
   }
 
   return base;

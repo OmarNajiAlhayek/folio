@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   UpdateDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '../common/base.entity';
@@ -18,9 +19,11 @@ import type { DisciplineClassificationJson } from '../ai/ai-client.types';
 import { SubmissionFile } from './submission-file.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
+import { SectionEditorAssignment } from './section-editor-assignment.entity';
 import type { SubmissionContributorJson } from '../submissions/submission-json.types';
 import type { ConstructorContent } from '../submissions/constructor-content.types';
 import type { ReviewManuscriptPresentation } from '../submissions/review-manuscript-presentation.types';
+import type { PreSubmitAnalysisData } from '../submissions/pre-submit-analysis.types';
 
 @Entity('submissions')
 @Index('ix_submissions_status_updated_at', ['status', 'updatedAt'])
@@ -145,6 +148,30 @@ export class Submission extends BaseEntity {
   })
   reviewManuscriptPresentation: ReviewManuscriptPresentation | null;
 
+  /** Author pre-submit validation snapshot (structure, grammar, citations). */
+  @Column({ name: 'pre_submit_analysis', type: 'jsonb', nullable: true })
+  preSubmitAnalysis: PreSubmitAnalysisData | null;
+
+  /**
+   * Format violations found in the uploaded manuscript Word file.
+   * Null = not checked yet (no .docx manuscript uploaded).
+   * Empty array = file passed all format checks.
+   */
+  @Column({ name: 'docx_manuscript_violations', type: 'jsonb', nullable: true })
+  docxManuscriptViolations:
+    | import('../submissions/docx-format-checker').DocxFormatViolation[]
+    | null;
+
+  /**
+   * Grammar/spelling notes from LanguageTool on the uploaded manuscript Word file.
+   * Null = not checked yet. Empty array = no issues found.
+   * Advisory only — does not block submission.
+   */
+  @Column({ name: 'docx_grammar_notes', type: 'jsonb', nullable: true })
+  docxGrammarNotes:
+    | import('@folio/shared/contracts/pre-submit-analysis').PreSubmitGrammarNote[]
+    | null;
+
   @Column({
     type: 'enum',
     enum: SubmissionStatus,
@@ -155,6 +182,32 @@ export class Submission extends BaseEntity {
   /** Optional rationale from the editor on accept/reject/revisions_requested. */
   @Column({ name: 'message_for_author', type: 'text', nullable: true })
   messageForAuthor: string | null;
+
+  /**
+   * Fine-grained decision audit trail: distinguishes a desk rejection
+   * (submitted → rejected, before review) from a post-review rejection
+   * (under_review → rejected). Null until the first editor decision.
+   */
+  @Column({
+    name: 'last_decision_kind',
+    type: 'varchar',
+    length: 30,
+    nullable: true,
+  })
+  lastDecisionKind:
+    | 'desk_reject'
+    | 'post_review_reject'
+    | 'accepted'
+    | 'revisions_requested'
+    | null;
+
+  /** Author's reply to reviewer/editor feedback, set on resubmission after revisions_requested. */
+  @Column({
+    name: 'author_response_to_reviewers',
+    type: 'text',
+    nullable: true,
+  })
+  authorResponseToReviewers: string | null;
 
   /**
    * Peer review visibility model (OJS: open / single-anonymous / double-anonymous).
@@ -214,4 +267,9 @@ export class Submission extends BaseEntity {
 
   @OneToMany(() => CopyeditAssignment, (a) => a.submission)
   copyeditAssignments: CopyeditAssignment[];
+
+  @OneToOne(() => SectionEditorAssignment, (a) => a.submission, {
+    nullable: true,
+  })
+  sectionEditorAssignment: SectionEditorAssignment | null;
 }

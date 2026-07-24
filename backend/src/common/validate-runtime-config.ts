@@ -195,11 +195,6 @@ export function validateBackendRuntimeConfig(config: ConfigService): void {
       'EMAIL_SERVICE_TOKEN must be set when EMAIL_SERVICE_URL is not loopback in production.',
     );
   }
-  if (!emailServiceToken) {
-    throw new RuntimeConfigError(
-      'EMAIL_SERVICE_TOKEN must be set in production. Nest must authenticate email-service internal API calls.',
-    );
-  }
 
   if (
     config.get<string>('AI_SERVICE_ENABLED', 'false').toLowerCase() === 'true'
@@ -226,6 +221,18 @@ export function validateBackendRuntimeConfig(config: ConfigService): void {
     if (!grpcHost) {
       throw new RuntimeConfigError(
         'AI_SERVICE_GRPC_HOST must be set when AI_SIMILARITY_ENABLED=true in production.',
+      );
+    }
+  }
+
+  if (
+    config.get<string>('AI_WEB_SIMILARITY_ENABLED', 'false').toLowerCase() ===
+    'true'
+  ) {
+    const grpcHost = config.get<string>('AI_SERVICE_GRPC_HOST', '').trim();
+    if (!grpcHost) {
+      throw new RuntimeConfigError(
+        'AI_SERVICE_GRPC_HOST must be set when AI_WEB_SIMILARITY_ENABLED=true in production.',
       );
     }
   }

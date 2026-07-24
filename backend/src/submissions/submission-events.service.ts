@@ -17,6 +17,7 @@ import type {
   ReviewerInvitedEvent,
   ReviewerRespondedEvent,
   ReviewerRespondedOutcome,
+  SectionEditorAssignedEvent,
   SubmissionDecisionEvent,
   SubmissionDecisionKind,
   SubmissionPublishedEvent,
@@ -30,6 +31,7 @@ import {
   copyeditQueriesSentKey,
   reviewerInvitedKey,
   reviewerRespondedKey,
+  sectionEditorAssignedKey,
   submissionDecisionKey,
   submissionPublishedKey,
   submissionSubmittedKey,
@@ -37,7 +39,10 @@ import {
 } from '@folio/shared/messaging/idempotency';
 import { truncateCopyeditNoteExcerpt } from '../common/copyedit-email-excerpt';
 import { resolveEmailLocale } from '../common/email-locale';
-import { assignmentInvitePageUrl } from '../common/folio-frontend-urls';
+import {
+  assignmentInvitePageUrl,
+  sectionEditorQueueUrl,
+} from '../common/folio-frontend-urls';
 import { Submission } from '../entities/submission.entity';
 import { User } from '../entities/user.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
@@ -238,6 +243,7 @@ export class SubmissionEventsService {
       editorId: string;
       editorFolioLocale?: string;
       messageForAuthor?: string | null;
+      isDeskReject?: boolean;
     },
     em: EntityManager,
   ): Promise<Notification | null> {
@@ -247,6 +253,7 @@ export class SubmissionEventsService {
       editorId,
       editorFolioLocale,
       messageForAuthor,
+      isDeskReject,
     } = args;
     if (!submission.slug) {
       throw new InternalServerErrorException({
@@ -299,6 +306,9 @@ export class SubmissionEventsService {
       },
       submissionUrl: `${this.appBaseUrl()}/submissions/${submission.slug}`,
       ...(messageForAuthor ? { messageForAuthor } : {}),
+      ...(decision === 'rejected'
+        ? { isDeskReject: Boolean(isDeskReject) }
+        : {}),
     };
     await this.eventPublisher.enqueue(
       ROUTING_KEY.submissionDecision,
@@ -744,5 +754,73 @@ export class SubmissionEventsService {
       },
       em,
     );
+  }
+
+  async enqueueSectionEditorAssignedEvent(args: {
+    submission: Submission;
+    sectionEditor: User;
+    assignedByDisplayName: string;
+    assignedById: string;
+    folioLocale?: string;
+  }): Promise<void> {
+    const {
+      submission,
+      sectionEditor,
+      assignedByDisplayName,
+      assignedById,
+      folioLocale,
+    } = args;
+    if (!submission.slug) {
+      throw new InternalServerErrorException({
+        message: 'Cannot enqueue section editor assigned: missing slug',
+        code: 'INTERNAL_ERROR',
+      });
+    }
+    const siteDefault = this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en');
+    const emailLocale = resolveEmailLocale({
+      recipientPreferred: sectionEditor.preferredLocale,
+      editorHeaderLocale: folioLocale?.trim() || undefined,
+      siteDefault,
+    });
+    const baseUrl = this.appBaseUrl();
+    const idempotencyKey = sectionEditorAssignedKey(
+      submission.slug,
+      sectionEditor.id,
+    );
+    const payload: SectionEditorAssignedEvent = {
+      type: 'SectionEditorAssigned',
+      occurredAt: new Date().toISOString(),
+      idempotencyKey,
+      submissionSlug: submission.slug,
+      submissionTitle: submission.title,
+      emailLocale,
+      sectionEditor: {
+        id: sectionEditor.id,
+        email: sectionEditor.email,
+        displayName: sectionEditor.displayName,
+      },
+      assignedBy: {
+        id: assignedById,
+        displayName: assignedByDisplayName,
+      },
+      queueUrl: sectionEditorQueueUrl(baseUrl, emailLocale),
+    };
+    await this.eventPublisher.enqueue(
+      ROUTING_KEY.sectionEditorAssigned,
+      payload as unknown as Record<string, unknown>,
+    );
+    const notification = await this.notifications.createIfAbsent(
+      {
+        userId: sectionEditor.id,
+        type: NOTIFICATION_TYPE.SECTION_EDITOR_ASSIGNED,
+        params: { submissionTitle: submission.title },
+        href: `/section-editor`,
+        idempotencyKey,
+      },
+      null,
+    );
+    if (notification) {
+      this.notifications.emitCreated([notification]);
+    }
   }
 }

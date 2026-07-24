@@ -35,6 +35,9 @@ import { EventPublisherService } from '../messaging/event-publisher.service';
 import { notificationsServiceMock } from '../notifications/notifications.service.mock';
 import type { RequestUser } from '../common/types/request-user';
 import type { ConstructorContent } from './constructor-content.types';
+import { hashConstructorContent } from './constructor-content-hash.util';
+import { ManuscriptAnalysisService } from './manuscript-analysis.service';
+import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 
 describe('SubmissionsService.submit (constructor files)', () => {
   let service: SubmissionsService;
@@ -93,6 +96,21 @@ describe('SubmissionsService.submit (constructor files)', () => {
     ],
   };
 
+  function readyPreSubmitAnalysis() {
+    const contentHash = hashConstructorContent(minimalConstructorContent)!;
+    return {
+      id: 'psa-1',
+      analyzedAt: new Date().toISOString(),
+      contentHash,
+      formatIssues: [],
+      grammarNotes: [],
+      referenceIssues: [],
+      aiUnavailable: false,
+      acknowledged: true,
+      acknowledgedAt: new Date().toISOString(),
+    };
+  }
+
   function draftConstructorRow(): Submission {
     return {
       id: 'sub-c',
@@ -100,9 +118,10 @@ describe('SubmissionsService.submit (constructor files)', () => {
       authorId: authorUser.sub,
       status: SubmissionStatus.DRAFT,
       constructorContent: minimalConstructorContent,
+      preSubmitAnalysis: readyPreSubmitAnalysis(),
       articleType: 'research_article',
-      keywords: 'one, two, three',
-      keywordsAr: 'واحد, اثنان, ثلاثة',
+      keywords: 'one, two, three, four, five',
+      keywordsAr: 'واحد, اثنان, ثلاثة, أربعة, خمسة',
       titleAr: 'عنوان',
       contributors: [
         {
@@ -154,6 +173,8 @@ describe('SubmissionsService.submit (constructor files)', () => {
         CopyeditWorkflowService,
         SubmissionLifecycleService,
         SubmissionAiService,
+        ManuscriptAnalysisService,
+        PreSubmitAnalysisService,
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         { provide: getRepositoryToken(SubmissionFile), useValue: filesRepo },
         { provide: getRepositoryToken(ReviewAssignment), useValue: {} },

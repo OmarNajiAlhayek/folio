@@ -12,6 +12,8 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
+import { ManuscriptAnalysisService } from './manuscript-analysis.service';
+import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 
 import { AiClientService } from '../ai/ai-client.service';
 import { AiJobsService } from '../ai-jobs/ai-jobs.service';
@@ -116,6 +118,8 @@ describe('SubmissionsService.startCorpusSimilarityJob', () => {
         CopyeditWorkflowService,
         SubmissionLifecycleService,
         SubmissionAiService,
+        { provide: ManuscriptAnalysisService, useValue: {} },
+        { provide: PreSubmitAnalysisService, useValue: {} },
         { provide: AiClientService, useValue: aiClient },
         { provide: AiJobsService, useValue: aiJobs },
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },

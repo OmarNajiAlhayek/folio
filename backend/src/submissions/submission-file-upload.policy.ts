@@ -36,6 +36,10 @@ const POLICY: Record<
     extensions: ['.pdf', '.docx', '.zip'],
     mimeTypes: ['application/pdf', DOCX_MIME, 'application/zip'],
   },
+  review_response: {
+    extensions: ['.pdf', '.docx'],
+    mimeTypes: ['application/pdf', DOCX_MIME],
+  },
 };
 
 /** Union of every allowed extension (for Multer fileFilter when kind is unknown). */
