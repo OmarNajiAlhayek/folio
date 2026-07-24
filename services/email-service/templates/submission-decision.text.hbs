@@ -4,7 +4,11 @@ Dear {{authorDisplayName}},
 We are pleased to inform you that your manuscript "{{submissionTitle}}" has been accepted.
 {{/if}}
 {{#if isRejected}}
+{{#if isDeskReject}}
+Following an initial editorial review, your manuscript "{{submissionTitle}}" has been declined without proceeding to peer review.
+{{else}}
 After editorial consideration, your manuscript "{{submissionTitle}}" has been declined.
+{{/if}}
 {{/if}}
 {{#if isRevisionsRequested}}
 The editor has requested revisions for your manuscript "{{submissionTitle}}".
@@ -20,4 +24,4 @@ Decision recorded by {{decidedByDisplayName}}.
 View your submission: {{submissionUrl}}
 
 Thank you,
-Folio editorial team
+Damascus University Journal editorial team

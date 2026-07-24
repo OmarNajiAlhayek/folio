@@ -1,7 +1,7 @@
 {
   "name": "@folio/email-service",
   "version": "0.1.0",
-  "description": "Folio email microservice: consumes RabbitMQ events, sends transactional + scheduled emails, owns reminder lifecycle.",
+  "description": "Damascus University Journal email microservice: consumes RabbitMQ events, sends transactional + scheduled emails, owns reminder lifecycle.",
   "private": true,
   "scripts": {
     "build": "npm run build --prefix ../../packages/shared && tsc -p tsconfig.json",

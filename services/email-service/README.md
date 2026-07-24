@@ -1,4 +1,4 @@
-# Folio email service
+# Damascus University Journal email service
 
 Standalone NestJS worker that consumes RabbitMQ events from the main API, renders Handlebars templates, and sends transactional mail (reviewer invites, copyedit, editorial workflow, role invitations) plus scheduled review reminders.
 

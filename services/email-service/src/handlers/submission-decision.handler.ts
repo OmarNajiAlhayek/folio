@@ -80,6 +80,7 @@ export class SubmissionDecisionHandler {
           isAccepted: decision === 'accepted',
           isRejected: decision === 'rejected',
           isRevisionsRequested: decision === 'revisions_requested',
+          isDeskReject: decision === 'rejected' && Boolean(event.isDeskReject),
           messageForAuthor: event.messageForAuthor ?? '',
           hasMessageForAuthor: Boolean(event.messageForAuthor?.trim()),
         },

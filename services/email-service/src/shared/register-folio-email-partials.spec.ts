@@ -16,6 +16,7 @@ describe('registerFolioEmailPartials', () => {
     );
     const html = tpl({});
     expect(html).toContain('data-folio-email="1"');
+    expect(html).toContain('Damascus University Journal');
     expect(html).toContain('Hello');
     expect(html).toContain('dir="ltr"');
   });

@@ -214,3 +214,16 @@ export function corpusSimilarityKey(jobId: string): string {
   }
   return `corpus_similarity:${jobId}`;
 }
+
+export function sectionEditorAssignedKey(
+  submissionSlug: string,
+  sectionEditorId: string,
+): string {
+  if (!submissionSlug) {
+    throw new Error('sectionEditorAssignedKey: submissionSlug is required');
+  }
+  if (!sectionEditorId) {
+    throw new Error('sectionEditorAssignedKey: sectionEditorId is required');
+  }
+  return `section_editor_assigned:${submissionSlug}:${sectionEditorId}`;
+}

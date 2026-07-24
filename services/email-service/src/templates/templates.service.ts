@@ -12,10 +12,10 @@ const TEMPLATES_DIR = join(__dirname, '..', '..', 'templates');
 
 const FILE_FALLBACK: Record<string, { subject: string }> = {
   'reviewer-invited': {
-    subject: `Review invitation: {{#if submissionTitle}}{{submissionTitle}}{{else}}Folio manuscript{{/if}}`,
+    subject: `Review invitation: {{#if submissionTitle}}{{submissionTitle}}{{else}}journal manuscript{{/if}}`,
   },
   'reminder-due': {
-    subject: `{{#if isOverdue}}Overdue review: {{#if submissionTitle}}{{submissionTitle}}{{else}}Folio manuscript{{/if}}{{else}}Reminder: review due for {{#if submissionTitle}}{{submissionTitle}}{{else}}Folio manuscript{{/if}}{{/if}}`,
+    subject: `{{#if isOverdue}}Overdue review: {{#if submissionTitle}}{{submissionTitle}}{{else}}journal manuscript{{/if}}{{else}}Reminder: review due for {{#if submissionTitle}}{{submissionTitle}}{{else}}journal manuscript{{/if}}{{/if}}`,
   },
   'copyedit-assigned': {
     subject: 'Copyediting assignment: {{submissionTitle}}',
@@ -49,16 +49,16 @@ const FILE_FALLBACK: Record<string, { subject: string }> = {
     subject: 'Published: {{submissionTitle}}',
   },
   'role-invitation': {
-    subject: 'Invitation to join Folio as {{roleLabel}}',
+    subject: 'Invitation to join Damascus University Journal as {{roleLabel}}',
   },
   'auth-verification-otp': {
-    subject: 'Your Folio verification code: {{otpCode}}',
+    subject: 'Your Damascus University Journal verification code: {{otpCode}}',
   },
   'auth-password-reset': {
-    subject: 'Reset your Folio password',
+    subject: 'Reset your Damascus University Journal password',
   },
   'auth-registration-welcome': {
-    subject: 'Welcome to Folio',
+    subject: 'Welcome to Damascus University Journal',
   },
 };
 

@@ -1,13 +1,13 @@
 import * as Handlebars from 'handlebars';
 
-/** Table-based shell aligned with Folio frontend tokens (ink, paper, accent). */
+/** Table-based shell aligned with Damascus University Journal frontend tokens (ink, paper, accent). */
 export const FOLIO_EMAIL_LAYOUT_PARTIAL = `<!DOCTYPE html>
 <html lang="{{lang}}" dir="{{dir}}" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>Folio</title>
+  <title>Damascus University Journal</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f3ee;" data-folio-email="1">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f3ee;">
@@ -16,7 +16,7 @@ export const FOLIO_EMAIL_LAYOUT_PARTIAL = `<!DOCTYPE html>
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;">
           <tr>
             <td style="padding:0 0 16px 0;border-bottom:3px solid #c45c3e;">
-              <span style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:bold;color:#0f172a;letter-spacing:-0.02em;">Folio</span>
+              <span style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:bold;color:#0f172a;letter-spacing:-0.02em;">Damascus University Journal</span>
             </td>
           </tr>
           <tr>
@@ -26,7 +26,7 @@ export const FOLIO_EMAIL_LAYOUT_PARTIAL = `<!DOCTYPE html>
           </tr>
           <tr>
             <td style="padding:20px 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
-              Folio journal workflow &middot; This is an automated message.
+              Damascus University Journal workflow &middot; This is an automated message.
             </td>
           </tr>
         </table>

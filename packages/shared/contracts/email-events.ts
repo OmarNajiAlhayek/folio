@@ -270,6 +270,9 @@ export type SubmissionDecisionEvent = {
   submissionUrl: string;
 
   messageForAuthor?: string;
+
+  /** Only meaningful when `decision === 'rejected'`: true if rejected before peer review started (desk reject) vs after (post-review reject). */
+  isDeskReject?: boolean;
 };
 
 export type ReviewSubmittedEvent = {
@@ -476,6 +479,26 @@ export type AuthRegistrationWelcomeEvent = {
   willingToReview: boolean;
 };
 
+export type SectionEditorAssignedEvent = {
+  type: 'SectionEditorAssigned';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  submissionSlug: string;
+
+  submissionTitle: string;
+
+  emailLocale?: 'en' | 'ar';
+
+  sectionEditor: ReviewerIdentity;
+
+  assignedBy: EditorIdentity;
+
+  queueUrl: string;
+};
+
 export type FolioEvent =
   | ReviewerInvitedEvent
   | ReviewerRespondedEvent
@@ -493,7 +516,8 @@ export type FolioEvent =
   | RoleInvitationCreatedEvent
   | AuthVerificationOtpEvent
   | AuthPasswordResetEvent
-  | AuthRegistrationWelcomeEvent;
+  | AuthRegistrationWelcomeEvent
+  | SectionEditorAssignedEvent;
 
 export const ROUTING_KEY = {
   reviewerInvited: 'reviewer.invited',
@@ -529,6 +553,8 @@ export const ROUTING_KEY = {
   authPasswordReset: 'auth.password_reset',
 
   authRegistrationWelcome: 'auth.registration_welcome',
+
+  sectionEditorAssigned: 'section_editor.assigned',
 } as const;
 
 export type RoutingKey = (typeof ROUTING_KEY)[keyof typeof ROUTING_KEY];
