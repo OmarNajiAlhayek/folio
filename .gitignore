@@ -67,6 +67,7 @@ user-equation.png
 extracted-*.png
 /*.docx
 Damascus_Articles/
+backend/src/submissions/docx-import.real-articles.spec.ts
 
 # Local reference PDFs and personal notes (never commit)
 *.pdf
