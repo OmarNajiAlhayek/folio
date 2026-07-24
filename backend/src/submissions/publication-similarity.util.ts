@@ -1,4 +1,5 @@
 import type { Submission } from '../entities/submission.entity';
+import { buildSubmissionCorpusPlainText } from './submission-corpus-text.util';
 
 const SUBMISSION_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,7 +25,6 @@ export function publicationSimilarityIndexPayload(s: Submission): {
     .filter((k): k is string => !!k)
     .join(', ');
   const category = s.disciplines?.[0]?.trim() ?? '';
-  const title = (s.titleAr?.trim() || s.title?.trim() || '').trim();
-  const fullText = [title, abstract, keywords].filter(Boolean).join('\n\n');
+  const fullText = buildSubmissionCorpusPlainText(s);
   return { abstract, keywords, category, fullText };
 }

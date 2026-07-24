@@ -51,6 +51,20 @@ export type CorpusSimilarityMatch = {
   similarity: number;
 };
 
+export type WebSimilarityMatch = {
+  querySnippet: string;
+  sourceUrl: string;
+  matchedSnippet: string;
+  similarity: number;
+};
+
+export type DetectCorpusSimilarityResult = {
+  localMatches: CorpusSimilarityMatch[];
+  webMatches: WebSimilarityMatch[];
+  localError?: string;
+  webError?: string;
+};
+
 export type ReviewerProfileIndexInput = {
   reviewerId: string;
   affiliation?: string;

@@ -56,11 +56,8 @@ function sectionPlainParts(section: ConstructorSection): string[] {
     case 'image':
       return section.caption.trim() ? [section.caption.trim()] : [];
     case 'references':
-      return [];
     case 'authors':
-      return section.authors
-        .map((a) => a.fullName.trim())
-        .filter((n) => n.length > 0);
+      return [];
     default:
       return [];
   }
@@ -87,10 +84,13 @@ function metadataFallback(s: Submission): string {
   return [title, abstract, keywords].filter(Boolean).join('\n\n').trim();
 }
 
-/** Plain text for corpus similarity (constructor walk, then metadata fallback). */
-export function buildSubmissionCorpusPlainText(s: Submission): string {
+/** Plain text for corpus similarity (constructor walk → uploaded DOCX text → metadata fallback). */
+export function buildSubmissionCorpusPlainText(
+  s: Submission,
+  uploadedManuscriptText?: string,
+): string {
   const fromCtor = fromConstructor(s.constructorContent);
-  const raw = fromCtor || metadataFallback(s);
+  const raw = fromCtor || uploadedManuscriptText?.trim() || metadataFallback(s);
   if (raw.length <= MAX_CORPUS_PLAIN_TEXT_CHARS) {
     return raw;
   }

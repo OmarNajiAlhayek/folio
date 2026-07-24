@@ -25,6 +25,19 @@ def reviewer_matching_grpc_service():
     return service
 
 
+@pytest.fixture
+def copyedit_grpc_service():
+    """Disabled copyedit stub for gRPC server tests."""
+    from unittest.mock import AsyncMock
+
+    from app.config import Settings
+    from app.services.copyedit_analysis_service import CopyeditAnalysisService
+
+    service = CopyeditAnalysisService(Settings(copyedit_analysis_enabled=False))
+    service.check_references = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    return service
+
+
 @pytest.fixture(autouse=True)
 def reset_vector_engine() -> None:
     """Isolate vector engine / encoder singleton between tests."""

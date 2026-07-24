@@ -1,7 +1,7 @@
 [project]
 name = "folio-ai-service"
 version = "0.1.0"
-description = "Folio AI microservice: FastAPI scaffold with pluggable LLM providers."
+description = "Damascus University Journal AI microservice: FastAPI scaffold with pluggable LLM providers."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -34,6 +34,13 @@ similarity = [
   "sentence-transformers>=3.3.0",
   "pyarabic>=0.6.15",
 ]
+web_similarity = [
+  "google-api-python-client>=2.150.0",
+  "beautifulsoup4>=4.12.0",
+  "requests>=2.32.0",
+  "farasapy>=0.0.14",
+  "pyarabic>=0.6.15",
+]
 dev = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.24.0",
@@ -57,6 +64,7 @@ testpaths = ["tests"]
 markers = [
   "ml: full AraBERT inference (requires pip install -e \".[ml]\" and local weights)",
   "similarity: pgvector + sentence-transformers (requires pip install -e \".[similarity]\")",
+  "web_similarity: Google CSE + AraBERT web check (requires pip install -e \".[ml,web_similarity]\")",
 ]
 
 [tool.ruff]

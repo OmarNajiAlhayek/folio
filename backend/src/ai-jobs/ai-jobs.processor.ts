@@ -4,11 +4,16 @@ import { In, IsNull, Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
 import { AiJob, type AiJobStatus } from '../entities/ai-job.entity';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionFile } from '../entities/submission-file.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import {
   aggregateCorpusSimilarityMatches,
+  aggregateWebSimilarityMatches,
   attachPublicationMetadata,
   type CorpusSimilarityReport,
+  type CorpusSimilarityStageReport,
+  type CorpusSimilaritySource,
+  type WebSimilaritySource,
 } from '../submissions/corpus-similarity-report.util';
 import {
   buildSubmissionCorpusPlainText,
@@ -19,6 +24,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_TYPE } from '../notifications/notification-types';
 
 const CORPUS_SIMILARITY_THRESHOLD = 0.85;
+const WEB_SIMILARITY_THRESHOLD = 70;
 const MAX_JOB_ATTEMPTS = 3;
 
 class PermanentJobError extends Error {
@@ -37,6 +43,8 @@ export class AiJobsProcessor {
     private readonly jobsRepo: Repository<AiJob>,
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
+    @InjectRepository(SubmissionFile)
+    private readonly filesRepo: Repository<SubmissionFile>,
     private readonly aiClient: AiClientService,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -158,7 +166,10 @@ export class AiJobsProcessor {
       throw new PermanentJobError('Submission not found');
     }
 
-    if (!this.aiClient.isCorpusSimilarityEnabled()) {
+    const localEnabled = this.aiClient.isSimilarityEnabled();
+    const webEnabled = this.aiClient.isWebSimilarityEnabled();
+
+    if (!localEnabled && !webEnabled) {
       return { status: 'unavailable' };
     }
 
@@ -167,46 +178,66 @@ export class AiJobsProcessor {
       return { status: 'no_text' };
     }
 
-    const threshold = CORPUS_SIMILARITY_THRESHOLD;
-    const matches = await this.aiClient.detectCorpusSimilarity({
+    const detectResult = await this.aiClient.detectCorpusSimilarity({
       submissionText: plainText,
-      threshold,
+      threshold: CORPUS_SIMILARITY_THRESHOLD,
       category: submission.disciplines?.[0]?.trim() || undefined,
     });
-    if (matches === null) {
+    if (detectResult === null) {
       return { status: 'unavailable' };
     }
 
-    const aggregated = aggregateCorpusSimilarityMatches(submission, matches);
-    const articleIds = aggregated.sources.map((src) => src.articleId);
-    const publishedById = new Map<
-      string,
-      { slug: string; title: string; titleAr: string | null }
-    >();
-    if (articleIds.length > 0) {
-      const rows = await this.submissionsRepo.find({
-        where: {
-          id: In(articleIds),
-          status: SubmissionStatus.PUBLISHED,
-        },
-        select: ['id', 'slug', 'title', 'titleAr'],
-      });
-      for (const row of rows) {
-        if (!row.slug) continue;
-        publishedById.set(row.id, {
-          slug: row.slug,
-          title: row.title ?? '',
-          titleAr: row.titleAr,
+    let local: CorpusSimilarityStageReport<CorpusSimilaritySource> | null =
+      null;
+    if (localEnabled) {
+      const aggregated = aggregateCorpusSimilarityMatches(
+        submission,
+        detectResult.localMatches,
+      );
+      const articleIds = aggregated.sources.map((src) => src.articleId);
+      const publishedById = new Map<
+        string,
+        { slug: string; title: string; titleAr: string | null }
+      >();
+      if (articleIds.length > 0) {
+        const rows = await this.submissionsRepo.find({
+          where: {
+            id: In(articleIds),
+            status: SubmissionStatus.PUBLISHED,
+          },
+          select: ['id', 'slug', 'title', 'titleAr'],
         });
+        for (const row of rows) {
+          if (!row.slug) continue;
+          publishedById.set(row.id, {
+            slug: row.slug,
+            title: row.title ?? '',
+            titleAr: row.titleAr,
+          });
+        }
       }
+      local = {
+        enabled: true,
+        threshold: CORPUS_SIMILARITY_THRESHOLD,
+        matchCount: aggregated.matchCount,
+        sources: attachPublicationMetadata(aggregated.sources, publishedById),
+        ...(detectResult.localError ? { error: detectResult.localError } : {}),
+      };
     }
 
-    return {
-      status: 'ok',
-      threshold,
-      matchCount: aggregated.matchCount,
-      sources: attachPublicationMetadata(aggregated.sources, publishedById),
-    };
+    let web: CorpusSimilarityStageReport<WebSimilaritySource> | null = null;
+    if (webEnabled) {
+      const aggregated = aggregateWebSimilarityMatches(detectResult.webMatches);
+      web = {
+        enabled: true,
+        threshold: WEB_SIMILARITY_THRESHOLD,
+        matchCount: aggregated.matchCount,
+        sources: aggregated.sources,
+        ...(detectResult.webError ? { error: detectResult.webError } : {}),
+      };
+    }
+
+    return { status: 'ok', local, web };
   }
 
   private async completeJob(

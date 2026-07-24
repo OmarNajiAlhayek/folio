@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
         raise SystemExit(1) from err
 
     app = FastAPI(
-        title="Folio AI Service",
+        title="Damascus University Journal AI Service",
         version="0.1.0",
         lifespan=lifespan,
     )

@@ -5,6 +5,7 @@ import { AiJobsProcessor } from './ai-jobs.processor';
 import { AiClientService } from '../ai/ai-client.service';
 import { AiJob } from '../entities/ai-job.entity';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionFile } from '../entities/submission-file.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { MIN_CORPUS_PLAIN_TEXT_CHARS } from '../submissions/submission-corpus-text.util';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -58,6 +59,7 @@ describe('AiJobsProcessor', () => {
   let processor: AiJobsProcessor;
   let aiClient: {
     isCorpusSimilarityEnabled: jest.Mock;
+    isWebSimilarityEnabled: jest.Mock;
     isSimilarityEnabled: jest.Mock;
     detectCorpusSimilarity: jest.Mock;
     upsertSimilarityArticle: jest.Mock;
@@ -76,8 +78,12 @@ describe('AiJobsProcessor', () => {
 
     aiClient = {
       isCorpusSimilarityEnabled: jest.fn().mockReturnValue(true),
+      isWebSimilarityEnabled: jest.fn().mockReturnValue(false),
       isSimilarityEnabled: jest.fn().mockReturnValue(true),
-      detectCorpusSimilarity: jest.fn().mockResolvedValue([]),
+      detectCorpusSimilarity: jest.fn().mockResolvedValue({
+        localMatches: [],
+        webMatches: [],
+      }),
       upsertSimilarityArticle: jest.fn().mockResolvedValue(true),
     };
     jobsRepo = {
@@ -97,6 +103,7 @@ describe('AiJobsProcessor', () => {
         { provide: AiClientService, useValue: aiClient },
         { provide: getRepositoryToken(AiJob), useValue: jobsRepo },
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
+        { provide: getRepositoryToken(SubmissionFile), useValue: {} },
         {
           provide: NotificationsService,
           useValue: {
@@ -115,24 +122,27 @@ describe('AiJobsProcessor', () => {
       submissionsRepo.findOne.mockResolvedValue(
         makeSubmission({ status: SubmissionStatus.PUBLISHED }),
       );
-      aiClient.detectCorpusSimilarity.mockResolvedValue([
-        {
-          submissionChunkIndex: 0,
-          submissionSnippet: 'overlap',
-          sourceArticleId: 'sub-1',
-          sourceChunkIndex: 0,
-          matchedSnippet: 'overlap',
-          similarity: 0.99,
-        },
-        {
-          submissionChunkIndex: 0,
-          submissionSnippet: 'other',
-          sourceArticleId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-          sourceChunkIndex: 0,
-          matchedSnippet: 'other',
-          similarity: 0.9,
-        },
-      ]);
+      aiClient.detectCorpusSimilarity.mockResolvedValue({
+        localMatches: [
+          {
+            submissionChunkIndex: 0,
+            submissionSnippet: 'overlap',
+            sourceArticleId: 'sub-1',
+            sourceChunkIndex: 0,
+            matchedSnippet: 'overlap',
+            similarity: 0.99,
+          },
+          {
+            submissionChunkIndex: 0,
+            submissionSnippet: 'other',
+            sourceArticleId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+            sourceChunkIndex: 0,
+            matchedSnippet: 'other',
+            similarity: 0.9,
+          },
+        ],
+        webMatches: [],
+      });
 
       await processor.processCorpusSimilarity('job-1');
 
@@ -140,11 +150,11 @@ describe('AiJobsProcessor', () => {
       expect(saved.status).toBe('completed');
       const report = saved.result as {
         status: string;
-        sources: { articleId: string }[];
+        local: { sources: { articleId: string }[] } | null;
       };
       expect(report.status).toBe('ok');
-      expect(report.sources).toHaveLength(1);
-      expect(report.sources[0].articleId).toBe(
+      expect(report.local?.sources).toHaveLength(1);
+      expect(report.local?.sources[0].articleId).toBe(
         'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       );
     });

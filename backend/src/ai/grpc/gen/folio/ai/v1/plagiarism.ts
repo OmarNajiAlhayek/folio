@@ -34,8 +34,18 @@ export interface CorpusSimilarityMatch {
   similarity: number;
 }
 
+export interface WebSimilarityMatch {
+  querySnippet: string;
+  sourceUrl: string;
+  matchedSnippet: string;
+  similarity: number;
+}
+
 export interface DetectCorpusSimilarityResponse {
-  matches: CorpusSimilarityMatch[];
+  localMatches: CorpusSimilarityMatch[];
+  webMatches: WebSimilarityMatch[];
+  localError?: string | undefined;
+  webError?: string | undefined;
 }
 
 export interface PlagiarismStatus {
@@ -336,8 +346,146 @@ export const CorpusSimilarityMatch: MessageFns<CorpusSimilarityMatch> = {
   },
 };
 
+function createBaseWebSimilarityMatch(): WebSimilarityMatch {
+  return { querySnippet: '', sourceUrl: '', matchedSnippet: '', similarity: 0 };
+}
+
+export const WebSimilarityMatch: MessageFns<WebSimilarityMatch> = {
+  encode(
+    message: WebSimilarityMatch,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.querySnippet !== '') {
+      writer.uint32(10).string(message.querySnippet);
+    }
+    if (message.sourceUrl !== '') {
+      writer.uint32(18).string(message.sourceUrl);
+    }
+    if (message.matchedSnippet !== '') {
+      writer.uint32(26).string(message.matchedSnippet);
+    }
+    if (message.similarity !== 0) {
+      writer.uint32(33).double(message.similarity);
+    }
+    return writer;
+  },
+
+  decode(
+    input: BinaryReader | Uint8Array,
+    length?: number,
+  ): WebSimilarityMatch {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWebSimilarityMatch();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.querySnippet = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sourceUrl = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.matchedSnippet = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 33) {
+            break;
+          }
+
+          message.similarity = reader.double();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): WebSimilarityMatch {
+    return {
+      querySnippet: isSet(object.querySnippet)
+        ? globalThis.String(object.querySnippet)
+        : isSet(object.query_snippet)
+          ? globalThis.String(object.query_snippet)
+          : '',
+      sourceUrl: isSet(object.sourceUrl)
+        ? globalThis.String(object.sourceUrl)
+        : isSet(object.source_url)
+          ? globalThis.String(object.source_url)
+          : '',
+      matchedSnippet: isSet(object.matchedSnippet)
+        ? globalThis.String(object.matchedSnippet)
+        : isSet(object.matched_snippet)
+          ? globalThis.String(object.matched_snippet)
+          : '',
+      similarity: isSet(object.similarity)
+        ? globalThis.Number(object.similarity)
+        : 0,
+    };
+  },
+
+  toJSON(message: WebSimilarityMatch): unknown {
+    const obj: any = {};
+    if (message.querySnippet !== '') {
+      obj.querySnippet = message.querySnippet;
+    }
+    if (message.sourceUrl !== '') {
+      obj.sourceUrl = message.sourceUrl;
+    }
+    if (message.matchedSnippet !== '') {
+      obj.matchedSnippet = message.matchedSnippet;
+    }
+    if (message.similarity !== 0) {
+      obj.similarity = message.similarity;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<WebSimilarityMatch>, I>>(
+    base?: I,
+  ): WebSimilarityMatch {
+    return WebSimilarityMatch.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WebSimilarityMatch>, I>>(
+    object: I,
+  ): WebSimilarityMatch {
+    const message = createBaseWebSimilarityMatch();
+    message.querySnippet = object.querySnippet ?? '';
+    message.sourceUrl = object.sourceUrl ?? '';
+    message.matchedSnippet = object.matchedSnippet ?? '';
+    message.similarity = object.similarity ?? 0;
+    return message;
+  },
+};
+
 function createBaseDetectCorpusSimilarityResponse(): DetectCorpusSimilarityResponse {
-  return { matches: [] };
+  return {
+    localMatches: [],
+    webMatches: [],
+    localError: undefined,
+    webError: undefined,
+  };
 }
 
 export const DetectCorpusSimilarityResponse: MessageFns<DetectCorpusSimilarityResponse> =
@@ -346,8 +494,17 @@ export const DetectCorpusSimilarityResponse: MessageFns<DetectCorpusSimilarityRe
       message: DetectCorpusSimilarityResponse,
       writer: BinaryWriter = new BinaryWriter(),
     ): BinaryWriter {
-      for (const v of message.matches) {
+      for (const v of message.localMatches) {
         CorpusSimilarityMatch.encode(v!, writer.uint32(10).fork()).join();
+      }
+      for (const v of message.webMatches) {
+        WebSimilarityMatch.encode(v!, writer.uint32(18).fork()).join();
+      }
+      if (message.localError !== undefined) {
+        writer.uint32(26).string(message.localError);
+      }
+      if (message.webError !== undefined) {
+        writer.uint32(34).string(message.webError);
       }
       return writer;
     },
@@ -368,9 +525,35 @@ export const DetectCorpusSimilarityResponse: MessageFns<DetectCorpusSimilarityRe
               break;
             }
 
-            message.matches.push(
+            message.localMatches.push(
               CorpusSimilarityMatch.decode(reader, reader.uint32()),
             );
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.webMatches.push(
+              WebSimilarityMatch.decode(reader, reader.uint32()),
+            );
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.localError = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.webError = reader.string();
             continue;
           }
         }
@@ -384,18 +567,50 @@ export const DetectCorpusSimilarityResponse: MessageFns<DetectCorpusSimilarityRe
 
     fromJSON(object: any): DetectCorpusSimilarityResponse {
       return {
-        matches: globalThis.Array.isArray(object?.matches)
-          ? object.matches.map((e: any) => CorpusSimilarityMatch.fromJSON(e))
-          : [],
+        localMatches: globalThis.Array.isArray(object?.localMatches)
+          ? object.localMatches.map((e: any) =>
+              CorpusSimilarityMatch.fromJSON(e),
+            )
+          : globalThis.Array.isArray(object?.local_matches)
+            ? object.local_matches.map((e: any) =>
+                CorpusSimilarityMatch.fromJSON(e),
+              )
+            : [],
+        webMatches: globalThis.Array.isArray(object?.webMatches)
+          ? object.webMatches.map((e: any) => WebSimilarityMatch.fromJSON(e))
+          : globalThis.Array.isArray(object?.web_matches)
+            ? object.web_matches.map((e: any) => WebSimilarityMatch.fromJSON(e))
+            : [],
+        localError: isSet(object.localError)
+          ? globalThis.String(object.localError)
+          : isSet(object.local_error)
+            ? globalThis.String(object.local_error)
+            : undefined,
+        webError: isSet(object.webError)
+          ? globalThis.String(object.webError)
+          : isSet(object.web_error)
+            ? globalThis.String(object.web_error)
+            : undefined,
       };
     },
 
     toJSON(message: DetectCorpusSimilarityResponse): unknown {
       const obj: any = {};
-      if (message.matches?.length) {
-        obj.matches = message.matches.map((e) =>
+      if (message.localMatches?.length) {
+        obj.localMatches = message.localMatches.map((e) =>
           CorpusSimilarityMatch.toJSON(e),
         );
+      }
+      if (message.webMatches?.length) {
+        obj.webMatches = message.webMatches.map((e) =>
+          WebSimilarityMatch.toJSON(e),
+        );
+      }
+      if (message.localError !== undefined) {
+        obj.localError = message.localError;
+      }
+      if (message.webError !== undefined) {
+        obj.webError = message.webError;
       }
       return obj;
     },
@@ -409,8 +624,13 @@ export const DetectCorpusSimilarityResponse: MessageFns<DetectCorpusSimilarityRe
       I extends Exact<DeepPartial<DetectCorpusSimilarityResponse>, I>,
     >(object: I): DetectCorpusSimilarityResponse {
       const message = createBaseDetectCorpusSimilarityResponse();
-      message.matches =
-        object.matches?.map((e) => CorpusSimilarityMatch.fromPartial(e)) || [];
+      message.localMatches =
+        object.localMatches?.map((e) => CorpusSimilarityMatch.fromPartial(e)) ||
+        [];
+      message.webMatches =
+        object.webMatches?.map((e) => WebSimilarityMatch.fromPartial(e)) || [];
+      message.localError = object.localError ?? undefined;
+      message.webError = object.webError ?? undefined;
       return message;
     },
   };

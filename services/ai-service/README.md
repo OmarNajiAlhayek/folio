@@ -1,6 +1,6 @@
-# Folio AI service
+# Damascus University Journal AI service
 
-Python **FastAPI** microservice for Folio AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, **keyword suggestions**, **article similarity**, **corpus plagiarism detection**, **reviewer matching**, and **copyedit reference cross-checking** — all product traffic over **gRPC** (Nest BFF only).
+Python **FastAPI** microservice for Damascus University Journal AI features: health probes, environment validation, a pluggable LLM provider layer (`noop` by default), optional **AraBERT Arabic discipline classifier**, **keyword suggestions**, **article similarity**, **corpus plagiarism detection**, **reviewer matching**, and **copyedit reference cross-checking** — all product traffic over **gRPC** (Nest BFF only).
 
 Design record: [`docs/plans/ai-service.md`](../../docs/plans/ai-service.md).
 

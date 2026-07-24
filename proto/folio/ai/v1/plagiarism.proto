@@ -23,8 +23,18 @@ message CorpusSimilarityMatch {
   double similarity = 6;
 }
 
+message WebSimilarityMatch {
+  string query_snippet = 1;
+  string source_url = 2;
+  string matched_snippet = 3;
+  double similarity = 4;
+}
+
 message DetectCorpusSimilarityResponse {
-  repeated CorpusSimilarityMatch matches = 1;
+  repeated CorpusSimilarityMatch local_matches = 1;
+  repeated WebSimilarityMatch web_matches = 2;
+  optional string local_error = 3;
+  optional string web_error = 4;
 }
 
 message PlagiarismStatus {

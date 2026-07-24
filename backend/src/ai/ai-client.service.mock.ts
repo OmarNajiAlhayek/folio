@@ -7,6 +7,7 @@ export const aiClientServiceMock = {
     isKeywordsEnabled: jest.fn().mockReturnValue(false),
     isSimilarityEnabled: jest.fn().mockReturnValue(false),
     isCorpusSimilarityEnabled: jest.fn().mockReturnValue(false),
+    isWebSimilarityEnabled: jest.fn().mockReturnValue(false),
     isReviewerMatchingEnabled: jest.fn().mockReturnValue(false),
     suggestReviewers: jest.fn().mockResolvedValue({ status: 'unavailable' }),
     detectCorpusSimilarity: jest.fn().mockResolvedValue(null),

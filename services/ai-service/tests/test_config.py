@@ -26,6 +26,13 @@ def test_production_rejects_noop(monkeypatch: pytest.MonkeyPatch) -> None:
         settings.validate_runtime()
 
 
+def test_empty_runtime_config_strict_is_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNTIME_CONFIG_STRICT", "")
+    get_settings.cache_clear()
+    settings = Settings()
+    assert settings.runtime_config_strict is False
+
+
 def test_strict_openai_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("RUNTIME_CONFIG_STRICT", "true")

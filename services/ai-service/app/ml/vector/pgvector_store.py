@@ -153,10 +153,10 @@ class PgVectorStore:
                 cur.execute(
                     f"""
                     SELECT submission_id, abstract, keywords, category,
-                           1 - (embedding <=> %s) AS similarity
+                           1 - (embedding <=> %s::vector) AS similarity
                     FROM {_SUMMARY_TABLE}
                     WHERE {where_sql}
-                    ORDER BY embedding <=> %s
+                    ORDER BY embedding <=> %s::vector
                     LIMIT %s
                     """,
                     params,
@@ -259,10 +259,10 @@ class PgVectorStore:
                     cur.execute(
                         f"""
                         SELECT article_id, chunk_index, chunk_text, category,
-                               1 - (embedding <=> %s) AS similarity
+                               1 - (embedding <=> %s::vector) AS similarity
                         FROM {_CHUNK_TABLE}
                         WHERE 1=1 {category_clause}
-                        ORDER BY embedding <=> %s
+                        ORDER BY embedding <=> %s::vector
                         LIMIT %s
                         """,
                         (embedding, *category_param, embedding, limit_per_query),

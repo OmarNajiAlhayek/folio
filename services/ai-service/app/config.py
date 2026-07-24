@@ -137,6 +137,43 @@ class Settings(BaseSettings):
         validation_alias="COPYEDIT_ANALYSIS_ENABLED",
     )
 
+    web_similarity_enabled: bool = Field(
+        default=False,
+        validation_alias="WEB_SIMILARITY_ENABLED",
+    )
+    google_cse_api_key: str = Field(default="", validation_alias="GOOGLE_CSE_API_KEY")
+    google_cse_id: str = Field(default="", validation_alias="GOOGLE_CSE_ID")
+    farasa_api_key: str = Field(default="", validation_alias="FARASA_API_KEY")
+    web_similarity_max_queries: int = Field(
+        default=5,
+        validation_alias="WEB_SIMILARITY_MAX_QUERIES",
+    )
+    web_similarity_results_per_query: int = Field(
+        default=10,
+        validation_alias="WEB_SIMILARITY_RESULTS_PER_QUERY",
+    )
+    web_similarity_threshold: float = Field(
+        default=70.0,
+        validation_alias="WEB_SIMILARITY_THRESHOLD",
+    )
+    web_similarity_search_lang: str = Field(
+        default="ar",
+        validation_alias="WEB_SIMILARITY_SEARCH_LANG",
+    )
+    web_similarity_fetch_workers: int = Field(
+        default=5,
+        validation_alias="WEB_SIMILARITY_FETCH_WORKERS",
+    )
+
+    @field_validator("runtime_config_strict", mode="before")
+    @classmethod
+    def parse_runtime_config_strict(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
     @field_validator("keywords_suggestion_enabled", mode="before")
     @classmethod
     def parse_keywords_suggestion_enabled(cls, value: object) -> bool:
@@ -158,6 +195,15 @@ class Settings(BaseSettings):
     @field_validator("copyedit_analysis_enabled", mode="before")
     @classmethod
     def parse_copyedit_analysis_enabled(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @field_validator("web_similarity_enabled", mode="before")
+    @classmethod
+    def parse_web_similarity_enabled(cls, value: object) -> bool:
         if isinstance(value, bool):
             return value
         if value is None:

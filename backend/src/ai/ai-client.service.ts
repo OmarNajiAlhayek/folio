@@ -5,7 +5,7 @@ import { Metadata, status as GrpcStatus } from '@grpc/grpc-js';
 import { FOLIO_REQUEST_ID_HEADER } from '@folio/shared/observability';
 import type {
   ClassifyArticleResponse,
-  CorpusSimilarityMatch,
+  DetectCorpusSimilarityResult,
   SemanticSearchHit,
   SimilarArticleHit,
   SuggestKeywordsInput,
@@ -66,7 +66,18 @@ export class AiClientService implements OnModuleDestroy {
   }
 
   isCorpusSimilarityEnabled(): boolean {
-    return this.isAiSimilarityFeatureEnabled();
+    return this.isAiSimilarityFeatureEnabled() || this.isWebSimilarityEnabled();
+  }
+
+  isWebSimilarityEnabled(): boolean {
+    if (
+      this.config
+        .get<string>('AI_WEB_SIMILARITY_ENABLED', 'false')
+        .toLowerCase() !== 'true'
+    ) {
+      return false;
+    }
+    return this.isEnabled();
   }
 
   isReviewerMatchingEnabled(): boolean {
@@ -119,6 +130,15 @@ export class AiClientService implements OnModuleDestroy {
     const raw = this.config.get<string>('AI_SERVICE_TIMEOUT_MS', '120000');
     const parsed = parseInt(raw, 10);
     return Number.isFinite(parsed) ? parsed : 120_000;
+  }
+
+  private corpusSimilarityTimeoutMs(): number {
+    const raw = this.config.get<string>(
+      'AI_CORPUS_SIMILARITY_TIMEOUT_MS',
+      '300000',
+    );
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : 300_000;
   }
 
   private metadata(): Metadata {
@@ -337,7 +357,7 @@ export class AiClientService implements OnModuleDestroy {
     submissionText: string;
     threshold?: number;
     category?: string;
-  }): Promise<CorpusSimilarityMatch[] | null> {
+  }): Promise<DetectCorpusSimilarityResult | null> {
     if (!this.isCorpusSimilarityEnabled()) {
       return null;
     }
@@ -346,7 +366,7 @@ export class AiClientService implements OnModuleDestroy {
       return null;
     }
     const client = getPlagiarismGrpcClient(host, this.grpcPort());
-    const deadline = new Date(Date.now() + this.timeoutMs());
+    const deadline = new Date(Date.now() + this.corpusSimilarityTimeoutMs());
 
     return new Promise((resolve) => {
       client.detectCorpusSimilarity(
@@ -371,8 +391,8 @@ export class AiClientService implements OnModuleDestroy {
             resolve(null);
             return;
           }
-          resolve(
-            (response.matches ?? []).map((m) => ({
+          resolve({
+            localMatches: (response.localMatches ?? []).map((m) => ({
               submissionChunkIndex: m.submissionChunkIndex,
               submissionSnippet: m.submissionSnippet,
               sourceArticleId: m.sourceArticleId,
@@ -380,7 +400,15 @@ export class AiClientService implements OnModuleDestroy {
               matchedSnippet: m.matchedSnippet,
               similarity: m.similarity,
             })),
-          );
+            webMatches: (response.webMatches ?? []).map((m) => ({
+              querySnippet: m.querySnippet,
+              sourceUrl: m.sourceUrl,
+              matchedSnippet: m.matchedSnippet,
+              similarity: m.similarity,
+            })),
+            localError: response.localError || undefined,
+            webError: response.webError || undefined,
+          });
         },
       );
     });

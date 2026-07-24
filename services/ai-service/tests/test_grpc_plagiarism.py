@@ -18,16 +18,28 @@ def mock_similarity_service() -> SimilarityService:
     settings = Settings(similarity_enabled=True)
     service = SimilarityService(settings)
     service.detect_corpus_similarity = AsyncMock(  # type: ignore[method-assign]
-        return_value=[
-            {
-                "submission_chunk_index": 0,
-                "submission_snippet": "Our methods extend prior work.",
-                "source_article_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-                "source_chunk_index": 1,
-                "matched_snippet": "methods extend prior",
-                "similarity": 0.91,
-            },
-        ],
+        return_value={
+            "local_matches": [
+                {
+                    "submission_chunk_index": 0,
+                    "submission_snippet": "Our methods extend prior work.",
+                    "source_article_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                    "source_chunk_index": 1,
+                    "matched_snippet": "methods extend prior",
+                    "similarity": 0.91,
+                },
+            ],
+            "web_matches": [
+                {
+                    "query_snippet": "Our methods extend prior work.",
+                    "source_url": "https://example.com/article",
+                    "matched_snippet": "methods extend prior research",
+                    "similarity": 82.5,
+                },
+            ],
+            "local_error": None,
+            "web_error": None,
+        },
     )
     service.status = lambda: {"enabled": True}  # type: ignore[method-assign, assignment]
     return service
@@ -37,6 +49,7 @@ def mock_similarity_service() -> SimilarityService:
 async def grpc_channel(
     mock_similarity_service: SimilarityService,
     reviewer_matching_grpc_service,
+    copyedit_grpc_service,
 ):
     classifier = ClassifierService(Settings(arabert_enabled=False))
     keywords = KeywordSuggestionService(Settings(keywords_suggestion_enabled=False))
@@ -46,6 +59,7 @@ async def grpc_channel(
         keywords,
         mock_similarity_service,
         reviewer_matching_grpc_service,
+        copyedit_grpc_service,
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")
@@ -66,8 +80,10 @@ async def test_detect_corpus_similarity_success(
             submission_text="A long enough submission body for corpus similarity checking.",
         ),
     )
-    assert len(response.matches) == 1
-    assert response.matches[0].similarity == pytest.approx(0.91)
+    assert len(response.local_matches) == 1
+    assert response.local_matches[0].similarity == pytest.approx(0.91)
+    assert len(response.web_matches) == 1
+    assert response.web_matches[0].similarity == pytest.approx(82.5)
 
 
 @pytest.mark.asyncio
@@ -86,6 +102,7 @@ async def test_detect_corpus_similarity_invalid_argument(
 async def test_detect_corpus_similarity_failed_precondition(
     mock_similarity_service: SimilarityService,
     reviewer_matching_grpc_service,
+    copyedit_grpc_service,
 ) -> None:
     mock_similarity_service.detect_corpus_similarity = AsyncMock(  # type: ignore[method-assign]
         side_effect=SimilarityDisabledError("disabled"),
@@ -98,6 +115,7 @@ async def test_detect_corpus_similarity_failed_precondition(
         keywords,
         mock_similarity_service,
         reviewer_matching_grpc_service,
+        copyedit_grpc_service,
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")

@@ -26,8 +26,8 @@ class PlagiarismGrpcServicer(plagiarism_pb2_grpc.PlagiarismServiceServicer):
                 threshold=threshold,
                 category=category,
             )
-            return plagiarism_pb2.DetectCorpusSimilarityResponse(
-                matches=[
+            response = plagiarism_pb2.DetectCorpusSimilarityResponse(
+                local_matches=[
                     plagiarism_pb2.CorpusSimilarityMatch(
                         submission_chunk_index=m["submission_chunk_index"],
                         submission_snippet=m["submission_snippet"],
@@ -36,9 +36,23 @@ class PlagiarismGrpcServicer(plagiarism_pb2_grpc.PlagiarismServiceServicer):
                         matched_snippet=m["matched_snippet"],
                         similarity=m["similarity"],
                     )
-                    for m in raw
+                    for m in raw["local_matches"]
+                ],
+                web_matches=[
+                    plagiarism_pb2.WebSimilarityMatch(
+                        query_snippet=m["query_snippet"],
+                        source_url=m["source_url"],
+                        matched_snippet=m["matched_snippet"],
+                        similarity=m["similarity"],
+                    )
+                    for m in raw["web_matches"]
                 ],
             )
+            if raw.get("local_error"):
+                response.local_error = raw["local_error"]
+            if raw.get("web_error"):
+                response.web_error = raw["web_error"]
+            return response
         except Exception as exc:
             await abort_mapped(context, exc)
             raise

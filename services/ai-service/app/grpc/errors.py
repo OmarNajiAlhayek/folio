@@ -21,6 +21,7 @@ from app.services.reviewer_matching_grpc_service import (
 from app.services.similarity_service import (
     SimilarityDisabledError,
     SimilarityUnavailableError,
+    WebSimilarityUnavailableError,
 )
 
 
@@ -33,6 +34,7 @@ def grpc_code_and_details(exc: BaseException) -> tuple[grpc.StatusCode, str]:
             SimilarityDisabledError,
             ReviewerMatchingDisabledError,
             CopyeditAnalysisDisabledError,
+            WebSimilarityUnavailableError,
         ),
     ):
         return grpc.StatusCode.FAILED_PRECONDITION, str(exc)

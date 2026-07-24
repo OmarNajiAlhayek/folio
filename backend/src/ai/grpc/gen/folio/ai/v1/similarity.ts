@@ -75,6 +75,7 @@ export interface SemanticSearchResponse {
 
 export interface SimilarityStatus {
   enabled: boolean;
+  /** Wire name kept for compatibility; value is the vector backend id (e.g. "pgvector"). */
   chromaPath: string;
   modelName: string;
   defaultThreshold: number;

@@ -57,8 +57,12 @@ def _configure_connection(conn: object, *, hnsw_ef_search: int) -> None:
     from pgvector.psycopg import register_vector
 
     register_vector(conn)
+    # SET must run in autocommit so the connection stays IDLE after configure;
+    # psycopg-pool discards connections left in INTRANS after the configure hook.
+    conn.autocommit = True  # type: ignore[attr-defined]
     with conn.cursor() as cur:  # type: ignore[attr-defined]
-        cur.execute("SET hnsw.ef_search = %s", (hnsw_ef_search,))
+        cur.execute(f"SET hnsw.ef_search = {hnsw_ef_search}")
+    conn.autocommit = False  # type: ignore[attr-defined]
 
 
 def open_pool(config: VectorDbConfig) -> ConnectionPool:

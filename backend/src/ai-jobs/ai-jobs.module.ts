@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiJob } from '../entities/ai-job.entity';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionFile } from '../entities/submission-file.entity';
 import { MessagingModule } from '../messaging/messaging.module';
 import { AiModule } from '../ai/ai.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -13,7 +14,7 @@ import { AiJobsHealthController } from './ai-jobs-health.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AiJob, Submission]),
+    TypeOrmModule.forFeature([AiJob, Submission, SubmissionFile]),
     MessagingModule,
     AiModule,
     NotificationsModule,

@@ -1,4 +1,4 @@
-# Folio protobuf contracts
+# Damascus University Journal protobuf contracts
 
 Cross-language API definitions between the Nest backend and Python microservices.
 
