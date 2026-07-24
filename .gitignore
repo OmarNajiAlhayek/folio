@@ -66,3 +66,10 @@ user-equation.png
 7bf54f8d7fe083dbcd2b54436a6d859addd90efe.png
 extracted-*.png
 /*.docx
+Damascus_Articles/
+
+# Local reference PDFs and personal notes (never commit)
+*.pdf
+.tmp-*
+claude-conversation-context.md
+using-arabert-with-analysis.py
