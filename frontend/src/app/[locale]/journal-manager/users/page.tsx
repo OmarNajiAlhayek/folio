@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
+import { CollapsibleSection } from '@/components/ui/collapsible-section';
+import { SectionEditorDisciplineEditor } from '@/components/section-editor-discipline-editor';
 import { SimpleSelect } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -55,7 +57,8 @@ type RoleLabelKey =
   | 'roleEditor'
   | 'roleJournalManager'
   | 'roleReviewer'
-  | 'roleCopyeditor';
+  | 'roleCopyeditor'
+  | 'roleSectionEditor';
 
 function roleLabelKey(slug: string): RoleLabelKey | null {
   switch (slug) {
@@ -69,6 +72,8 @@ function roleLabelKey(slug: string): RoleLabelKey | null {
       return 'roleReviewer';
     case ROLE_SLUGS.COPYEDITOR:
       return 'roleCopyeditor';
+    case ROLE_SLUGS.SECTION_EDITOR:
+      return 'roleSectionEditor';
     default:
       return null;
   }
@@ -312,7 +317,7 @@ export default function JournalManagerUsersPage() {
 
   async function sendInvite(
     row: AdminUserRow,
-    roleSlug: 'editor' | 'journal_manager',
+    roleSlug: 'editor' | 'journal_manager' | 'section_editor',
   ) {
     const parsed = safeParseResult(createRoleInvitationSchema, { roleSlug });
     if (!parsed.ok) return;
@@ -453,6 +458,7 @@ export default function JournalManagerUsersPage() {
             type="button"
             onClick={() => setAdvancedOpen((o) => !o)}
             aria-expanded={advancedOpen}
+            aria-controls="user-advanced-filters"
             className={cn(
               'flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-all duration-200',
               advancedOpen
@@ -472,86 +478,89 @@ export default function JournalManagerUsersPage() {
       </div>
 
       {/* Advanced filters panel */}
-      {advancedOpen ? (
-        <div className="mt-3 rounded-2xl border border-ink/10 bg-surface/95 p-4 shadow-sm backdrop-blur-md">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {/* Role */}
-            <div>
-              <label
-                htmlFor="user-adv-role"
-                className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
-              >
-                {t('filterRole')}
-              </label>
-              <div className="mt-1.5">
-                <SimpleSelect
-                  value={roleDraft}
-                  onValueChange={setRoleDraft}
-                  options={roleOptions}
-                  placeholder={t('filterRoleAny')}
-                  aria-labelledby="user-adv-role"
-                />
-              </div>
-            </div>
-
-            {/* Joined from */}
-            <div>
-              <label
-                htmlFor="user-adv-from"
-                className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
-              >
-                {t('filterJoinedFrom')}
-              </label>
-              <div className="mt-1.5">
-                <DatePicker
-                  id="user-adv-from"
-                  value={joinedFromDraft}
-                  onChange={setJoinedFromDraft}
-                  placeholder={t('filterPickDate')}
-                  aria-label={t('filterJoinedFrom')}
-                />
-              </div>
-            </div>
-
-            {/* Joined to */}
-            <div>
-              <label
-                htmlFor="user-adv-to"
-                className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
-              >
-                {t('filterJoinedTo')}
-              </label>
-              <div className="mt-1.5">
-                <DatePicker
-                  id="user-adv-to"
-                  value={joinedToDraft}
-                  onChange={setJoinedToDraft}
-                  placeholder={t('filterPickDate')}
-                  aria-label={t('filterJoinedTo')}
-                />
-              </div>
+      <CollapsibleSection
+        id="user-advanced-filters"
+        open={advancedOpen}
+        className="mt-3"
+        contentClassName="rounded-2xl border border-ink/10 bg-surface/95 p-4 shadow-sm backdrop-blur-md"
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Role */}
+          <div>
+            <label
+              htmlFor="user-adv-role"
+              className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
+            >
+              {t('filterRole')}
+            </label>
+            <div className="mt-1.5">
+              <SimpleSelect
+                value={roleDraft}
+                onValueChange={setRoleDraft}
+                options={roleOptions}
+                placeholder={t('filterRoleAny')}
+                aria-labelledby="user-adv-role"
+              />
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/6 pt-4">
-            <button
-              type="button"
-              onClick={applyAdvanced}
-              className="rounded-xl bg-accent px-5 py-2 text-xs font-semibold text-white shadow-xs transition-all duration-200 hover:brightness-105 active:scale-[0.98]"
+          {/* Joined from */}
+          <div>
+            <label
+              htmlFor="user-adv-from"
+              className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
             >
-              {t('filterApply')}
-            </button>
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="rounded-xl border border-ink/15 px-5 py-2 text-xs font-semibold text-ink/75 transition-all duration-200 hover:bg-ink/5 active:scale-[0.98]"
+              {t('filterJoinedFrom')}
+            </label>
+            <div className="mt-1.5">
+              <DatePicker
+                id="user-adv-from"
+                value={joinedFromDraft}
+                onChange={setJoinedFromDraft}
+                placeholder={t('filterPickDate')}
+                aria-label={t('filterJoinedFrom')}
+              />
+            </div>
+          </div>
+
+          {/* Joined to */}
+          <div>
+            <label
+              htmlFor="user-adv-to"
+              className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
             >
-              {t('filterClear')}
-            </button>
+              {t('filterJoinedTo')}
+            </label>
+            <div className="mt-1.5">
+              <DatePicker
+                id="user-adv-to"
+                value={joinedToDraft}
+                onChange={setJoinedToDraft}
+                placeholder={t('filterPickDate')}
+                aria-label={t('filterJoinedTo')}
+              />
+            </div>
           </div>
         </div>
-      ) : null}
+
+        {/* Actions */}
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/6 pt-4">
+          <button
+            type="button"
+            onClick={applyAdvanced}
+            className="rounded-xl bg-accent px-5 py-2 text-xs font-semibold text-white shadow-xs transition-all duration-200 hover:brightness-105 active:scale-[0.98]"
+          >
+            {t('filterApply')}
+          </button>
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="rounded-xl border border-ink/15 px-5 py-2 text-xs font-semibold text-ink/75 transition-all duration-200 hover:bg-ink/5 active:scale-[0.98]"
+          >
+            {t('filterClear')}
+          </button>
+        </div>
+      </CollapsibleSection>
 
       {/* Active filter chips (when panel is closed) */}
       {!advancedOpen && activeFilterCount > 0 ? (
@@ -653,6 +662,11 @@ export default function JournalManagerUsersPage() {
               const busy = rowBusy === row.id;
               const editorHas = hasRole(row, ROLE_SLUGS.EDITOR);
               const jmHas = hasRole(row, ROLE_SLUGS.JOURNAL_MANAGER);
+              const seHas = hasRole(row, ROLE_SLUGS.SECTION_EDITOR);
+              const sePending = hasPendingInvite(
+                row,
+                ROLE_SLUGS.SECTION_EDITOR,
+              );
               const editorPending = hasPendingInvite(row, ROLE_SLUGS.EDITOR);
               const jmPending = hasPendingInvite(
                 row,
@@ -818,9 +832,50 @@ export default function JournalManagerUsersPage() {
                             {t('inviteJournalManager')}
                           </Button>
                         )}
+
+                        {sePending ? (
+                          <div className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                            <Clock className="size-3.5 shrink-0" aria-hidden />
+                            {t('pendingSectionEditorInvite')}
+                          </div>
+                        ) : seHas ? (
+                          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                            <CheckCircle2
+                              className="size-3.5 shrink-0"
+                              aria-hidden
+                            />
+                            {t('hasSectionEditorRole')}
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              void sendInvite(row, 'section_editor')
+                            }
+                            className="w-full justify-start gap-2 border-teal-500/35 bg-teal-500/6 text-teal-700 hover:bg-teal-500/14 hover:border-teal-500/50 dark:text-teal-400 dark:border-teal-500/25"
+                          >
+                            <UserPlus
+                              className="size-3.5 shrink-0"
+                              aria-hidden
+                            />
+                            {t('inviteSectionEditor')}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
+
+                  {/* Section editor discipline scope */}
+                  {seHas && (
+                    <div className="border-t border-ink/8 px-5 pb-5 pt-4">
+                      <p className="mb-2.5 text-[10px] font-bold uppercase tracking-wider text-ink/40">
+                        {t('sectionEditorDisciplines')}
+                      </p>
+                      <SectionEditorDisciplineEditor userId={row.id} />
+                    </div>
+                  )}
                 </li>
               );
             })}

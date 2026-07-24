@@ -201,7 +201,14 @@ export const createReviewSchema = z
   .object({
     commentsForAuthor: reviewCommentTrim,
     commentsToEditorOnly: reviewCommentTrim,
-    recommendation: z.enum(['accept', 'reject', 'revisions']),
+    recommendation: z.enum([
+      'accept',
+      'revisions',
+      'resubmit_for_review',
+      'resubmit_elsewhere',
+      'reject',
+      'see_comments',
+    ]),
   })
   .refine(
     (d) =>

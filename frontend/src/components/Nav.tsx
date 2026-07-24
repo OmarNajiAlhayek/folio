@@ -37,6 +37,7 @@ import {
   CommandPalette,
   useCommandPalette,
 } from '@/components/command-palette';
+import { SimpleTooltip } from '@/components/ui/tooltip';
 
 function isNavActive(
   pathname: string,
@@ -135,22 +136,24 @@ export function Nav() {
 
           {/* Desktop nav */}
           <nav className="hidden sm:flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setCmdOpen(true)}
-              className={cn(
-                navLinkBase,
-                'inline-flex items-center gap-2 text-ink/55 hover:bg-ink/6 hover:text-ink border border-ink/10 px-3 py-1.5',
-              )}
-              aria-label="Open command palette"
-            >
-              <Search className="h-3.5 w-3.5" />
-              <span className="text-xs">Search</span>
-              <kbd className="ms-1 hidden text-[10px] font-sans font-medium text-ink/30 md:inline-flex items-center gap-0.5">
-                <span>⌘</span>
-                <span>K</span>
-              </kbd>
-            </button>
+            <SimpleTooltip content={t('commandPaletteTooltip')}>
+              <button
+                type="button"
+                onClick={() => setCmdOpen(true)}
+                className={cn(
+                  navLinkBase,
+                  'inline-flex items-center gap-2 text-ink/55 hover:bg-ink/6 hover:text-ink border border-ink/10 px-3 py-1.5',
+                )}
+                aria-label={t('commandPaletteAria')}
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span className="text-xs">Search</span>
+                <kbd className="ms-1 hidden text-[10px] font-sans font-medium text-ink/30 md:inline-flex items-center gap-0.5">
+                  <span>⌘</span>
+                  <span>K</span>
+                </kbd>
+              </button>
+            </SimpleTooltip>
             <ThemeToggle />
             <LocaleSwitcher />
             <div className="mx-1 h-4 w-px shrink-0 bg-ink/12" aria-hidden />
@@ -170,6 +173,11 @@ export function Nav() {
                 {perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE) && (
                   <NavTextLink href="/editor" match="exact">
                     {t('editor')}
+                  </NavTextLink>
+                )}
+                {perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE) && (
+                  <NavTextLink href="/section-editor" match="exact">
+                    {t('sectionEditor')}
                   </NavTextLink>
                 )}
                 {perms.has(PERMISSION_SLUGS.USERS_MANAGE_ROLES) && (
@@ -328,6 +336,14 @@ export function Nav() {
                 show:
                   !!meQuery.data &&
                   perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE),
+                match: 'exact' as const,
+              },
+              {
+                href: '/section-editor',
+                label: t('sectionEditor'),
+                show:
+                  !!meQuery.data &&
+                  perms.has(PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE),
                 match: 'exact' as const,
               },
               {

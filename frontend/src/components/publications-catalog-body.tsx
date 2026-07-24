@@ -13,6 +13,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/i18n/navigation';
 import { Link } from '@/i18n/navigation';
+import { CollapsibleSection } from '@/components/ui/collapsible-section';
 import { ApiErrorState } from '@/components/api-error-state';
 import type React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,6 +35,7 @@ import {
   type PublicationListItem,
 } from '@/lib/queries/publications';
 import { useApiErrorMessages } from '@/lib/use-api-error-messages';
+import { cn } from '@/lib/utils';
 import { DisciplineBadges } from '@/components/discipline-badges';
 
 function CatalogSkeleton() {
@@ -93,15 +95,25 @@ function CatalogArticle({
       </div>
 
       <div>
-        <h2 className="font-serif text-xl font-bold leading-snug text-ink transition-colors duration-200 group-hover:text-accent sm:text-2xl">
-          {item.title}
+        <h2 className="font-serif text-xl font-bold leading-snug sm:text-2xl">
+          <Link
+            href={`/publications/${encodeURIComponent(pubSlug)}`}
+            className="text-ink transition-colors duration-200 hover:text-accent group-hover:text-accent"
+          >
+            {item.title}
+          </Link>
         </h2>
         {item.titleAr?.trim() ? (
           <p
             dir="rtl"
-            className="mt-2 font-serif text-lg font-bold leading-snug text-ink/90"
+            className="mt-2 font-serif text-lg font-bold leading-snug"
           >
-            {item.titleAr}
+            <Link
+              href={`/publications/${encodeURIComponent(pubSlug)}`}
+              className="text-ink/90 transition-colors duration-200 hover:text-accent group-hover:text-accent"
+            >
+              {item.titleAr}
+            </Link>
           </p>
         ) : null}
       </div>
@@ -144,6 +156,7 @@ function CatalogArticle({
             type="button"
             onClick={onToggleAbstract}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:brightness-95 active:scale-[0.98] transition-all duration-200 select-none pb-1.5"
+            aria-expanded={isAbstractOpen}
           >
             <ChevronRight
               className={`size-3.5 transform transition-transform duration-300 ${isAbstractOpen ? 'rotate-90' : ''}`}
@@ -153,34 +166,33 @@ function CatalogArticle({
             {isAbstractOpen ? t('hideAbstract') : t('showAbstract')}
           </button>
 
-          {isAbstractOpen ? (
-            <div className="mt-3.5 space-y-3 border-s-4 border-accent/40 ps-5 animate-fadeIn">
-              <div>
+          <CollapsibleSection
+            open={isAbstractOpen}
+            slide={false}
+            contentClassName="mt-3.5 space-y-3 border-s-4 border-accent/40 ps-5"
+          >
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-ink/40">
+                {tWf('abstractLabelEn')}
+              </p>
+              <p dir="ltr" className="mt-1 text-xs leading-relaxed text-ink/75">
+                {item.abstract}
+              </p>
+            </div>
+            {item.abstractAr?.trim() ? (
+              <div className="pt-2">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-ink/40">
-                  {tWf('abstractLabelEn')}
+                  {tWf('abstractLabelAr')}
                 </p>
                 <p
-                  dir="ltr"
-                  className="mt-1 text-xs leading-relaxed text-ink/75"
+                  dir="rtl"
+                  className="mt-1 text-xs leading-relaxed text-ink/75 font-serif"
                 >
-                  {item.abstract}
+                  {item.abstractAr}
                 </p>
               </div>
-              {item.abstractAr?.trim() ? (
-                <div className="pt-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-ink/40">
-                    {tWf('abstractLabelAr')}
-                  </p>
-                  <p
-                    dir="rtl"
-                    className="mt-1 text-xs leading-relaxed text-ink/75 font-serif"
-                  >
-                    {item.abstractAr}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+          </CollapsibleSection>
         </div>
       ) : null}
 
@@ -279,6 +291,15 @@ export function PublicationsCatalogBody() {
     [filters, replaceFilters],
   );
 
+  const onRemoveFilter = useCallback(
+    (key: keyof PublicationCatalogFilters) => {
+      const next = { ...filters };
+      delete next[key];
+      replaceFilters(next);
+    },
+    [filters, replaceFilters],
+  );
+
   const toggleAbstract = (id: string) => {
     setOpenAbstracts((prev) => ({
       ...prev,
@@ -287,9 +308,11 @@ export function PublicationsCatalogBody() {
   };
 
   const loadError = error ? resolveApiError(error, t('loadFailed')) : null;
-  const loading = isPending || (isFetching && !isFetchingNextPage);
+  const initialLoading = isPending && !data;
+  const isRefetching = isFetching && !isPending && !isFetchingNextPage;
   const showLoadMore =
     !semanticActive && hasNextPage && !loadError && items.length > 0;
+  const showEmptyState = !initialLoading && !loadError && items.length === 0;
 
   return (
     <>
@@ -299,11 +322,15 @@ export function PublicationsCatalogBody() {
         onSearchModeChange={onSearchModeChange}
         onApplyAdvanced={onApplyAdvanced}
         onClear={onClear}
-        resultCount={loading ? null : (total ?? items.length)}
+        onRemoveFilter={onRemoveFilter}
+        resultCount={initialLoading ? null : (total ?? items.length)}
         semanticResultsCap={
-          semanticActive && !loading ? PUBLICATION_SEMANTIC_DEFAULT_LIMIT : null
+          semanticActive && !initialLoading
+            ? PUBLICATION_SEMANTIC_DEFAULT_LIMIT
+            : null
         }
-        loading={loading}
+        loading={initialLoading}
+        isUpdating={isRefetching}
       />
 
       {loadError ? (
@@ -323,11 +350,11 @@ export function PublicationsCatalogBody() {
         </div>
       ) : null}
 
-      {loading ? (
+      {initialLoading ? (
         <SkeletonBusyRegion label={t('loading')}>
           <CatalogSkeleton />
         </SkeletonBusyRegion>
-      ) : !loadError && items.length === 0 ? (
+      ) : showEmptyState ? (
         <div className="mt-8 flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-ink/15 dark:border-white/15 bg-linear-to-b from-surface/50 to-surface-muted/20">
           <div className="relative flex items-center justify-center size-16 rounded-full bg-accent/8 border border-accent/15 text-accent mb-5">
             <span className="absolute inset-0 rounded-full bg-accent/8 animate-pulse" />
@@ -351,10 +378,26 @@ export function PublicationsCatalogBody() {
             </button>
           ) : null}
         </div>
-      ) : (
-        !loadError && (
+      ) : !loadError && items.length > 0 ? (
+        <div className="relative mt-6">
+          {isRefetching ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden rounded-full bg-accent/15"
+              aria-hidden
+            >
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-accent" />
+            </div>
+          ) : null}
+          {isRefetching ? (
+            <p className="sr-only" aria-live="polite">
+              {t('updatingResults')}
+            </p>
+          ) : null}
           <motion.div
-            className="mt-6 space-y-5"
+            className={cn(
+              'space-y-5',
+              isRefetching && 'opacity-70 transition-opacity duration-200',
+            )}
             initial="hidden"
             animate="visible"
             variants={{ visible: { transition: { staggerChildren: 0.06 } } }}
@@ -395,8 +438,8 @@ export function PublicationsCatalogBody() {
               </div>
             ) : null}
           </motion.div>
-        )
-      )}
+        </div>
+      ) : null}
     </>
   );
 }

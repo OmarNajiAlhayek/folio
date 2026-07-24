@@ -19,6 +19,10 @@ type AssignmentRow = {
   id: string;
   slug: string | null;
   status: string;
+  assignedAt?: string;
+  responseDueAt?: string | null;
+  reviewDueAt?: string | null;
+  assignedBy?: { id: string; displayName: string } | null;
   submission?: {
     id: string;
     title: string;
@@ -26,6 +30,7 @@ type AssignmentRow = {
     status: string;
     abstract?: string;
     abstractAr?: string | null;
+    reviewMethod?: string;
   };
 };
 
@@ -289,6 +294,63 @@ export default function AssignmentInvitePage() {
             <p className="mt-6 text-xs text-ink/50">
               {t('fullManuscriptAfterAccept')}
             </p>
+          </section>
+
+          {/* Review schedule */}
+          <section className="mt-6 rounded-xl border border-ink/10 bg-surface p-6 shadow-sm sm:p-8">
+            <h2 className="font-sans text-xs font-semibold uppercase tracking-wider text-ink/50">
+              {t('scheduleSection')}
+            </h2>
+            <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-ink/3 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                  {t('responseDue')}
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {assignment.responseDueAt
+                    ? new Date(assignment.responseDueAt).toLocaleDateString(
+                        undefined,
+                        { year: 'numeric', month: 'long', day: 'numeric' },
+                      )
+                    : '—'}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-ink/3 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                  {t('reviewDue')}
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {assignment.reviewDueAt
+                    ? new Date(assignment.reviewDueAt).toLocaleDateString(
+                        undefined,
+                        { year: 'numeric', month: 'long', day: 'numeric' },
+                      )
+                    : '—'}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-ink/3 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                  {t('reviewMethod')}
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {assignment.submission?.reviewMethod === 'double_anonymous'
+                    ? t('methodDoubleAnonymous')
+                    : assignment.submission?.reviewMethod === 'anonymous'
+                      ? t('methodAnonymous')
+                      : assignment.submission?.reviewMethod === 'open'
+                        ? t('methodOpen')
+                        : '—'}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-ink/3 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                  {t('invitedBy')}
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {assignment.assignedBy?.displayName ?? '—'}
+                </dd>
+              </div>
+            </dl>
           </section>
 
           <div className="mt-8 flex flex-wrap gap-3">

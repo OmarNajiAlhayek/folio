@@ -1,5 +1,5 @@
-import { apiJson } from "@/lib/api";
-import type { ConstructorContent } from "@/lib/constructor-content.types";
+import { apiJson } from '@/lib/api';
+import type { ConstructorContent } from '@/lib/constructor-content.types';
 
 /**
  * Build a journal-styled `.docx` from constructor JSON and store it as the
@@ -12,10 +12,10 @@ export async function attachConstructorManuscript(
 ): Promise<void> {
   const enc = encodeURIComponent(slug);
   const attachKind = options?.preserveUploadedManuscript
-    ? "manuscript_constructor"
-    : "manuscript";
+    ? 'manuscript_constructor'
+    : 'manuscript';
   await apiJson(`/submissions/${enc}/generate-docx?attach=true`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({ content, attach: true, attachKind }),
   });
 }
@@ -33,6 +33,7 @@ export async function submitSubmissionForReview(
     useUploadedManuscript?: boolean;
     presentUploadedManuscript?: boolean;
     presentConstructorManuscript?: boolean;
+    authorResponseToReviewers?: string;
   },
 ): Promise<void> {
   const enc = encodeURIComponent(slug);
@@ -40,20 +41,27 @@ export async function submitSubmissionForReview(
   const explicitPresentation =
     options?.presentUploadedManuscript !== undefined ||
     options?.presentConstructorManuscript !== undefined;
+  const responseToReviewers = options?.authorResponseToReviewers?.trim();
+  const extra = responseToReviewers
+    ? { authorResponseToReviewers: responseToReviewers }
+    : {};
   const body = explicitPresentation
     ? JSON.stringify({
         presentUploadedManuscript: options?.presentUploadedManuscript === true,
         presentConstructorManuscript:
           options?.presentConstructorManuscript === true,
         ...(cc && Array.isArray(cc.sections) ? { constructorContent: cc } : {}),
+        ...extra,
       })
     : options?.useUploadedManuscript === true
-      ? JSON.stringify({ useUploadedManuscript: true })
+      ? JSON.stringify({ useUploadedManuscript: true, ...extra })
       : cc && Array.isArray(cc.sections)
-        ? JSON.stringify({ constructorContent: cc })
-        : undefined;
+        ? JSON.stringify({ constructorContent: cc, ...extra })
+        : responseToReviewers
+          ? JSON.stringify(extra)
+          : undefined;
   await apiJson(`/submissions/${enc}/submit`, {
-    method: "POST",
+    method: 'POST',
     body,
   });
 }

@@ -1,6 +1,6 @@
-# Folio frontend (Next.js)
+# Damascus University Journal frontend (Next.js)
 
-App Router UI for the Folio peer-review workspace. Default dev URL: **`http://localhost:5240`**.
+App Router UI for the Damascus University Journal peer-review workspace. Default dev URL: **`http://localhost:5240`**.
 
 ## Quick start
 
@@ -16,11 +16,11 @@ The browser calls same-origin `/api/v1`; Next.js rewrites to the Nest API (`API_
 
 Monorepo overview and run order: [`../README.md`](../README.md).
 
-| Topic | Doc |
-|-------|-----|
-| Features by role | [`../docs/feature-report.md`](../docs/feature-report.md) |
-| Word Constructor | [`../docs/plans/word-constructor.md`](../docs/plans/word-constructor.md) |
-| Playwright E2E | [`../docs/plans/playwright-constructor-e2e.md`](../docs/plans/playwright-constructor-e2e.md) |
+| Topic            | Doc                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| Features by role | [`../docs/feature-report.md`](../docs/feature-report.md)                                     |
+| Word Constructor | [`../docs/plans/word-constructor.md`](../docs/plans/word-constructor.md)                     |
+| Playwright E2E   | [`../docs/plans/playwright-constructor-e2e.md`](../docs/plans/playwright-constructor-e2e.md) |
 
 ## Tests
 

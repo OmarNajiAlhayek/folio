@@ -1643,7 +1643,8 @@ export default function EmailSettingsPage() {
                           From:
                         </span>
                         <span className="text-ink/80 font-semibold font-mono">
-                          Folio Systems &lt;noreply@journal.folio&gt;
+                          Damascus University Journal
+                          &lt;noreply@journal.damascus-university.edu.sy&gt;
                         </span>
                       </div>
                       <div className="flex text-ink/50">

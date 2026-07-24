@@ -17,6 +17,7 @@ import {
   useNotificationsList,
   useUnreadNotificationCount,
 } from '@/lib/queries/notifications';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -189,7 +190,9 @@ export function NotificationBell() {
                           aria-label={itemLabel}
                           onClick={() => {
                             setOpen(false);
-                            markRead.mutate(item.id);
+                            markRead.mutate(item.id, {
+                              onError: () => toast.error(t('markReadError')),
+                            });
                             router.push(item.href as '/');
                           }}
                         >
@@ -224,7 +227,9 @@ export function NotificationBell() {
                             )}
                             onClick={(e) => {
                               e.stopPropagation();
-                              markRead.mutate(item.id);
+                              markRead.mutate(item.id, {
+                                onError: () => toast.error(t('markReadError')),
+                              });
                             }}
                           >
                             <Check className="h-3.5 w-3.5" aria-hidden />
@@ -245,7 +250,11 @@ export function NotificationBell() {
                 type="button"
                 className="text-xs text-ink/70 hover:text-ink hover:underline"
                 disabled={markAllRead.isPending}
-                onClick={() => markAllRead.mutate()}
+                onClick={() =>
+                  markAllRead.mutate(undefined, {
+                    onError: () => toast.error(t('markAllReadError')),
+                  })
+                }
               >
                 {t('markAllRead')}
               </button>

@@ -4,6 +4,7 @@ import {
   type ReviewManuscriptPresentation,
 } from '@/lib/review-manuscript-presentation';
 import type { SubmissionApiErrorCode } from '@/lib/submission-api-error-codes';
+import { PRE_SUBMIT_VALIDATION_FIELD } from '@/lib/pre-submit-validation';
 import { ABSTRACT_MAX_WORDS, countWords } from '@/lib/validation';
 
 export type FieldInputVariant = 'wizard' | 'form';
@@ -205,6 +206,11 @@ export function apiCodeToFieldErrors(
       break;
     case 'SUBMISSION_MANUSCRIPT_PRESENTATION_REQUIRED':
       errors.add('presentation');
+      break;
+    case 'PRE_SUBMIT_ANALYSIS_REQUIRED':
+    case 'PRE_SUBMIT_ANALYSIS_STALE':
+    case 'PRE_SUBMIT_BLOCKING_ISSUES':
+      errors.add(PRE_SUBMIT_VALIDATION_FIELD);
       break;
     default:
       break;
@@ -420,6 +426,7 @@ export const SUBMIT_FIELD_SCROLL_ORDER: string[] = [
   'aiUsage',
   'originality',
   'presentation',
+  PRE_SUBMIT_VALIDATION_FIELD,
   fileFieldKey('cover_letter'),
   fileFieldKey('title_page'),
   fileFieldKey('manuscript'),

@@ -20,6 +20,7 @@ import {
   useNotificationsList,
   useUnreadNotificationCount,
 } from '@/lib/queries/notifications';
+import { toast } from '@/lib/toast';
 import { useApiErrorMessages } from '@/lib/use-api-error-messages';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
@@ -191,7 +192,11 @@ export default function NotificationsPage() {
               'hover:bg-ink/5 hover:text-ink active:scale-98 shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/35',
             )}
             disabled={markAllRead.isPending}
-            onClick={() => markAllRead.mutate()}
+            onClick={() =>
+              markAllRead.mutate(undefined, {
+                onError: () => toast.error(t('markAllReadError')),
+              })
+            }
           >
             {t('markAllRead')}
           </button>
@@ -412,7 +417,10 @@ export default function NotificationsPage() {
                               className="w-full text-start focus:outline-none cursor-pointer"
                               onClick={() => {
                                 if (isUnread) {
-                                  markRead.mutate(item.id);
+                                  markRead.mutate(item.id, {
+                                    onError: () =>
+                                      toast.error(t('markReadError')),
+                                  });
                                 }
                                 router.push(item.href as '/');
                               }}
@@ -456,7 +464,10 @@ export default function NotificationsPage() {
                                 )}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  markRead.mutate(item.id);
+                                  markRead.mutate(item.id, {
+                                    onError: () =>
+                                      toast.error(t('markReadError')),
+                                  });
                                 }}
                               >
                                 <Check

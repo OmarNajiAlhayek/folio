@@ -13,6 +13,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiErrorState } from '@/components/api-error-state';
 import { Button } from '@/components/ui/button';
+import { CollapsibleSection } from '@/components/ui/collapsible-section';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SimpleSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -171,48 +172,48 @@ function AuditLogRowCard({
           </span>
         ) : null}
       </button>
-      {open ? (
-        <div className="border-t border-ink/8 px-4 py-4 ps-11">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <DetailBlock label={t('detailUserId')}>
-              {row.userId ?? '—'}
-            </DetailBlock>
-            <DetailBlock label={t('detailRoles')}>
-              {row.userRoles?.length ? row.userRoles.join(', ') : '—'}
-            </DetailBlock>
-            <DetailBlock label={t('detailRoute')}>
-              {row.routePattern ?? '—'}
-            </DetailBlock>
-            <DetailBlock label={t('detailIp')}>
-              {row.ipAddress ?? '—'}
-            </DetailBlock>
-            <DetailBlock label={t('detailUserAgent')}>
-              {row.userAgent ?? '—'}
-            </DetailBlock>
-            <DetailBlock label={t('detailError')}>
-              {row.error ?? '—'}
+      <CollapsibleSection
+        open={open}
+        slide={false}
+        contentClassName="border-t border-ink/8 px-4 py-4 ps-11"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DetailBlock label={t('detailUserId')}>
+            {row.userId ?? '—'}
+          </DetailBlock>
+          <DetailBlock label={t('detailRoles')}>
+            {row.userRoles?.length ? row.userRoles.join(', ') : '—'}
+          </DetailBlock>
+          <DetailBlock label={t('detailRoute')}>
+            {row.routePattern ?? '—'}
+          </DetailBlock>
+          <DetailBlock label={t('detailIp')}>
+            {row.ipAddress ?? '—'}
+          </DetailBlock>
+          <DetailBlock label={t('detailUserAgent')}>
+            {row.userAgent ?? '—'}
+          </DetailBlock>
+          <DetailBlock label={t('detailError')}>{row.error ?? '—'}</DetailBlock>
+        </div>
+        {row.params && Object.keys(row.params).length > 0 ? (
+          <div className="mt-4">
+            <DetailBlock label={t('detailParams')}>
+              <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-ink/4 p-2 font-mono text-[11px] leading-relaxed">
+                {JSON.stringify(row.params, null, 2)}
+              </pre>
             </DetailBlock>
           </div>
-          {row.params && Object.keys(row.params).length > 0 ? (
-            <div className="mt-4">
-              <DetailBlock label={t('detailParams')}>
-                <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-ink/4 p-2 font-mono text-[11px] leading-relaxed">
-                  {JSON.stringify(row.params, null, 2)}
-                </pre>
-              </DetailBlock>
-            </div>
-          ) : null}
-          {row.requestBody && Object.keys(row.requestBody).length > 0 ? (
-            <div className="mt-4">
-              <DetailBlock label={t('detailBody')}>
-                <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-ink/4 p-2 font-mono text-[11px] leading-relaxed">
-                  {JSON.stringify(row.requestBody, null, 2)}
-                </pre>
-              </DetailBlock>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+        ) : null}
+        {row.requestBody && Object.keys(row.requestBody).length > 0 ? (
+          <div className="mt-4">
+            <DetailBlock label={t('detailBody')}>
+              <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-ink/4 p-2 font-mono text-[11px] leading-relaxed">
+                {JSON.stringify(row.requestBody, null, 2)}
+              </pre>
+            </DetailBlock>
+          </div>
+        ) : null}
+      </CollapsibleSection>
     </li>
   );
 }
@@ -413,6 +414,7 @@ export default function AuditLogPage() {
           type="button"
           onClick={() => setAdvancedOpen((o) => !o)}
           aria-expanded={advancedOpen}
+          aria-controls="audit-advanced-filters"
           className={cn(
             'flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-all duration-200',
             advancedOpen
@@ -439,119 +441,122 @@ export default function AuditLogPage() {
         ) : null}
       </div>
 
-      {advancedOpen ? (
-        <div className="mt-4 rounded-2xl border border-ink/10 bg-surface p-4 shadow-xs sm:p-5">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
-                {t('filterFrom')}
-              </label>
-              <div className="mt-2">
-                <DatePicker
-                  value={fromDraft}
-                  onChange={setFromDraft}
-                  placeholder={t('filterPickDate')}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
-                {t('filterTo')}
-              </label>
-              <div className="mt-2">
-                <DatePicker
-                  value={toDraft}
-                  onChange={setToDraft}
-                  placeholder={t('filterPickDate')}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
-                {t('filterMethod')}
-              </label>
-              <div className="mt-2">
-                <SimpleSelect
-                  value={methodDraft}
-                  onValueChange={setMethodDraft}
-                  options={methodOptions}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
-                {t('filterAction')}
-              </label>
-              <div className="mt-2">
-                <SimpleSelect
-                  value={actionTypeDraft}
-                  onValueChange={setActionTypeDraft}
-                  options={actionOptions}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
-                {t('filterResource')}
-              </label>
-              <div className="mt-2">
-                <SimpleSelect
-                  value={resourceTypeDraft}
-                  onValueChange={setResourceTypeDraft}
-                  options={resourceOptions}
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor="audit-filter-user-id"
-                className="text-xs font-semibold uppercase tracking-wider text-ink/50"
-              >
-                {t('filterUserId')}
-              </label>
-              <input
-                id="audit-filter-user-id"
-                type="text"
-                value={userIdDraft}
-                onChange={(e) => setUserIdDraft(e.target.value)}
-                placeholder={t('filterUserIdPlaceholder')}
-                className="mt-2 w-full rounded-xl border border-ink/15 bg-surface px-3 py-2.5 text-sm text-ink shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                autoComplete="off"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="audit-filter-resource-id"
-                className="text-xs font-semibold uppercase tracking-wider text-ink/50"
-              >
-                {t('filterResourceId')}
-              </label>
-              <input
-                id="audit-filter-resource-id"
-                type="text"
-                value={resourceIdDraft}
-                onChange={(e) => setResourceIdDraft(e.target.value)}
-                placeholder={t('filterResourceIdPlaceholder')}
-                className="mt-2 w-full rounded-xl border border-ink/15 bg-surface px-3 py-2.5 text-sm text-ink shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                autoComplete="off"
+      <CollapsibleSection
+        id="audit-advanced-filters"
+        open={advancedOpen}
+        className="mt-4"
+        contentClassName="rounded-2xl border border-ink/10 bg-surface p-4 shadow-xs sm:p-5"
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+              {t('filterFrom')}
+            </label>
+            <div className="mt-2">
+              <DatePicker
+                value={fromDraft}
+                onChange={setFromDraft}
+                placeholder={t('filterPickDate')}
               />
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" size="sm" onClick={applyAdvanced}>
-              {t('filterApply')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={clearAllFilters}
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+              {t('filterTo')}
+            </label>
+            <div className="mt-2">
+              <DatePicker
+                value={toDraft}
+                onChange={setToDraft}
+                placeholder={t('filterPickDate')}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+              {t('filterMethod')}
+            </label>
+            <div className="mt-2">
+              <SimpleSelect
+                value={methodDraft}
+                onValueChange={setMethodDraft}
+                options={methodOptions}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+              {t('filterAction')}
+            </label>
+            <div className="mt-2">
+              <SimpleSelect
+                value={actionTypeDraft}
+                onValueChange={setActionTypeDraft}
+                options={actionOptions}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-ink/50">
+              {t('filterResource')}
+            </label>
+            <div className="mt-2">
+              <SimpleSelect
+                value={resourceTypeDraft}
+                onValueChange={setResourceTypeDraft}
+                options={resourceOptions}
+              />
+            </div>
+          </div>
+          <div>
+            <label
+              htmlFor="audit-filter-user-id"
+              className="text-xs font-semibold uppercase tracking-wider text-ink/50"
             >
-              {t('filterClear')}
-            </Button>
+              {t('filterUserId')}
+            </label>
+            <input
+              id="audit-filter-user-id"
+              type="text"
+              value={userIdDraft}
+              onChange={(e) => setUserIdDraft(e.target.value)}
+              placeholder={t('filterUserIdPlaceholder')}
+              className="mt-2 w-full rounded-xl border border-ink/15 bg-surface px-3 py-2.5 text-sm text-ink shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              autoComplete="off"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label
+              htmlFor="audit-filter-resource-id"
+              className="text-xs font-semibold uppercase tracking-wider text-ink/50"
+            >
+              {t('filterResourceId')}
+            </label>
+            <input
+              id="audit-filter-resource-id"
+              type="text"
+              value={resourceIdDraft}
+              onChange={(e) => setResourceIdDraft(e.target.value)}
+              placeholder={t('filterResourceIdPlaceholder')}
+              className="mt-2 w-full rounded-xl border border-ink/15 bg-surface px-3 py-2.5 text-sm text-ink shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              autoComplete="off"
+            />
           </div>
         </div>
-      ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={applyAdvanced}>
+            {t('filterApply')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={clearAllFilters}
+          >
+            {t('filterClear')}
+          </Button>
+        </div>
+      </CollapsibleSection>
 
       {loading && items.length === 0 ? (
         <SkeletonBusyRegion label={t('loading')} className="mt-8">

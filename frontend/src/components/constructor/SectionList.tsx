@@ -93,20 +93,14 @@ const HEADING_BODY_KINDS: AddableKind[] = [
 
 const MEDIA_KINDS: AddableKind[] = ['image', 'table', 'equation'];
 
-const BACK_MATTER_KINDS: AddableKind[] = [
+const BACK_MATTER_KINDS = [
   'acknowledgments',
-
   'funding',
-
   'conflictOfInterest',
-
   'dataAvailability',
-];
+] as const satisfies AddableKind[];
 
-const BACK_MATTER_ICONS: Record<
-  (typeof BACK_MATTER_KINDS)[number],
-  LucideIcon
-> = {
+const BACK_MATTER_ICONS = {
   acknowledgments: HandHeart,
   funding: Coins,
   conflictOfInterest: Scale,

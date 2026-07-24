@@ -4,52 +4,57 @@ import type {
   ConstructorSection,
   ConstructorGuidance,
   RichTextBlockKind,
-} from "./constructor-content.types";
+} from './constructor-content.types';
 
 export type MandatorySlot =
-  | "title-en"
-  | "title-ar"
-  | "authors"
-  | "abstract-en"
-  | "abstract-ar"
-  | "references";
+  | 'title-en'
+  | 'title-ar'
+  | 'authors'
+  | 'abstract-en'
+  | 'abstract-ar'
+  | 'references';
 
 export type BackMatterMandatorySlot = RichTextBlockKind;
 
 const FRONT_MANDATORY: MandatorySlot[] = [
-  "title-en",
-  "title-ar",
-  "authors",
-  "abstract-en",
-  "abstract-ar",
+  'title-en',
+  'title-ar',
+  'authors',
+  'abstract-en',
+  'abstract-ar',
 ];
-const BACK_MANDATORY: MandatorySlot[] = ["references"];
+const BACK_MANDATORY: MandatorySlot[] = ['references'];
 
 function newId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
   return Math.random().toString(36).slice(2);
 }
 
-function matchesSlot(section: ConstructorSection, slot: MandatorySlot): boolean {
+function matchesSlot(
+  section: ConstructorSection,
+  slot: MandatorySlot,
+): boolean {
   switch (slot) {
-    case "title-en":
+    case 'title-en':
       return (
-        section.kind === "title" &&
-        ((section as { lang?: string }).lang === "en" ||
+        section.kind === 'title' &&
+        ((section as { lang?: string }).lang === 'en' ||
           !(section as { lang?: string }).lang)
       );
-    case "title-ar":
-      return section.kind === "title" && (section as { lang?: string }).lang === "ar";
-    case "authors":
-      return section.kind === "authors";
-    case "abstract-en":
-      return section.kind === "abstract" && section.lang === "en";
-    case "abstract-ar":
-      return section.kind === "abstract" && section.lang === "ar";
-    case "references":
-      return section.kind === "references";
+    case 'title-ar':
+      return (
+        section.kind === 'title' && (section as { lang?: string }).lang === 'ar'
+      );
+    case 'authors':
+      return section.kind === 'authors';
+    case 'abstract-en':
+      return section.kind === 'abstract' && section.lang === 'en';
+    case 'abstract-ar':
+      return section.kind === 'abstract' && section.lang === 'ar';
+    case 'references':
+      return section.kind === 'references';
   }
 }
 
@@ -58,47 +63,47 @@ function createMandatorySection(slot: MandatorySlot): ConstructorSection {
   const base = {
     id,
     pinned: true,
-    dirSource: "auto" as const,
+    dirSource: 'auto' as const,
   };
   switch (slot) {
-    case "title-en":
+    case 'title-en':
       return {
         ...base,
-        kind: "title",
-        lang: "en",
-        text: "",
-        dir: "ltr" satisfies ConstructorDir,
+        kind: 'title',
+        lang: 'en',
+        text: '',
+        dir: 'ltr' satisfies ConstructorDir,
       };
-    case "title-ar":
+    case 'title-ar':
       return {
         ...base,
-        kind: "title",
-        lang: "ar",
-        text: "",
-        dir: "rtl",
+        kind: 'title',
+        lang: 'ar',
+        text: '',
+        dir: 'rtl',
       };
-    case "authors":
-      return { ...base, kind: "authors", authors: [], dir: "ltr" };
-    case "abstract-en":
+    case 'authors':
+      return { ...base, kind: 'authors', authors: [], dir: 'ltr' };
+    case 'abstract-en':
       return {
         ...base,
-        kind: "abstract",
-        lang: "en",
-        text: "",
-        keywords: "",
-        dir: "ltr",
+        kind: 'abstract',
+        lang: 'en',
+        text: '',
+        keywords: '',
+        dir: 'ltr',
       };
-    case "abstract-ar":
+    case 'abstract-ar':
       return {
         ...base,
-        kind: "abstract",
-        lang: "ar",
-        text: "",
-        keywords: "",
-        dir: "rtl",
+        kind: 'abstract',
+        lang: 'ar',
+        text: '',
+        keywords: '',
+        dir: 'rtl',
       };
-    case "references":
-      return { ...base, kind: "references", items: [], dir: "ltr" };
+    case 'references':
+      return { ...base, kind: 'references', items: [], dir: 'ltr' };
   }
 }
 
@@ -108,9 +113,9 @@ function createBackMatterMandatorySection(
   return {
     id: newId(),
     kind: slot,
-    html: "<p></p>",
-    dir: "ltr",
-    dirSource: "auto",
+    html: '<p></p>',
+    dir: 'ltr',
+    dirSource: 'auto',
     pinned: true,
   };
 }
@@ -158,13 +163,10 @@ export function ensureMandatoryConstructorSections(
     return { ...content, sections };
   }
 
-  sections = [
-    ...missingFront.map(createMandatorySection),
-    ...sections,
-  ];
+  sections = [...missingFront.map(createMandatorySection), ...sections];
 
   if (missingBackMatter.length > 0) {
-    const refsIdx = sections.findIndex((s) => s.kind === "references");
+    const refsIdx = sections.findIndex((s) => s.kind === 'references');
     const inserted = missingBackMatter.map(createBackMatterMandatorySection);
     if (refsIdx >= 0) {
       sections = [
@@ -183,7 +185,7 @@ export function ensureMandatoryConstructorSections(
 
   return {
     ...content,
-    defaultDir: content.defaultDir ?? "ltr",
+    defaultDir: content.defaultDir ?? guidance?.defaultDocumentDir ?? 'ltr',
     sections,
   };
 }
@@ -193,7 +195,7 @@ export function createEmptyConstructorContent(
   guidance?: ConstructorGuidance | null,
 ): ConstructorContent {
   return ensureMandatoryConstructorSections(
-    { defaultDir: "ltr", sections: [] },
+    { defaultDir: 'ltr', sections: [] },
     guidance,
   );
 }

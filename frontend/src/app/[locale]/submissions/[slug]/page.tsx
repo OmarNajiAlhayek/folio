@@ -18,6 +18,8 @@ import {
   ACCEPT_SUPPLEMENTARY,
 } from '@/lib/upload-accept';
 import { ApiErrorState } from '@/components/api-error-state';
+import { ReviewConsensusPanel } from '@/components/ReviewConsensusPanel';
+import { EditorAssignmentDiscussion } from '@/components/EditorAssignmentDiscussion';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonLoadingStatus } from '@/components/ui/skeleton-loading-status';
@@ -93,6 +95,8 @@ import { SubmissionDisciplinePanel } from '@/components/submission-discipline-pa
 import { DisciplineBadges } from '@/components/discipline-badges';
 import { CorpusSimilarityPanel } from '@/components/corpus-similarity-panel';
 import { ReviewerSuggestionsPanel } from '@/components/reviewer-suggestions-panel';
+import { SectionEditorSuggestionsPanel } from '@/components/section-editor-suggestions-panel';
+import type { SectionEditorCandidate } from '@/lib/queries/submissions';
 import type {
   ConstructorContent,
   ConstructorValidationError,
@@ -112,6 +116,12 @@ import {
   type SubmitReadinessContributor,
 } from '@/lib/submission-field-errors';
 import { SUBMISSION_API_ERROR_CODES } from '@/lib/submission-api-error-codes';
+import { ManuscriptValidationPanel } from '@/components/manuscript-validation/ManuscriptValidationPanel';
+import {
+  PRE_SUBMIT_API_ERROR_CODES,
+  PRE_SUBMIT_VALIDATION_FIELD,
+} from '@/lib/pre-submit-validation';
+import { usePreSubmitValidation } from '@/lib/use-pre-submit-validation';
 
 type FileRow = SubmissionRecord['files'] extends Array<infer R> | undefined
   ? R
@@ -266,9 +276,22 @@ function recommendationLabel(
   r: string,
   tCommon: (key: string) => string,
 ): string {
-  if (r === 'accept') return tCommon('recAccept');
-  if (r === 'reject') return tCommon('recReject');
-  return tCommon('recRevisions');
+  switch (r) {
+    case 'accept':
+      return tCommon('recAccept');
+    case 'reject':
+      return tCommon('recReject');
+    case 'revisions':
+      return tCommon('recRevisions');
+    case 'resubmit_for_review':
+      return tCommon('recResubmitForReview');
+    case 'resubmit_elsewhere':
+      return tCommon('recResubmitElsewhere');
+    case 'see_comments':
+      return tCommon('recSeeComments');
+    default:
+      return tCommon('recRevisions');
+  }
 }
 
 function parseInvalidStatusTransition(
@@ -379,6 +402,8 @@ export default function SubmissionDetailPage() {
   const me = detail?.me ?? null;
   const sub = detail?.sub ?? null;
   const reviewerCandidates = detail?.reviewerCandidates ?? [];
+  const sectionEditorCandidates: SectionEditorCandidate[] =
+    detail?.sectionEditorCandidates ?? [];
   const reviewersLoadError = detail
     ? detail.reviewersLoadError === 'reviewers_load_failed'
       ? t('reviewersLoadFailed')
@@ -413,8 +438,14 @@ export default function SubmissionDetailPage() {
     });
   }, []);
   const [reviewerPick, setReviewerPick] = useState('');
+  const [assignResponseDue, setAssignResponseDue] = useState('');
+  const [assignReviewDue, setAssignReviewDue] = useState('');
+  const [assignEditorInstructions, setAssignEditorInstructions] = useState('');
+  const [sectionEditorPick, setSectionEditorPick] = useState('');
   const [statusPick, setStatusPick] = useState('');
   const [messageForAuthor, setMessageForAuthor] = useState('');
+  const [authorResponseToReviewers, setAuthorResponseToReviewers] =
+    useState('');
   const [busy, setBusy] = useState(false);
   const [uploadingName, setUploadingName] = useState<string | null>(null);
   const [reminderRescheduleAt, setReminderRescheduleAt] = useState<
@@ -483,6 +514,28 @@ export default function SubmissionDetailPage() {
     sub?.files,
     sub?.reviewManuscriptPresentation,
   ]);
+
+  const draftManuscriptSources = detectManuscriptSources({
+    files: sub?.files ?? [],
+    constructorContent: sub?.constructorContent,
+  });
+
+  const preSubmitValidation = usePreSubmitValidation({
+    serverAnalysis: sub?.preSubmitAnalysis ?? null,
+    serverUpdatedAt: sub?.updatedAt,
+    constructorContent: sub?.constructorContent,
+    hasConstructorDraft: draftManuscriptSources.hasConstructorDraft,
+    reviewPresentation,
+    busy,
+    hasManuscript:
+      draftManuscriptSources.hasUploadedManuscript ||
+      draftManuscriptSources.hasConstructorDraft,
+    t,
+    onBlocked: (errors) => {
+      setSubmitFieldErrors(errors);
+      scrollToFirstFieldError(errors);
+    },
+  });
 
   async function uploadFile(f: File, kind: string) {
     if (!sub) return;
@@ -648,6 +701,18 @@ export default function SubmissionDetailPage() {
         return;
       }
 
+      const preSubmitState = await preSubmitValidation.assertReadyBeforeSubmit({
+        analysis: fresh.preSubmitAnalysis ?? null,
+        constructorContent: cc,
+      });
+      if (preSubmitState !== 'ready') {
+        const validationErrors = new Set<string>([PRE_SUBMIT_VALIDATION_FIELD]);
+        setSubmitFieldErrors(validationErrors);
+        scrollToFirstFieldError(validationErrors);
+        preSubmitValidation.toastForSubmitState(preSubmitState);
+        return;
+      }
+
       await submitSubmissionForReview(sub.slug, {
         presentUploadedManuscript: reviewPresentation.presentUploaded,
         presentConstructorManuscript: reviewPresentation.presentConstructor,
@@ -655,9 +720,14 @@ export default function SubmissionDetailPage() {
           reviewPresentation.presentConstructor && sources.hasConstructorDraft
             ? cc
             : null,
+        authorResponseToReviewers:
+          sub.status === 'revisions_requested'
+            ? authorResponseToReviewers
+            : undefined,
       });
       toast.success(t('submitSuccess'), { id: 'submission-submit-success' });
       setSubmitFieldErrors(new Set());
+      setAuthorResponseToReviewers('');
       invalidateDetail(slug);
     } catch (err) {
       if (
@@ -671,10 +741,26 @@ export default function SubmissionDetailPage() {
         router.push(`/submissions/${encodeURIComponent(sub.slug)}/compose`);
         return;
       }
+      if (err instanceof ApiError && err.code === 'DOCX_FORMAT_VIOLATIONS') {
+        const violationCount = Array.isArray(err.details?.violations)
+          ? (err.details.violations as unknown[]).length
+          : 1;
+        const manuscriptFieldErrors = new Set([fileFieldKey('manuscript')]);
+        setSubmitFieldErrors(manuscriptFieldErrors);
+        scrollToFirstFieldError(manuscriptFieldErrors);
+        toast.error(
+          t('docxViolationsSubmitBlocked', { count: violationCount }),
+          {
+            id: 'submission-docx-violations',
+          },
+        );
+        return;
+      }
       if (
         err instanceof ApiError &&
         err.code &&
-        (SUBMISSION_API_ERROR_CODES as readonly string[]).includes(err.code)
+        ((SUBMISSION_API_ERROR_CODES as readonly string[]).includes(err.code) ||
+          (PRE_SUBMIT_API_ERROR_CODES as readonly string[]).includes(err.code))
       ) {
         const fileKinds = new Set(
           (sub.files ?? []).map((f) => f.kind).filter(Boolean) as string[],
@@ -710,19 +796,72 @@ export default function SubmissionDetailPage() {
     setBusy(true);
     setValidationError(null);
     try {
+      const body: Record<string, string> = { ...parsed.data };
+      if (assignResponseDue) body.responseDueAt = assignResponseDue;
+      if (assignReviewDue) body.reviewDueAt = assignReviewDue;
+      if (assignEditorInstructions.trim())
+        body.editorInstructions = assignEditorInstructions.trim();
       await apiJson(
         `/submissions/${encodeURIComponent(sub.slug)}/assignments`,
         {
           method: 'POST',
           headers: { 'X-Folio-Locale': locale },
-          body: JSON.stringify(parsed.data),
+          body: JSON.stringify(body),
         },
       );
       toast.success(t('assignSuccess'), { id: 'submission-assign-success' });
       setReviewerPick('');
+      setAssignResponseDue('');
+      setAssignReviewDue('');
+      setAssignEditorInstructions('');
       invalidateDetail(slug);
     } catch (err) {
       showApiError(err, t('assignFailed'), { id: 'submission-assign' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignSectionEditor() {
+    if (!sub || !sectionEditorPick.trim()) return;
+    setBusy(true);
+    try {
+      await apiJson(
+        `/submissions/${encodeURIComponent(sub.slug)}/section-editor-assignment`,
+        {
+          method: 'POST',
+          headers: { 'X-Folio-Locale': locale },
+          body: JSON.stringify({ sectionEditorId: sectionEditorPick }),
+        },
+      );
+      toast.success(t('sectionEditorAssignSuccess'), {
+        id: 'se-assign-success',
+      });
+      setSectionEditorPick('');
+      invalidateDetail(slug);
+    } catch (err) {
+      showApiError(err, t('sectionEditorAssignFailed'), { id: 'se-assign' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSectionEditorAssignment() {
+    if (!sub) return;
+    setBusy(true);
+    try {
+      await apiJson(
+        `/submissions/${encodeURIComponent(sub.slug)}/section-editor-assignment`,
+        { method: 'DELETE' },
+      );
+      toast.success(t('sectionEditorUnassignSuccess'), {
+        id: 'se-unassign-success',
+      });
+      invalidateDetail(slug);
+    } catch (err) {
+      showApiError(err, t('sectionEditorUnassignFailed'), {
+        id: 'se-unassign',
+      });
     } finally {
       setBusy(false);
     }
@@ -955,6 +1094,9 @@ export default function SubmissionDetailPage() {
     isEditorView &&
     me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER) &&
     canConfigureReviewForStatus;
+  const canAssignSectionEditor =
+    isEditorView &&
+    me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR);
   const canEditManuscript =
     canManageOwn &&
     isAuthor &&
@@ -1046,6 +1188,22 @@ export default function SubmissionDetailPage() {
   const composeHref = `/submissions/${encodeURIComponent(sub.slug)}/compose`;
   const editableFileKinds = fileKindsForSubmissionDetail();
   const showReadonlyFiles = !canEditManuscript && files.length > 0;
+
+  const {
+    preSubmitAnalysis,
+    setPreSubmitAnalysis,
+    validatingManuscript,
+    setValidatingManuscript,
+    preSubmitState,
+    submitDisabled,
+    submitButtonLabel,
+    handleSubmitClick,
+  } = preSubmitValidation;
+  const effectiveSubmitButtonLabel =
+    sub.status === 'revisions_requested' &&
+    (preSubmitState === 'ready' || preSubmitState === 'not_required')
+      ? t('resubmitBannerCta')
+      : submitButtonLabel;
 
   const mainShellCls = isEditorView
     ? submissionQueueShellCls
@@ -1410,6 +1568,85 @@ export default function SubmissionDetailPage() {
                         </label>
                       </div>
                     </FileDropZone>
+                    {kind === 'manuscript' &&
+                    sub.docxManuscriptViolations &&
+                    sub.docxManuscriptViolations.length > 0 ? (
+                      <div className="mt-3 rounded-xl border border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20 dark:border-amber-500/30 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                              {t('docxViolationsHeading')}
+                            </p>
+                            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400/80">
+                              {t('docxViolationsBody')}
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                              {sub.docxManuscriptViolations.map((v) => (
+                                <li
+                                  key={v.code}
+                                  className="text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5"
+                                >
+                                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" />
+                                  {locale === 'ar' ? v.messageAr : v.message}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    {kind === 'manuscript' &&
+                    sub.docxGrammarNotes &&
+                    sub.docxGrammarNotes.length > 0 ? (
+                      <div className="mt-3 rounded-xl border border-blue-300/60 bg-blue-50/70 dark:bg-blue-950/20 dark:border-blue-500/30 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <svg
+                            className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          <div className="min-w-0 w-full">
+                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                              {t('docxGrammarHeading')}
+                            </p>
+                            <p className="mt-0.5 text-xs text-blue-700 dark:text-blue-400/80">
+                              {t('docxGrammarBody')}
+                            </p>
+                            <ul className="mt-2 divide-y divide-blue-200/50 dark:divide-blue-700/30">
+                              {sub.docxGrammarNotes.map((n, i) => (
+                                <li
+                                  key={i}
+                                  className="py-2 first:pt-0 last:pb-0"
+                                >
+                                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                                    <span className="font-medium">
+                                      {t('docxGrammarExcerpt')}:{' '}
+                                    </span>
+                                    <span className="font-mono bg-blue-100 dark:bg-blue-900/40 px-1 rounded">
+                                      &ldquo;{n.excerpt}&rdquo;
+                                    </span>
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-blue-700 dark:text-blue-400">
+                                    <span className="font-medium">
+                                      {t('docxGrammarSuggestion')}:{' '}
+                                    </span>
+                                    {n.suggestion}
+                                  </p>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                     {kind === 'manuscript' && canEditConstructor ? (
                       <div
                         className={`mt-4 pt-4 border-t border-ink/[0.05] dark:border-white/[0.05] ${
@@ -1444,6 +1681,21 @@ export default function SubmissionDetailPage() {
                 </p>
               )}
               <p className="text-xs text-ink/55">{t('uploadHint')}</p>
+              {canEditConstructor && hasConstructorDraft ? (
+                <div className="pt-2">
+                  <ManuscriptValidationPanel
+                    slug={sub.slug}
+                    constructorContent={constructorContent}
+                    analysis={preSubmitAnalysis}
+                    onAnalysisChange={(next) => {
+                      setPreSubmitAnalysis(next);
+                      invalidateDetail(slug);
+                    }}
+                    validating={validatingManuscript}
+                    onValidatingChange={setValidatingManuscript}
+                  />
+                </div>
+              ) : null}
               {files.length > 0 && (
                 <div className="pt-4 border-t border-ink/[0.05] dark:border-white/[0.05]">
                   <h3 className="text-sm font-semibold text-ink mb-3">
@@ -1563,6 +1815,19 @@ export default function SubmissionDetailPage() {
             </section>
           )}
 
+          {isEditorView && sub.authorResponseToReviewers?.trim() && (
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
+              <h2 className="font-serif text-lg font-semibold text-ink">
+                {t('resubmitResponseLabel')}
+              </h2>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink/80">
+                {sub.authorResponseToReviewers}
+              </p>
+            </section>
+          )}
+
           {isEditorView && (
             <section
               className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
@@ -1570,6 +1835,12 @@ export default function SubmissionDetailPage() {
               <h2 className="font-serif text-lg font-semibold text-ink">
                 {t('reviewsSectionEditor')}
               </h2>
+              <div className="mt-4">
+                <ReviewConsensusPanel
+                  assignments={editorAssignmentRows}
+                  reviews={editorReviews}
+                />
+              </div>
               {reviewsError && (
                 <p className="mt-3 text-sm text-red-700">{reviewsError}</p>
               )}
@@ -1826,11 +2097,13 @@ export default function SubmissionDetailPage() {
                       {t('submitIrreversibleHint')}
                     </p>
                     <Button
-                      disabled={busy || !hasManuscript}
-                      onClick={() => void submitForReview()}
+                      disabled={submitDisabled}
+                      onClick={() =>
+                        handleSubmitClick(() => void submitForReview())
+                      }
                       className="w-full py-3 text-xs font-bold"
                     >
-                      {t('submitForReview')}
+                      {effectiveSubmitButtonLabel}
                     </Button>
                   </div>
                 )}
@@ -1851,89 +2124,133 @@ export default function SubmissionDetailPage() {
               </div>
             )}
 
-          {/* Author Submission Workflow Stage Tracker */}
           {isAuthor &&
             !isEditorView &&
-            !(
-              sub.status === 'draft' || sub.status === 'revisions_requested'
-            ) && (
-              <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-5">
-                <h3 className="font-serif text-base font-semibold text-ink border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
-                  {t('workflowProgress')}
-                </h3>
+            sub.status === 'revisions_requested' &&
+            canEditConstructor && (
+              <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-1.5">
+                <label
+                  htmlFor="author-response-to-reviewers"
+                  className="text-xs font-semibold text-ink"
+                >
+                  {t('resubmitResponseLabel')}
+                </label>
+                <p className="text-[10px] text-ink/50">
+                  {t('resubmitResponseHint')}
+                </p>
+                <textarea
+                  id="author-response-to-reviewers"
+                  value={authorResponseToReviewers}
+                  onChange={(e) => setAuthorResponseToReviewers(e.target.value)}
+                  placeholder={t('resubmitResponsePlaceholder')}
+                  disabled={busy}
+                  rows={4}
+                  maxLength={8000}
+                  className="w-full rounded-lg border border-ink/15 dark:border-white/15 bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
+                />
+              </div>
+            )}
 
-                <div className="relative ps-6 space-y-6 before:absolute before:start-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-ink/[0.06] dark:before:bg-white/[0.06]">
-                  {/* Step 1: Submitted */}
-                  <div className="relative">
-                    <span className="absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-                      ✓
-                    </span>
-                    <p className="text-xs font-bold text-ink">
-                      {t('workflowSubmitted')}
-                    </p>
-                    <p className="text-[10px] text-ink/50">
-                      {t('workflowSubmittedHint')}
-                    </p>
-                  </div>
+          {/* Author Submission Workflow Stage Tracker */}
+          {isAuthor && !isEditorView && sub.status !== 'draft' && (
+            <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-5">
+              <h3 className="font-serif text-base font-semibold text-ink border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
+                {t('workflowProgress')}
+              </h3>
 
-                  {/* Step 2: Under Review */}
-                  <div className="relative">
-                    <span
-                      className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                        sub.status === 'under_review' ||
-                        sub.status === 'revisions_requested'
-                          ? 'border-blue-500 bg-blue-500 text-white animate-pulse'
-                          : sub.status === 'accepted' ||
-                              sub.status === 'published'
-                            ? 'border-emerald-500 bg-emerald-500 text-white'
-                            : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
-                      }`}
-                    >
-                      {sub.status === 'accepted' || sub.status === 'published'
-                        ? '✓'
-                        : '2'}
-                    </span>
-                    <p
-                      className={`text-xs font-bold ${sub.status === 'under_review' ? 'text-blue-600 dark:text-blue-400' : 'text-ink'}`}
-                    >
-                      {t('workflowPeerReview')}
-                    </p>
-                    <p className="text-[10px] text-ink/50">
-                      {sub.status === 'under_review'
-                        ? t('workflowPeerReviewActive')
+              <div className="relative ps-6 space-y-6 before:absolute before:start-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-ink/[0.06] dark:before:bg-white/[0.06]">
+                {/* Step 1: Submitted */}
+                <div className="relative">
+                  <span className="absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                    ✓
+                  </span>
+                  <p className="text-xs font-bold text-ink">
+                    {t('workflowSubmitted')}
+                  </p>
+                  <p className="text-[10px] text-ink/50">
+                    {t('workflowSubmittedHint')}
+                  </p>
+                </div>
+
+                {/* Step 2: Under Review */}
+                <div className="relative">
+                  <span
+                    className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                      sub.status === 'under_review' ||
+                      sub.status === 'revisions_requested'
+                        ? 'border-blue-500 bg-blue-500 text-white animate-pulse'
+                        : sub.status === 'accepted' ||
+                            sub.status === 'published'
+                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
+                    }`}
+                  >
+                    {sub.status === 'accepted' || sub.status === 'published'
+                      ? '✓'
+                      : '2'}
+                  </span>
+                  <p
+                    className={`text-xs font-bold ${
+                      sub.status === 'under_review'
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : sub.status === 'revisions_requested'
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-ink'
+                    }`}
+                  >
+                    {t('workflowPeerReview')}
+                  </p>
+                  <p className="text-[10px] text-ink/50">
+                    {sub.status === 'under_review'
+                      ? t('workflowPeerReviewActive')
+                      : sub.status === 'revisions_requested'
+                        ? t('workflowPeerReviewRevisions')
                         : sub.status === 'accepted' ||
                             sub.status === 'published'
                           ? t('workflowPeerReviewDone')
                           : t('workflowPeerReviewWaiting')}
-                    </p>
-                  </div>
+                  </p>
+                </div>
 
-                  {/* Step 3: Decision */}
-                  <div className="relative">
-                    <span
-                      className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                        sub.status === 'accepted'
-                          ? 'border-emerald-500 bg-emerald-500 text-white animate-pulse'
-                          : sub.status === 'published'
-                            ? 'border-emerald-500 bg-emerald-500 text-white'
-                            : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
-                      }`}
-                    >
-                      {sub.status === 'published' ? '✓' : '3'}
-                    </span>
-                    <p className="text-xs font-bold text-ink">
-                      {t('workflowDecision')}
-                    </p>
-                    <p className="text-[10px] text-ink/50">
-                      {sub.status === 'accepted'
-                        ? t('workflowDecisionAccepted')
+                {/* Step 3: Decision */}
+                <div className="relative">
+                  <span
+                    className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                      sub.status === 'accepted'
+                        ? 'border-emerald-500 bg-emerald-500 text-white animate-pulse'
                         : sub.status === 'published'
-                          ? t('workflowDecisionPublished')
-                          : t('workflowDecisionWaiting')}
-                    </p>
-                  </div>
+                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          : sub.status === 'rejected'
+                            ? 'border-rose-500 bg-rose-500 text-white'
+                            : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
+                    }`}
+                  >
+                    {sub.status === 'published'
+                      ? '✓'
+                      : sub.status === 'rejected'
+                        ? '✕'
+                        : '3'}
+                  </span>
+                  <p
+                    className={`text-xs font-bold ${sub.status === 'rejected' ? 'text-rose-600 dark:text-rose-400' : 'text-ink'}`}
+                  >
+                    {t('workflowDecision')}
+                  </p>
+                  <p className="text-[10px] text-ink/50">
+                    {sub.status === 'accepted'
+                      ? t('workflowDecisionAccepted')
+                      : sub.status === 'published'
+                        ? t('workflowDecisionPublished')
+                        : sub.status === 'rejected'
+                          ? t('workflowDecisionRejected')
+                          : sub.status === 'revisions_requested'
+                            ? t('workflowDecisionRevisions')
+                            : t('workflowDecisionWaiting')}
+                  </p>
+                </div>
 
-                  {/* Step 4: Published */}
+                {/* Step 4: Published */}
+                {sub.status !== 'rejected' && (
                   <div className="relative">
                     <span
                       className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
@@ -1955,9 +2272,10 @@ export default function SubmissionDetailPage() {
                         : t('workflowPublishedPending')}
                     </p>
                   </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+          )}
 
           {/* Editor Command Center in Sidebar */}
           {isEditorView && (
@@ -2024,7 +2342,12 @@ export default function SubmissionDetailPage() {
                     onValueChange={setStatusPick}
                     options={statuses.map((s) => ({
                       value: s,
-                      label: submissionStatusLabel(s, tSub),
+                      label:
+                        s === 'rejected'
+                          ? sub.status === 'submitted'
+                            ? tSub('stRejectedDeskReject')
+                            : tSub('stRejectedPostReview')
+                          : submissionStatusLabel(s, tSub),
                     }))}
                     className="w-full"
                     aria-labelledby="status-select-label"
@@ -2062,6 +2385,70 @@ export default function SubmissionDetailPage() {
                   {t('applyStatus')}
                 </button>
               </div>
+
+              {/* Assign Section Editor Box */}
+              {canAssignSectionEditor && (
+                <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
+                    {t('sectionEditorPanel')}
+                  </h3>
+                  {sub.sectionEditorAssignment?.sectionEditor && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-ink/10 dark:border-white/10 bg-paper/60 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-ink">
+                          {
+                            sub.sectionEditorAssignment.sectionEditor
+                              .displayName
+                          }
+                        </p>
+                        <p className="truncate text-[10px] text-ink/50">
+                          {sub.sectionEditorAssignment.sectionEditor.email}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void removeSectionEditorAssignment()}
+                        className="shrink-0 rounded-lg border border-red-400/30 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+                      >
+                        {t('removeSectionEditorAssignment')}
+                      </button>
+                    </div>
+                  )}
+                  <SectionEditorSuggestionsPanel
+                    slug={sub.slug}
+                    disabled={busy}
+                    onPick={setSectionEditorPick}
+                  />
+                  <div className="flex flex-col gap-1 text-sm font-medium text-ink">
+                    <span id="se-select-label" className="sr-only">
+                      {t('sectionEditorLabel')}
+                    </span>
+                    <SearchableSelect
+                      options={sectionEditorCandidates.map((c) => ({
+                        value: c.id,
+                        label: `${c.displayName} (${c.email})`,
+                        keywords: [c.displayName, c.email, ...c.disciplines],
+                      }))}
+                      value={sectionEditorPick}
+                      onValueChange={setSectionEditorPick}
+                      placeholder={t('sectionEditorPlaceholder')}
+                      searchPlaceholder={tUi('searchPlaceholder')}
+                      emptyText={tUi('noResults')}
+                      disabled={busy}
+                      className="w-full animate-fade-in"
+                      aria-labelledby="se-select-label"
+                    />
+                  </div>
+                  <Button
+                    disabled={busy || !sectionEditorPick.trim()}
+                    onClick={() => void assignSectionEditor()}
+                    className="w-full text-xs font-bold"
+                  >
+                    {t('assignSectionEditor')}
+                  </Button>
+                </div>
+              )}
 
               {/* Assign Reviewer Box */}
               <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
@@ -2110,6 +2497,48 @@ export default function SubmissionDetailPage() {
                         aria-labelledby="reviewer-select-label"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+                          {t('assignResponseDue')}
+                        </label>
+                        <input
+                          type="date"
+                          value={assignResponseDue}
+                          onChange={(e) => setAssignResponseDue(e.target.value)}
+                          disabled={busy}
+                          className="rounded-md border border-ink/15 bg-surface px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+                          {t('assignReviewDue')}
+                        </label>
+                        <input
+                          type="date"
+                          value={assignReviewDue}
+                          onChange={(e) => setAssignReviewDue(e.target.value)}
+                          disabled={busy}
+                          className="rounded-md border border-ink/15 bg-surface px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+                        {t('assignEditorInstructions')}
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={assignEditorInstructions}
+                        onChange={(e) =>
+                          setAssignEditorInstructions(e.target.value)
+                        }
+                        disabled={busy}
+                        maxLength={10000}
+                        placeholder={t('assignEditorInstructionsHint')}
+                        className="rounded-md border border-ink/15 bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink/35 focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 resize-none"
+                      />
+                    </div>
                     <Button
                       disabled={
                         busy || !reviewerPick.trim() || !!reviewersLoadError
@@ -2151,6 +2580,9 @@ export default function SubmissionDetailPage() {
                       const remindersFailed = asg
                         ? reminderLoadFailedByAssignment[asg] === true
                         : false;
+                      const reviewForAssignment = editorReviews.find(
+                        (r) => r.assignmentId === a.id,
+                      );
                       return (
                         <div
                           key={a.id}
@@ -2163,11 +2595,21 @@ export default function SubmissionDetailPage() {
                             >
                               {name}
                             </span>
-                            <span
-                              className={assignmentStatusPillClass(a.status)}
-                            >
-                              {assignmentStatusLabel(a.status, tAssign)}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {reviewForAssignment && (
+                                <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
+                                  {recommendationLabel(
+                                    reviewForAssignment.recommendation,
+                                    tCommon,
+                                  )}
+                                </span>
+                              )}
+                              <span
+                                className={assignmentStatusPillClass(a.status)}
+                              >
+                                {assignmentStatusLabel(a.status, tAssign)}
+                              </span>
+                            </div>
                           </div>
                           <div className="border-t border-ink/10 dark:border-white/10 pt-3 space-y-2 text-[11px]">
                             <p className="font-semibold text-ink/80">
@@ -2295,6 +2737,9 @@ export default function SubmissionDetailPage() {
                               </div>
                             )}
                           </div>
+                          {asg && (
+                            <EditorAssignmentDiscussion assignmentSlug={asg} />
+                          )}
                         </div>
                       );
                     })}

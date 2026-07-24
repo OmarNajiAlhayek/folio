@@ -1,6 +1,10 @@
 'use client';
 
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query';
 import { publicJson } from '@/lib/public-api';
 import {
   buildPublicSubmissionsQuery,
@@ -82,6 +86,7 @@ export function usePublicationsCatalog(filters: PublicationCatalogFilters) {
       const nextOffset = lastPage.offset + lastPage.items.length;
       return nextOffset < lastPage.total ? nextOffset : undefined;
     },
+    placeholderData: keepPreviousData,
     retry: false,
   });
 }

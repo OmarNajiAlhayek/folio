@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { getApiBase } from "@/lib/api";
+import { useEffect, useMemo, useState } from 'react';
+import { getApiBase } from '@/lib/api';
 import {
   fetchManuscriptStyleCatalog,
   type ManuscriptConstructorGuidance,
   type ManuscriptStyleCatalog,
-} from "@/lib/manuscript-styles-catalog";
+} from '@/lib/manuscript-styles-catalog';
 import type {
   ConstructorContent,
   ConstructorGuidance,
-} from "@/lib/constructor-content.types";
+} from '@/lib/constructor-content.types';
 
 export function guidanceFromCatalogEntry(
   entry: { constructorGuidance?: ManuscriptConstructorGuidance } | undefined,
@@ -21,6 +21,7 @@ export function guidanceFromCatalogEntry(
     extraMandatorySlots: g.extraMandatorySlots,
     recommendedPresets: g.recommendedPresets,
     requiredRichTextKinds: g.requiredRichTextKinds,
+    defaultDocumentDir: g.defaultDocumentDir,
   };
 }
 
@@ -57,13 +58,13 @@ export function useConstructorStyleGuidance(
     };
   }, []);
 
-  const previewStyleOverride = options?.previewStyleId?.trim() ?? "";
+  const previewStyleOverride = options?.previewStyleId?.trim() ?? '';
 
   const effectiveStyleId =
     previewStyleOverride ||
     content.manuscriptStyleId?.trim() ||
     catalog?.defaultStyleId ||
-    "";
+    '';
 
   const catalogEntry = useMemo(
     () => catalog?.styles.find((s) => s.id === effectiveStyleId),

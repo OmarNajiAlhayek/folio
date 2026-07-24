@@ -1,11 +1,11 @@
 'use client';
 
-import { CircleX } from 'lucide-react';
+import { CircleX, ChevronDown, ChevronUp, Paperclip, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useParams } from 'next/navigation';
-import { apiBlob, apiJson, ApiError } from '@/lib/api';
+import { apiBlob, apiJson, apiUpload, ApiError } from '@/lib/api';
 import { redirectToLogin } from '@/lib/auth-redirect';
 import { ApiErrorState } from '@/components/api-error-state';
 import { toast } from '@/lib/toast';
@@ -23,7 +23,14 @@ import {
   safeParseResult,
 } from '@/lib/validation';
 
-const recs = ['accept', 'reject', 'revisions'] as const;
+const recs = [
+  'accept',
+  'revisions',
+  'resubmit_for_review',
+  'resubmit_elsewhere',
+  'reject',
+  'see_comments',
+] as const;
 type Rec = (typeof recs)[number];
 
 const ABSTRACT_PREVIEW_LEN = 420;
@@ -36,10 +43,35 @@ type ReviewFileRow = {
   fileStage?: string;
 };
 
+type DiscussionMessage = {
+  id: string;
+  body: string;
+  createdAt: string;
+  author?: { id: string; displayName: string } | null;
+};
+
+type DiscussionRow = {
+  id: string;
+  subject: string;
+  createdAt: string;
+  messages: DiscussionMessage[];
+};
+
 type AssignmentRow = {
   id: string;
   slug: string | null;
   status: string;
+  assignedAt?: string;
+  responseDueAt?: string | null;
+  reviewDueAt?: string | null;
+  assignedBy?: { id: string; displayName: string } | null;
+  editorInstructions?: string;
+  review?: {
+    id: string;
+    recommendation: string;
+    submittedAt: string;
+  } | null;
+  discussions?: DiscussionRow[];
   submission?: {
     id: string;
     title: string;
@@ -48,6 +80,7 @@ type AssignmentRow = {
     slug?: string | null;
     abstract?: string;
     abstractAr?: string | null;
+    reviewMethod?: string;
     files?: ReviewFileRow[];
   };
 };
@@ -130,12 +163,31 @@ export default function ReviewFormPage() {
   const [contextError, setContextError] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<AssignmentRow | null>(null);
   const [contextMissing, setContextMissing] = useState<
-    'notFound' | 'invited' | 'notOpen' | null
+    'notFound' | 'invited' | 'completed' | 'notOpen' | null
   >(null);
   const [contextErrorCause, setContextErrorCause] = useState<unknown>(null);
   const { resolve: resolveApiError } = useApiErrorMessages();
   const tApi = useTranslations('ApiErrors');
   const showApiError = useToastApiError();
+
+  // Guidelines
+  const [guidelines, setGuidelines] = useState<string>('');
+
+  // Reviewer files
+  const [reviewerFiles, setReviewerFiles] = useState<ReviewFileRow[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Discussions
+  const [discussions, setDiscussions] = useState<DiscussionRow[]>([]);
+  const [expandedDiscussionId, setExpandedDiscussionId] = useState<
+    string | null
+  >(null);
+  const [showNewDiscussion, setShowNewDiscussion] = useState(false);
+  const [newDiscSubject, setNewDiscSubject] = useState('');
+  const [newDiscBody, setNewDiscBody] = useState('');
+  const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
+  const [replyBodies, setReplyBodies] = useState<Record<string, string>>({});
+  const [submittingReply, setSubmittingReply] = useState<string | null>(null);
 
   const loadContext = useCallback(async () => {
     setPageLoading(true);
@@ -144,30 +196,38 @@ export default function ReviewFormPage() {
     setContextMissing(null);
     setAssignment(null);
     try {
-      const items = await apiJson<AssignmentRow[]>('/assignments/me');
-      const row = items.find((a) => a.slug === slug);
-      if (!row) {
-        setContextMissing('notFound');
-        return;
-      }
+      const row = await apiJson<AssignmentRow>(
+        `/assignments/${encodeURIComponent(slug)}`,
+      );
+      setAssignment(row);
       if (row.status === 'invited') {
-        setAssignment(row);
         setContextMissing('invited');
         return;
       }
+      if (row.status === 'completed') {
+        setContextMissing('completed');
+        return;
+      }
       if (row.status !== 'accepted') {
-        setAssignment(row);
         setContextMissing('notOpen');
         return;
       }
-      setAssignment(row);
+      if (row.discussions) setDiscussions(row.discussions);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         redirectToLogin(router, pathname);
         return;
       }
       if (err instanceof ApiError && err.status === 403) {
-        setContextError(tAssignments('needReviewerRole'));
+        setContextError(
+          (err as ApiError & { code?: string }).code === 'FORBIDDEN'
+            ? t('wrongReviewerAccount')
+            : tAssignments('needReviewerRole'),
+        );
+        return;
+      }
+      if (err instanceof ApiError && err.status === 404) {
+        setContextMissing('notFound');
         return;
       }
       setContextErrorCause(err);
@@ -183,6 +243,19 @@ export default function ReviewFormPage() {
       setPageLoading(false);
     });
   }, [loadContext, router, pathname, t]);
+
+  useEffect(() => {
+    apiJson<{ value: string }>('/journal/settings/reviewer-guidelines')
+      .then((r) => setGuidelines(r.value ?? ''))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!assignment || assignment.status !== 'accepted') return;
+    apiJson<ReviewFileRow[]>(`/assignments/${encodeURIComponent(slug)}/files`)
+      .then((files) => setReviewerFiles(files))
+      .catch(() => {});
+  }, [slug, assignment]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -207,11 +280,80 @@ export default function ReviewFormPage() {
       toast.success(t('submitSuccess'), {
         id: 'assignment-review-submit-success',
       });
-      router.push('/assignments');
+      // Reload page to show completion state
+      await loadContext();
     } catch (err) {
       showApiError(err, t('submitFailed'), { id: 'assignment-review-submit' });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const saved = (await apiUpload(
+        `/assignments/${encodeURIComponent(slug)}/files`,
+        file,
+      )) as ReviewFileRow;
+      setReviewerFiles((prev) => [...prev, saved]);
+      toast.success(t('uploadSuccess'), {
+        id: 'assignment-review-upload-success',
+      });
+    } catch (err) {
+      showApiError(err, t('uploadFailed'), { id: 'assignment-review-upload' });
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function submitNewDiscussion() {
+    if (!newDiscBody.trim()) return;
+    setSubmittingDiscussion(true);
+    try {
+      const disc = await apiJson<DiscussionRow>(
+        `/assignments/${encodeURIComponent(slug)}/discussions`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ subject: newDiscSubject, body: newDiscBody }),
+        },
+      );
+      setDiscussions((prev) => [...prev, disc]);
+      setNewDiscSubject('');
+      setNewDiscBody('');
+      setShowNewDiscussion(false);
+      setExpandedDiscussionId(disc.id);
+    } catch (err) {
+      showApiError(err, t('discussionFailed'), {
+        id: 'assignment-discussion-create',
+      });
+    } finally {
+      setSubmittingDiscussion(false);
+    }
+  }
+
+  async function submitReply(discussionId: string) {
+    const body = replyBodies[discussionId]?.trim();
+    if (!body) return;
+    setSubmittingReply(discussionId);
+    try {
+      const msg = await apiJson<DiscussionMessage>(
+        `/assignments/${encodeURIComponent(slug)}/discussions/${discussionId}/messages`,
+        { method: 'POST', body: JSON.stringify({ body }) },
+      );
+      setDiscussions((prev) =>
+        prev.map((d) =>
+          d.id === discussionId ? { ...d, messages: [...d.messages, msg] } : d,
+        ),
+      );
+      setReplyBodies((prev) => ({ ...prev, [discussionId]: '' }));
+    } catch (err) {
+      showApiError(err, t('replyFailed'), { id: 'assignment-reply' });
+    } finally {
+      setSubmittingReply(null);
     }
   }
 
@@ -234,19 +376,38 @@ export default function ReviewFormPage() {
   const statusLabel =
     statusKey != null ? tSub(statusKey) : (sub?.status ?? '—');
 
-  const recHint = (r: Rec) =>
-    r === 'accept'
-      ? t('recHintAccept')
-      : r === 'reject'
-        ? t('recHintReject')
-        : t('recHintRevisions');
+  const recLabel = (r: Rec): string => {
+    const map: Record<Rec, string> = {
+      accept: tCommon('recAccept'),
+      revisions: tCommon('recRevisions'),
+      resubmit_for_review: tCommon('recResubmitForReview'),
+      resubmit_elsewhere: tCommon('recResubmitElsewhere'),
+      reject: tCommon('recReject'),
+      see_comments: tCommon('recSeeComments'),
+    };
+    return map[r];
+  };
+
+  const recHint = (r: Rec): string => {
+    const map: Record<Rec, string> = {
+      accept: t('recHintAccept'),
+      revisions: t('recHintRevisions'),
+      resubmit_for_review: t('recHintResubmitForReview'),
+      resubmit_elsewhere: t('recHintResubmitElsewhere'),
+      reject: t('recHintReject'),
+      see_comments: t('recHintSeeComments'),
+    };
+    return map[r];
+  };
+
+  const commentsOptional = recommendation === 'accept';
 
   async function downloadReviewFile(file: ReviewFileRow) {
-    const slug = sub?.slug;
-    if (!slug) return;
+    const subSlug = sub?.slug;
+    if (!subSlug) return;
     try {
       const blob = await apiBlob(
-        `/submissions/${encodeURIComponent(slug)}/files/${file.id}`,
+        `/submissions/${encodeURIComponent(subSlug)}/files/${file.id}`,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -329,6 +490,58 @@ export default function ReviewFormPage() {
           </div>
         )}
 
+      {/* Completion section */}
+      {!pageLoading &&
+        !contextError &&
+        contextMissing === 'completed' &&
+        assignment && (
+          <div className="mt-8 rounded-xl border border-green-200 bg-green-50 p-8 shadow-sm">
+            <p className="font-sans text-xs font-semibold uppercase tracking-wider text-green-700">
+              {t('eyebrow')}
+            </p>
+            <h1 className="mt-2 font-serif text-2xl font-semibold text-green-900">
+              {t('completedHeading')}
+            </h1>
+            <p className="mt-1 font-serif text-lg text-ink/80">
+              {sub?.title ?? tAssignments('submissionFallback')}
+            </p>
+            {assignment.review && (
+              <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-white/60 px-4 py-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                    {t('completedRecommendation')}
+                  </dt>
+                  <dd className="mt-1 text-sm font-medium text-ink">
+                    {recLabel(assignment.review.recommendation as Rec) ??
+                      assignment.review.recommendation}
+                  </dd>
+                </div>
+                <div className="rounded-lg bg-white/60 px-4 py-3">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                    {t('completedAt')}
+                  </dt>
+                  <dd className="mt-1 text-sm font-medium text-ink">
+                    {new Date(assignment.review.submittedAt).toLocaleDateString(
+                      undefined,
+                      {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      },
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            )}
+            <Link
+              href="/assignments"
+              className="mt-8 inline-block text-sm font-medium text-accent hover:underline"
+            >
+              {t('backToAssignments')}
+            </Link>
+          </div>
+        )}
+
       {!pageLoading &&
         !contextError &&
         contextMissing === 'notOpen' &&
@@ -357,6 +570,47 @@ export default function ReviewFormPage() {
           </h1>
 
           <div className="mt-10 flex flex-col gap-8">
+            {/* Section 2: Guidelines */}
+            {(guidelines.trim() || assignment.editorInstructions?.trim()) && (
+              <section
+                className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm sm:p-8"
+                aria-labelledby="guidelines-heading"
+              >
+                <h2
+                  id="guidelines-heading"
+                  className="font-sans text-xs font-semibold uppercase tracking-wider text-ink/50"
+                >
+                  {t('guidelinesSection')}
+                </h2>
+                {guidelines.trim() && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                      {t('journalGuidelines')}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink/80">
+                      {guidelines}
+                    </p>
+                  </div>
+                )}
+                {assignment.editorInstructions?.trim() && (
+                  <div
+                    className={cn(
+                      'mt-4',
+                      guidelines.trim() && 'border-t border-ink/8 pt-4',
+                    )}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                      {t('editorInstructions')}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink/80">
+                      {assignment.editorInstructions}
+                    </p>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Section 1 + 3: Manuscript + Download + Upload */}
             <section
               className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm sm:p-8"
               aria-labelledby="manuscript-heading"
@@ -442,6 +696,15 @@ export default function ReviewFormPage() {
               ) : (
                 <p className="mt-6 text-sm italic text-ink/45">—</p>
               )}
+
+              {/* Double-blind notice */}
+              {sub?.reviewMethod === 'double_anonymous' && (
+                <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                  {t('doubleBlindNote')}
+                </p>
+              )}
+
+              {/* Download review package */}
               {sub?.files && sub.files.length > 0 ? (
                 <div className="mt-8">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">
@@ -471,6 +734,51 @@ export default function ReviewFormPage() {
                   </ul>
                 </div>
               ) : null}
+
+              {/* Upload review response file */}
+              <div className="mt-8 border-t border-ink/8 pt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                  {t('uploadSection')}
+                </h3>
+                <p className="mt-1 text-xs text-ink/50">{t('uploadHint')}</p>
+                {reviewerFiles.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {reviewerFiles.map((file) => (
+                      <li
+                        key={file.id}
+                        className="flex items-center gap-2 rounded-lg border border-ink/10 bg-paper/50 px-3 py-2 text-sm"
+                      >
+                        <Paperclip
+                          className="size-4 shrink-0 text-ink/40"
+                          aria-hidden
+                        />
+                        <span
+                          className="min-w-0 truncate text-ink"
+                          title={file.originalName}
+                        >
+                          {file.originalName}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-ink/20 bg-paper/50 px-4 py-3 text-sm font-medium text-accent hover:bg-paper transition-colors">
+                  {uploading ? (
+                    <Spinner className="size-4" aria-hidden />
+                  ) : (
+                    <Plus className="size-4" aria-hidden />
+                  )}
+                  {t('uploadLabel')}
+                  <input
+                    type="file"
+                    accept=".pdf,.docx"
+                    className="sr-only"
+                    disabled={uploading}
+                    onChange={(e) => void handleFileUpload(e)}
+                  />
+                </label>
+              </div>
+
               {sub?.slug ? (
                 <Link
                   href={`/submissions/${encodeURIComponent(sub.slug)}`}
@@ -482,6 +790,182 @@ export default function ReviewFormPage() {
               ) : null}
             </section>
 
+            {/* Section 4: Review Discussions */}
+            <section
+              className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm sm:p-8"
+              aria-labelledby="discussions-heading"
+            >
+              <h2
+                id="discussions-heading"
+                className="font-sans text-xs font-semibold uppercase tracking-wider text-ink/50"
+              >
+                {t('discussionsSection')}
+              </h2>
+
+              {discussions.length === 0 && !showNewDiscussion && (
+                <p className="mt-4 text-sm text-ink/50">{t('noDiscussions')}</p>
+              )}
+
+              {discussions.length > 0 && (
+                <ul className="mt-4 space-y-3">
+                  {discussions.map((disc) => {
+                    const isExpanded = expandedDiscussionId === disc.id;
+                    const lastMsg = disc.messages[disc.messages.length - 1];
+                    return (
+                      <li
+                        key={disc.id}
+                        className="rounded-lg border border-ink/10 bg-paper/50"
+                      >
+                        <button
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+                          onClick={() =>
+                            setExpandedDiscussionId(isExpanded ? null : disc.id)
+                          }
+                          aria-expanded={isExpanded}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-ink">
+                              {disc.subject || t('noSubject')}
+                            </span>
+                            {!isExpanded && lastMsg && (
+                              <span className="mt-0.5 block truncate text-xs text-ink/50">
+                                {lastMsg.author?.displayName ?? '—'}:{' '}
+                                {lastMsg.body}
+                              </span>
+                            )}
+                          </span>
+                          {isExpanded ? (
+                            <ChevronUp
+                              className="mt-0.5 size-4 shrink-0 text-ink/40"
+                              aria-hidden
+                            />
+                          ) : (
+                            <ChevronDown
+                              className="mt-0.5 size-4 shrink-0 text-ink/40"
+                              aria-hidden
+                            />
+                          )}
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-ink/8 px-4 pb-4">
+                            <ul className="mt-3 space-y-3">
+                              {disc.messages.map((msg) => (
+                                <li key={msg.id} className="text-sm">
+                                  <span className="font-semibold text-ink">
+                                    {msg.author?.displayName ?? '—'}
+                                  </span>
+                                  <span className="ms-2 text-xs text-ink/45">
+                                    {new Date(msg.createdAt).toLocaleDateString(
+                                      undefined,
+                                      {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                      },
+                                    )}
+                                  </span>
+                                  <p className="mt-1 whitespace-pre-wrap text-ink/80">
+                                    {msg.body}
+                                  </p>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="mt-4">
+                              <textarea
+                                rows={3}
+                                placeholder={t('reply') + '…'}
+                                value={replyBodies[disc.id] ?? ''}
+                                onChange={(e) =>
+                                  setReplyBodies((prev) => ({
+                                    ...prev,
+                                    [disc.id]: e.target.value,
+                                  }))
+                                }
+                                className={cn(
+                                  'w-full resize-y rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink',
+                                  'outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30',
+                                )}
+                              />
+                              <Button
+                                size="sm"
+                                className="mt-2"
+                                loading={submittingReply === disc.id}
+                                onClick={() => void submitReply(disc.id)}
+                              >
+                                {t('sendMessage')}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {showNewDiscussion ? (
+                <div className="mt-4 rounded-lg border border-ink/10 bg-paper/50 p-4">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                      {t('subject')}
+                    </span>
+                    <input
+                      type="text"
+                      value={newDiscSubject}
+                      onChange={(e) => setNewDiscSubject(e.target.value)}
+                      maxLength={500}
+                      className={cn(
+                        'rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink',
+                        'outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30',
+                      )}
+                    />
+                  </label>
+                  <label className="mt-3 flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                      {t('discussionBody')}
+                    </span>
+                    <textarea
+                      rows={4}
+                      value={newDiscBody}
+                      onChange={(e) => setNewDiscBody(e.target.value)}
+                      className={cn(
+                        'resize-y rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink',
+                        'outline-none focus-visible:border-accent/40 focus-visible:ring-2 focus-visible:ring-accent/30',
+                      )}
+                    />
+                  </label>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      loading={submittingDiscussion}
+                      onClick={() => void submitNewDiscussion()}
+                    >
+                      {t('sendMessage')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={submittingDiscussion}
+                      onClick={() => setShowNewDiscussion(false)}
+                    >
+                      {tCommon('cancel')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowNewDiscussion(true)}
+                  className="mt-4 flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+                >
+                  <Plus className="size-4" aria-hidden />
+                  {t('startDiscussion')}
+                </button>
+              )}
+            </section>
+
+            {/* Section 5 + form: Recommendations + Comments */}
             <section
               className="rounded-xl border border-ink/10 bg-surface p-6 shadow-sm sm:p-8"
               aria-labelledby="review-form-heading"
@@ -493,7 +977,7 @@ export default function ReviewFormPage() {
                 {t('formSection')}
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-ink/65">
-                {recommendation === 'accept'
+                {commentsOptional
                   ? t('commentsOptionalOnAccept')
                   : t('commentsRequiredOnRejectOrRevisions')}
               </p>
@@ -521,12 +1005,6 @@ export default function ReviewFormPage() {
                     aria-label={t('recommendation')}
                   >
                     {recs.map((r) => {
-                      const label =
-                        r === 'accept'
-                          ? tCommon('recAccept')
-                          : r === 'reject'
-                            ? tCommon('recReject')
-                            : tCommon('recRevisions');
                       const id = `${recGroupId}-${r}`;
                       return (
                         <label
@@ -551,7 +1029,7 @@ export default function ReviewFormPage() {
                             />
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-semibold text-ink">
-                                {label}
+                                {recLabel(r)}
                               </span>
                               <span className="mt-1 block text-xs leading-relaxed text-ink/60">
                                 {recHint(r)}

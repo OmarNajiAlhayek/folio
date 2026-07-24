@@ -6,6 +6,7 @@ import { ApiError } from '@/lib/api-response';
 import { queryKeys } from '@/lib/query-keys';
 import { PERMISSION_SLUGS } from '@/lib/permissions';
 import type { MeProfile } from '@/lib/permissions';
+import type { PreSubmitAnalysis } from '@/lib/pre-submit-validation';
 
 export type SubmissionListItem = {
   id: string;
@@ -65,6 +66,13 @@ export type SubmissionRecord = {
   originalityConfirmed?: boolean;
   aiUsageStatement?: string | null;
   messageForAuthor?: string | null;
+  lastDecisionKind?:
+    | 'desk_reject'
+    | 'post_review_reject'
+    | 'accepted'
+    | 'revisions_requested'
+    | null;
+  authorResponseToReviewers?: string | null;
   files?: SubmissionFileRow[];
   constructorContent?: unknown | null;
   reviewManuscriptPresentation?: {
@@ -77,10 +85,31 @@ export type SubmissionRecord = {
   disciplineSuggestedConfidence?: number | null;
   disciplineScopeInJournal?: boolean | null;
   disciplineScopeWarning?: string | null;
+  preSubmitAnalysis?: PreSubmitAnalysis | null;
+  docxManuscriptViolations?: Array<{
+    code: string;
+    message: string;
+    messageAr: string;
+    found: string;
+    expected: string;
+  }> | null;
+  docxGrammarNotes?: Array<{
+    excerpt: string;
+    suggestion: string;
+    rule: string;
+  }> | null;
+  sectionEditorAssignment?: {
+    id: string;
+    sectionEditorId: string;
+    assignedById: string;
+    assignedAt: string;
+    sectionEditor?: { id: string; displayName: string; email: string };
+  } | null;
 };
 
 export type ReviewForEditor = {
   id: string;
+  assignmentId: string;
   commentsForAuthor: string;
   commentsToEditorOnly: string;
   recommendation: string;
@@ -111,6 +140,13 @@ export type AssignmentRow = {
   reviewer?: { displayName?: string; email?: string };
 };
 
+export type SectionEditorCandidate = {
+  id: string;
+  displayName: string;
+  email: string;
+  disciplines: string[];
+};
+
 export type SubmissionDetailPayload = {
   me: { id: string; permissions: string[] };
   sub: SubmissionRecord;
@@ -129,6 +165,7 @@ export type SubmissionDetailPayload = {
   assignmentReminders: Record<string, ReminderRow[]>;
   /** True when GET …/reminders failed for that assignment slug (not "empty list"). */
   reminderLoadFailedByAssignment: Record<string, boolean>;
+  sectionEditorCandidates: SectionEditorCandidate[];
 };
 
 export async function fetchSubmissionDetail(
@@ -192,23 +229,36 @@ export async function fetchSubmissionDetail(
   );
   const assignmentsWithSlug = assignmentRows.filter((a) => a.slug);
 
-  const [candidatesResult, ...reminderEntries] = await Promise.all([
-    canAssignReviewer
-      ? apiJson<SubmissionDetailPayload['reviewerCandidates']>(
-          '/users/reviewer-candidates',
+  const canAssignSectionEditor = permissions.includes(
+    PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
+  );
+
+  const [candidatesResult, seCandidatesResult, ...reminderEntries] =
+    await Promise.all([
+      canAssignReviewer
+        ? apiJson<SubmissionDetailPayload['reviewerCandidates']>(
+            '/users/reviewer-candidates',
+          )
+            .then((data) => ({ ok: true as const, data }))
+            .catch((err: unknown) => ({ ok: false as const, err }))
+        : Promise.resolve(null),
+      canAssignSectionEditor
+        ? apiJson<SectionEditorCandidate[]>('/users/section-editor-candidates')
+            .then((data) => ({ ok: true as const, data }))
+            .catch(() => ({
+              ok: false as const,
+              data: [] as SectionEditorCandidate[],
+            }))
+        : Promise.resolve(null),
+      ...assignmentsWithSlug.map((a) => {
+        const asg = String(a.slug);
+        return apiJson<ReminderRow[]>(
+          `/submissions/${enc}/assignments/${encodeURIComponent(asg)}/reminders`,
         )
-          .then((data) => ({ ok: true as const, data }))
-          .catch((err: unknown) => ({ ok: false as const, err }))
-      : Promise.resolve(null),
-    ...assignmentsWithSlug.map((a) => {
-      const asg = String(a.slug);
-      return apiJson<ReminderRow[]>(
-        `/submissions/${enc}/assignments/${encodeURIComponent(asg)}/reminders`,
-      )
-        .then((rows) => ({ asg, rows, failed: false }))
-        .catch(() => ({ asg, rows: [] as ReminderRow[], failed: true }));
-    }),
-  ]);
+          .then((rows) => ({ asg, rows, failed: false }))
+          .catch(() => ({ asg, rows: [] as ReminderRow[], failed: true }));
+      }),
+    ]);
 
   let candidates: SubmissionDetailPayload['reviewerCandidates'] = [];
   let reviewErr: string | null = null;
@@ -233,6 +283,9 @@ export async function fetchSubmissionDetail(
     reminderEntries.filter((e) => e.failed).map((e) => [e.asg, true]),
   );
 
+  const sectionEditorCandidates: SectionEditorCandidate[] =
+    seCandidatesResult?.ok ? seCandidatesResult.data : [];
+
   return {
     me: { id: m.id, permissions },
     sub: s,
@@ -246,6 +299,7 @@ export async function fetchSubmissionDetail(
     editorAssignmentRows: assignmentRows,
     assignmentReminders: reminderMap,
     reminderLoadFailedByAssignment,
+    sectionEditorCandidates,
   };
 }
 

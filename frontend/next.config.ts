@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 import bundleAnalyzer from '@next/bundle-analyzer';
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
@@ -9,11 +9,24 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 const projectRoot = dirname(fileURLToPath(import.meta.url));
+const monorepoRoot = resolve(projectRoot, '..');
+
+const sharedSubpathAliases = {
+  '@folio/shared/compose': './packages/shared/constructor/index.ts',
+  '@folio/shared/compose/canonical-json':
+    './packages/shared/constructor/canonical-json.ts',
+  '@folio/shared/contracts/pre-submit-analysis':
+    './packages/shared/contracts/pre-submit-analysis.ts',
+} as const;
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  transpilePackages: ['@folio/shared'],
+  outputFileTracingRoot: monorepoRoot,
   turbopack: {
-    root: projectRoot,
+    // Monorepo root so Turbopack can resolve file:-linked @folio/shared sources.
+    root: monorepoRoot,
+    resolveAlias: sharedSubpathAliases,
   },
   async rewrites() {
     const target = process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:5243';

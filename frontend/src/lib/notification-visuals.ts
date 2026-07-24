@@ -93,6 +93,12 @@ export function getNotificationVisuals(
         bg: 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-500/20',
         icon: BadgeCheck,
       };
+    case 'section_editor_assigned':
+    case 'sectionEditorAssigned':
+      return {
+        bg: 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400 border-violet-500/20',
+        icon: FileText,
+      };
     case 'review_invitation_declined':
     case 'reviewDeclined':
       return {

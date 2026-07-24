@@ -6,6 +6,8 @@ export const PERMISSION_SLUGS = {
   SUBMISSION_ASSIGN_REVIEWER: 'submission.assign_reviewer',
   SUBMISSION_LIST_ASSIGNMENTS: 'submission.list_assignments',
   SUBMISSION_ASSIGN_COPYEDITOR: 'submission.assign_copyeditor',
+  SUBMISSION_VIEW_SECTION_QUEUE: 'submission.view_section_queue',
+  SUBMISSION_ASSIGN_SECTION_EDITOR: 'submission.assign_section_editor',
   COPYEDIT_VIEW_QUEUE: 'copyedit.view_queue',
   COPYEDIT_SUBMIT_NOTE: 'copyedit.submit_note',
   COPYEDIT_PUBLISH: 'copyedit.publish',
@@ -23,6 +25,7 @@ export const ROLE_SLUGS = {
   JOURNAL_MANAGER: 'journal_manager',
   REVIEWER: 'reviewer',
   COPYEDITOR: 'copyeditor',
+  SECTION_EDITOR: 'section_editor',
 } as const;
 
 /** Global email admin or per-assignment reminder controls on a submission. */

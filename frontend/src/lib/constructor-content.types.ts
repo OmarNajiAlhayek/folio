@@ -170,6 +170,7 @@ export type ConstructorGuidance = {
   extraMandatorySlots?: RichTextBlockKind[];
   recommendedPresets?: ConstructorPresetId[];
   requiredRichTextKinds?: RichTextBlockKind[];
+  defaultDocumentDir?: ConstructorDir;
 };
 
 /** Shape used by the multi-tab BroadcastChannel and localStorage envelope. */

@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { ApiError } from "@/lib/api-response";
-import { publicJson } from "@/lib/public-api";
+import { z } from 'zod';
+import { ApiError } from '@/lib/api-response';
+import { publicJson } from '@/lib/public-api';
 
 const previewThemeSchema = z.object({
   fontFamilyLatinStack: z.string(),
@@ -17,34 +17,35 @@ const constructorGuidanceSchema = z.object({
   extraMandatorySlots: z
     .array(
       z.enum([
-        "acknowledgments",
-        "funding",
-        "conflictOfInterest",
-        "dataAvailability",
+        'acknowledgments',
+        'funding',
+        'conflictOfInterest',
+        'dataAvailability',
       ]),
     )
     .optional(),
   recommendedPresets: z
     .array(
       z.enum([
-        "introduction",
-        "literatureReview",
-        "materialsAndMethods",
-        "resultsAndDiscussion",
-        "conclusions",
+        'introduction',
+        'literatureReview',
+        'materialsAndMethods',
+        'resultsAndDiscussion',
+        'conclusions',
       ]),
     )
     .optional(),
   requiredRichTextKinds: z
     .array(
       z.enum([
-        "acknowledgments",
-        "funding",
-        "conflictOfInterest",
-        "dataAvailability",
+        'acknowledgments',
+        'funding',
+        'conflictOfInterest',
+        'dataAvailability',
       ]),
     )
     .optional(),
+  defaultDocumentDir: z.enum(['ltr', 'rtl']).optional(),
 });
 
 const catalogEntrySchema = z.object({
@@ -67,13 +68,15 @@ export type ManuscriptConstructorGuidance = z.infer<
   typeof constructorGuidanceSchema
 >;
 export type ManuscriptStyleCatalogEntry = z.infer<typeof catalogEntrySchema>;
-export type ManuscriptStyleCatalog = z.infer<typeof manuscriptStyleCatalogSchema>;
+export type ManuscriptStyleCatalog = z.infer<
+  typeof manuscriptStyleCatalogSchema
+>;
 
 export type ManuscriptStyleCatalogFetchResult =
   | { ok: true; data: ManuscriptStyleCatalog }
   | {
       ok: false;
-      kind: "http" | "schema" | "network";
+      kind: 'http' | 'schema' | 'network';
       /** User-facing summary */
       message: string;
       /** For debugging / conditional UI (retry on network, etc.) */
@@ -87,53 +90,53 @@ export type ManuscriptStyleCatalogFetchResult =
  */
 export const DAMASCUS_PREVIEW_THEME_FALLBACK: ManuscriptPreviewTheme = {
   fontFamilyLatinStack: '"Times New Roman", "Liberation Serif", serif',
-  fontFamilyArabicStack:
-    '"Simplified Arabic", "Noto Naskh Arabic", serif',
+  fontFamilyArabicStack: '"Simplified Arabic", "Noto Naskh Arabic", serif',
   figureCaptionBelowImage: true,
   tableCaptionAboveTable: true,
   referencesArabicFirst: true,
-  figureWord: "Figure",
-  tableWord: "Table",
-  referencesHeading: "References",
+  figureWord: 'Figure',
+  tableWord: 'Table',
+  referencesHeading: 'References',
 };
 
 /** @param _apiBase Ignored; uses `NEXT_PUBLIC_API_URL` via `publicJson`. */
 export async function fetchManuscriptStyleCatalog(
   _apiBase?: string,
 ): Promise<ManuscriptStyleCatalogFetchResult> {
+  void _apiBase;
   try {
-    const json: unknown = await publicJson("/public/manuscript-styles", {
-      cache: "no-store",
+    const json: unknown = await publicJson('/public/manuscript-styles', {
+      cache: 'no-store',
     });
     const parsed = manuscriptStyleCatalogSchema.safeParse(json);
     if (!parsed.success) {
       console.error(
-        "[fetchManuscriptStyleCatalog] schema validation failed",
+        '[fetchManuscriptStyleCatalog] schema validation failed',
         parsed.error.flatten(),
       );
       return {
         ok: false,
-        kind: "schema",
-        message: "Invalid manuscript styles catalog",
+        kind: 'schema',
+        message: 'Invalid manuscript styles catalog',
         detail: parsed.error.flatten(),
       };
     }
     return { ok: true, data: parsed.data };
   } catch (e) {
     if (e instanceof ApiError) {
-      console.error("[fetchManuscriptStyleCatalog] HTTP error", e);
+      console.error('[fetchManuscriptStyleCatalog] HTTP error', e);
       return {
         ok: false,
-        kind: "http",
+        kind: 'http',
         message: e.message,
         detail: { status: e.status, code: e.code },
       };
     }
-    console.error("[fetchManuscriptStyleCatalog] network or parse error", e);
+    console.error('[fetchManuscriptStyleCatalog] network or parse error', e);
     return {
       ok: false,
-      kind: "network",
-      message: "Network error",
+      kind: 'network',
+      message: 'Network error',
       detail: e,
     };
   }

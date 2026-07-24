@@ -51,6 +51,10 @@ export const ROUTE_ACCESS_RULES: Array<{
     permissions: PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   },
   {
+    pattern: /^\/section-editor(\/|$)/,
+    permissions: PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
+  },
+  {
     pattern: /^\/assignments(\/|$)/,
     permissions: PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
   },
