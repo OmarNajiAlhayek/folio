@@ -1,5 +1,5 @@
 @startuml folio-activity-submit-to-journal
-' Folio — Author submits manuscript (UC-01)
+' Damascus University Journal — Author submits manuscript (UC-01)
 ' Render: https://www.plantuml.com/plantuml
 
 title Submit to journal — activity (UC-01)

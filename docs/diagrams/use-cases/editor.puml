@@ -1,5 +1,5 @@
 @startuml folio-editor-use-cases
-' Folio — Editor essentials (workflow + peer review; excludes journal-manager-only scope)
+' Damascus University Journal — Editor essentials (workflow + peer review; excludes journal-manager-only scope)
 ' AI: plagiarism detection, discipline comparison, suggested reviewers (docs/plans/ai-service.md)
 ' Render: https://www.plantuml.com/plantuml
 
@@ -9,7 +9,7 @@ skinparam actorStyle stickman
 
 actor "Editor" as ED
 
-rectangle "Folio — editor scope" {
+rectangle "Damascus University Journal — editor scope" {
 
   usecase "Handle editorial workflow" as UC_Workflow
   usecase "Browse editor submission queue" as UC_Queue

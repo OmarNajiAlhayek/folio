@@ -1,6 +1,6 @@
 # Authorization layers
 
-Folio uses three complementary checks. They are not duplicates of the same rule — each layer answers a different question.
+Damascus University Journal uses three complementary checks. They are not duplicates of the same rule — each layer answers a different question.
 
 | Layer | Where | Question |
 |-------|-------|----------|

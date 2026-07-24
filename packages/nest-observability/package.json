@@ -2,7 +2,7 @@
   "name": "@folio/nest-observability",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenTelemetry + structured Pino logging for Folio NestJS services",
+  "description": "OpenTelemetry + structured Pino logging for Damascus University Journal NestJS services",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {

@@ -37,7 +37,7 @@ Journal managers with JWT + **`email.manage_reminders`** can manage the singleto
 
 **Prerequisites:** email-service running at `EMAIL_SERVICE_URL` with migrations applied (`folio_email` database, schema `email`).
 
-**UI:** Folio frontend — **`/journal-manager/email-settings`** (nav link when the permission is present).
+**UI:** Damascus University Journal frontend — **`/journal-manager/email-settings`** (nav link when the permission is present).
 
 **HTML styling:** Default templates use a shared Handlebars layout (`{{#> folio-email-layout …}}` with optional `{{> folio-email-button …}}`). Preview and sends register the same partials from `packages/shared/email/register-folio-email-partials.ts`. After upgrading, run email-service migrations (including `1714600000009-email-template-styled-layout`) so existing `email.email_template` rows pick up the styled bodies from disk. If you edit HTML in the admin UI, keep the layout wrapper unless you intentionally replace the full document.
 

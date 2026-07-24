@@ -1,4 +1,4 @@
-# Folio ERD (split by domain)
+# Damascus University Journal ERD (split by domain)
 
 The full model is split so each diagram stays small. **`users` and `submissions` repeat** where another slice needs context.
 

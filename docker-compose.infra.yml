@@ -1,0 +1,71 @@
+# Minimal local infrastructure for Folio (native app services + native Postgres).
+#
+# Provides RabbitMQ, LanguageTool, and Typesense only. Run Postgres on the host
+# (folio_review + folio_email) and start backend/frontend/email-service/ai-service
+# natively — see README.md "Light Docker".
+#
+#   docker compose -f docker-compose.infra.yml up -d
+#
+# Or start individually:
+#   docker compose -f docker-compose.infra.yml up -d rabbitmq
+#   docker compose -f docker-compose.infra.yml up -d languagetool
+#   docker compose -f docker-compose.infra.yml up -d typesense
+#
+# For containerized Postgres as well, use docker-compose.dev.yml instead.
+# For the full stack in Docker, use docker-compose.local.yml (heavy on Windows).
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: folio-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI: http://localhost:15672 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - folio-rabbitmq-data:/var/lib/rabbitmq
+
+  languagetool:
+    image: erikvl87/languagetool:latest
+    container_name: folio-languagetool
+    ports:
+      - "8010:8010"
+    environment:
+      # Omit langtool_languageModel unless you mount ngram data (see image docs).
+      - Java_Xms=256m
+      - Java_Xmx=512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8010/v2/languages | grep -q 'name'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Full-text search engine. Enable with TYPESENSE_ENABLED=true in backend/.env.
+  # API key matches the default in backend/.env.example.
+  typesense:
+    image: typesense/typesense:26.0
+    container_name: folio-typesense
+    ports:
+      - "8108:8108"
+    command: >
+      --data-dir /data
+      --api-key=xyz
+      --enable-cors
+    volumes:
+      - folio-typesense-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8108/health | grep -q 'ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  folio-rabbitmq-data:
+  folio-typesense-data:

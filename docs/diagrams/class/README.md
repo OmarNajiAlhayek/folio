@@ -1,4 +1,4 @@
-# Folio class diagrams (TypeORM domain model)
+# Damascus University Journal class diagrams (TypeORM domain model)
 
 UML class diagrams for **`backend/src/entities/`** (NestJS + TypeORM). Property names match TypeScript entities; table names are in notes where they differ.
 

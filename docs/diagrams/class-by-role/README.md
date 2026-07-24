@@ -1,4 +1,4 @@
-# Folio class diagrams by role
+# Damascus University Journal class diagrams by role
 
 TypeORM entities from **`backend/src/entities/`**, grouped by **who primarily reads/writes** them. Classes **repeat** across roles; links show the main workflow, not exclusive access.
 

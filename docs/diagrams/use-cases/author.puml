@@ -1,5 +1,5 @@
 @startuml folio-author-use-cases
-' Folio — Author essentials (submission.manage_own only)
+' Damascus University Journal — Author essentials (submission.manage_own only)
 ' AI: suggest discipline, keyword suggestions (docs/plans/ai-service.md)
 ' Excludes staff roles (editor, journal manager, reviewer, copyeditor diagrams)
 ' Render: https://www.plantuml.com/plantuml
@@ -10,7 +10,7 @@ skinparam actorStyle stickman
 
 actor "Author" as AU
 
-rectangle "Folio — author scope" {
+rectangle "Damascus University Journal — author scope" {
 
   usecase "Manage own submission" as UC_Own
   usecase "Browse my submissions" as UC_List

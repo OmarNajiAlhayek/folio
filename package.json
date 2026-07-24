@@ -1,7 +1,7 @@
 {
   "name": "folio",
   "private": true,
-  "description": "Folio peer-review monorepo (frontend, backend, email-service, ai-service)",
+  "description": "Damascus University Journal peer-review monorepo (frontend, backend, email-service, ai-service)",
   "scripts": {
     "build:shared": "npm run build --prefix packages/shared",
     "prepare": "husky",

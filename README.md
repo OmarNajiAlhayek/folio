@@ -1,4 +1,4 @@
-# Folio — peer review workspace
+# Damascus University Journal — peer review workspace
 
 Scholarly **manuscript submission and peer-review** workflow (OJS-inspired concepts, original implementation). Stack: **Next.js** (frontend) + **NestJS** (backend) + **PostgreSQL**.
 
@@ -21,7 +21,7 @@ See [`docs/PROJECT-CONTEXT.md`](docs/PROJECT-CONTEXT.md) for product goals, stac
 
 | Path | Purpose |
 |------|---------|
-| `frontend/` | Next.js app (Folio UI) |
+| `frontend/` | Next.js app (Damascus University Journal UI) |
 | `backend/` | NestJS API (`/api/v1/...`) |
 | `services/email-service/` | NestJS standalone email microservice (RabbitMQ consumer, scheduled reminders) |
 | `services/ai-service/` | Python FastAPI + gRPC AI microservice (classifier, keywords, similarity, plagiarism, reviewer matching, copyedit reference check) |
@@ -57,7 +57,7 @@ npm install
 
 - Node.js LTS
 - PostgreSQL (local or via Docker). Create a database, e.g. `CREATE DATABASE folio_review;`
-- Docker (optional; `docker-compose.dev.yml` covers all infrastructure dependencies)
+- Docker (optional; [`docker-compose.infra.yml`](docker-compose.infra.yml) for RabbitMQ/LanguageTool/Typesense; [`docker-compose.dev.yml`](docker-compose.dev.yml) adds containerized Postgres)
 - Python 3.12+ (only when running the ai-service)
 
 ## Configuration
@@ -71,7 +71,31 @@ npm install
 
 ## Run locally
 
-**Terminal 0 — Docker (optional infrastructure)**
+### Light Docker (recommended on Windows)
+
+Run **PostgreSQL natively** on the host and keep only lightweight infra in Docker. This avoids the RAM spike from `docker-compose.local.yml` (full stack) or containerized Postgres.
+
+**Terminal 0 — Docker (RabbitMQ, LanguageTool, Typesense only)**
+
+```bash
+docker compose -f docker-compose.infra.yml up -d
+```
+
+| Service | Port(s) | Purpose |
+|---------|---------|---------|
+| `rabbitmq` | AMQP **5672**, management UI **15672** (guest/guest) | Event bus for email pipeline |
+| `languagetool` | **8010** | Copyedit grammar/spelling; set `LANGUAGE_TOOL_ENABLED=true` |
+| `typesense` | **8108** | Full-text search engine; set `TYPESENSE_ENABLED=true` |
+
+**Native Postgres:** create `folio_review` and `folio_email` on your local instance (default port **5432**). Set `DB_PORT=5432` in `backend/.env` and `services/email-service/.env`. Enable pgvector on `folio_review` for migrations (`CREATE EXTENSION vector`). On Windows without pgvector, run [`scripts/install-pgvector-windows.ps1`](scripts/install-pgvector-windows.ps1) as Administrator.
+
+**Windows one-launcher:** [`run-dev.bat`](run-dev.bat) starts `docker-compose.infra.yml` then opens terminals for backend, frontend, email-service, and ai-service.
+
+Stop infra when done: `docker compose -f docker-compose.infra.yml down`
+
+### Docker infrastructure (containerized Postgres)
+
+If you prefer Postgres in Docker instead of a native install:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
@@ -89,7 +113,7 @@ docker compose -f docker-compose.dev.yml up -d
 
 Start a single service: `docker compose -f docker-compose.dev.yml up -d typesense`. Note the API default in `backend/.env.example` uses `DB_PORT=5434` to match.
 
-**Alternative: full-stack in Docker** — `docker compose -f docker-compose.local.yml up` runs infra + all app services together. Do **not** run both compose files simultaneously (they share ports).
+**Full-stack in Docker (heavy):** `docker compose -f docker-compose.local.yml up` runs infra + all app services together. Avoid on low-RAM Windows machines. Do **not** run multiple compose files simultaneously (shared ports).
 
 **Terminal 1 — API**
 

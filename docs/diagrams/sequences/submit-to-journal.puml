@@ -1,12 +1,12 @@
 @startuml folio-sequence-submit-to-journal
-' Folio — Author submits manuscript (UC-01)
+' Damascus University Journal — Author submits manuscript (UC-01)
 ' Matches: POST /api/v1/submissions/:slug/submit, transactional outbox, submission.submitted
 ' Render: https://www.plantuml.com/plantuml
 
 title Submit to journal (UC-01)
 
 actor Author
-participant "Folio UI\n(Next.js)" as UI
+participant "Damascus University Journal UI\n(Next.js)" as UI
 participant "Backend API\n(NestJS)" as API
 database "PostgreSQL" as DB
 queue "RabbitMQ" as MQ

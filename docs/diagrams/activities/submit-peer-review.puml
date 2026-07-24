@@ -1,5 +1,5 @@
 @startuml folio-activity-submit-peer-review
-' Folio — Reviewer submits review (UC-04)
+' Damascus University Journal — Reviewer submits review (UC-04)
 ' Render: https://www.plantuml.com/plantuml
 
 title Submit peer review — activity (UC-04)

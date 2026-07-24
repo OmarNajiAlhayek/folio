@@ -1,11 +1,11 @@
 @startuml folio-sequence-submit-peer-review
-' Folio — Reviewer submits review (UC-04)
+' Damascus University Journal — Reviewer submits review (UC-04)
 ' Render: https://www.plantuml.com/plantuml
 
 title Submit peer review (UC-04)
 
 actor Reviewer
-participant "Folio UI" as UI
+participant "Damascus University Journal UI" as UI
 participant "Backend API\n(NestJS)" as API
 database "PostgreSQL" as DB
 queue "RabbitMQ" as MQ

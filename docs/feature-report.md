@@ -1,7 +1,7 @@
-# Folio — Feature Report by Role
+# Damascus University Journal — Feature Report by Role
 
 > [!NOTE]
-> Folio is a scholarly **manuscript submission and peer-review** workspace (OJS-inspired). Single-journal MVP. Stack: **Next.js 16** + **NestJS 11** + **PostgreSQL** + **RabbitMQ** email microservice + optional **Python ai-service** (gRPC).
+> Damascus University Journal is a scholarly **manuscript submission and peer-review** workspace (OJS-inspired). Single-journal MVP. Stack: **Next.js 16** + **NestJS 11** + **PostgreSQL** + **RabbitMQ** email microservice + optional **Python ai-service** (gRPC).
 
 ## Architecture at a Glance
 

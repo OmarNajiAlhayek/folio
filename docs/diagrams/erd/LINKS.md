@@ -1,4 +1,4 @@
-# Folio ERD — all links (one table)
+# Damascus University Journal ERD — all links (one table)
 
 **Diagrams (split, recommended):** [`README.md`](./README.md) — six small `.mmd` files; `users` / `submissions` repeat where needed.
 

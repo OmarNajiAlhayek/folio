@@ -1,4 +1,4 @@
-# Folio — Strengths & Weaknesses Analysis
+# Damascus University Journal — Strengths & Weaknesses Analysis
 
 ## Strengths
 

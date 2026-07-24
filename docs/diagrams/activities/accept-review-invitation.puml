@@ -1,5 +1,5 @@
 @startuml folio-activity-accept-review-invitation
-' Folio — Reviewer accepts or declines (UC-03)
+' Damascus University Journal — Reviewer accepts or declines (UC-03)
 ' Render: https://www.plantuml.com/plantuml
 
 title Accept review invitation — activity (UC-03)

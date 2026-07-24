@@ -1,6 +1,6 @@
 # AI service — design record
 
-Python **FastAPI** microservice for Folio AI features.
+Python **FastAPI** microservice for Damascus University Journal AI features.
 
 - **Phase 1 (done):** health probes, config validation, provider registry (`noop` / `openai`), gRPC server on port **5246**, optional AraBERT classifier.
 - **Phase 2 (largely done):** Nest BFF routes and frontend UI call ai-service over **gRPC** only (browser never talks to Python directly).

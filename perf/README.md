@@ -1,4 +1,4 @@
-# Folio performance harness
+# Damascus University Journal performance harness
 
 Repeatable load benchmarks. Full runbook: [`docs/testing-performance.md`](../docs/testing-performance.md).
 

@@ -1,6 +1,6 @@
 # Observability — structured logging and distributed tracing
 
-Folio services emit **JSON structured logs** (production) with correlated **trace** and **request** identifiers. Traces export via **OpenTelemetry OTLP** when configured.
+Damascus University Journal services emit **JSON structured logs** (production) with correlated **trace** and **request** identifiers. Traces export via **OpenTelemetry OTLP** when configured.
 
 ## Correlation model
 

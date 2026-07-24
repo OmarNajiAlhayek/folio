@@ -1,6 +1,6 @@
 # Project context
 
-Folio is a **manuscript submission and peer-review** workspace: editors manage a queue, assign reviewers, and move submissions through a defined lifecycle; authors and reviewers act through role-based permissions. The stack is **Next.js** (UI), **NestJS** (HTTP API), **PostgreSQL**, optional **RabbitMQ** + **`services/email-service`** for outbound mail without blocking the API, and optional **`services/ai-service`** (Python gRPC) for AI-assisted discipline, keywords, similarity, and reviewer matching — always called from Nest, never from the browser.
+Damascus University Journal is a **manuscript submission and peer-review** workspace: editors manage a queue, assign reviewers, and move submissions through a defined lifecycle; authors and reviewers act through role-based permissions. The stack is **Next.js** (UI), **NestJS** (HTTP API), **PostgreSQL**, optional **RabbitMQ** + **`services/email-service`** for outbound mail without blocking the API, and optional **`services/ai-service`** (Python gRPC) for AI-assisted discipline, keywords, similarity, and reviewer matching — always called from Nest, never from the browser.
 
 ## Scope (MVP)
 

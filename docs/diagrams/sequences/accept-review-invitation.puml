@@ -1,11 +1,11 @@
 @startuml folio-sequence-accept-review-invitation
-' Folio — Reviewer accepts invitation (UC-03)
+' Damascus University Journal — Reviewer accepts invitation (UC-03)
 ' Render: https://www.plantuml.com/plantuml
 
 title Accept review invitation (UC-03)
 
 actor Reviewer
-participant "Folio UI" as UI
+participant "Damascus University Journal UI" as UI
 participant "Backend API\n(NestJS)" as API
 database "PostgreSQL" as DB
 queue "RabbitMQ" as MQ

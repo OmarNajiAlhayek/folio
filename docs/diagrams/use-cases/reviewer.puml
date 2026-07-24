@@ -1,5 +1,5 @@
 @startuml folio-reviewer-use-cases
-' Folio — Reviewer essentials (assignment.view_own, review.submit)
+' Damascus University Journal — Reviewer essentials (assignment.view_own, review.submit)
 ' Excludes editor assign-invite flow and author/editor staff diagrams
 ' Render: https://www.plantuml.com/plantuml
 
@@ -9,7 +9,7 @@ skinparam actorStyle stickman
 
 actor "Reviewer" as RV
 
-rectangle "Folio — reviewer scope" {
+rectangle "Damascus University Journal — reviewer scope" {
 
   usecase "Handle review assignment" as UC_Handle
   usecase "Browse my review assignments" as UC_List

@@ -1,7 +1,7 @@
 # Email service — design record
 
 This file captures the implemented design of the email microservice
-that owns all outbound mail in Folio (immediate reviewer-invite emails
+that owns all outbound mail in Damascus University Journal (immediate reviewer-invite emails
 and scheduled reminders). It mirrors the executed plan and the trade-offs
 made along the way. Companion plan: `.cursor/plans/email-microservice-with-rabbitmq_*.plan.md`.
 

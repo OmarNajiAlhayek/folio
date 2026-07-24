@@ -1,5 +1,5 @@
 @startuml folio-reader-use-cases
-' Folio — Reader essentials (public / unauthenticated; not an RBAC role)
+' Damascus University Journal — Reader essentials (public / unauthenticated; not an RBAC role)
 ' AI: semantic catalog search, related articles (docs/plans/ai-service.md)
 ' Render: https://www.plantuml.com/plantuml
 
@@ -9,7 +9,7 @@ skinparam actorStyle stickman
 
 actor "Reader" as RD
 
-rectangle "Folio — reader scope" {
+rectangle "Damascus University Journal — reader scope" {
 
   usecase "Discover published articles" as UC_Discover
   usecase "Browse publication catalog" as UC_Browse

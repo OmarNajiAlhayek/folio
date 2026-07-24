@@ -1,5 +1,5 @@
 @startuml folio-copyeditor-use-cases
-' Folio — Copyeditor essentials (copyedit.view_queue, copyedit.submit_note, copyedit.publish)
+' Damascus University Journal — Copyeditor essentials (copyedit.view_queue, copyedit.submit_note, copyedit.publish)
 ' Excludes editor assign-copyeditor and author "mark ready" flows
 ' Render: https://www.plantuml.com/plantuml
 
@@ -9,7 +9,7 @@ skinparam actorStyle stickman
 
 actor "Copyeditor" as CE
 
-rectangle "Folio — copyeditor scope" {
+rectangle "Damascus University Journal — copyeditor scope" {
 
   usecase "Handle copyedit assignment" as UC_Handle
   usecase "Browse copyedit queue" as UC_List

@@ -1,4 +1,4 @@
-# Folio activity diagrams (PlantUML)
+# Damascus University Journal activity diagrams (PlantUML)
 
 Workflow views for the thesis (Chapter 4 / 5). Complements sequence diagrams in [`../sequences/`](../sequences/) and use cases in [`../use-cases/`](../use-cases/).
 

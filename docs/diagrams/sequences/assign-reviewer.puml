@@ -1,12 +1,12 @@
 @startuml folio-sequence-assign-reviewer
-' Folio — Editor assigns reviewer (UC-02)
+' Damascus University Journal — Editor assigns reviewer (UC-02)
 ' Render: https://www.plantuml.com/plantuml
 
 title Assign reviewer (UC-02)
 
 actor Editor
 actor Reviewer
-participant "Folio UI" as UI
+participant "Damascus University Journal UI" as UI
 participant "Backend API\n(NestJS)" as API
 database "PostgreSQL" as DB
 queue "RabbitMQ" as MQ

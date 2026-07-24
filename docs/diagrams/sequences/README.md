@@ -1,4 +1,4 @@
-# Folio sequence diagrams (PlantUML)
+# Damascus University Journal sequence diagrams (PlantUML)
 
 Interaction flows for the thesis / system design chapter. Pair with use cases in [`../use-cases/`](../use-cases/).
 

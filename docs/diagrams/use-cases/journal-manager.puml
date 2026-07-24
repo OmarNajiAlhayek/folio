@@ -1,5 +1,5 @@
 @startuml folio-journal-manager-use-cases
-' Folio — Journal Manager essentials only (excludes capabilities shared with editor; see editor.puml)
+' Damascus University Journal — Journal Manager essentials only (excludes capabilities shared with editor; see editor.puml)
 ' Permissions unique to this role: users.manage_roles, email.manage_reminders
 ' Render: https://www.plantuml.com/plantuml
 
@@ -9,7 +9,7 @@ skinparam actorStyle stickman
 
 actor "Journal Manager" as JM
 
-rectangle "Folio — journal manager scope" {
+rectangle "Damascus University Journal — journal manager scope" {
 
   usecase "Manage staff roles" as UC_StaffRoles
   usecase "Search users" as UC_Search

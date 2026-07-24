@@ -1,4 +1,4 @@
-# Folio AI features — detailed guide
+# Damascus University Journal AI features — detailed guide
 
 This document explains **how each AI-related product feature works** end to end: who triggers it, which services run, what data flows where, and how failures are handled.
 
@@ -24,7 +24,7 @@ For architecture flags and ports, see [`plans/ai-service.md`](./plans/ai-service
 
 ## 1. Shared platform
 
-Folio splits AI work across three tiers. The browser **never** calls `ai-service` directly.
+Damascus University Journal splits AI work across three tiers. The browser **never** calls `ai-service` directly.
 
 ```mermaid
 flowchart TB
@@ -260,26 +260,49 @@ Unauthenticated public `GET /public/submissions` with query params.
 
 ### Purpose
 
-Show editors and **assigned reviewers** where the **current manuscript text** overlaps the **published corpus** at chunk level (overlap detection, not a legal plagiarism verdict).
+Show editors and **assigned reviewers** where the **current manuscript text** overlaps (1) **published articles in Folio** and (2) **selected web sources**. Advisory overlap detection, not a legal plagiarism verdict.
+
+### Two stages (one async job)
+
+| Stage | Backend flag | ai-service flag | Method |
+|-------|--------------|-----------------|--------|
+| Local corpus | `AI_SIMILARITY_ENABLED` | `SIMILARITY_ENABLED` | pgvector chunk search (threshold **0.85**, 0–1 scale) |
+| Web search | `AI_WEB_SIMILARITY_ENABLED` | `WEB_SIMILARITY_ENABLED` + CSE keys | Google CSE → fetch paragraphs → Farasa clean → AraBERT cosine (threshold **70**, 0–100 scale) |
+
+`isCorpusSimilarityEnabled()` is true when **either** stage is on. Stages run in order inside one gRPC `DetectCorpusSimilarity` call. Partial failure returns results from the stage that succeeded plus an `error` on the failed stage.
+
+Published articles are indexed with **full constructor body** (`buildSubmissionCorpusPlainText`) so local stage compares body-to-body. Re-index after indexing changes: `npm run seed:reset` in `backend/`.
 
 ### Flow
 
 1. `POST /submissions/:slug/corpus-similarity/jobs` — starts an async job (or returns immediate `no_text` / `unavailable` without a job). **Not** available to authors or copyeditors-only roles.  
 2. `GET /submissions/:slug/corpus-similarity/jobs/:jobId` — poll job status; `completed` includes the report in `result`.  
 3. `GET /submissions/:slug/corpus-similarity/jobs/latest` — resume the active or most recent completed job (tab-switch safe).  
-4. Worker: gRPC `DetectCorpusSimilarity` with default threshold **0.85** and optional `category` = submission discipline.  
-5. ai-service: clean → chunk submission → embed all chunks → batched nearest-neighbor search in **chunks** collection (batch size 200) → matches above threshold.  
-6. Nest `aggregateCorpusSimilarityMatches()` groups by source article, top snippets per source, attaches published metadata (slug, title) when the source id is a known published submission.
+4. Worker: gRPC `DetectCorpusSimilarity` (deadline `AI_CORPUS_SIMILARITY_TIMEOUT_MS`, default 300s).  
+5. **Local:** clean → chunk submission → embed → batched pgvector chunk search (batch 200).  
+6. **Web:** extract top-N longest paragraphs → CSE per passage → parallel page fetch → max AraBERT similarity per URL across `<p>` blocks.  
+7. Nest aggregates into `local` and `web` sections; local sources get publication metadata when known.
 
 ### Response shapes
 
 | `status` | Meaning |
 |----------|---------|
-| `unavailable` | Feature off or gRPC failed |
+| `unavailable` | Both stages off or gRPC failed entirely |
 | `no_text` | Manuscript too empty to analyze |
-| `ok` | `threshold`, `matchCount`, `sources[]` with snippets and optional publication link |
+| `ok` | `local` and/or `web` each with `enabled`, `threshold`, `matchCount`, `sources[]`, optional `error` |
 
-Frontend: `corpus-similarity-panel.tsx`.
+Frontend: `corpus-similarity-panel.tsx` (two sections).
+
+### Operational limits
+
+| Resource | Limit |
+|----------|-------|
+| Google Custom Search | 100 free queries/day (~20 manuscripts at 5 queries each) |
+| Farasa API | Free tier with QCRI key (`FARASA_API_KEY`) |
+| pgvector local | No external cost; needs published articles indexed |
+| AraBERT (web) | CPU-heavy; runs inside the existing async job |
+
+ai-service extras: `pip install -e ".[similarity]"` (local), `pip install -e ".[ml,web_similarity]"` (web).
 
 ---
 
@@ -405,7 +428,8 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 |----------|---------|
 | `AI_PROVIDER=openai` + `OPENAI_API_KEY` | Keywords, copyedit references |
 | `ARABERT_ENABLED=true` + `[ml]` + weights | Discipline classifier |
-| `SIMILARITY_ENABLED=true` + `[similarity]` | Index, related articles, semantic search, corpus similarity |
+| `SIMILARITY_ENABLED=true` + `[similarity]` | Index, related articles, semantic search, local corpus stage |
+| `WEB_SIMILARITY_ENABLED=true` + `[ml,web_similarity]` + CSE/Farasa keys | Web plagiarism stage |
 | `REVIEWER_MATCHING_ENABLED=true` | Suggested reviewers (needs similarity) |
 | `KEYWORDS_SUGGESTION_ENABLED=true` | Keyword RPC |
 | `COPYEDIT_ANALYSIS_ENABLED=true` | Reference check RPC |
@@ -417,7 +441,9 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 |----------|-------------------------|
 | `AI_SERVICE_ENABLED` + `AI_SERVICE_GRPC_HOST` | Any gRPC feature |
 | `AI_KEYWORDS_ENABLED` | Keywords + openai |
-| `AI_SIMILARITY_ENABLED` | Similarity / plagiarism / semantic search |
+| `AI_SIMILARITY_ENABLED` | Local plagiarism + similarity / semantic search |
+| `AI_WEB_SIMILARITY_ENABLED` | Web plagiarism stage |
+| `AI_CORPUS_SIMILARITY_TIMEOUT_MS` | gRPC deadline for plagiarism jobs (default 300s) |
 | `AI_REVIEWER_MATCHING_ENABLED` | Reviewer matching + similarity |
 | `AI_COPYEDIT_ENABLED` | Copyedit reference check + openai |
 | `LANGUAGE_TOOL_ENABLED` | (LanguageTool container, not ai-service) |
@@ -429,6 +455,7 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 | Discipline only | AraBERT weights, `ARABERT_ENABLED`, Nest `AI_SERVICE_ENABLED` |
 | Keywords + references | LM Studio or OpenAI, `AI_PROVIDER=openai`, both keyword/copyedit flags |
 | Similarity + reviewers | `[similarity]`, `VECTOR_DB_*`, both similarity flags |
+| Plagiarism (local + web) | `[similarity]` + `[ml,web_similarity]`, `GOOGLE_CSE_*`, `FARASA_API_KEY`, both plagiarism flags |
 | Full copyedit panel | Above + LanguageTool in Docker Compose |
 
 ---
@@ -464,7 +491,8 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 | Keywords | Author | Nest → gRPC | OpenAI-compatible LLM |
 | Related publications | Public | Nest → gRPC | pgvector summary + bi-encoder |
 | Semantic catalog search | Public | Nest → gRPC | pgvector chunks + bi-encoder |
-| Corpus similarity | Editor, reviewer | Nest → gRPC | pgvector chunks + bi-encoder |
+| Corpus similarity (local) | Editor, reviewer | Nest → gRPC | pgvector chunks + bi-encoder |
+| Corpus similarity (web) | Editor, reviewer | Nest → gRPC | Google CSE + AraBERT + Farasa |
 | Suggested reviewers | Editor | Nest → gRPC | Bi-encoder + cross-encoder |
 | Copyedit format | Copyeditor, editor | Nest only | Rule-based |
 | Copyedit grammar | Copyeditor, editor | Nest → LanguageTool | LanguageTool |

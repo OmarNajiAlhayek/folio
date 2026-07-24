@@ -1,6 +1,6 @@
 # AI feature block diagrams (Mermaid)
 
-Block-level architecture for Folio AI capabilities. The browser **never** calls `ai-service` directly; Nest is the BFF over REST, then gRPC on port **5246**.
+Block-level architecture for Damascus University Journal AI capabilities. The browser **never** calls `ai-service` directly; Nest is the BFF over REST, then gRPC on port **5246**.
 
 Design record and flags: [`docs/plans/ai-service.md`](../../../plans/ai-service.md).
 

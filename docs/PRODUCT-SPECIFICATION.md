@@ -1,10 +1,10 @@
-# Folio — Product Specification
+# Damascus University Journal — Product Specification
 
 **Version:** 1.0 (as-built)  
 **Status:** Pre-production / active development  
 **Last verified against codebase:** June 2026  
 
-This document describes **what Folio is and what it does today**, derived from the running implementation (backend, frontend, email-service, ai-service). Older docs in `docs/` may drift; treat this file plus [`API-NOTES.md`](./API-NOTES.md) and [`DATA-MODEL.md`](./DATA-MODEL.md) as the primary product references.
+This document describes **what Damascus University Journal is and what it does today**, derived from the running implementation (backend, frontend, email-service, ai-service). Older docs in `docs/` may drift; treat this file plus [`API-NOTES.md`](./API-NOTES.md) and [`DATA-MODEL.md`](./DATA-MODEL.md) as the primary product references.
 
 ---
 
@@ -12,7 +12,7 @@ This document describes **what Folio is and what it does today**, derived from t
 
 ### 1.1 Vision
 
-**Folio** is a scholarly **manuscript submission and peer-review workspace** for a single academic journal. It supports the full editorial lifecycle—from author draft through peer review, copyediting, and public publication—with role-based access, bilingual (English / Arabic) UI, optional AI assistance, and a decoupled email pipeline.
+**Damascus University Journal** is a scholarly **manuscript submission and peer-review workspace** for a single academic journal. It supports the full editorial lifecycle—from author draft through peer review, copyediting, and public publication—with role-based access, bilingual (English / Arabic) UI, optional AI assistance, and a decoupled email pipeline.
 
 The product is **OJS-inspired in workflow vocabulary** but is an **original implementation** (not a fork or port of Open Journal Systems).
 

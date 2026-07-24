@@ -1,4 +1,4 @@
-# Folio ERD by role
+# Damascus University Journal ERD by role
 
 Same database as [`../erd/`](../erd/) (domain slices), organized by **who primarily reads/writes** each table. Tables **repeat** across roles; arrows show the main workflow path, not exclusive access.
 

@@ -1,4 +1,4 @@
-# Folio use case diagrams (PlantUML)
+# Damascus University Journal use case diagrams (PlantUML)
 
 Text-based UML use case diagrams with stick-figure actors, `<<include>>`, and `<<extend>>`.
 

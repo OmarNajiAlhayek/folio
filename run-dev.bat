@@ -23,18 +23,18 @@ if not exist "%ROOT%services\ai-service\pyproject.toml" (
   exit /b 1
 )
 
-echo Starting dev infrastructure ^(docker-compose.dev.yml^)...
-echo   Postgres 5434, Postgres-email 5433, RabbitMQ 5672, LanguageTool 8010, Typesense 8108
-docker compose -f "%ROOT%docker-compose.dev.yml" up -d
+echo Starting dev infrastructure ^(docker-compose.infra.yml^)...
+echo   RabbitMQ 5672, LanguageTool 8010, Typesense 8108 ^(Postgres runs natively on host^)
+docker compose -f "%ROOT%docker-compose.infra.yml" up -d
 if errorlevel 1 (
-  echo [WARN] docker compose failed — ensure Docker is running. Apps need Postgres ^(5434/5433^) and RabbitMQ ^(5672^).
+  echo [WARN] docker compose failed — ensure Docker is running. Apps need native Postgres and RabbitMQ ^(5672^).
   goto launch_apps
 )
 
 echo Waiting for RabbitMQ to accept AMQP connections...
 set "RABBIT_TRIES=0"
 :wait_rabbit
-docker compose -f "%ROOT%docker-compose.dev.yml" exec -T rabbitmq rabbitmq-diagnostics -q ping >nul 2>&1
+docker compose -f "%ROOT%docker-compose.infra.yml" exec -T rabbitmq rabbitmq-diagnostics -q ping >nul 2>&1
 if not errorlevel 1 goto rabbit_ready
 set /a RABBIT_TRIES+=1
 if %RABBIT_TRIES% GEQ 45 (
@@ -68,7 +68,8 @@ if exist "%ROOT%services\ai-service\.venv\Scripts\python.exe" (
 )
 
 echo Launched: backend, frontend, email-service, ai-service ^(separate terminals^).
-echo Infra: docker-compose.dev.yml ^(Postgres 5434, Postgres-email 5433, RabbitMQ 5672/15672, LanguageTool 8010, Typesense 8108^).
+echo Infra: docker-compose.infra.yml ^(RabbitMQ 5672/15672, LanguageTool 8010, Typesense 8108^).
+echo Postgres: native host ^(folio_review + folio_email on port 5432^).
 echo Backend: npm run start:dev
 echo Frontend: npm run dev
 echo Email-service: npm run start:dev
