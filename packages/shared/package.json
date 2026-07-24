@@ -2,7 +2,7 @@
   "name": "@folio/shared",
   "version": "0.1.0",
   "private": true,
-  "description": "Canonical messaging contracts and helpers for Folio Nest apps",
+  "description": "Canonical messaging contracts and helpers for Damascus University Journal Nest apps",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -44,6 +44,26 @@
       "import": "./dist/ids/entity-id.js",
       "require": "./dist/ids/entity-id.js",
       "default": "./dist/ids/entity-id.js"
+    },
+    "./contracts/pre-submit-analysis": {
+      "types": "./dist/contracts/pre-submit-analysis.d.ts",
+      "default": "./dist/contracts/pre-submit-analysis.js"
+    },
+    "./constructor": {
+      "types": "./dist/constructor/index.d.ts",
+      "default": "./dist/constructor/index.js"
+    },
+    "./constructor/canonical-json": {
+      "types": "./dist/constructor/canonical-json.d.ts",
+      "default": "./dist/constructor/canonical-json.js"
+    },
+    "./compose": {
+      "types": "./dist/constructor/index.d.ts",
+      "default": "./dist/constructor/index.js"
+    },
+    "./compose/canonical-json": {
+      "types": "./dist/constructor/canonical-json.d.ts",
+      "default": "./dist/constructor/canonical-json.js"
     }
   },
   "scripts": {
@@ -73,6 +93,6 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "rootDir": ".",
-    "testRegex": "(observability|ids)/.*\\.spec\\.ts$"
+    "testRegex": "(observability|ids|constructor)/.*\\.spec\\.ts$"
   }
 }
