@@ -186,6 +186,34 @@ input[type='datetime-local'] {
   transform: rotate(-45deg) scale(0.9);
 }
 
+/* Rotational Settings Gear — same spring as the theme toggle.
+   Radix sets data-state on the popover trigger, so the gear stays turned while the menu is open. */
+.settings-icon-container svg {
+  transition: transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.settings-icon-container:hover svg,
+.settings-icon-container[data-state='open'] svg {
+  transform: rotate(90deg);
+}
+
+.settings-icon-container:active svg {
+  transform: rotate(90deg) scale(0.9);
+}
+
+/* Magnifier — tilts and leans in, as if being raised to inspect something. */
+.search-icon-container svg {
+  transition: transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.search-icon-container:hover svg {
+  transform: translate(-0.5px, -0.5px) rotate(-12deg) scale(1.15);
+}
+
+.search-icon-container:active svg {
+  transform: rotate(-12deg) scale(0.92);
+}
+
 /* Premium Dashboard Card Glow Transitions */
 .hover-glow-indigo {
   transition:
@@ -229,6 +257,8 @@ input[type='datetime-local'] {
 
 @media (prefers-reduced-motion: reduce) {
   .theme-icon-container svg,
+  .settings-icon-container svg,
+  .search-icon-container svg,
   .hover-glow-indigo,
   .hover-glow-accent,
   .hover-glow-emerald,
@@ -236,6 +266,26 @@ input[type='datetime-local'] {
     transition: none !important;
     transform: none !important;
     box-shadow: none !important;
+  }
+}
+
+/*
+ * Global reduced-motion guard. The targeted rules above still matter because they also reset
+ * `transform`; this catches everything else — `animate-ping`, `animate-fade-in`, the accordion
+ * keyframes, and any animation added later — without needing to be updated each time.
+ *
+ * Deliberately limited to durations. A blanket `transform: none` would break layout, since
+ * Radix positions every popover, tooltip and dropdown with `transform: translate3d(...)`.
+ * 0.01ms rather than 0 so `transitionend` / `animationend` listeners still fire.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

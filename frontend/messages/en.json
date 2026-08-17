@@ -43,6 +43,7 @@
   },
   "Nav": {
     "brand": "Damascus University Journal",
+    "brandShort": "DU Journal",
     "publications": "Publications",
     "dashboard": "Dashboard",
     "submissions": "Submissions",
@@ -72,7 +73,30 @@
     "localeToggleAria": "Switch language. Current: {current}.",
     "commandPaletteTitle": "Search pages and actions",
     "commandPaletteTooltip": "Search pages and actions. Click or press ⌘K.",
-    "commandPaletteAria": "Open command palette. Shortcut: Command K."
+    "commandPaletteAria": "Open command palette. Shortcut: Command K.",
+    "searchLabel": "Search",
+    "searchDrawerLabel": "Search pages & actions…",
+    "more": "More",
+    "moreAria": "More navigation links",
+    "settings": "Settings",
+    "settingsAria": "Open settings menu",
+    "theme": "Theme",
+    "language": "Language",
+    "openNavMenuAria": "Open navigation menu",
+    "closeMenuAria": "Close menu",
+    "mobileNavAria": "Mobile navigation"
+  },
+  "CommandPalette": {
+    "placeholder": "Search pages and actions…",
+    "noResults": "No results found.",
+    "groupNavigate": "Navigate",
+    "groupActions": "Actions",
+    "groupAccount": "Account",
+    "newSubmission": "New submission",
+    "newBadge": "New",
+    "notifications": "Notifications",
+    "signOut": "Sign out",
+    "signIn": "Sign in"
   },
   "Notifications": {
     "title": "Notifications",
@@ -451,7 +475,8 @@
     "tipReviewTitle": "Willing to Review:",
     "tipReviewBody": "Keep your review keywords up to date on your profile. This helps handling editors invite you to relevant peer reviews.",
     "tipFilesTitle": "Files Package:",
-    "tipFilesBody": "When preparing submissions, upload high-resolution figures and tables separately to ensure premium layout output."
+    "tipFilesBody": "When preparing submissions, upload high-resolution figures and tables separately to ensure premium layout output.",
+    "noPendingInvitationsAria": "No pending invitations"
   },
   "Submissions": {
     "title": "Submissions",
@@ -612,7 +637,7 @@
     "editorPanelTitle": "Editor actions",
     "editorPanelHint": "Assign reviewers and move this submission through the workflow.",
     "corpusSimilarityTitle": "Plagiarism check",
-    "corpusSimilarityDisclaimer": "Advisory two-stage check: published journal corpus, then selected web sources. High overlap is not proof of misconduct.",
+    "corpusSimilarityDisclaimer": "Advisory three-stage check: verbatim overlap in indexed sources, then semantic similarity to published journal articles, then selected web sources. High overlap is not proof of misconduct.",
     "corpusSimilarityLoading": "Running plagiarism check…",
     "corpusSimilarityLoadFailed": "Could not load plagiarism report.",
     "corpusSimilarityUnavailable": "Plagiarism check is not available (AI service off or not configured).",
@@ -769,7 +794,22 @@
     "docxGrammarHeading": "Language notes",
     "docxGrammarBody": "LanguageTool flagged the following in your manuscript. These are advisory — fix what applies and re-upload, or submit as-is.",
     "docxGrammarExcerpt": "Found",
-    "docxGrammarSuggestion": "Suggestion"
+    "docxGrammarSuggestion": "Suggestion",
+    "corpusSimilarityExactTitle": "Verbatim overlap",
+    "corpusSimilarityExactOverallLabel": "of the manuscript",
+    "corpusSimilarityExactInSubmission": "In this submission",
+    "corpusSimilarityExactInSource": "In {title}",
+    "corpusSimilarityExactExplainer": "{matched} of {total} words appear word-for-word in indexed sources. Counted once even when the same passage is found in several places.",
+    "corpusSimilarityExactReferencesSkipped": "The reference list ({tokens} words) was excluded.",
+    "corpusSimilarityExactQuoted": "{tokens} words fall inside quotation marks and are reported as quotation, not copying.",
+    "corpusSimilarityExactClear": "No verbatim overlap found in the indexed sources.",
+    "corpusSimilarityExactError": "The verbatim check could not be completed, so this section may be incomplete.",
+    "corpusSimilarityExactSourceOverlap": "{percent}% · {tokens} words",
+    "corpusSimilarityExactSpanLength": "{tokens} words verbatim",
+    "corpusSimilarityExactQuotedSpan": "quoted",
+    "corpusSimilarityExactUnreadable": "The manuscript text is unreadable (broken PDF encoding or scan garbage). Exact-match cannot run — re-upload a clean DOCX or a PDF with a real text layer.",
+    "corpusSimilarityExactEstimated": "Estimated (fingerprint only — no quotable source text)",
+    "corpusSimilarityExactVerified": "Verified against stored source text"
   },
   "SubmissionWorkflow": {
     "metadataReadonlyTitle": "Submission metadata",
@@ -1001,7 +1041,11 @@
     "filterPickDate": "Pick a date",
     "filterApply": "Apply filters",
     "filterClear": "Clear all",
-    "filterActiveCount": "{count, plural, one {# filter active} other {# filters active}}"
+    "filterActiveCount": "{count, plural, one {# filter active} other {# filters active}}",
+    "clearSearchAria": "Clear search",
+    "removeRoleFilterAria": "Remove role filter",
+    "removeJoinedFromAria": "Remove joined-from filter",
+    "removeJoinedToAria": "Remove joined-to filter"
   },
   "JournalManagerAuditLog": {
     "title": "Audit log",
@@ -1711,7 +1755,8 @@
     "clearSelection": "Clear",
     "allStatuses": "All statuses",
     "nSelected": "{count} selected",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "clearDate": "Clear date"
   },
   "Validation": {
     "required": "This field is required.",

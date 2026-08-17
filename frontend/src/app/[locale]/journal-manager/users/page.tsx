@@ -446,7 +446,7 @@ export default function JournalManagerUsersPage() {
                 type="button"
                 onClick={() => setSearchInput('')}
                 className="absolute inset-e-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-ink/40 transition hover:text-ink/70"
-                aria-label="Clear search"
+                aria-label={t('clearSearchAria')}
               >
                 <X className="size-4" aria-hidden />
               </button>
@@ -577,7 +577,7 @@ export default function JournalManagerUsersPage() {
                   setOffset(0);
                 }}
                 className="rounded-full p-0.5 hover:bg-accent/15"
-                aria-label="Remove role filter"
+                aria-label={t('removeRoleFilterAria')}
               >
                 <X className="size-2.5" />
               </button>
@@ -594,7 +594,7 @@ export default function JournalManagerUsersPage() {
                   setOffset(0);
                 }}
                 className="rounded-full p-0.5 hover:bg-accent/15"
-                aria-label="Remove joined-from filter"
+                aria-label={t('removeJoinedFromAria')}
               >
                 <X className="size-2.5" />
               </button>
@@ -611,7 +611,7 @@ export default function JournalManagerUsersPage() {
                   setOffset(0);
                 }}
                 className="rounded-full p-0.5 hover:bg-accent/15"
-                aria-label="Remove joined-to filter"
+                aria-label={t('removeJoinedToAria')}
               >
                 <X className="size-2.5" />
               </button>

@@ -390,7 +390,7 @@ export default function SearchCurationPage() {
         href="/editor"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-ink/55 transition hover:text-accent"
       >
-        <ArrowLeft className="size-4" aria-hidden />
+        <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden />
         {t('backToEditor')}
       </Link>
 

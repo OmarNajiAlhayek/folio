@@ -131,7 +131,7 @@ function AuditLogRowCard({
           {open ? (
             <ChevronDown className="size-4" />
           ) : (
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-4 rtl:rotate-180" />
           )}
         </span>
         <div className="min-w-0 flex-1">

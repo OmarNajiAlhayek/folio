@@ -838,7 +838,7 @@ export default function DashboardPage() {
             /* Elegant Empty State replacing blank space */
             <section
               className="h-full flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-ink/15 dark:border-white/15 bg-linear-to-b from-surface/50 to-surface-muted/20"
-              aria-label="No pending invitations"
+              aria-label={t('noPendingInvitationsAria')}
             >
               <div className="relative flex items-center justify-center size-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 mb-5 shadow-xs">
                 <span className="absolute inset-0 rounded-full bg-emerald-500/10 animate-pulse" />

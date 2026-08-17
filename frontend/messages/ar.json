@@ -43,6 +43,7 @@
   },
   "Nav": {
     "brand": "مجلة جامعة دمشق",
+    "brandShort": "مجلة دمشق",
     "publications": "المنشورات",
     "dashboard": "لوحة التحكم",
     "submissions": "الطلبات",
@@ -72,7 +73,30 @@
     "localeToggleAria": "تبديل اللغة. الحالية: {current}.",
     "commandPaletteTitle": "البحث في الصفحات والإجراءات",
     "commandPaletteTooltip": "البحث في الصفحات والإجراءات. انقر أو اضغط ⌘K.",
-    "commandPaletteAria": "فتح لوحة الأوامر. الاختصار: Command K."
+    "commandPaletteAria": "فتح لوحة الأوامر. الاختصار: Command K.",
+    "searchLabel": "بحث",
+    "searchDrawerLabel": "البحث في الصفحات والإجراءات…",
+    "more": "المزيد",
+    "moreAria": "روابط تنقل إضافية",
+    "settings": "الإعدادات",
+    "settingsAria": "فتح قائمة الإعدادات",
+    "theme": "المظهر",
+    "language": "اللغة",
+    "openNavMenuAria": "فتح قائمة التنقل",
+    "closeMenuAria": "إغلاق القائمة",
+    "mobileNavAria": "التنقل في الجوال"
+  },
+  "CommandPalette": {
+    "placeholder": "البحث في الصفحات والإجراءات…",
+    "noResults": "لا توجد نتائج.",
+    "groupNavigate": "التنقل",
+    "groupActions": "الإجراءات",
+    "groupAccount": "الحساب",
+    "newSubmission": "طلب جديد",
+    "newBadge": "جديد",
+    "notifications": "الإشعارات",
+    "signOut": "تسجيل الخروج",
+    "signIn": "تسجيل الدخول"
   },
   "Notifications": {
     "title": "الإشعارات",
@@ -451,7 +475,8 @@
     "tipReviewTitle": "اهتمامات التحكيم",
     "tipReviewBody": "تأكد من تحديث اهتماماتك التحكيمية وخبراتك العلمية في حسابك الشخصي لتلقي تنبيهات ودعوات التحكيم من المحررين.",
     "tipFilesTitle": "حزمة الملفات",
-    "tipFilesBody": "عند إرسال بحث للتحكيم، قم برفع الأشكال التوضيحية والجداول كملفات مستقلة ذات دقة عالية لضمان أفضل إخراج صحفي."
+    "tipFilesBody": "عند إرسال بحث للتحكيم، قم برفع الأشكال التوضيحية والجداول كملفات مستقلة ذات دقة عالية لضمان أفضل إخراج صحفي.",
+    "noPendingInvitationsAria": "لا توجد دعوات معلقة"
   },
   "Submissions": {
     "title": "الطلبات",
@@ -612,7 +637,7 @@
     "editorPanelTitle": "إجراءات المحرّر",
     "editorPanelHint": "عيّن المحكّمين وانقل هذا الطلب عبر مسار العمل.",
     "corpusSimilarityTitle": "فحص الانتحال",
-    "corpusSimilarityDisclaimer": "فحص استشاري على مرحلتين: مقالات المجلة المنشورة، ثم مصادر ويب مختارة. التشابه العالي ليس دليلاً على سوء السلوك.",
+    "corpusSimilarityDisclaimer": "فحص استشاري على ثلاث مراحل: تطابق حرفي في المصادر المفهرسة، ثم تشابه دلالي مع مقالات المجلة المنشورة، ثم مصادر ويب مختارة. التشابه العالي ليس دليلاً على سوء السلوك.",
     "corpusSimilarityLoading": "جارٍ فحص الانتحال…",
     "corpusSimilarityLoadFailed": "تعذّر تحميل تقرير الانتحال.",
     "corpusSimilarityUnavailable": "فحص الانتحال غير متاح (خدمة الذكاء الاصطناعي متوقفة أو غير مهيأة).",
@@ -769,7 +794,22 @@
     "docxGrammarHeading": "ملاحظات لغوية",
     "docxGrammarBody": "رصدت أداة LanguageTool الملاحظات التالية في مخطوطتك. هذه ملاحظات إرشادية — صحّح ما ينطبق وأعد الرفع، أو أرسل كما هو.",
     "docxGrammarExcerpt": "النص",
-    "docxGrammarSuggestion": "الاقتراح"
+    "docxGrammarSuggestion": "الاقتراح",
+    "corpusSimilarityExactTitle": "تطابق حرفي",
+    "corpusSimilarityExactOverallLabel": "من البحث",
+    "corpusSimilarityExactInSubmission": "في هذه المخطوطة",
+    "corpusSimilarityExactInSource": "في {title}",
+    "corpusSimilarityExactExplainer": "{matched} كلمة من أصل {total} تظهر حرفياً في مصادر مفهرسة. تُحتسب مرة واحدة حتى لو وُجد المقطع نفسه في عدة مواضع.",
+    "corpusSimilarityExactReferencesSkipped": "استُبعدت قائمة المراجع ({tokens} كلمة).",
+    "corpusSimilarityExactQuoted": "{tokens} كلمة وردت ضمن علامات اقتباس وتُعدّ اقتباساً لا نسخاً.",
+    "corpusSimilarityExactClear": "لم يُعثر على تطابق حرفي في المصادر المفهرسة.",
+    "corpusSimilarityExactError": "تعذّر إتمام فحص التطابق الحرفي، وقد يكون هذا القسم ناقصاً.",
+    "corpusSimilarityExactSourceOverlap": "{percent}٪ · {tokens} كلمة",
+    "corpusSimilarityExactSpanLength": "{tokens} كلمة حرفياً",
+    "corpusSimilarityExactQuotedSpan": "اقتباس",
+    "corpusSimilarityExactUnreadable": "نص المخطوطة غير قابل للقراءة (ترميز PDF تالف أو نص مستخرج تالف). لا يمكن تشغيل التطابق الحرفي — أعد رفع ملف DOCX سليم أو PDF بطبقة نص حقيقية.",
+    "corpusSimilarityExactEstimated": "تقديري (بصمات فقط — لا يوجد نص مصدر قابل للاقتباس)",
+    "corpusSimilarityExactVerified": "مُتحقق منه مقابل نص المصدر المخزّن"
   },
   "SubmissionWorkflow": {
     "metadataReadonlyTitle": "بيانات وصفية للطلب",
@@ -1001,7 +1041,11 @@
     "filterPickDate": "اختر تاريخاً",
     "filterApply": "تطبيق الفلاتر",
     "filterClear": "مسح الكل",
-    "filterActiveCount": "{count, plural, one {فلتر واحد نشط} other {# فلاتر نشطة}}"
+    "filterActiveCount": "{count, plural, one {فلتر واحد نشط} other {# فلاتر نشطة}}",
+    "clearSearchAria": "مسح البحث",
+    "removeRoleFilterAria": "إزالة عامل تصفية الدور",
+    "removeJoinedFromAria": "إزالة عامل تصفية تاريخ البداية",
+    "removeJoinedToAria": "إزالة عامل تصفية تاريخ النهاية"
   },
   "JournalManagerAuditLog": {
     "title": "سجل التدقيق",
@@ -1687,7 +1731,8 @@
     "clearSelection": "مسح",
     "allStatuses": "كل الحالات",
     "nSelected": "محدد {count}",
-    "openMenu": "فتح القائمة"
+    "openMenu": "فتح القائمة",
+    "clearDate": "مسح التاريخ"
   },
   "Validation": {
     "required": "هذا الحقل مطلوب.",
