@@ -5,7 +5,7 @@
  *  1. Self-contained – author panel visibility (always runs, no seed needed)
  *  2. Opt-in – editor / reviewer flows with mocked AI API
  *     Set  E2E_PLAGIARISM_OPT_IN=1  and run `npm run seed` in backend first.
- *     Seeded accounts: k76462338@gmail.com / Editor123!  and  ysryrwthqsdthwy@gmail.com / Reviewer123!
+ *     Seeded accounts: editor@folio.dev / Editor123!  (and a reviewer account from seed)
  */
 
 import {
@@ -31,7 +31,7 @@ import { hideNextJsDevPortals } from './helpers/hide-next-dev-portals';
 // ── Seeded accounts ─────────────────────────────────────────────────────────
 
 const EDITOR_CREDS = {
-  email: 'k76462338@gmail.com',
+  email: 'editor@folio.dev',
   password: 'Editor123!',
   displayName: 'C. Editor',
 };

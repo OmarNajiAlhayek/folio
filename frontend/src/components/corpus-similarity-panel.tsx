@@ -37,6 +37,38 @@ type StageReport<T> = {
   error?: string;
 };
 
+export type ExactMatchSpan = {
+  submissionStartToken: number;
+  submissionEndToken: number;
+  submissionSnippet: string;
+  matchedSnippet: string;
+  tokenLength: number;
+  quoted: boolean;
+};
+
+export type ExactMatchSource = {
+  docId: string;
+  sourceKind: string;
+  title: string;
+  sourceUrl: string;
+  matchedTokens: number;
+  overlapPercent: number;
+  spans: ExactMatchSpan[];
+  publication?: { slug: string; title: string; titleAr: string | null };
+};
+
+export type ExactMatchStage = {
+  enabled: true;
+  totalTokens: number;
+  matchedTokens: number;
+  overallPercent: number;
+  quotedTokens: number;
+  referenceTokensSkipped: number;
+  sources: ExactMatchSource[];
+  suppressedCount: number;
+  error?: string;
+};
+
 export type CorpusSimilarityReport =
   | { status: 'unavailable' }
   | { status: 'no_text' }
@@ -44,6 +76,7 @@ export type CorpusSimilarityReport =
       status: 'ok';
       local: StageReport<CorpusSimilaritySource> | null;
       web: StageReport<WebSimilaritySource> | null;
+      exact?: ExactMatchStage | null;
     };
 
 type AiJobResponse = {
@@ -78,6 +111,108 @@ function formatLocalPercent(similarity: number): string {
 
 function formatWebPercent(similarity: number): string {
   return `${Math.round(similarity)}%`;
+}
+
+const TEXT_RETAINING_SOURCE_KINDS = new Set([
+  'folio_submission',
+  'back_catalog',
+]);
+
+/** Fingerprint-only or empty evidence → show as estimated, not verified quote. */
+function isExactSourceEstimated(src: ExactMatchSource): boolean {
+  if (!TEXT_RETAINING_SOURCE_KINDS.has(src.sourceKind)) return true;
+  return src.spans.some((span) => !span.matchedSnippet?.trim());
+}
+
+/** Light fold so back_catalog / OAI twins of the same Arabic article collide. */
+function foldExactTitle(title: string): string {
+  return title
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '') // harakat + tatweel
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/[ىي]/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .toLowerCase();
+}
+
+/**
+ * Drop estimated (fingerprint-only) sources when a verified sibling already
+ * covers the same work. Lone estimated hits stay visible.
+ */
+function filterExactSourcesForDisplay(
+  sources: ExactMatchSource[],
+): ExactMatchSource[] {
+  const verifiedKeys = new Set(
+    sources
+      .filter((src) => !isExactSourceEstimated(src))
+      .map((src) => foldExactTitle(src.title))
+      .filter(Boolean),
+  );
+  if (verifiedKeys.size === 0) return sources;
+  return sources.filter((src) => {
+    if (!isExactSourceEstimated(src)) return true;
+    const key = foldExactTitle(src.title);
+    return !key || !verifiedKeys.has(key);
+  });
+}
+
+/**
+ * Verbatim overlap bands. Deliberately stricter than the semantic stage: an
+ * exact run is evidence rather than resemblance, so double digits already
+ * warrants an editor's attention. Still advisory — never a verdict.
+ */
+function exactBadgeCls(percent: number): string {
+  if (percent >= 20) {
+    return 'font-mono text-xs font-semibold px-2 py-0.5 rounded-full text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30';
+  }
+  if (percent >= 8) {
+    return 'font-mono text-xs font-semibold px-2 py-0.5 rounded-full text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30';
+  }
+  return 'font-mono text-xs text-ink/55';
+}
+
+/** Text colors only — used for the overall hero figure, not the pill. */
+function exactHeroCls(percent: number): string {
+  if (percent >= 20) {
+    return 'font-mono text-4xl font-semibold text-red-700 dark:text-red-300';
+  }
+  if (percent >= 8) {
+    return 'font-mono text-4xl font-semibold text-amber-700 dark:text-amber-300';
+  }
+  return 'font-mono text-4xl font-semibold text-ink/55';
+}
+
+function exactCoverageSegmentCls(percent: number): string {
+  if (percent >= 20) {
+    return 'bg-red-600/70 dark:bg-red-400/60';
+  }
+  if (percent >= 8) {
+    return 'bg-amber-500/70 dark:bg-amber-400/50';
+  }
+  return 'bg-ink/35';
+}
+
+function exactCoverageSegments(
+  sources: ExactMatchSource[],
+  totalTokens: number,
+): { leftPct: number; widthPct: number }[] {
+  if (totalTokens <= 0) return [];
+  const out: { leftPct: number; widthPct: number }[] = [];
+  for (const src of sources) {
+    for (const span of src.spans) {
+      const start = Math.max(0, span.submissionStartToken);
+      const end = Math.max(start, span.submissionEndToken);
+      const leftPct = Math.min(100, (start / totalTokens) * 100);
+      const widthPct = Math.min(
+        100 - leftPct,
+        ((end - start) / totalTokens) * 100,
+      );
+      if (widthPct <= 0) continue;
+      out.push({ leftPct, widthPct });
+    }
+  }
+  return out;
 }
 
 function localSimilarityBadgeCls(
@@ -235,14 +370,27 @@ export function CorpusSimilarityPanel({ slug }: Props) {
 
   const localStage = report?.status === 'ok' ? report.local : null;
   const webStage = report?.status === 'ok' ? report.web : null;
+  const exactStage = report?.status === 'ok' ? (report.exact ?? null) : null;
+  const exactSourcesForDisplay =
+    exactStage != null ? filterExactSourcesForDisplay(exactStage.sources) : [];
+  const exactCoverage =
+    exactStage != null && exactStage.totalTokens > 0
+      ? exactCoverageSegments(exactSourcesForDisplay, exactStage.totalTokens)
+      : [];
   const hasLocalMatches = localStage != null && localStage.sources.length > 0;
   const hasWebMatches = webStage != null && webStage.sources.length > 0;
+  const hasExactMatches =
+    exactStage != null &&
+    exactSourcesForDisplay.length > 0 &&
+    exactStage.error !== 'unreadable_submission';
   const allClear =
     report?.status === 'ok' &&
     !hasLocalMatches &&
     !hasWebMatches &&
+    !hasExactMatches &&
     !localStage?.error &&
-    !webStage?.error;
+    !webStage?.error &&
+    !exactStage?.error;
 
   const checkedAtLabel = checkedAt
     ? t('corpusSimilarityCheckedAt', {
@@ -329,6 +477,174 @@ export function CorpusSimilarityPanel({ slug }: Props) {
                 {checkedAtLabel}
               </p>
             )}
+
+            {exactStage?.error && (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {exactStage.error === 'unreadable_submission'
+                  ? t('corpusSimilarityExactUnreadable')
+                  : t('corpusSimilarityExactError')}
+              </p>
+            )}
+            {exactStage != null &&
+              exactStage.error !== 'unreadable_submission' && (
+                <section
+                  data-testid="corpus-similarity-exact-section"
+                  className="space-y-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-ink">
+                      {t('corpusSimilarityExactTitle')}
+                    </h3>
+                    <div className="flex flex-col items-end leading-none">
+                      <span className={exactHeroCls(exactStage.overallPercent)}>
+                        {locale === 'ar'
+                          ? `${exactStage.overallPercent.toFixed(1)}٪`
+                          : `${exactStage.overallPercent.toFixed(1)}%`}
+                      </span>
+                      <span className="mt-1 text-xs text-ink/55">
+                        {t('corpusSimilarityExactOverallLabel')}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-ink/60">
+                    {t('corpusSimilarityExactExplainer', {
+                      total: exactStage.totalTokens,
+                      matched: exactStage.matchedTokens,
+                    })}
+                    {exactStage.referenceTokensSkipped > 0 &&
+                      ` ${t('corpusSimilarityExactReferencesSkipped', {
+                        tokens: exactStage.referenceTokensSkipped,
+                      })}`}
+                    {exactStage.quotedTokens > 0 &&
+                      ` ${t('corpusSimilarityExactQuoted', {
+                        tokens: exactStage.quotedTokens,
+                      })}`}
+                  </p>
+                  {exactCoverage.length > 0 && (
+                    <div
+                      aria-hidden
+                      className="relative h-2 w-full overflow-hidden rounded-sm bg-ink/10"
+                    >
+                      {exactCoverage.map((seg, i) => (
+                        <div
+                          key={i}
+                          className={`absolute inset-y-0 ${exactCoverageSegmentCls(exactStage.overallPercent)}`}
+                          style={{
+                            left: `${seg.leftPct}%`,
+                            width: `${seg.widthPct}%`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {exactSourcesForDisplay.length === 0 && !exactStage.error && (
+                    <p className="text-sm text-ink/65">
+                      {t('corpusSimilarityExactClear')}
+                    </p>
+                  )}
+                  {exactSourcesForDisplay.length > 0 && (
+                    <ul className="space-y-4">
+                      {exactSourcesForDisplay.map((src) => {
+                        const pubTitle =
+                          locale === 'ar' && src.publication?.titleAr
+                            ? src.publication.titleAr
+                            : src.publication?.title;
+                        const sourceTitle =
+                          pubTitle ||
+                          src.title ||
+                          src.publication?.slug ||
+                          src.sourceUrl ||
+                          src.docId;
+                        return (
+                          <li
+                            key={src.docId}
+                            data-testid="corpus-similarity-exact-source"
+                            className="rounded-md border border-ink/10 bg-surface/80 p-3 dark:border-white/10"
+                          >
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                              {src.publication?.slug ? (
+                                <Link
+                                  href={`/publications/${src.publication.slug}`}
+                                  className="text-sm font-semibold text-accent hover:underline"
+                                >
+                                  {pubTitle ?? src.publication.slug}
+                                </Link>
+                              ) : src.sourceUrl ? (
+                                <a
+                                  href={src.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                  dir="auto"
+                                  className="text-sm font-semibold text-accent hover:underline"
+                                >
+                                  {src.title || src.sourceUrl}
+                                </a>
+                              ) : (
+                                <span
+                                  dir="auto"
+                                  className="text-sm font-semibold text-ink"
+                                >
+                                  {src.title || src.docId}
+                                </span>
+                              )}
+                              <span
+                                className={exactBadgeCls(src.overlapPercent)}
+                              >
+                                {t('corpusSimilarityExactSourceOverlap', {
+                                  percent: src.overlapPercent.toFixed(1),
+                                  tokens: src.matchedTokens,
+                                })}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-ink/50">
+                              {isExactSourceEstimated(src)
+                                ? t('corpusSimilarityExactEstimated')
+                                : t('corpusSimilarityExactVerified')}
+                            </p>
+                            <ul className="mt-2 space-y-3">
+                              {src.spans.map((span, i) => (
+                                <li key={i} className="space-y-1 text-ink/70">
+                                  <p className="text-xs font-medium text-ink/50">
+                                    {t('corpusSimilarityExactSpanLength', {
+                                      tokens: span.tokenLength,
+                                    })}
+                                    {span.quoted &&
+                                      ` · ${t('corpusSimilarityExactQuotedSpan')}`}
+                                  </p>
+                                  <p
+                                    dir="auto"
+                                    className="font-serif text-sm leading-loose line-clamp-5"
+                                  >
+                                    <span className="font-sans font-medium text-ink/50">
+                                      {t('corpusSimilarityExactInSubmission')}
+                                      :{' '}
+                                    </span>
+                                    {span.submissionSnippet}
+                                  </p>
+                                  <p
+                                    dir="auto"
+                                    className="font-serif text-sm leading-loose line-clamp-5"
+                                  >
+                                    <span className="font-sans font-medium text-ink/50">
+                                      {t('corpusSimilarityExactInSource', {
+                                        title: sourceTitle,
+                                      })}
+                                      :{' '}
+                                    </span>
+                                    {span.matchedSnippet?.trim()
+                                      ? span.matchedSnippet
+                                      : ''}
+                                  </p>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              )}
 
             {localStage === null && (
               <p className="text-sm text-ink/65">

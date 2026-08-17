@@ -141,6 +141,13 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="WEB_SIMILARITY_ENABLED",
     )
+
+    # Verbatim-overlap matching against the fingerprint corpus. Needs only
+    # VECTOR_DB_* (no embeddings, no torch), so it can run standalone.
+    exact_match_enabled: bool = Field(
+        default=False,
+        validation_alias="EXACT_MATCH_ENABLED",
+    )
     google_cse_api_key: str = Field(default="", validation_alias="GOOGLE_CSE_API_KEY")
     google_cse_id: str = Field(default="", validation_alias="GOOGLE_CSE_ID")
     farasa_api_key: str = Field(default="", validation_alias="FARASA_API_KEY")
@@ -195,6 +202,15 @@ class Settings(BaseSettings):
     @field_validator("copyedit_analysis_enabled", mode="before")
     @classmethod
     def parse_copyedit_analysis_enabled(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @field_validator("exact_match_enabled", mode="before")
+    @classmethod
+    def parse_exact_match_enabled(cls, value: object) -> bool:
         if isinstance(value, bool):
             return value
         if value is None:

@@ -151,11 +151,122 @@ cd backend
 npx ts-node scripts/smoke-copyedit-grpc.ts
 ```
 
+### Exact-overlap corpus (plagiarism)
+
+Verbatim matching runs off a winnowed k-gram index (`app/ml/exact_match/`) in
+`corpus_documents` / `corpus_fingerprints`, separate from the pgvector semantic
+path and independent of it — no embeddings, no torch.
+
+```bash
+pip install -e ".[corpus]"
+# backend migration AddExactMatchCorpus must have run first
+```
+
+Fill the corpus, highest value first. The journal's own back catalogue matters
+most: local authors copy from local prior issues far more than from anything an
+English open-access API indexes.
+
+```bash
+# Tier 1 — back catalogue (PDF/DOCX/TXT, recursive). Text is stored: we own it.
+python scripts/import_back_catalog.py ../../Damascus_Articles --category "الهندسة"
+python scripts/import_back_catalog.py <dir> --dry-run     # extraction quality only
+
+# Tier 2 — regional journals over OAI-PMH. No search engine, no scraping.
+# Damascus itself is harvestable: 13 journals under one site-wide endpoint.
+python scripts/import_oai_pmh.py https://journal.damascusuniversity.edu.sy --probe
+python scripts/import_oai_pmh.py https://journal.damascusuniversity.edu.sy/index.php/index/oai --list-sets
+python scripts/import_oai_pmh.py <oai-url> --set engj:ART --limit 200 --category "الهندسة"
+python scripts/import_oai_pmh.py <oai-url> --from 2026-01-01     # incremental, nightly
+
+# Tier 2b — CORE open access. Fingerprints only, never the text. Mostly English.
+CORE_API_KEY=... python scripts/import_core_oa.py --query '"structural engineering"' --limit 500
+
+# After any bulk import (also run automatically by both importers)
+python scripts/import_back_catalog.py --refresh-stoplist-only
+```
+
+Tier 3 is the web check: distinctive passages go out as **quoted phrase queries**
+so Google does the exact matching, and each fetched page is folded back into the
+corpus as fingerprints (`SourceKind.WEB`), so the same page is matched for free
+from then on. See `app/ml/exact_match/sources/web.py`.
+
+Re-imports are cheap — a document whose normalized text is unchanged is skipped
+without re-fingerprinting. Changing `k_gram`, `window`, or the hash in
+`ExactMatchConfig` invalidates every stored fingerprint: re-run the importers.
+
+### Broken Arabic PDFs
+
+Many Arabic academic PDFs carry no usable `ToUnicode` CMap, so extractors emit
+valid Arabic code points that spell nothing (`إت ل ف لدايرس ل ةا لب ةع`).
+Indexing one is worse than skipping it: it looks successful and can never match.
+
+Three defences, in order:
+
+1. **Best-of-N extraction.** `extract_pdf` runs PyMuPDF, pdfplumber and pypdf and
+   keeps whichever scores highest — they disagree, and not always in the same
+   direction.
+2. **A quality gate.** `text_quality.py` scores function-word frequency: real text
+   runs 10-13%, broken extraction 0.6-2.9%. Measured on the Damascus catalogue
+   the two populations do not overlap. Broken text is rejected, never indexed.
+3. **OCR fallback** (`--ocr`), which renders the page and ignores the text layer.
+   This is the only defence that generalizes — other institutions publish what
+   they publish, and no amount of asking gets you their Word originals.
+
+```bash
+pip install -e ".[ocr]"     # Surya 0.17 + Tesseract bindings; host also needs tesseract + ara
+python scripts/import_back_catalog.py <dir> --ocr
+python scripts/import_oai_pmh.py <oai-url> --ocr
+```
+
+Pin note: extras install `surya-ocr>=0.17,<0.20` (torch-local API matching
+`SuryaEngine`). Surya 2+ needs a vLLM Docker / llama.cpp server — do not bump
+past 0.20 until the engine wrapper and runtime are updated.
+
+Tesseract with `ara` lifted all four broken Damascus files from `broken` (0.023-0.026)
+to `good` (0.088-0.091) at ~2.3s/page. OCR output goes through the same gate, and
+is discarded if it scores no better than the text layer it replaced.
+
+**Choosing an engine — measure, don't argue.** `scripts/ocr_bench.py` runs every
+installed engine over the same pages of your real PDFs and prints quality and
+pace:
+
+```bash
+python scripts/ocr_bench.py ../../Damascus_Articles --only-broken --pages 3
+```
+
+Known results on this corpus:
+
+| Engine | Function-word score | Notes |
+|--------|--------------------|-------|
+| text layer (broken PDFs) | 0.014-0.029 | unusable |
+| Tesseract `tessdata_fast` | 0.074-0.091 | usable, free, CPU |
+| Tesseract `tessdata_best` | 0.077-0.095 | no real gain, 2.7x slower — not worth it |
+| Surya 0.17 (GPU, RTX 4060) | ~0.068-0.090 (mean ~0.079 on 3-page sample) | free, local torch; ~3× slower than Tesseract here; does not clearly beat it yet |
+| clean DOCX (reference) | 0.112-0.132 | the ceiling |
+
+Surya is preferred over a vision-language model for corpus text: it transcribes,
+whereas a VLM *completes*. A VLM reading a smudged word writes a plausible word,
+which in a plagiarism report means showing an editor source text the source never
+contained.
+
+Accuracy matters more here than for search: exact matching needs whole k-grams,
+and at word error rate `p` a k-gram survives with probability `(1-p)^k`. At k=6,
+5% error keeps 74% of fingerprints and 15% keeps 38% — so if Tesseract proves too
+weak on a given corpus, swap `OcrEngine` for a cloud engine (~$1.50/1000 pages)
+and re-measure with the same gate.
+
 ## Tests
 
 ```bash
 pytest
 ruff check app tests
+```
+
+Exact-match tests need no database or extras — detection runs against an
+in-memory store:
+
+```bash
+pytest tests/test_exact_match.py
 ```
 
 Full model inference (slow, needs weights):

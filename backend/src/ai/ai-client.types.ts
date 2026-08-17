@@ -58,11 +58,48 @@ export type WebSimilarityMatch = {
   similarity: number;
 };
 
+/** One verbatim run shared with a corpus document. Token indices allow highlighting. */
+export type ExactMatchSpan = {
+  submissionStartToken: number;
+  submissionEndToken: number;
+  submissionSnippet: string;
+  matchedSnippet: string;
+  tokenLength: number;
+  /** Inside quotation marks — attribution, reported apart from copying. */
+  quoted: boolean;
+};
+
+export type ExactMatchSource = {
+  docId: string;
+  /** folio_submission | back_catalog | external_oa | web */
+  sourceKind: string;
+  sourceRef: string;
+  title: string;
+  sourceUrl: string;
+  /** Present only for Folio submissions, so publication status can be re-checked. */
+  submissionId?: string;
+  matchedTokens: number;
+  overlapRatio: number;
+  spans: ExactMatchSpan[];
+};
+
+export type ExactMatchReport = {
+  totalTokens: number;
+  matchedTokens: number;
+  /** De-duplicated across sources: one passage on five mirrors counts once. */
+  overallRatio: number;
+  quotedTokens: number;
+  referenceTokensSkipped: number;
+  sources: ExactMatchSource[];
+};
+
 export type DetectCorpusSimilarityResult = {
   localMatches: CorpusSimilarityMatch[];
   webMatches: WebSimilarityMatch[];
   localError?: string;
   webError?: string;
+  exactReport?: ExactMatchReport;
+  exactError?: string;
 };
 
 export type ReviewerProfileIndexInput = {

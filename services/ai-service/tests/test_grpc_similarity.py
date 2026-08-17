@@ -9,6 +9,7 @@ from folio.ai.v1 import similarity_pb2, similarity_pb2_grpc
 from app.config import Settings
 from app.grpc.server import start_grpc_server, stop_grpc_server
 from app.services.classifier_service import ClassifierService
+from app.services.copyedit_analysis_service import CopyeditAnalysisService
 from app.services.keyword_suggestion_service import KeywordSuggestionService
 from app.services.similarity_service import SimilarityDisabledError, SimilarityService
 
@@ -57,11 +58,13 @@ async def grpc_channel(
     classifier = ClassifierService(Settings(arabert_enabled=False))
     keywords = KeywordSuggestionService(Settings(keywords_suggestion_enabled=False))
     settings = Settings(grpc_port=0, ai_service_token="")
+    copyedit = CopyeditAnalysisService(Settings(copyedit_analysis_enabled=False))
     server, port = await start_grpc_server(
         classifier,
         keywords,
         mock_similarity_service,
         reviewer_matching_grpc_service,
+        copyedit,
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")
@@ -136,11 +139,13 @@ async def test_semantic_search_failed_precondition(
     classifier = ClassifierService(Settings(arabert_enabled=False))
     keywords = KeywordSuggestionService(Settings(keywords_suggestion_enabled=False))
     settings = Settings(grpc_port=0, ai_service_token="")
+    copyedit = CopyeditAnalysisService(Settings(copyedit_analysis_enabled=False))
     server, port = await start_grpc_server(
         classifier,
         keywords,
         mock_similarity_service,
         reviewer_matching_grpc_service,
+        copyedit,
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")

@@ -8,6 +8,7 @@ from folio.ai.v1 import keywords_pb2, keywords_pb2_grpc
 
 from app.config import Settings
 from app.grpc.server import start_grpc_server, stop_grpc_server
+from app.services.copyedit_analysis_service import CopyeditAnalysisService
 from app.services.keyword_suggestion_service import KeywordSuggestionService
 
 
@@ -41,6 +42,7 @@ async def grpc_channel(
         mock_keyword_service,
         similarity,
         reviewer_matching_grpc_service,
+        CopyeditAnalysisService(Settings(copyedit_analysis_enabled=False)),
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")

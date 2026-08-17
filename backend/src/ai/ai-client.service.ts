@@ -357,6 +357,8 @@ export class AiClientService implements OnModuleDestroy {
     submissionText: string;
     threshold?: number;
     category?: string;
+    /** Excluded from exact matching so an indexed article cannot match itself. */
+    submissionId?: string;
   }): Promise<DetectCorpusSimilarityResult | null> {
     if (!this.isCorpusSimilarityEnabled()) {
       return null;
@@ -374,6 +376,7 @@ export class AiClientService implements OnModuleDestroy {
           submissionText: input.submissionText,
           threshold: input.threshold,
           category: input.category,
+          submissionId: input.submissionId,
         },
         this.metadata(),
         { deadline },
@@ -408,6 +411,35 @@ export class AiClientService implements OnModuleDestroy {
             })),
             localError: response.localError || undefined,
             webError: response.webError || undefined,
+            exactReport: response.exactMatches
+              ? {
+                  totalTokens: response.exactMatches.totalTokens,
+                  matchedTokens: response.exactMatches.matchedTokens,
+                  overallRatio: response.exactMatches.overallRatio,
+                  quotedTokens: response.exactMatches.quotedTokens,
+                  referenceTokensSkipped:
+                    response.exactMatches.referenceTokensSkipped,
+                  sources: (response.exactMatches.sources ?? []).map((s) => ({
+                    docId: s.docId,
+                    sourceKind: s.sourceKind,
+                    sourceRef: s.sourceRef,
+                    title: s.title,
+                    sourceUrl: s.sourceUrl,
+                    submissionId: s.submissionId || undefined,
+                    matchedTokens: s.matchedTokens,
+                    overlapRatio: s.overlapRatio,
+                    spans: (s.spans ?? []).map((sp) => ({
+                      submissionStartToken: sp.submissionStartToken,
+                      submissionEndToken: sp.submissionEndToken,
+                      submissionSnippet: sp.submissionSnippet,
+                      matchedSnippet: sp.matchedSnippet,
+                      tokenLength: sp.tokenLength,
+                      quoted: sp.quoted,
+                    })),
+                  })),
+                }
+              : undefined,
+            exactError: response.exactError || undefined,
           });
         },
       );

@@ -10,6 +10,11 @@ import {
   aggregateCorpusSimilarityMatches,
   aggregateWebSimilarityMatches,
   attachPublicationMetadata,
+  buildExactMatchStage,
+  collectCorpusArticleIds,
+  collectExactMatchSubmissionIds,
+  type CorpusArticleLookup,
+  type ExactMatchStageReport,
   type CorpusSimilarityReport,
   type CorpusSimilarityStageReport,
   type CorpusSimilaritySource,
@@ -182,6 +187,9 @@ export class AiJobsProcessor {
       submissionText: plainText,
       threshold: CORPUS_SIMILARITY_THRESHOLD,
       category: submission.disciplines?.[0]?.trim() || undefined,
+      // Without this a published article re-checked against the corpus matches
+      // its own indexed copy at ~100%.
+      submissionId: submission.id,
     });
     if (detectResult === null) {
       return { status: 'unavailable' };
@@ -190,37 +198,48 @@ export class AiJobsProcessor {
     let local: CorpusSimilarityStageReport<CorpusSimilaritySource> | null =
       null;
     if (localEnabled) {
-      const aggregated = aggregateCorpusSimilarityMatches(
+      // Resolve article ids *before* aggregating: the published check is a
+      // confidentiality gate, so a match against a manuscript that is no longer
+      // published must be dropped before it is counted or snippet-copied.
+      // Deliberately queried without a status filter — an id that returns no row
+      // is an external corpus source (back catalogue, open access, web), which is
+      // different from a submission that exists but is not public.
+      const articleIds = collectCorpusArticleIds(
         submission,
         detectResult.localMatches,
       );
-      const articleIds = aggregated.sources.map((src) => src.articleId);
-      const publishedById = new Map<
-        string,
-        { slug: string; title: string; titleAr: string | null }
-      >();
+      const articlesById = new Map<string, CorpusArticleLookup>();
       if (articleIds.length > 0) {
         const rows = await this.submissionsRepo.find({
-          where: {
-            id: In(articleIds),
-            status: SubmissionStatus.PUBLISHED,
-          },
-          select: ['id', 'slug', 'title', 'titleAr'],
+          where: { id: In(articleIds) },
+          select: ['id', 'slug', 'title', 'titleAr', 'status'],
         });
         for (const row of rows) {
-          if (!row.slug) continue;
-          publishedById.set(row.id, {
+          articlesById.set(row.id, {
+            isPublished: row.status === SubmissionStatus.PUBLISHED,
             slug: row.slug,
             title: row.title ?? '',
             titleAr: row.titleAr,
           });
         }
       }
+
+      const aggregated = aggregateCorpusSimilarityMatches(
+        submission,
+        detectResult.localMatches,
+        articlesById,
+      );
+      if (aggregated.suppressedCount > 0) {
+        this.logger.warn(
+          `corpus_similarity job ${job.id}: suppressed ${aggregated.suppressedCount} match(es) ` +
+            'against submissions that are indexed but no longer published',
+        );
+      }
       local = {
         enabled: true,
         threshold: CORPUS_SIMILARITY_THRESHOLD,
         matchCount: aggregated.matchCount,
-        sources: attachPublicationMetadata(aggregated.sources, publishedById),
+        sources: attachPublicationMetadata(aggregated.sources, articlesById),
         ...(detectResult.localError ? { error: detectResult.localError } : {}),
       };
     }
@@ -237,7 +256,51 @@ export class AiJobsProcessor {
       };
     }
 
-    return { status: 'ok', local, web };
+    let exact: ExactMatchStageReport | null = null;
+    // exactReport may be absent when the manuscript itself is unreadable
+    // (exactError=unreadable_submission) — still surface the stage so the UI
+    // can say "file unreadable" instead of silently omitting the section.
+    if (detectResult.exactReport || detectResult.exactError) {
+      const exactReport = detectResult.exactReport ?? {
+        totalTokens: 0,
+        matchedTokens: 0,
+        overallRatio: 0,
+        quotedTokens: 0,
+        referenceTokensSkipped: 0,
+        sources: [],
+      };
+      // Exact-match sources can point at Folio submissions too, so they get the
+      // same published re-check as the semantic stage.
+      const exactIds = collectExactMatchSubmissionIds(exactReport);
+      const exactArticles = new Map<string, CorpusArticleLookup>();
+      if (exactIds.length > 0) {
+        const rows = await this.submissionsRepo.find({
+          where: { id: In(exactIds) },
+          select: ['id', 'slug', 'title', 'titleAr', 'status'],
+        });
+        for (const row of rows) {
+          exactArticles.set(row.id, {
+            isPublished: row.status === SubmissionStatus.PUBLISHED,
+            slug: row.slug,
+            title: row.title ?? '',
+            titleAr: row.titleAr,
+          });
+        }
+      }
+      exact = buildExactMatchStage(
+        exactReport,
+        exactArticles,
+        detectResult.exactError,
+      );
+      if (exact.suppressedCount > 0) {
+        this.logger.warn(
+          `corpus_similarity job ${job.id}: suppressed ${exact.suppressedCount} exact-match ` +
+            'source(s) against submissions that are indexed but no longer published',
+        );
+      }
+    }
+
+    return { status: 'ok', local, web, exact };
   }
 
   private async completeJob(

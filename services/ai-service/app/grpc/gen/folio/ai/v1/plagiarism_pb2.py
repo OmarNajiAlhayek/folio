@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x66olio/ai/v1/plagiarism.proto\x12\x0b\x66olio.ai.v1\"\xa7\x01\n\x1d\x44\x65tectCorpusSimilarityRequest\x12\'\n\x0fsubmission_text\x18\x01 \x01(\tR\x0esubmissionText\x12!\n\tthreshold\x18\x02 \x01(\x01H\x00R\tthreshold\x88\x01\x01\x12\x1f\n\x08\x63\x61tegory\x18\x03 \x01(\tH\x01R\x08\x63\x61tegory\x88\x01\x01\x42\x0c\n\n_thresholdB\x0b\n\t_category\"\x9f\x02\n\x15\x43orpusSimilarityMatch\x12\x34\n\x16submission_chunk_index\x18\x01 \x01(\x05R\x14submissionChunkIndex\x12-\n\x12submission_snippet\x18\x02 \x01(\tR\x11submissionSnippet\x12*\n\x11source_article_id\x18\x03 \x01(\tR\x0fsourceArticleId\x12,\n\x12source_chunk_index\x18\x04 \x01(\x05R\x10sourceChunkIndex\x12\'\n\x0fmatched_snippet\x18\x05 \x01(\tR\x0ematchedSnippet\x12\x1e\n\nsimilarity\x18\x06 \x01(\x01R\nsimilarity\"\xa1\x01\n\x12WebSimilarityMatch\x12#\n\rquery_snippet\x18\x01 \x01(\tR\x0cquerySnippet\x12\x1d\n\nsource_url\x18\x02 \x01(\tR\tsourceUrl\x12\'\n\x0fmatched_snippet\x18\x03 \x01(\tR\x0ematchedSnippet\x12\x1e\n\nsimilarity\x18\x04 \x01(\x01R\nsimilarity\"\x91\x02\n\x1e\x44\x65tectCorpusSimilarityResponse\x12G\n\rlocal_matches\x18\x01 \x03(\x0b\x32\".folio.ai.v1.CorpusSimilarityMatchR\x0clocalMatches\x12@\n\x0bweb_matches\x18\x02 \x03(\x0b\x32\x1f.folio.ai.v1.WebSimilarityMatchR\nwebMatches\x12$\n\x0blocal_error\x18\x03 \x01(\tH\x00R\nlocalError\x88\x01\x01\x12 \n\tweb_error\x18\x04 \x01(\tH\x01R\x08webError\x88\x01\x01\x42\x0e\n\x0c_local_errorB\x0c\n\n_web_error\",\n\x10PlagiarismStatus\x12\x18\n\x07\x65nabled\x18\x01 \x01(\x08R\x07\x65nabled\"\x1c\n\x1aGetPlagiarismStatusRequest2\xe5\x01\n\x11PlagiarismService\x12q\n\x16\x44\x65tectCorpusSimilarity\x12*.folio.ai.v1.DetectCorpusSimilarityRequest\x1a+.folio.ai.v1.DetectCorpusSimilarityResponse\x12]\n\x13GetPlagiarismStatus\x12\'.folio.ai.v1.GetPlagiarismStatusRequest\x1a\x1d.folio.ai.v1.PlagiarismStatusBp\n\x0f\x63om.folio.ai.v1B\x0fPlagiarismProtoP\x01\xa2\x02\x03\x46\x41X\xaa\x02\x0b\x46olio.Ai.V1\xca\x02\x0b\x46olio\\Ai\\V1\xe2\x02\x17\x46olio\\Ai\\V1\\GPBMetadata\xea\x02\rFolio::Ai::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x66olio/ai/v1/plagiarism.proto\x12\x0b\x66olio.ai.v1\"\xe3\x01\n\x1d\x44\x65tectCorpusSimilarityRequest\x12\'\n\x0fsubmission_text\x18\x01 \x01(\tR\x0esubmissionText\x12!\n\tthreshold\x18\x02 \x01(\x01H\x00R\tthreshold\x88\x01\x01\x12\x1f\n\x08\x63\x61tegory\x18\x03 \x01(\tH\x01R\x08\x63\x61tegory\x88\x01\x01\x12(\n\rsubmission_id\x18\x04 \x01(\tH\x02R\x0csubmissionId\x88\x01\x01\x42\x0c\n\n_thresholdB\x0b\n\t_categoryB\x10\n\x0e_submission_id\"\x9f\x02\n\x15\x43orpusSimilarityMatch\x12\x34\n\x16submission_chunk_index\x18\x01 \x01(\x05R\x14submissionChunkIndex\x12-\n\x12submission_snippet\x18\x02 \x01(\tR\x11submissionSnippet\x12*\n\x11source_article_id\x18\x03 \x01(\tR\x0fsourceArticleId\x12,\n\x12source_chunk_index\x18\x04 \x01(\x05R\x10sourceChunkIndex\x12\'\n\x0fmatched_snippet\x18\x05 \x01(\tR\x0ematchedSnippet\x12\x1e\n\nsimilarity\x18\x06 \x01(\x01R\nsimilarity\"\xa1\x01\n\x12WebSimilarityMatch\x12#\n\rquery_snippet\x18\x01 \x01(\tR\x0cquerySnippet\x12\x1d\n\nsource_url\x18\x02 \x01(\tR\tsourceUrl\x12\'\n\x0fmatched_snippet\x18\x03 \x01(\tR\x0ematchedSnippet\x12\x1e\n\nsimilarity\x18\x04 \x01(\x01R\nsimilarity\"\x8b\x02\n\x0e\x45xactMatchSpan\x12\x34\n\x16submission_start_token\x18\x01 \x01(\x05R\x14submissionStartToken\x12\x30\n\x14submission_end_token\x18\x02 \x01(\x05R\x12submissionEndToken\x12-\n\x12submission_snippet\x18\x03 \x01(\tR\x11submissionSnippet\x12\'\n\x0fmatched_snippet\x18\x04 \x01(\tR\x0ematchedSnippet\x12!\n\x0ctoken_length\x18\x05 \x01(\x05R\x0btokenLength\x12\x16\n\x06quoted\x18\x06 \x01(\x08R\x06quoted\"\xd9\x02\n\x10\x45xactMatchSource\x12\x15\n\x06\x64oc_id\x18\x01 \x01(\tR\x05\x64ocId\x12\x1f\n\x0bsource_kind\x18\x02 \x01(\tR\nsourceKind\x12\x1d\n\nsource_ref\x18\x03 \x01(\tR\tsourceRef\x12\x14\n\x05title\x18\x04 \x01(\tR\x05title\x12\x1d\n\nsource_url\x18\x05 \x01(\tR\tsourceUrl\x12(\n\rsubmission_id\x18\x06 \x01(\tH\x00R\x0csubmissionId\x88\x01\x01\x12%\n\x0ematched_tokens\x18\x07 \x01(\x05R\rmatchedTokens\x12#\n\roverlap_ratio\x18\x08 \x01(\x01R\x0coverlapRatio\x12\x31\n\x05spans\x18\t \x03(\x0b\x32\x1b.folio.ai.v1.ExactMatchSpanR\x05spansB\x10\n\x0e_submission_id\"\x99\x02\n\x10\x45xactMatchReport\x12!\n\x0ctotal_tokens\x18\x01 \x01(\x05R\x0btotalTokens\x12%\n\x0ematched_tokens\x18\x02 \x01(\x05R\rmatchedTokens\x12#\n\roverall_ratio\x18\x03 \x01(\x01R\x0coverallRatio\x12#\n\rquoted_tokens\x18\x04 \x01(\x05R\x0cquotedTokens\x12\x38\n\x18reference_tokens_skipped\x18\x05 \x01(\x05R\x16referenceTokensSkipped\x12\x37\n\x07sources\x18\x06 \x03(\x0b\x32\x1d.folio.ai.v1.ExactMatchSourceR\x07sources\"\xa2\x03\n\x1e\x44\x65tectCorpusSimilarityResponse\x12G\n\rlocal_matches\x18\x01 \x03(\x0b\x32\".folio.ai.v1.CorpusSimilarityMatchR\x0clocalMatches\x12@\n\x0bweb_matches\x18\x02 \x03(\x0b\x32\x1f.folio.ai.v1.WebSimilarityMatchR\nwebMatches\x12$\n\x0blocal_error\x18\x03 \x01(\tH\x00R\nlocalError\x88\x01\x01\x12 \n\tweb_error\x18\x04 \x01(\tH\x01R\x08webError\x88\x01\x01\x12G\n\rexact_matches\x18\x05 \x01(\x0b\x32\x1d.folio.ai.v1.ExactMatchReportH\x02R\x0c\x65xactMatches\x88\x01\x01\x12$\n\x0b\x65xact_error\x18\x06 \x01(\tH\x03R\nexactError\x88\x01\x01\x42\x0e\n\x0c_local_errorB\x0c\n\n_web_errorB\x10\n\x0e_exact_matchesB\x0e\n\x0c_exact_error\",\n\x10PlagiarismStatus\x12\x18\n\x07\x65nabled\x18\x01 \x01(\x08R\x07\x65nabled\"\x1c\n\x1aGetPlagiarismStatusRequest2\xe5\x01\n\x11PlagiarismService\x12q\n\x16\x44\x65tectCorpusSimilarity\x12*.folio.ai.v1.DetectCorpusSimilarityRequest\x1a+.folio.ai.v1.DetectCorpusSimilarityResponse\x12]\n\x13GetPlagiarismStatus\x12\'.folio.ai.v1.GetPlagiarismStatusRequest\x1a\x1d.folio.ai.v1.PlagiarismStatusBp\n\x0f\x63om.folio.ai.v1B\x0fPlagiarismProtoP\x01\xa2\x02\x03\x46\x41X\xaa\x02\x0b\x46olio.Ai.V1\xca\x02\x0b\x46olio\\Ai\\V1\xe2\x02\x17\x46olio\\Ai\\V1\\GPBMetadata\xea\x02\rFolio::Ai::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,17 +33,23 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\017com.folio.ai.v1B\017PlagiarismProtoP\001\242\002\003FAX\252\002\013Folio.Ai.V1\312\002\013Folio\\Ai\\V1\342\002\027Folio\\Ai\\V1\\GPBMetadata\352\002\rFolio::Ai::V1'
   _globals['_DETECTCORPUSSIMILARITYREQUEST']._serialized_start=46
-  _globals['_DETECTCORPUSSIMILARITYREQUEST']._serialized_end=213
-  _globals['_CORPUSSIMILARITYMATCH']._serialized_start=216
-  _globals['_CORPUSSIMILARITYMATCH']._serialized_end=503
-  _globals['_WEBSIMILARITYMATCH']._serialized_start=506
-  _globals['_WEBSIMILARITYMATCH']._serialized_end=667
-  _globals['_DETECTCORPUSSIMILARITYRESPONSE']._serialized_start=670
-  _globals['_DETECTCORPUSSIMILARITYRESPONSE']._serialized_end=943
-  _globals['_PLAGIARISMSTATUS']._serialized_start=945
-  _globals['_PLAGIARISMSTATUS']._serialized_end=989
-  _globals['_GETPLAGIARISMSTATUSREQUEST']._serialized_start=991
-  _globals['_GETPLAGIARISMSTATUSREQUEST']._serialized_end=1019
-  _globals['_PLAGIARISMSERVICE']._serialized_start=1022
-  _globals['_PLAGIARISMSERVICE']._serialized_end=1251
+  _globals['_DETECTCORPUSSIMILARITYREQUEST']._serialized_end=273
+  _globals['_CORPUSSIMILARITYMATCH']._serialized_start=276
+  _globals['_CORPUSSIMILARITYMATCH']._serialized_end=563
+  _globals['_WEBSIMILARITYMATCH']._serialized_start=566
+  _globals['_WEBSIMILARITYMATCH']._serialized_end=727
+  _globals['_EXACTMATCHSPAN']._serialized_start=730
+  _globals['_EXACTMATCHSPAN']._serialized_end=997
+  _globals['_EXACTMATCHSOURCE']._serialized_start=1000
+  _globals['_EXACTMATCHSOURCE']._serialized_end=1345
+  _globals['_EXACTMATCHREPORT']._serialized_start=1348
+  _globals['_EXACTMATCHREPORT']._serialized_end=1629
+  _globals['_DETECTCORPUSSIMILARITYRESPONSE']._serialized_start=1632
+  _globals['_DETECTCORPUSSIMILARITYRESPONSE']._serialized_end=2050
+  _globals['_PLAGIARISMSTATUS']._serialized_start=2052
+  _globals['_PLAGIARISMSTATUS']._serialized_end=2096
+  _globals['_GETPLAGIARISMSTATUSREQUEST']._serialized_start=2098
+  _globals['_GETPLAGIARISMSTATUSREQUEST']._serialized_end=2126
+  _globals['_PLAGIARISMSERVICE']._serialized_start=2129
+  _globals['_PLAGIARISMSERVICE']._serialized_end=2358
 # @@protoc_insertion_point(module_scope)

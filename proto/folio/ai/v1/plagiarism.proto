@@ -12,6 +12,9 @@ message DetectCorpusSimilarityRequest {
   string submission_text = 1;
   optional double threshold = 2;
   optional string category = 3;
+  // Excluded from exact matching so a resubmission or a re-check of an already
+  // indexed article does not match itself at 100%.
+  optional string submission_id = 4;
 }
 
 message CorpusSimilarityMatch {
@@ -30,11 +33,51 @@ message WebSimilarityMatch {
   double similarity = 4;
 }
 
+// One verbatim run shared between the manuscript and a corpus document.
+// Positions are token indices into the normalized text, so the UI can highlight.
+message ExactMatchSpan {
+  int32 submission_start_token = 1;
+  int32 submission_end_token = 2;
+  string submission_snippet = 3;
+  string matched_snippet = 4;
+  int32 token_length = 5;
+  // Inside quotation marks: attribution, reported separately from copying.
+  bool quoted = 6;
+}
+
+message ExactMatchSource {
+  string doc_id = 1;
+  // folio_submission | back_catalog | external_oa | web
+  string source_kind = 2;
+  string source_ref = 3;
+  string title = 4;
+  string source_url = 5;
+  // Set only when the source is a Folio submission, so the backend can re-check
+  // that it is still published before showing anything.
+  optional string submission_id = 6;
+  int32 matched_tokens = 7;
+  double overlap_ratio = 8;
+  repeated ExactMatchSpan spans = 9;
+}
+
+message ExactMatchReport {
+  int32 total_tokens = 1;
+  int32 matched_tokens = 2;
+  // Share of the manuscript covered by verbatim runs, de-duplicated across
+  // sources — the same passage found on five mirrors counts once.
+  double overall_ratio = 3;
+  int32 quoted_tokens = 4;
+  int32 reference_tokens_skipped = 5;
+  repeated ExactMatchSource sources = 6;
+}
+
 message DetectCorpusSimilarityResponse {
   repeated CorpusSimilarityMatch local_matches = 1;
   repeated WebSimilarityMatch web_matches = 2;
   optional string local_error = 3;
   optional string web_error = 4;
+  optional ExactMatchReport exact_matches = 5;
+  optional string exact_error = 6;
 }
 
 message PlagiarismStatus {

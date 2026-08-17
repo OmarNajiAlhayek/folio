@@ -1242,7 +1242,7 @@ async function run() {
     },
   });
   const editor = await ensureUser(usersService, rbacService, {
-    email: 'k76462338@gmail.com',
+    email: 'editor@folio.dev',
     password: 'Editor123!',
     displayName: 'C. Editor',
     roleSlugs: [ROLE_SLUGS.EDITOR],

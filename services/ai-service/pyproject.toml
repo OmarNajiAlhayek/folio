@@ -23,9 +23,12 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-  "torch>=2.5.0",
-  "transformers>=4.46.0",
-  "arabert>=1.0.1",
+  # Pin to the training/eval stack used with the fine-tuned AraBERT weights
+  # (Muhyiddin): torch 2.5.1+cu121, transformers 4.57.6, arabert 1.0.1.
+  # Install torch from the cu121 index first, then: pip install -e ".[ml]"
+  "torch==2.5.1",
+  "transformers==4.57.6",
+  "arabert==1.0.1",
   "safetensors>=0.4.0",
 ]
 similarity = [
@@ -40,6 +43,29 @@ web_similarity = [
   "requests>=2.32.0",
   "farasapy>=0.0.14",
   "pyarabic>=0.6.15",
+]
+# Exact-overlap corpus: fingerprint index plus the importers that fill it.
+# Deliberately free of torch/transformers — exact matching needs no embeddings,
+# so a deployment can run plagiarism checks without the ML stack.
+corpus = [
+  "psycopg[binary,pool]>=3.2.0",
+  "pymupdf>=1.24.0",
+  "pypdf>=5.0.0",
+  "requests>=2.32.0",
+]
+# OCR fallback for PDFs with a broken font encoding.
+# Tesseract also needs the host binary + `ara` traineddata.
+# Surya is the preferred free engine (GPU, strong Arabic); Tesseract is the fallback.
+# Pin <0.20: Surya 2+ (0.20+) requires a vLLM Docker / llama.cpp server and
+# changed the Python API (FoundationPredictor → SuryaInferenceManager,
+# text_lines → blocks). Our SuryaEngine targets the 0.17 torch-local API.
+ocr = [
+  "surya-ocr>=0.17.0,<0.20",
+  # Surya 0.17 breaks on transformers 5.x (pad_token_id / removed utils).
+  "transformers>=4.56.1,<5",
+  "pytesseract>=0.3.13",
+  "pillow>=10.2.0,<11",
+  "pymupdf>=1.24.0",
 ]
 dev = [
   "pytest>=8.3.0",
@@ -65,6 +91,7 @@ markers = [
   "ml: full AraBERT inference (requires pip install -e \".[ml]\" and local weights)",
   "similarity: pgvector + sentence-transformers (requires pip install -e \".[similarity]\")",
   "web_similarity: Google CSE + AraBERT web check (requires pip install -e \".[ml,web_similarity]\")",
+  "corpus: exact-match corpus against a live Postgres (requires pip install -e \".[corpus]\")",
 ]
 
 [tool.ruff]

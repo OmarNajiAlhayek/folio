@@ -11,6 +11,7 @@ from app.grpc.interceptors import ServiceTokenInterceptor
 from app.grpc.server import start_grpc_server, stop_grpc_server
 from app.grpc.servicer import ClassifierGrpcServicer
 from app.services.classifier_service import ClassifierDisabledError, ClassifierService
+from app.services.copyedit_analysis_service import CopyeditAnalysisService
 from app.services.keyword_suggestion_service import KeywordSuggestionService
 from app.services.similarity_service import SimilarityService
 
@@ -74,6 +75,7 @@ async def grpc_channel(
         mock_keyword_service,
         mock_similarity_service,
         reviewer_matching_grpc_service,
+        CopyeditAnalysisService(Settings(copyedit_analysis_enabled=False)),
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")
@@ -124,6 +126,7 @@ async def test_classify_article_failed_precondition(
         mock_keyword_service,
         mock_similarity_service,
         reviewer_matching_grpc_service,
+        CopyeditAnalysisService(Settings(copyedit_analysis_enabled=False)),
         settings,
     )
     channel = grpc.aio.insecure_channel(f"localhost:{port}")

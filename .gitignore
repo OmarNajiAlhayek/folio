@@ -75,3 +75,10 @@ backend/src/submissions/docx-import.real-articles.spec.ts
 claude-conversation-context.md
 using-arabert-with-analysis.py
 تنسيقات*.md
+
+.local/
+
+# Local scratch: one-off conversion experiments and throwaway probe specs
+exp/
+backend/src/submissions/ztmp-*.spec.ts
+

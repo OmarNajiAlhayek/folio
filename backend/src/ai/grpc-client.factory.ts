@@ -33,10 +33,7 @@ export function getClassifierGrpcClient(
     return client;
   }
   const prevClassifier = client;
-  client = new ClassifierServiceClient(
-    target,
-    credentials.createInsecure() as ChannelCredentials,
-  );
+  client = new ClassifierServiceClient(target, credentials.createInsecure());
   clientTarget = target;
   prevClassifier?.close();
   return client;
@@ -53,7 +50,7 @@ export function getKeywordGrpcClient(
   const prevKeyword = keywordClient;
   keywordClient = new KeywordServiceClient(
     target,
-    credentials.createInsecure() as ChannelCredentials,
+    credentials.createInsecure(),
   );
   keywordClientTarget = target;
   prevKeyword?.close();
@@ -71,7 +68,7 @@ export function getPlagiarismGrpcClient(
   const prevPlagiarism = plagiarismClient;
   plagiarismClient = new PlagiarismServiceClient(
     target,
-    credentials.createInsecure() as ChannelCredentials,
+    credentials.createInsecure(),
   );
   plagiarismClientTarget = target;
   prevPlagiarism?.close();
@@ -113,7 +110,7 @@ export function getSimilarityGrpcClient(
   const prevSimilarity = similarityClient;
   similarityClient = new SimilarityServiceClient(
     target,
-    credentials.createInsecure() as ChannelCredentials,
+    credentials.createInsecure(),
   );
   similarityClientTarget = target;
   prevSimilarity?.close();
@@ -139,7 +136,7 @@ export function getReviewerMatchingGrpcClient(
   const prevReviewer = reviewerClient;
   reviewerClient = new ReviewerMatchingServiceClient(
     target,
-    credentials.createInsecure() as ChannelCredentials,
+    credentials.createInsecure(),
   );
   reviewerClientTarget = target;
   prevReviewer?.close();
@@ -165,7 +162,7 @@ export function getCopyeditGrpcClient(
   const prevCopyedit = copyeditClient;
   copyeditClient = new CopyeditServiceClient(
     target,
-    credentials.createInsecure() as ChannelCredentials,
+    credentials.createInsecure(),
   );
   copyeditClientTarget = target;
   prevCopyedit?.close();

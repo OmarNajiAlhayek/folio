@@ -37,6 +37,36 @@ def mock_similarity_service() -> SimilarityService:
                     "similarity": 82.5,
                 },
             ],
+            "exact_report": {
+                "total_tokens": 1000,
+                "matched_tokens": 250,
+                "overall_ratio": 0.25,
+                "quoted_tokens": 40,
+                "reference_tokens_skipped": 120,
+                "sources": [
+                    {
+                        "doc_id": "11111111-2222-4333-8444-555555555555",
+                        "source_kind": "external_oa",
+                        "source_ref": "oai:journal/article/55",
+                        "title": "عنوان البحث",
+                        "source_url": "https://journal.example/article/55",
+                        "submission_id": None,
+                        "matched_tokens": 250,
+                        "overlap_ratio": 0.25,
+                        "spans": [
+                            {
+                                "submission_start_token": 10,
+                                "submission_end_token": 40,
+                                "submission_snippet": "verbatim run",
+                                "matched_snippet": "verbatim run",
+                                "token_length": 30,
+                                "quoted": True,
+                            },
+                        ],
+                    },
+                ],
+            },
+            "exact_error": None,
             "local_error": None,
             "web_error": None,
         },
@@ -131,3 +161,69 @@ async def test_detect_corpus_similarity_failed_precondition(
     finally:
         await channel.close()
         await stop_grpc_server(server)
+
+
+@pytest.mark.asyncio
+async def test_detect_corpus_similarity_returns_exact_matches(
+    grpc_channel: grpc.aio.Channel,
+) -> None:
+    """The exact-overlap stage must survive protobuf round-tripping intact."""
+    stub = plagiarism_pb2_grpc.PlagiarismServiceStub(grpc_channel)
+    response = await stub.DetectCorpusSimilarity(
+        plagiarism_pb2.DetectCorpusSimilarityRequest(
+            submission_text="Our methods extend prior work.",
+            submission_id="99999999-8888-4777-8666-555555555555",
+        ),
+    )
+
+    assert response.HasField("exact_matches")
+    report = response.exact_matches
+    assert report.total_tokens == 1000
+    assert report.matched_tokens == 250
+    assert report.overall_ratio == pytest.approx(0.25)
+    assert report.quoted_tokens == 40
+    assert report.reference_tokens_skipped == 120
+
+    assert len(report.sources) == 1
+    source = report.sources[0]
+    assert source.source_kind == "external_oa"
+    assert source.source_url == "https://journal.example/article/55"
+    # Optional field must stay unset rather than serializing an empty string,
+    # because the backend keys its published re-check off its presence.
+    assert not source.HasField("submission_id")
+
+    assert len(source.spans) == 1
+    span = source.spans[0]
+    assert span.token_length == 30
+    assert span.quoted is True
+    assert span.submission_start_token == 10
+
+
+@pytest.mark.asyncio
+async def test_submission_id_reaches_the_service(
+    mock_similarity_service: SimilarityService,
+    grpc_channel: grpc.aio.Channel,
+) -> None:
+    """Without this the manuscript matches its own indexed copy at ~100%."""
+    stub = plagiarism_pb2_grpc.PlagiarismServiceStub(grpc_channel)
+    await stub.DetectCorpusSimilarity(
+        plagiarism_pb2.DetectCorpusSimilarityRequest(
+            submission_text="text",
+            submission_id="99999999-8888-4777-8666-555555555555",
+        ),
+    )
+    kwargs = mock_similarity_service.detect_corpus_similarity.await_args.kwargs
+    assert kwargs["submission_id"] == "99999999-8888-4777-8666-555555555555"
+
+
+@pytest.mark.asyncio
+async def test_submission_id_omitted_stays_none(
+    mock_similarity_service: SimilarityService,
+    grpc_channel: grpc.aio.Channel,
+) -> None:
+    stub = plagiarism_pb2_grpc.PlagiarismServiceStub(grpc_channel)
+    await stub.DetectCorpusSimilarity(
+        plagiarism_pb2.DetectCorpusSimilarityRequest(submission_text="text"),
+    )
+    kwargs = mock_similarity_service.detect_corpus_similarity.await_args.kwargs
+    assert kwargs["submission_id"] is None

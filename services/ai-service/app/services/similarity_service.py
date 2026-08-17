@@ -1,34 +1,18 @@
 from __future__ import annotations
 
-
-
 import asyncio
-
 import logging
-
 import threading
-
 from typing import Any
 
-
-
 from app.config import Settings
-
 from app.ml.vector.ai_engine import AIEngine
-
 from app.ml.vector.article_ingestion_service import ArticleIngestionService
-
 from app.ml.vector.config import VectorConfig
-
 from app.ml.vector.plagiarism_service import PlagiarismService
-
 from app.ml.vector.search_service import SearchService
-
 from app.ml.vector.similarity_service import SimilarArticlesService
-
 from app.ml.vector.types import ArticleNotIndexedError, VectorDependenciesError
-
-
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +96,8 @@ class SimilarityService:
 
         self._web_plagiarism: Any | None = None
 
+        self._exact_match: Any | None = None
+
         self._engine_lock = threading.Lock()
 
 
@@ -128,7 +114,11 @@ class SimilarityService:
 
     def corpus_similarity_enabled(self) -> bool:
 
-        return self._settings.similarity_enabled or self._web_similarity_configured()
+        return (
+            self._settings.similarity_enabled
+            or self._web_similarity_configured()
+            or self._settings.exact_match_enabled
+        )
 
 
 
@@ -248,6 +238,42 @@ class SimilarityService:
 
 
 
+    def _get_exact_match_service(self) -> Any:
+        """
+        Lazily open the exact-match corpus.
+
+        Independent of the pgvector engine on purpose — exact matching needs no
+        embeddings, so this stage works on a deployment where SIMILARITY_ENABLED
+        is off entirely.
+        """
+
+        if self._exact_match is not None:
+
+            return self._exact_match
+
+        with self._engine_lock:
+
+            if self._exact_match is not None:
+
+                return self._exact_match
+
+            from app.ml.exact_match.corpus_store import CorpusStore
+            from app.ml.exact_match.exact_match_service import ExactMatchService
+            from app.ml.vector.pg_pool import VectorDbConfig
+
+            store = CorpusStore.open(
+                VectorDbConfig(
+                    host=self._settings.vector_db_host,
+                    port=self._settings.vector_db_port,
+                    user=self._settings.vector_db_user,
+                    password=self._settings.vector_db_password,
+                    database=self._settings.vector_db_database,
+                    ssl=self._settings.vector_db_ssl,
+                ),
+            )
+            self._exact_match = ExactMatchService(store)
+            return self._exact_match
+
     def _get_plagiarism_service(self) -> PlagiarismService:
 
         self._require_enabled()
@@ -311,9 +337,7 @@ class SimilarityService:
             try:
 
                 from app.ml.web_similarity.web_plagiarism_service import (
-
                     WebPlagiarismService,
-
                 )
 
             except ImportError as err:
@@ -365,6 +389,8 @@ class SimilarityService:
             "default_threshold": self._settings.similarity_default_threshold,
 
             "same_category_only": self._settings.similarity_same_category_only,
+
+            "exact_match_enabled": self._settings.exact_match_enabled,
 
         }
 
@@ -584,6 +610,8 @@ class SimilarityService:
 
         category: str | None = None,
 
+        submission_id: str | None = None,
+
     ) -> dict[str, Any]:
 
         if not submission_text or not submission_text.strip():
@@ -710,6 +738,101 @@ class SimilarityService:
 
 
 
+        exact_report: dict[str, Any] | None = None
+
+        exact_error: str | None = None
+
+        if self._settings.exact_match_enabled:
+
+            def _run_exact() -> dict[str, Any]:
+
+                service = self._get_exact_match_service()
+
+                # The manuscript's own corpus entry must be excluded, otherwise a
+                # re-check of an indexed article reports itself at ~100%.
+
+                report = service.detect(
+                    submission_text,
+                    exclude_submission_ids=[submission_id] if submission_id else None,
+                )
+
+                return {
+
+                    "total_tokens": report.total_tokens,
+
+                    "matched_tokens": report.matched_tokens,
+
+                    "overall_ratio": report.overall_ratio,
+
+                    "quoted_tokens": report.quoted_tokens,
+
+                    "reference_tokens_skipped": report.reference_tokens_skipped,
+
+                    "sources": [
+
+                        {
+
+                            "doc_id": doc.doc_id,
+
+                            "source_kind": str(doc.source_kind),
+
+                            "source_ref": doc.source_ref,
+
+                            "title": doc.title,
+
+                            "source_url": doc.source_url,
+
+                            "submission_id": doc.submission_id,
+
+                            "matched_tokens": doc.matched_tokens,
+
+                            "overlap_ratio": doc.overlap_ratio,
+
+                            "spans": [
+
+                                {
+
+                                    "submission_start_token": span.submission_start_token,
+
+                                    "submission_end_token": span.submission_end_token,
+
+                                    "submission_snippet": span.submission_snippet,
+
+                                    "matched_snippet": span.matched_snippet,
+
+                                    "token_length": span.token_length,
+
+                                    "quoted": span.quoted,
+
+                                }
+
+                                for span in doc.spans
+
+                            ],
+
+                        }
+
+                        for doc in report.documents
+
+                    ],
+
+                }
+
+            try:
+
+                exact_report = await asyncio.to_thread(_run_exact)
+
+            except Exception as exc:
+                from app.ml.exact_match.types import UnreadableSubmissionTextError
+
+                if isinstance(exc, UnreadableSubmissionTextError):
+                    # Stable code the UI maps to "file unreadable" — not a crash.
+                    exact_error = UnreadableSubmissionTextError.ERROR_CODE
+                    logger.warning("Exact match skipped: unreadable submission text (%s)", exc.reason)
+                else:
+                    logger.exception("Exact match detection failed")
+                    exact_error = str(exc)
+
         return {
 
             "local_matches": local_matches,
@@ -719,6 +842,10 @@ class SimilarityService:
             "local_error": local_error,
 
             "web_error": web_error,
+
+            "exact_report": exact_report,
+
+            "exact_error": exact_error,
 
         }
 
