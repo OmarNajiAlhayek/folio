@@ -34,6 +34,7 @@
     "db:publication-search": "node scripts/run-publication-search.mjs",
     "smoke:auth": "node scripts/smoke-auth.mjs",
     "migrate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:run -d src/db/data-source.ts",
+    "migrate:prod": "node ./node_modules/typeorm/cli.js migration:run -d dist/db/data-source.js",
     "migrate:generate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:generate src/db/migrations/Migration -d src/db/data-source.ts",
     "migrate:revert": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:revert -d src/db/data-source.ts"
   },

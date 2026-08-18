@@ -1,0 +1,26 @@
+# Build context for this image is services/ai-service (see Dockerfile header),
+# so the repository-root .dockerignore does not apply here.
+
+__pycache__/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.env
+.env.*
+!.env.example
+
+tests/
+archive/
+data/
+eval_output/
+eval_output_subset_pinned/
+arabert_clean_model_FINAL*/
+extracted_test_set.csv
+*.csv
+*.log

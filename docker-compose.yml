@@ -1,0 +1,332 @@
+# ==============================================================================
+# Folio — full application stack, built from source, no bind mounts.
+#
+#   cp docker/.env.example .env      # one file configures the whole stack
+#   docker compose build
+#   docker compose up -d
+#
+# This is the canonical deployment topology. The other compose files are
+# development conveniences and are NOT meant to run alongside this one:
+#
+#   docker-compose.infra.yml   RabbitMQ + LanguageTool + Typesense only
+#   docker-compose.dev.yml     the above + containerised Postgres
+#   docker-compose.local.yml   everything, with hot-reload bind mounts
+#   docker-compose.perf.yml    perf-harness fixtures
+#
+# Optional components sit behind profiles, so the default `up` stays lean:
+#   --profile grammar   LanguageTool (copyedit grammar checks)
+#   --profile search    Typesense (public catalogue search)
+# ==============================================================================
+
+name: folio
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging: *default-logging
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  # ---------------------------------------------------------------------------
+  # Data stores and message bus
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    <<: *service-defaults
+    image: pgvector/pgvector:${POSTGRES_IMAGE_TAG:-pg17}
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_DATABASE:-folio_review}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Creates the pgvector extension the similarity/plagiarism stages need.
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-folio_review}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # Not published by default — reach it with `docker compose exec postgres psql`.
+    # Uncomment to expose it on the host:
+    # ports:
+    #   - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  postgres-email:
+    <<: *service-defaults
+    image: postgres:${POSTGRES_EMAIL_IMAGE_TAG:-17-alpine}
+    environment:
+      POSTGRES_USER: ${EMAIL_DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${EMAIL_DB_PASSWORD:?set EMAIL_DB_PASSWORD in .env}
+      POSTGRES_DB: ${EMAIL_DB_DATABASE:-folio_email}
+    volumes:
+      - postgres-email-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${EMAIL_DB_USERNAME:-postgres} -d ${EMAIL_DB_DATABASE:-folio_email}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  rabbitmq:
+    <<: *service-defaults
+    image: rabbitmq:${RABBITMQ_IMAGE_TAG:-3-management}
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    ports:
+      # Management UI only; AMQP stays on the internal network.
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+
+  # ---------------------------------------------------------------------------
+  # Optional infrastructure (profiles)
+  # ---------------------------------------------------------------------------
+
+  languagetool:
+    <<: *service-defaults
+    profiles: ["grammar"]
+    image: erikvl87/languagetool:${LANGUAGETOOL_IMAGE_TAG:-latest}
+    environment:
+      Java_Xms: 256m
+      Java_Xmx: ${LANGUAGETOOL_HEAP:-512m}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:8010/v2/languages | grep -q name",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  typesense:
+    <<: *service-defaults
+    profiles: ["search"]
+    image: typesense/typesense:${TYPESENSE_IMAGE_TAG:-26.0}
+    command: >
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:?set TYPESENSE_API_KEY in .env}
+      --enable-cors
+    volumes:
+      - typesense-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8108/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Application services
+  # ---------------------------------------------------------------------------
+
+  email-service:
+    <<: *service-defaults
+    image: ${IMAGE_PREFIX:-folio}/email-service:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: services/email-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+      DB_HOST: postgres-email
+      DB_PORT: "5432"
+      DB_USERNAME: ${EMAIL_DB_USERNAME:-postgres}
+      DB_PASSWORD: ${EMAIL_DB_PASSWORD}
+      DB_DATABASE: ${EMAIL_DB_DATABASE:-folio_email}
+      DB_SCHEMA: ${EMAIL_DB_SCHEMA:-email}
+      HTTP_PORT: "5244"
+      HTTP_BIND_HOST: 0.0.0.0
+      EMAIL_SERVICE_TOKEN: ${EMAIL_SERVICE_TOKEN:?set EMAIL_SERVICE_TOKEN in .env}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-folio.events}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL in .env}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-noop}
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@folio.local}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      REVIEW_DUE_IN_DAYS: ${REVIEW_DUE_IN_DAYS:-21}
+      OTEL_SERVICE_NAME: folio-email-service
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    depends_on:
+      postgres-email:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ai-service:
+    <<: *service-defaults
+    image: ${IMAGE_PREFIX:-folio}/ai-service:${IMAGE_TAG:-local}
+    build:
+      context: services/ai-service
+      args:
+        # corpus = exact-overlap plagiarism, no torch. Add `similarity` / `ml`
+        # for embeddings and the AraBERT classifier (multi-GB images).
+        PIP_EXTRAS: ${AI_PIP_EXTRAS:-corpus}
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+      HTTP_BIND_HOST: 0.0.0.0
+      GRPC_BIND_HOST: 0.0.0.0
+      # Required: the service refuses a non-loopback gRPC bind without it.
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env}
+      AI_PROVIDER: ${AI_PROVIDER:-noop}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      SIMILARITY_ENABLED: ${SIMILARITY_ENABLED:-false}
+      REVIEWER_MATCHING_ENABLED: ${REVIEWER_MATCHING_ENABLED:-false}
+      KEYWORDS_SUGGESTION_ENABLED: ${KEYWORDS_SUGGESTION_ENABLED:-false}
+      COPYEDIT_ANALYSIS_ENABLED: ${COPYEDIT_ANALYSIS_ENABLED:-false}
+      EXACT_MATCH_ENABLED: ${EXACT_MATCH_ENABLED:-false}
+      ARABERT_ENABLED: ${ARABERT_ENABLED:-false}
+      WEB_SIMILARITY_ENABLED: ${WEB_SIMILARITY_ENABLED:-false}
+      GOOGLE_CSE_API_KEY: ${GOOGLE_CSE_API_KEY:-}
+      GOOGLE_CSE_ID: ${GOOGLE_CSE_ID:-}
+      VECTOR_DB_HOST: postgres
+      VECTOR_DB_PORT: "5432"
+      VECTOR_DB_USER: ${DB_USERNAME:-postgres}
+      VECTOR_DB_PASSWORD: ${DB_PASSWORD}
+      VECTOR_DB_DATABASE: ${DB_DATABASE:-folio_review}
+      OTEL_SERVICE_NAME: folio-ai-service
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    volumes:
+      - ai-model-cache:/srv/folio/cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    <<: *service-defaults
+    image: ${IMAGE_PREFIX:-folio}/backend:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        # true also installs Chromium for the browser equation renderer
+        # (then set EQUATION_RENDER_MATHJAX_ONLY=0 below).
+        WITH_CHROMIUM: ${BACKEND_WITH_CHROMIUM:-false}
+    environment:
+      NODE_ENV: production
+      PORT: "5243"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_DATABASE:-folio_review}
+      # TypeORM migrations run on boot; set false when a release pipeline owns them.
+      DB_MIGRATE_ON_START: ${DB_MIGRATE_ON_START:-true}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (32+ random chars)}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_EXPIRES_IN: ${REFRESH_EXPIRES_IN:-30d}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL in .env}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?set FRONTEND_ORIGIN in .env}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_RETURN_BEARER: ${AUTH_RETURN_BEARER:-false}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      UPLOAD_DIR: /srv/folio/uploads
+      EQUATION_RENDER_MATHJAX_ONLY: ${EQUATION_RENDER_MATHJAX_ONLY:-1}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-folio.events}
+      EMAIL_SERVICE_URL: http://email-service:5244
+      EMAIL_SERVICE_TOKEN: ${EMAIL_SERVICE_TOKEN}
+      AI_SERVICE_ENABLED: ${AI_SERVICE_ENABLED:-false}
+      AI_SERVICE_GRPC_HOST: ai-service
+      AI_SERVICE_GRPC_PORT: "5246"
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN}
+      AI_SIMILARITY_ENABLED: ${AI_SIMILARITY_ENABLED:-false}
+      AI_KEYWORDS_ENABLED: ${AI_KEYWORDS_ENABLED:-false}
+      AI_REVIEWER_MATCHING_ENABLED: ${AI_REVIEWER_MATCHING_ENABLED:-false}
+      AI_COPYEDIT_ENABLED: ${AI_COPYEDIT_ENABLED:-false}
+      AI_WEB_SIMILARITY_ENABLED: ${AI_WEB_SIMILARITY_ENABLED:-false}
+      LANGUAGE_TOOL_ENABLED: ${LANGUAGE_TOOL_ENABLED:-false}
+      LANGUAGE_TOOL_URL: http://languagetool:8010
+      TYPESENSE_ENABLED: ${TYPESENSE_ENABLED:-false}
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: "8108"
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-}
+      TYPESENSE_COLLECTION: ${TYPESENSE_COLLECTION:-publications}
+      OTEL_SERVICE_NAME: folio-backend
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    volumes:
+      - uploads:/srv/folio/uploads
+    tmpfs:
+      - /tmp
+    ports:
+      - "${BACKEND_HTTP_PORT:-5243}:5243"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    <<: *service-defaults
+    image: ${IMAGE_PREFIX:-folio}/frontend:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Inlined into the client bundle at build time — rebuild to change.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    environment:
+      NODE_ENV: production
+      PORT: "5240"
+      HOSTNAME: 0.0.0.0
+      # Server-side rewrite target for /api/v1/*; the browser never calls the API directly.
+      API_PROXY_TARGET: http://backend:5243
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "${FRONTEND_HTTP_PORT:-5240}:5240"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  postgres-email-data:
+  rabbitmq-data:
+  typesense-data:
+  ai-model-cache:
+  uploads:

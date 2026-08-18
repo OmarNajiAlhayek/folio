@@ -1,6 +1,8 @@
 # Preparation checklist
 
-Use this before running Damascus University Journal locally. Full run instructions are in the repository [`README.md`](../README.md).
+Condensed checklist for running Damascus University Journal locally. Full setup, sample
+accounts and troubleshooting: [`DEVELOPMENT.md`](./DEVELOPMENT.md). Container deployment:
+[`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
 ## Tooling
 

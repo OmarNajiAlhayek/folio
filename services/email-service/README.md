@@ -76,6 +76,23 @@ After editing shared contracts under `packages/shared/`, sync mirrors:
 npm run build:shared   # from repo root, after editing packages/shared
 ```
 
+## Container image
+
+Built from the **repository root**, not from this directory — the worker links
+`@folio/shared` and `@folio/nest-observability` through npm `file:` paths that resolve to
+`packages/*`, so a service-scoped build context makes `npm ci` fail:
+
+```bash
+docker build -f services/email-service/Dockerfile -t folio/email-service .
+```
+
+The runtime stage carries `dist`, production dependencies and the Handlebars `templates/`
+directory (templates are read from disk at send time), runs as a non-root user, and health-checks
+`/health`. Migrations still run at startup inside the container; `npm run migrate:prod` applies
+compiled migrations explicitly for a release pipeline.
+
+Stack, configuration and operations: [`../../docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md).
+
 ## Tests
 
 ```bash

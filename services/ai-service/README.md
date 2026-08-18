@@ -236,16 +236,16 @@ python scripts/ocr_bench.py ../../Damascus_Articles --only-broken --pages 3
 
 Known results on this corpus:
 
-| Engine | Function-word score | Notes |
-|--------|--------------------|-------|
-| text layer (broken PDFs) | 0.014-0.029 | unusable |
-| Tesseract `tessdata_fast` | 0.074-0.091 | usable, free, CPU |
-| Tesseract `tessdata_best` | 0.077-0.095 | no real gain, 2.7x slower — not worth it |
+| Engine                     | Function-word score                         | Notes                                                                           |
+| -------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
+| text layer (broken PDFs)   | 0.014-0.029                                 | unusable                                                                        |
+| Tesseract `tessdata_fast`  | 0.074-0.091                                 | usable, free, CPU                                                               |
+| Tesseract `tessdata_best`  | 0.077-0.095                                 | no real gain, 2.7x slower — not worth it                                        |
 | Surya 0.17 (GPU, RTX 4060) | ~0.068-0.090 (mean ~0.079 on 3-page sample) | free, local torch; ~3× slower than Tesseract here; does not clearly beat it yet |
-| clean DOCX (reference) | 0.112-0.132 | the ceiling |
+| clean DOCX (reference)     | 0.112-0.132                                 | the ceiling                                                                     |
 
 Surya is preferred over a vision-language model for corpus text: it transcribes,
-whereas a VLM *completes*. A VLM reading a smudged word writes a plausible word,
+whereas a VLM _completes_. A VLM reading a smudged word writes a plausible word,
 which in a plagiarism report means showing an editor source text the source never
 contained.
 
@@ -275,13 +275,38 @@ Full model inference (slow, needs weights):
 RUN_ML_TESTS=1 pytest -m ml
 ```
 
-## Docker
+## Container image
+
+Built from this directory (unlike the Node services, it has no monorepo links) — the generated
+protobuf stubs under `app/grpc/gen` are committed, so no Buf toolchain is needed:
 
 ```bash
-docker build -t folio-ai-service .
-docker run --rm -p 5245:5245 -e AI_PROVIDER=noop folio-ai-service
+docker build -t folio/ai-service .
+docker run --rm -p 5245:5245 -e AI_PROVIDER=noop -e AI_SERVICE_TOKEN=... folio/ai-service
 ```
 
-Do **not** publish port **5246** to the public internet; bind gRPC on the internal Docker/K8s network only (`AI_SERVICE_GRPC_HOST=ai-service` from Nest).
+**Python extras are a build-time decision**, because they differ by an order of magnitude in size:
 
-Production images should set `APP_ENV=production`, `AI_PROVIDER=openai`, and a real `OPENAI_API_KEY`.
+```bash
+docker build --build-arg PIP_EXTRAS=corpus,similarity -t folio/ai-service .
+```
+
+| `PIP_EXTRAS`           | Approx. image | Enables                                                      |
+| ---------------------- | ------------- | ------------------------------------------------------------ |
+| `corpus` (default)     | ~250 MB       | Exact-overlap plagiarism and the corpus importers — no torch |
+| `corpus,similarity`    | ~3 GB         | + embeddings, related articles, reviewer matching            |
+| `corpus,similarity,ml` | ~3.5 GB       | + AraBERT classifier (weights are **not** in the image)      |
+
+An extra only installs the code; the matching feature flag still has to be on.
+
+The image binds both listeners to `0.0.0.0` because a container's loopback is useless to sibling services — which means **`AI_SERVICE_TOKEN` is mandatory**: startup refuses a non-loopback gRPC bind without it. Still, do **not** publish port **5246** outside the internal network; the backend reaches it as `AI_SERVICE_GRPC_HOST=ai-service`.
+
+Runs as a non-root user with `dumb-init` as PID 1 and a `/health` healthcheck. Model downloads live in `HF_HOME` (`/srv/folio/cache`), mounted as a volume so replacing the container does not re-download weights. Ops scripts (`scripts/import_oai_pmh.py`, `scripts/reindex_ocr.py`, …) ship in the image:
+
+```bash
+docker compose run --rm ai-service python scripts/import_oai_pmh.py --help
+```
+
+Production images should set `APP_ENV=production`, and — when using an LLM — `AI_PROVIDER=openai` with a real `OPENAI_API_KEY`.
+
+Stack, configuration and operations: [`../../docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md).

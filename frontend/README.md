@@ -22,6 +22,24 @@ Monorepo overview and run order: [`../README.md`](../README.md).
 | Word Constructor | [`../docs/plans/word-constructor.md`](../docs/plans/word-constructor.md)                     |
 | Playwright E2E   | [`../docs/plans/playwright-constructor-e2e.md`](../docs/plans/playwright-constructor-e2e.md) |
 
+## Container image
+
+Built from the **repository root** — the app transpiles `@folio/shared` from `packages/shared`
+and `next.config.ts` sets `outputFileTracingRoot` to the monorepo root:
+
+```bash
+docker build -f frontend/Dockerfile -t folio/frontend .
+```
+
+The build uses Next.js `output: 'standalone'`, so the runtime image carries a self-contained
+server plus only traced dependencies — no `npm install`, no dev dependencies, non-root.
+
+`NEXT_PUBLIC_*` values are inlined at build time and are therefore **build arguments**
+(`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SENTRY_DSN`), not runtime configuration. Server-side
+settings (`API_PROXY_TARGET`, `SENTRY_DSN`) stay runtime env.
+
+Full stack and operations: [`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
+
 ## Tests
 
 ```bash

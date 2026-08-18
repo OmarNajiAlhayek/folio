@@ -22,6 +22,9 @@ const sharedSubpathAliases = {
 const nextConfig: NextConfig = {
   reactCompiler: true,
   transpilePackages: ['@folio/shared'],
+  // Self-contained server bundle for the Docker image (frontend/Dockerfile).
+  // Additive: `next start` and `next dev` are unaffected.
+  output: 'standalone',
   outputFileTracingRoot: monorepoRoot,
   turbopack: {
     // Monorepo root so Turbopack can resolve file:-linked @folio/shared sources.

@@ -28,6 +28,27 @@ Monorepo overview, all services, and sample accounts: [`../README.md`](../README
 | Documentation index | [`../docs/README.md`](../docs/README.md)                                 |
 | Copyedit workflow   | [`../docs/API-NOTES.md`](../docs/API-NOTES.md#copyediting)               |
 
+## Container image
+
+Production image, built from the **repository root** — the API links `packages/shared` and
+`packages/nest-observability` through npm `file:` paths that a `backend/`-scoped build context
+cannot resolve:
+
+```bash
+docker build -f backend/Dockerfile -t folio/backend .
+```
+
+Multi-stage: linked packages compiled first, then the API, then a runtime stage with only
+`dist` and production dependencies — non-root (uid 1001), `dumb-init` as PID 1, healthcheck on
+`/api/v1/health`. The default image has no browser, so it sets
+`EQUATION_RENDER_MATHJAX_ONLY=1`; build with `--build-arg WITH_CHROMIUM=true` and set it to `0`
+for the Chromium equation renderer.
+
+Migrations run at startup unless `DB_MIGRATE_ON_START=false`; run them explicitly with
+`npm run migrate:prod` (compiled migrations from `dist/db/migrations`).
+
+Full stack and operations: [`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
+
 ## Tests
 
 ```bash

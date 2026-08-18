@@ -160,8 +160,10 @@ services:
 
   email-service:
     build:
-      context: ./services/email-service
-      dockerfile: Dockerfile
+      # Root context: this service links packages/shared and
+      # packages/nest-observability through npm `file:` paths.
+      context: .
+      dockerfile: services/email-service/Dockerfile
     container_name: folio-email-service
     ports:
       - "5244:5244"

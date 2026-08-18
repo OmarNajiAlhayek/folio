@@ -8,6 +8,7 @@
     "start": "node dist/main.js",
     "start:dev": "ts-node --transpile-only src/main.ts",
     "migrate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:run -d src/db/data-source.ts",
+    "migrate:prod": "node ./node_modules/typeorm/cli.js migration:run -d dist/db/data-source.js",
     "migrate:generate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:generate -d src/db/data-source.ts",
     "migrate:revert": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:revert -d src/db/data-source.ts",
     "test": "jest",

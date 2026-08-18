@@ -1,0 +1,69 @@
+# Build context for every Folio image is the repository ROOT, because the Node
+# apps depend on packages/* through npm `file:` links. Keep this list tight:
+# everything not excluded here is uploaded to the daemon on every build.
+
+# --- Version control / tooling -------------------------------------------------
+.git
+.github
+.husky
+.vscode
+.cursor
+.claude
+.idea
+
+# --- Dependencies and build output (re-created inside the image) ---------------
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+**/__pycache__
+**/*.egg-info
+**/.venv
+**/venv
+
+# --- Secrets: images must be configured through runtime env, never baked in ----
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.local.example
+
+# --- Test, perf and report artifacts -------------------------------------------
+**/playwright-report
+**/blob-report
+**/test-results
+testsprite_tests
+perf/results
+backend/.test-uploads
+backend/test
+frontend/e2e
+frontend/tests
+
+# --- Local data that must never enter an image ---------------------------------
+uploads
+backend/uploads
+backend/data
+.local
+Damascus_Articles
+_docx-inspect
+equation-probe-out
+exp
+services/ai-service/data
+services/ai-service/archive
+services/ai-service/eval_output
+services/ai-service/eval_output_subset_pinned
+services/ai-service/arabert_clean_model_FINAL*
+
+# --- Docs, notes and scratch ---------------------------------------------------
+docs
+*.md
+!README.md
+!packages/shared/README.md
+!services/ai-service/README.md
+!services/email-service/README.md
+*.pdf
+*.docx
+*.log
+.tmp-*
