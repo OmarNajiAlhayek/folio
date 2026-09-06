@@ -45,19 +45,19 @@ async def run_test():
         elem = page.get_by_text('العربية', exact=True).locator("xpath=ancestor-or-self::*[.//a][1]").get_by_role('link', name='Log in', exact=True)
         await elem.click(timeout=10000)
         
-        # -> Fill the Email field with 'o65834757@gmail.com' and the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
+        # -> Fill the Email field with 'author@folio.dev' and the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("o65834757@gmail.com")
+        await elem.fill("author@folio.dev")
         
-        # -> Fill the Email field with 'o65834757@gmail.com' and the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
+        # -> Fill the Email field with 'author@folio.dev' and the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
         # password password field
         elem = page.get_by_label('Password', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
         await elem.fill("Author123!")
         
-        # -> Fill the Email field with 'o65834757@gmail.com' and the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
+        # -> Fill the Email field with 'author@folio.dev' and the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
         # Sign in button
         elem = page.get_by_role('button', name='Sign in', exact=True)
         await elem.click(timeout=10000)

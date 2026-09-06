@@ -47,19 +47,19 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Fill the 'Email' field with the author email o65834757@gmail.com, fill the 'Password' field with Author123!, and click the 'Sign in' button.
+        # -> Fill the 'Email' field with the author email author@folio.dev, fill the 'Password' field with Author123!, and click the 'Sign in' button.
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("o65834757@gmail.com")
+        await elem.fill("author@folio.dev")
         
-        # -> Fill the 'Email' field with the author email o65834757@gmail.com, fill the 'Password' field with Author123!, and click the 'Sign in' button.
+        # -> Fill the 'Email' field with the author email author@folio.dev, fill the 'Password' field with Author123!, and click the 'Sign in' button.
         # password password field
         elem = page.get_by_label('Password', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
         await elem.fill("Author123!")
         
-        # -> Fill the 'Email' field with the author email o65834757@gmail.com, fill the 'Password' field with Author123!, and click the 'Sign in' button.
+        # -> Fill the 'Email' field with the author email author@folio.dev, fill the 'Password' field with Author123!, and click the 'Sign in' button.
         # Sign in button
         elem = page.get_by_role('button', name='Sign in', exact=True)
         await elem.click(timeout=10000)

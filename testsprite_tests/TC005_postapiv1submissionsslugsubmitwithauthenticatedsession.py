@@ -12,7 +12,7 @@ from folio_api_session import (
 BASE_URL = "http://localhost:5240"
 API_BASE = f"{BASE_URL}/api/v1"
 
-AUTHOR_EMAIL = "o65834757@gmail.com"
+AUTHOR_EMAIL = "author@folio.dev"
 AUTHOR_PASSWORD = "Author123!"
 
 

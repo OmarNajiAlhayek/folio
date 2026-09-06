@@ -35,7 +35,7 @@ Use stable `code` values for the frontend (e.g. `UNAUTHORIZED`, `FORBIDDEN`, `NO
 
 ### Submission `status` in API
 
-Must include `copyediting` between acceptance and publication: `draft`, `submitted`, `under_review`, `revisions_requested`, `accepted`, `rejected`, `copyediting`, `published`. Transitions enforced in service layer, not ad hoc from clients.
+Must include `copyediting` between acceptance and publication: `draft`, `submitted`, `under_review`, `revisions_requested`, `accepted`, `rejected`, `copyediting`, `published`, `retracted`. Transitions enforced in service layer, not ad hoc from clients.
 
 ### Copyediting
 
@@ -45,7 +45,8 @@ Must include `copyediting` between acceptance and publication: `draft`, `submitt
 - **Queries:** `POST /copyedit-assignments/:assignmentSlug/notes` body `{ noteForAuthor, noteToEditorOnly? }` — assignment `active` or `ready_for_review` → `awaiting_author`; emits `copyedit.queries_sent`.
 - **Author ready:** `POST /copyedit-assignments/:assignmentSlug/ready` — author only; requires new `manuscript` upload after latest note; emits `copyedit.author_ready`.
 - **Approve without author round:** `POST /copyedit-assignments/:assignmentSlug/approve-ready` — copyeditor (assignment owner); assignment must be `active`; sets `ready_for_review` (no email).
-- **Publish:** `POST /submissions/:slug/publish` — copyeditor assigned on submission; all assignments must be `ready_for_review`.
+- **Publish:** `POST /submissions/:slug/publish` — assigned copyeditor, or a chief editor (`copyedit.publish` + `submission.view_editor_queue`); all assignments must be `ready_for_review`.
+- **Retract:** `POST /submissions/:slug/retract` — chief editor or journal manager (`submission.view_editor_queue`); `published` → `retracted`. Drops public files and catalog/search visibility. Terminal.
 - **List notes:** `GET /submissions/:slug/copyedit-notes` — timeline with `round`, `assignmentSlug`; author sees `noteForAuthor` only.
 - **AI analysis:** `POST /copyedit-assignments/:assignmentSlug/ai-analysis` — copyeditor (assignment owner) or editor. Returns `{ formatIssues, grammarNotes, referenceIssues, aiUnavailable }`. Format rules are local (Damascus profile). Grammar uses LanguageTool when `LANGUAGE_TOOL_ENABLED=true` (empty array when disabled/unavailable). Reference cross-check uses gRPC `CopyeditService` when `AI_COPYEDIT_ENABLED=true` (`aiUnavailable: true` when disabled/unreachable).
 - **Dev DB:** drop unique on `copyedit_notes.assignment_id` when migrating from one-note schema (TypeORM `synchronize` on fresh DBs applies automatically).
@@ -54,6 +55,7 @@ Must include `copyediting` between acceptance and publication: `draft`, `submitt
 
 - **`GET /submissions/:slug`** returns a **JSON-shaped submission** that depends on the caller: editors and authors see full metadata (and full file lists); **assigned reviewers** see a **redacted** payload per [`DATA-MODEL.md`](./DATA-MODEL.md) (review method × metadata matrix), **only files with `file_stage = review`**, and never `constructor_content` or `review_assignments`.
 - **`GET /assignments/me`** nests the same reviewer-safe submission summary under each assignment.
+- **Reviewer review files** (`kind = review_response`) are editor-only until an editor releases them. The author never sees an unreleased one in `files[]` and cannot download it; once released it arrives under an anonymised `originalName`/`displayName` (`Reviewer 2 — review file.docx`). Reviewers never see another reviewer's review file, even though it sits in the review stage.
 - **File download:** authenticated reviewers may only fetch files in the **review** stage (except public published artifacts as already defined). Authors and editors may fetch all files they are allowed to see.
 - **Gate:** Transition to `under_review` (editor `PATCH .../status`) and the automatic `submitted` → `under_review` step when a reviewer **accepts** require at least one **`manuscript`** file with `file_stage = review`. Error code `REVIEW_PACKAGE_INCOMPLETE` when violated.
 
@@ -112,7 +114,7 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | PATCH | `/submissions/:slug` | Author | Full metadata when `draft` or `revisions_requested` (title, abstract, article type, keywords, contributors, declarations, reviewer preferences). |
 | PATCH | `/submissions/:slug/review-method` | Editor | Body: `{ "reviewMethod": "open" \| "anonymous" \| "double_anonymous" }`. Requires `submission.change_status` **or** `submission.assign_reviewer`. |
 | POST | `/submissions/:slug/submit` | Author | `draft` → `submitted` (or resubmit from `revisions_requested`). Validates journal-style checklist; new author uploads default `file_stage = submission`. |
-| PATCH | `/submissions/:slug/status` | Editor | Body: `{ "status": "…", "messageForAuthor"?: string }`. Optional `messageForAuthor` (max 4000 chars) when setting `accepted`, `rejected`, or `revisions_requested`; persisted on the submission and included in the author decision email. `under_review` requires a review-package manuscript (see policy). |
+| PATCH | `/submissions/:slug/status` | Editor | Body: `{ "status": "…", "messageForAuthor"?: string, "revisionSeverity"?: "minor" \| "major", "releaseReviewFileIds"?: string[] }`. `revisionSeverity` is **required** for `revisions_requested` and rejected otherwise; it also bumps `revision_round`. `releaseReviewFileIds` releases reviewer `review_response` files to the author in the same transaction. Optional `messageForAuthor` (max 4000 chars) when setting `accepted`, `rejected`, or `revisions_requested`; persisted on the submission and included in the author decision email. `under_review` requires a review-package manuscript (see policy). |
 | GET | `/submissions/discipline-labels` | Author / Editor | Arabic discipline label list; optional journal scope via `JOURNAL_ALLOWED_DISCIPLINES`. |
 | POST | `/submissions/:slug/suggest-discipline` | Author (draft) | Calls ai-service `ClassifierService`; stores `disciplineSuggestedLabels` + classification JSON. Returns `topLabel`, `suggestedLabels[]`, `probabilities`. Requires `AI_SERVICE_ENABLED` + classifier enabled on ai-service. |
 | POST | `/submissions/:slug/suggest-keywords` | Author (draft) | Returns suggested EN/AR keyword lists (not persisted). Requires `AI_KEYWORDS_ENABLED`. |
@@ -145,6 +147,7 @@ Common error codes when AI is misconfigured or unreachable: `AI_SERVICE_UNAVAILA
 | PATCH | `/submissions/:slug/files/:fileId/stage` | Editor | Body: `{ "fileStage": "submission" \| "review" }`. Requires `submission.change_status` **or** `submission.assign_reviewer`. |
 | GET | `/submissions/:slug/files/:fileId` | Author / Editor / Assigned reviewer / Public | Reviewers: **review-stage files only** (unless public published artifact). |
 | DELETE | `/submissions/:slug/files/:fileId` | Author | `draft` or `revisions_requested` when replacing files. |
+| PATCH | `/submissions/:slug/files/:fileId/release` | Editor | Body: `{ "released": boolean }`. `review_response` files only; requires `submission.change_status`. Releases a reviewer's review file to the author, or revokes it. |
 
 ### Review assignments
 
@@ -157,6 +160,9 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 | GET | `/assignments/me` | Reviewer | All of the reviewer’s assignments. |
 | POST | `/assignments/:slug/accept` | Reviewer | `invited` → `accepted`; may set submission `submitted` → `under_review`. |
 | POST | `/assignments/:slug/decline` | Reviewer | `invited` → `declined`. |
+| GET | `/assignments/:slug/files` | Reviewer | The reviewer's own uploaded `review_response` files for this assignment. |
+| POST | `/assignments/:slug/files` | Reviewer | Multipart `file`. Assignment must be `accepted`. Stored as `kind = review_response`, `file_stage = review`, linked to the assignment. PDF/DOCX, max 25 MB. |
+| DELETE | `/assignments/:slug/files/:fileId` | Reviewer | Withdraw an own review file. Refused once an editor has released it to the author. |
 
 ### Copyedit assignments
 
@@ -259,6 +265,11 @@ Operational view (counts only, no PII):
 `GET /health/outbox` returns the backend outbox state (`pending`,
 `published`, `dead` plus the oldest pending row).
 
+Open by default so the k6 harness, the e2e suite and local development work
+unchanged. Set `OPS_METRICS_TOKEN` on a deployed instance and the endpoint then
+requires an `x-folio-ops-token` header matching it — queue and dead-letter depth
+tell an outsider whether mail delivery is broken.
+
 Journal managers with JWT and permission `email.manage_reminders` may call
 `GET /admin/email/pipeline-status` for a fuller operational snapshot:
 outbox counts and redacted samples of dead rows, `email.email_log` counts
@@ -295,7 +306,8 @@ Persisted per-user inbox (PostgreSQL `notifications`). Live updates via SSE whil
 
 | Method | Path | Who | Notes |
 |--------|------|-----|-------|
-| GET | `/health` | Public | Liveness — always returns 200 with `{ status, db, ... }`. |
-| GET | `/health/outbox` | Public | Outbox stats: pending, published, dead counts + oldest pending row. |
+| GET | `/health` | Public | Liveness — always returns 200 with `{ status, db, ... }`. Never gated. |
+| GET | `/health/outbox` | Public, or `x-folio-ops-token` | Outbox stats: pending, published, dead counts + oldest pending row. Requires the header when `OPS_METRICS_TOKEN` is set. |
+| GET | `/health/ai-jobs` | Public, or `x-folio-ops-token` | AI job counts by type and status. Same gating. |
 
 Use for load balancers and first vertical slice smoke tests. Neither endpoint is throttled. Email-service exposes its own probes at `http://127.0.0.1:5244/health` (liveness) and `http://127.0.0.1:5244/ready` (readiness; checks DB and AMQP; returns 503 if degraded).

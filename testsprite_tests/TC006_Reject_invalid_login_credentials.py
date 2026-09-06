@@ -36,19 +36,19 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Fill 'o65834757@gmail.com' into the Email field, fill an incorrect password into the Password field, then click the 'Sign in' button to submit the form.
+        # -> Fill 'author@folio.dev' into the Email field, fill an incorrect password into the Password field, then click the 'Sign in' button to submit the form.
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("o65834757@gmail.com")
+        await elem.fill("author@folio.dev")
         
-        # -> Fill 'o65834757@gmail.com' into the Email field, fill an incorrect password into the Password field, then click the 'Sign in' button to submit the form.
+        # -> Fill 'author@folio.dev' into the Email field, fill an incorrect password into the Password field, then click the 'Sign in' button to submit the form.
         # password password field
         elem = page.get_by_label('Password', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
         await elem.fill("WrongPassword123!")
         
-        # -> Fill 'o65834757@gmail.com' into the Email field, fill an incorrect password into the Password field, then click the 'Sign in' button to submit the form.
+        # -> Fill 'author@folio.dev' into the Email field, fill an incorrect password into the Password field, then click the 'Sign in' button to submit the form.
         # Sign in button
         elem = page.get_by_role('button', name='Sign in', exact=True)
         await elem.click(timeout=10000)

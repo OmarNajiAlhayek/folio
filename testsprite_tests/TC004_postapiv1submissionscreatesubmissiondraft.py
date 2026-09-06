@@ -9,7 +9,7 @@ from folio_api_session import login_bearer, minimal_draft_payload
 BASE_URL = "http://localhost:5240"
 SUBMISSIONS_URL = f"{BASE_URL}/api/v1/submissions"
 
-AUTHOR_EMAIL = "o65834757@gmail.com"
+AUTHOR_EMAIL = "author@folio.dev"
 AUTHOR_PASSWORD = "Author123!"
 
 

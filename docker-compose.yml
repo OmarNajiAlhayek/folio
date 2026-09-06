@@ -104,8 +104,10 @@ services:
       retries: 10
       start_period: 40s
     ports:
-      # Management UI only; AMQP stays on the internal network.
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      # Management UI only; AMQP stays on the internal network. Loopback-bound —
+      # this console can drain and replay the mail queue, so it must never be
+      # reachable from outside the host. Reach it with an SSH tunnel.
+      - "${RABBITMQ_MANAGEMENT_PORT:-127.0.0.1:15672}:15672"
 
   # ---------------------------------------------------------------------------
   # Optional infrastructure (profiles)
@@ -285,6 +287,7 @@ services:
       TYPESENSE_PORT: "8108"
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-}
       TYPESENSE_COLLECTION: ${TYPESENSE_COLLECTION:-publications}
+      OPS_METRICS_TOKEN: ${OPS_METRICS_TOKEN:-}
       OTEL_SERVICE_NAME: folio-backend
       OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-none}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -293,7 +296,10 @@ services:
     tmpfs:
       - /tmp
     ports:
-      - "${BACKEND_HTTP_PORT:-5243}:5243"
+      # Loopback only. The browser reaches the API through the frontend's
+      # server-side /api/v1 rewrite, which is what keeps the access token out of
+      # JavaScript — publishing this publicly routes around that. Debugging only.
+      - "${BACKEND_HTTP_PORT:-127.0.0.1:5243}:5243"
     depends_on:
       postgres:
         condition: service_healthy
@@ -318,7 +324,9 @@ services:
       API_PROXY_TARGET: http://backend:5243
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
-      - "${FRONTEND_HTTP_PORT:-5240}:5240"
+      # Loopback only — terminate TLS in a reverse proxy on this host and point
+      # it here. Compose ships no terminator; see docker/.env.example.
+      - "${FRONTEND_HTTP_PORT:-127.0.0.1:5240}:5240"
     depends_on:
       backend:
         condition: service_healthy

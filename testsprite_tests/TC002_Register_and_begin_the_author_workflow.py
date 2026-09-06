@@ -103,26 +103,26 @@ async def run_test():
         elem = page.get_by_role('button', name='Create account', exact=True)
         await elem.click(timeout=10000)
         
-        # -> Open the 'Log in' page and sign in using the seeded author account (email o65834757@gmail.com and password Author123!) to verify an authenticated session is reachable.
+        # -> Open the 'Log in' page and sign in using the seeded author account (email author@folio.dev and password Author123!) to verify an authenticated session is reachable.
         await page.goto("http://localhost:5240/en/login")
         try:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
         except Exception:
             pass
         
-        # -> Fill the Email field with the seeded author email 'o65834757@gmail.com', fill the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
+        # -> Fill the Email field with the seeded author email 'author@folio.dev', fill the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("o65834757@gmail.com")
+        await elem.fill("author@folio.dev")
         
-        # -> Fill the Email field with the seeded author email 'o65834757@gmail.com', fill the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
+        # -> Fill the Email field with the seeded author email 'author@folio.dev', fill the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
         # password password field
         elem = page.get_by_label('Password', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
         await elem.fill("Author123!")
         
-        # -> Fill the Email field with the seeded author email 'o65834757@gmail.com', fill the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
+        # -> Fill the Email field with the seeded author email 'author@folio.dev', fill the Password field with 'Author123!', then click the 'Sign in' button to authenticate.
         # Sign in button
         elem = page.get_by_role('button', name='Sign in', exact=True)
         await elem.click(timeout=10000)

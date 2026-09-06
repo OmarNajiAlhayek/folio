@@ -7,7 +7,7 @@ from folio_api_session import login_bearer
 BASE_URL = "http://localhost:5240"
 ASSIGNMENTS_ME_URL = f"{BASE_URL}/api/v1/assignments/me"
 
-USERNAME = "ysryrwthqsdthwy@gmail.com"
+USERNAME = "reviewer@folio.dev"
 PASSWORD = "Reviewer123!"
 TIMEOUT = 30
 

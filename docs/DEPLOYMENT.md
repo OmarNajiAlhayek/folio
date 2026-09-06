@@ -89,6 +89,27 @@ Required with no default (`docker compose config` fails if any is missing):
 `DB_PASSWORD`, `EMAIL_DB_PASSWORD`, `RABBITMQ_PASSWORD`, `JWT_SECRET`,
 `EMAIL_SERVICE_TOKEN`, `AI_SERVICE_TOKEN`, `APP_BASE_URL`, `FRONTEND_ORIGIN`.
 
+Two more are required in practice, and fail at **boot** rather than at
+`compose config` — both services set `NODE_ENV=production` here and validate
+themselves on start:
+
+- **`EMAIL_PROVIDER` must not be `noop`.** The email service exits rather than
+  pretend to deliver reviewer invitations. Set `smtp` and fill `SMTP_HOST`,
+  `EMAIL_FROM` and credentials.
+- **`AUTH_COOKIE_SECURE` must be `true`,** which means `APP_BASE_URL` must be
+  `https://`. A browser silently discards a `Secure` cookie sent over plain
+  HTTP, so an HTTP deployment logs users in and then treats every subsequent
+  request as anonymous.
+
+**Terminate TLS before letting anyone in.** Compose ships no terminator. Put a
+reverse proxy in front of the frontend, point `APP_BASE_URL` and
+`FRONTEND_ORIGIN` at it, and keep the container ports on loopback (the default).
+
+> If a container restarts in a loop, read its logs first:
+> `docker compose logs backend | tail -20`. Both Node services print
+> `Configuration invalid: <what is wrong>` and exit — they are not crashing,
+> they are refusing an unsafe configuration.
+
 Validate before starting anything:
 
 ```bash
@@ -112,11 +133,15 @@ surfaces as a failed container rather than a half-migrated database.
 
 ### Published ports
 
+All three are bound to `127.0.0.1` by default, so only the reverse proxy on the
+same host can reach them. Override in `.env` (e.g. `FRONTEND_HTTP_PORT=0.0.0.0:5240`)
+only when the proxy runs on another machine.
+
 | Port | Service | Notes |
 |------|---------|-------|
-| `5240` | frontend | The only port a browser needs |
-| `5243` | backend | API + `/api-docs` when `SWAGGER_ENABLED=true`. Drop this mapping if a reverse proxy fronts the app |
-| `15672` | RabbitMQ management UI | Restrict or remove in production |
+| `127.0.0.1:5240` | frontend | The only port a browser needs — put the proxy here |
+| `127.0.0.1:5243` | backend | Debugging only. The browser reaches the API through the frontend's server-side rewrite, which is what keeps the access token out of JavaScript; publishing this publicly routes around that. Drop the mapping once the stack is up |
+| `127.0.0.1:15672` | RabbitMQ management UI | Can drain and replay the mail queue. Never expose it — reach it over an SSH tunnel |
 
 PostgreSQL, AMQP, the email worker and ai-service are **not** published. Reach them through the
 compose network:
@@ -176,6 +201,14 @@ substitute.
 
 Seeds are development fixtures and are **not** in the production images (they need `ts-node`).
 Seed a demo environment from a checkout instead — see [`DEVELOPMENT.md`](./DEVELOPMENT.md).
+
+`seed.ts` also refuses to run against anything that does not look like a local
+machine — it checks `NODE_ENV`, `AUTH_COOKIE_SECURE`, `APP_BASE_URL` and
+`DB_HOST` before opening a connection, and the destructive modes
+(`SEED_RESET_ALL`, `SEED_RESET_SAMPLE`) additionally require
+`FOLIO_ALLOW_DESTRUCTIVE_SEED=1`. This matters because a checkout on an
+operator's laptop is one edited `.env` away from the production database, and
+`SEED_RESET_ALL` truncates every table and clears `uploads/`.
 
 ### Backup and restore
 
@@ -237,12 +270,15 @@ Configuration:
 - [ ] `LOG_FORMAT=json`, `LOG_LEVEL=info`
 - [ ] Image tags pinned in `.env` (`POSTGRES_IMAGE_TAG`, `RABBITMQ_IMAGE_TAG`, `LANGUAGETOOL_IMAGE_TAG`, …) — `latest` is not a deployment
 
+- [ ] `EMAIL_PROVIDER=smtp` with the `SMTP_*` block filled, and **one real message sent and received**
+
 Exposure:
 
 - [ ] TLS terminated by a reverse proxy in front of `frontend`
 - [ ] Backend port unpublished (or firewalled) when the proxy reaches it over the compose network
 - [ ] RabbitMQ management UI removed or restricted
 - [ ] Databases unpublished (default)
+- [ ] `OPS_METRICS_TOKEN` set, so `/health/outbox` and `/health/ai-jobs` stop reporting queue depth to anonymous callers
 
 Data:
 

@@ -45,19 +45,19 @@ async def run_test():
         elem = page.get_by_text('العربية', exact=True).locator("xpath=ancestor-or-self::*[.//a][1]").get_by_role('link', name='Log in', exact=True)
         await elem.click(timeout=10000)
         
-        # -> Fill the 'Email' field with the editor email (k76462338@gmail.com), fill the 'Password' field with the editor password (Editor123!), then click the 'Sign in' button to submit the login form.
+        # -> Fill the 'Email' field with the editor email (editor@folio.dev), fill the 'Password' field with the editor password (Editor123!), then click the 'Sign in' button to submit the login form.
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("k76462338@gmail.com")
+        await elem.fill("editor@folio.dev")
         
-        # -> Fill the 'Email' field with the editor email (k76462338@gmail.com), fill the 'Password' field with the editor password (Editor123!), then click the 'Sign in' button to submit the login form.
+        # -> Fill the 'Email' field with the editor email (editor@folio.dev), fill the 'Password' field with the editor password (Editor123!), then click the 'Sign in' button to submit the login form.
         # password password field
         elem = page.get_by_label('Password', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
         await elem.fill("Editor123!")
         
-        # -> Fill the 'Email' field with the editor email (k76462338@gmail.com), fill the 'Password' field with the editor password (Editor123!), then click the 'Sign in' button to submit the login form.
+        # -> Fill the 'Email' field with the editor email (editor@folio.dev), fill the 'Password' field with the editor password (Editor123!), then click the 'Sign in' button to submit the login form.
         # Sign in button
         elem = page.get_by_role('button', name='Sign in', exact=True)
         await elem.click(timeout=10000)

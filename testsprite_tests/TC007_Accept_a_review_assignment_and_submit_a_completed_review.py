@@ -49,7 +49,7 @@ async def run_test():
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("ysryrwthqsdthwy@gmail.com")
+        await elem.fill("reviewer@folio.dev")
         
         # -> Fill the reviewer's email into the Email field, fill the password into the Password field, and click the 'Sign in' button to log in.
         # password password field

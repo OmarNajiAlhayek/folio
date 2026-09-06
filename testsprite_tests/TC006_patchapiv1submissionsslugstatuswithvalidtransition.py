@@ -8,7 +8,7 @@ BASE_URL = "http://localhost:5240"
 SUBMISSIONS_API = f"{BASE_URL}/api/v1/submissions"
 TIMEOUT = 30
 
-EDITOR_EMAIL = "k76462338@gmail.com"
+EDITOR_EMAIL = "editor@folio.dev"
 EDITOR_PASSWORD = "Editor123!"
 
 

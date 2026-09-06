@@ -26,19 +26,23 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 - **`review_manuscript_presentation`** (JSONB, nullable): Which sources (upload / constructor `.docx`) are in the review package at submit.
 - **`review_method`** (OJS-aligned enum, default `double_anonymous`): `open` | `anonymous` | `double_anonymous`. In UI/docs, label **`anonymous`** as **single-blind** (reviewer identity hidden from author; author identity still visible to reviewer unless `double_anonymous`).
 - `status`: see [Submission lifecycle](#submission-lifecycle) (store as enum or constrained text).
+- **`revision_severity`** (`minor` | `major`, nullable): severity of the current `revisions_requested` decision. Deliberately **not** a status value, so every existing status guard keeps working; cleared on accept/reject.
+- **`revision_round`** (int, default 0): incremented on each `revisions_requested` decision, kept as history afterwards. Threaded into the `submission.decision` and `submission.submitted` idempotency keys so round N+1 is not deduped against round N.
 - Timestamps: `created_at`, `updated_at`; optional `published_at` when `status = published`.
 
 ### SubmissionFile
 
 - Belongs to one `Submission`.
-- Fields: `storage_key` or path, original filename, MIME type, size, **`kind`**: `cover_letter` | `title_page` | `manuscript` | `figure` | `table` | `supplementary` (submit requires at least one file of each of the first three kinds), **`file_stage`**: `submission` (editorial package, default on author upload) | `review` (curated **review package** visible to reviewers), `created_at`.
+- Fields: `storage_key` or path, original filename, MIME type, size, **`kind`**: `cover_letter` | `title_page` | `manuscript` | `manuscript_constructor` | `figure` | `table` | `supplementary` | `review_response` (submit requires at least one file of each of the first three kinds), **`file_stage`**: `submission` (editorial package, default on author upload) | `review` (curated **review package** visible to reviewers), `created_at`.
 - **Review package (uniform rule):** Reviewers may **only** download files with `file_stage = review`. Editors move or duplicate manuscripts into the review package before setting `under_review` or before a reviewer **accepts** (implementation requires ≥ one `manuscript` in `review` for those transitions). `open` review still uses a curated review file set; it does not grant reviewers the full submission tree.
+- **`released_to_author_at` / `released_by_id`** (nullable): meaningful only for `kind = review_response`. Null means editor-only; set when an editor releases a reviewer's review file to the author, either via the decision (`releaseReviewFileIds`) or `PATCH …/files/:fileId/release`. The author sees released files under an anonymised name.
 - **File storage:** MVP default is local disk under something like `uploads/` (ignored by git via root `.gitignore`). Object storage (S3-compatible) is a later swap—keep DB metadata stable.
 
 ### ReviewAssignment
 
 - Links `Submission` + `Reviewer` (`User` with reviewer role).
 - Fields: `assigned_at`, optional `due_at`, `status`: `invited` (editor invited; no file access yet) | `accepted` (reviewer agreed; can read and submit) | `declined` | `completed` (review filed).
+- **`responded_at`** (nullable): when the reviewer accepted or declined. Feeds the author's anonymised review timeline; null for assignments answered before this field existed.
 
 ### RoleInvitation (staff roles)
 
@@ -47,7 +51,7 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 ### Review
 
 - Belongs to one `ReviewAssignment` (one review document per assignment).
-- Fields: `comments_for_author` (text, may be shown to the author), `comments_to_editor_only` (text, confidential to editors), `recommendation` (e.g. `accept` | `reject` | `revisions`), `submitted_at`. **At least one** of the two comment fields must be non-empty on submit.
+- Fields: `comments_for_author` (text, may be shown to the author), `comments_to_editor_only` (text, confidential to editors), `recommendation` (`accept` | `minor_revisions` | `major_revisions` | `resubmit_for_review` | `resubmit_elsewhere` | `reject` | `see_comments`; the undifferentiated `revisions` value is retained for rows written before the minor/major split), `submitted_at`. **At least one** of the two comment fields must be non-empty on submit.
 
 ### CopyeditAssignment
 
@@ -112,6 +116,7 @@ Canonical **`status`** values on `Submission` (use these strings in API and UI):
 | `rejected` | Terminal; not published. |
 | `copyediting` | Accepted manuscript in production editing; one or more copyeditors assigned. |
 | `published` | Visible in public catalog with file access per policy. |
+| `retracted` | Was published; removed from the public catalog. Terminal. |
 
 **State machine (narrative):** The author creates a `draft`, then moves to `submitted`. The editor assigns reviewers and sets `under_review` via `PATCH .../status` (or status advances automatically on the first reviewer **accept** while still `submitted`, if a review-package manuscript exists). When enough reviews exist, the editor sets `accepted`, `rejected`, or `revisions_requested`. From `revisions_requested`, the author resubmits and status returns to `submitted` (then the editor may set `under_review` again). From `accepted`, copyediting and publish follow [`API-NOTES.md`](./API-NOTES.md). `rejected` does not move to `published` without a new submission (out of scope unless you define reopen).
 

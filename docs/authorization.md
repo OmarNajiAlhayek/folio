@@ -51,10 +51,11 @@ Methods below declare why caller checks are kept or omitted.
 | `SubmissionLifecycleService.updateStatus` | `assertCallerPermission(CHANGE_STATUS)` | seed + HTTP |
 | `ReviewWorkflowService.assignReviewer` | `assertCallerPermission(ASSIGN_REVIEWER)` | seed + HTTP |
 | `CopyeditWorkflowService.assignCopyeditor` | `assertCallerPermission(ASSIGN_COPYEDITOR)` | seed + HTTP |
-| `CopyeditWorkflowService.publishSubmission` | `assertCallerPermission(COPYEDIT_PUBLISH)` | seed + HTTP |
+| `CopyeditWorkflowService.publishSubmission` | `assertCallerPermission(COPYEDIT_PUBLISH)` plus assigned copyeditor **or** `VIEW_EDITOR_QUEUE` | seed + HTTP |
+| `CopyeditWorkflowService.retractSubmission` | `assertCallerPermission(VIEW_EDITOR_QUEUE)` | HTTP |
 | `SubmissionAiService.getSuggestedReviewers` | `assertCallerHasEveryPermission(...)` | guard OR is looser than AND rule |
-| `ReviewWorkflowService.listAssignments` | none (resource only) | HTTP-only; guard + draft visibility |
-| `CopyeditWorkflowService.listCopyeditAssignments` | none (resource only) | HTTP-only; guard + draft visibility |
+| `ReviewWorkflowService.listAssignments` | `assertCanRead` | Guard slug is held by section editors too — see below |
+| `CopyeditWorkflowService.listCopyeditAssignments` | `assertCanRead` | Same rule, kept symmetrical |
 | `ReviewWorkflowService.updateReviewMethod` | none | HTTP-only; guard matches OR list |
 | `RemindersService.*` | none | HTTP-only; guard matches OR list; service validates submission/assignment scope |
 | `SubmissionAccessService.assertCanRead` | resource gate | always in service |
@@ -72,6 +73,21 @@ Methods below declare why caller checks are kept or omitted.
 1. Guard: `SUBMISSION_ASSIGN_REVIEWER`.
 2. Service: same slug via `assertCallerPermission` (seed calls this directly).
 3. Service: `userHasPermission(reviewerId, REVIEW_SUBMIT)` — target must be a reviewer.
+
+**List reviewer assignments (`GET /submissions/:slug/assignments`)**
+
+1. Guard: `SUBMISSION_LIST_ASSIGNMENTS`.
+2. Service: `assertCanRead` — **required**, not optional. The slug is held by
+   `editor`, `journal_manager` *and* `section_editor`. A section editor is scoped
+   by assignment everywhere else in the system, so without the resource gate they
+   could read the reviewer roster — names and email addresses — for any
+   submission outside their own scope by guessing or discovering its slug.
+3. Response is mapped through `assignment-response.mapper.ts`. The repository
+   loads `reviewer` as a full `User`; returning the row directly ships
+   `passwordHash`.
+
+> A guard slug is never sufficient on its own when any role holding it is scoped
+> by assignment. Ask "who else holds this slug?" before choosing "resource only".
 
 **Assignment reminders (`GET …/reminders`)**
 

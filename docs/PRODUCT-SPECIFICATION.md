@@ -229,7 +229,7 @@ flowchart TB
 | `draft` | Author-editable; not in editor incoming queue |
 | `submitted` | With editorial office |
 | `under_review` | Active peer review |
-| `revisions_requested` | Returned to author |
+| `revisions_requested` | Returned to author; `revision_severity` records **minor** vs **major** and `revision_round` counts the cycles |
 | `accepted` | Editorial accept; not yet public |
 | `rejected` | Terminal |
 | `copyediting` | Production editing (≥1 copyeditor assigned) |
@@ -242,8 +242,8 @@ stateDiagram-v2
     [*] --> draft : Author creates
     draft --> submitted : Author submits
     submitted --> under_review : Editor sets status OR first reviewer accepts
-    under_review --> revisions_requested : Editor decision
-    revisions_requested --> submitted : Author resubmits
+    under_review --> revisions_requested : Editor decision (minor or major)
+    revisions_requested --> submitted : Author resubmits (revision_round + 1)
     under_review --> rejected : Editor decision
     under_review --> accepted : Editor decision
     accepted --> copyediting : Editor assigns copyeditor
@@ -305,15 +305,17 @@ Each review requires **at least one** of:
 - `commentsForAuthor` (may be shown to author)
 - `commentsToEditorOnly` (confidential)
 
-Plus `recommendation`: `accept`, `reject`, or `revisions`.
+Plus `recommendation`: `accept`, `minor_revisions`, `major_revisions`, `resubmit_for_review`, `resubmit_elsewhere`, `reject`, or `see_comments`. (`revisions` is retained for reviews filed before the minor/major split, but is no longer offered in the form.)
+
+Reviewers may also attach **review files** (`kind = review_response`, PDF/DOCX) via `POST /assignments/:slug/files` once they have accepted. These are editor-only until an editor releases them with a decision.
 
 ### 6.3 Review visibility
 
 | Viewer | Sees |
 |--------|------|
-| Editor | All reviews, full text, recommendations, reviewer identity |
-| Author | Redacted list: `commentsForAuthor`, `submittedAt` only |
-| Reviewer | Own review only (blind to co-reviewers) |
+| Editor | All reviews, full text, recommendations, reviewer identity, all review files |
+| Author | Redacted list: `commentsForAuthor`, `submittedAt` only. Plus an **anonymised progress feed** (`reviewProgress`): per reviewer, a stable 1-based index, assignment state and dates — never identity, never a per-reviewer recommendation. Plus only those review files an editor has **released**, under an anonymised filename |
+| Reviewer | Own review only (blind to co-reviewers), and never another reviewer's review file |
 
 ### 6.4 Reminders
 

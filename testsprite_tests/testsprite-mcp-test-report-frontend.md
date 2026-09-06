@@ -32,7 +32,7 @@
 - **Test Visualization and Result:** https://www.testsprite.com/dashboard/mcp/tests/4547da19-8a4d-4904-814c-75a63c56ec74/311562d7-fa58-4018-8a64-e5f9e54c2545
 - **Status:** ❌ Failed
 - **Severity:** MEDIUM
-- **Analysis / Findings:** **Likely automation fragility** — password field interaction failed in the browser agent, not necessarily a product bug. Author workflow itself works when using seeded account (`o65834757@gmail.com`). Worth a manual check of `/en/register` with a fresh email; also verify password visibility toggle / autofill does not block automated fills.
+- **Analysis / Findings:** **Likely automation fragility** — password field interaction failed in the browser agent, not necessarily a product bug. Author workflow itself works when using seeded account (`author@folio.dev`). Worth a manual check of `/en/register` with a fresh email; also verify password visibility toggle / autofill does not block automated fills.
 
 ---
 

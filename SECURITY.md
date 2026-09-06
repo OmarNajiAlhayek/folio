@@ -34,8 +34,18 @@ checks enforce ownership and workflow state. The guard alone cannot express "thi
 this submission", so both layers are required — see [`docs/authorization.md`](docs/authorization.md).
 
 **Requests are audited.** Every non-health request is written to `audit_log` (sampled by
-`AUDIT_SAMPLE_RATE`) with passwords, tokens and OTPs redacted, and purged on the schedule in
-`AUDIT_RETENTION_DAYS`.
+`AUDIT_SAMPLE_RATE`) and purged on the schedule in `AUDIT_RETENTION_DAYS`. Two classes of field
+are redacted from the stored body: credentials (passwords, tokens, OTPs — matched by suffix, so
+`newPassword` is covered) and confidential editorial text (reviewer comments, recommendations,
+decision letters, copyedit notes, discussion bodies). The audit log records *who did what*; it is
+not a second copy of the manuscript pipeline, and it must not become a way for a journal manager
+to read a double-anonymous review that `submission-response.mapper.ts` withholds.
+
+**Responses are mapped, not returned.** `User` rows carry `passwordHash`, so no handler returns an
+entity — or a relation — directly. Staff-facing shapes go through `users/user-summary.ts` and
+`submissions/assignment-response.mapper.ts`. `@Exclude()` on the column plus a global
+`ClassSerializerInterceptor` is the backstop, not the plan;
+`response-mappers.no-secret-leak.spec.ts` asserts both layers.
 
 **Rate limits are per handler.** Login, registration, refresh, OTP, password reset, upload,
 DOCX conversion and SSE each have their own budget rather than sharing one global bucket.

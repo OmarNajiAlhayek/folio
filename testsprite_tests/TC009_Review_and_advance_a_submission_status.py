@@ -51,7 +51,7 @@ async def run_test():
         # email text field
         elem = page.get_by_label('Email', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("k76462338@gmail.com")
+        await elem.fill("editor@folio.dev")
         
         # -> Fill the 'Email' field with the editor email, fill the 'Password' field with the editor password, then click the 'Sign in' button to log in.
         # password password field

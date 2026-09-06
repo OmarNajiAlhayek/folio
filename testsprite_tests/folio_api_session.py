@@ -69,9 +69,9 @@ def minimal_constructor_content(*, title: str) -> dict:
     }
 
 
-EDITOR_EMAIL = "k76462338@gmail.com"
+EDITOR_EMAIL = "editor@folio.dev"
 EDITOR_PASSWORD = "Editor123!"
-REVIEWER_EMAIL = "ysryrwthqsdthwy@gmail.com"
+REVIEWER_EMAIL = "reviewer@folio.dev"
 REVIEWER_PASSWORD = "Reviewer123!"
 
 

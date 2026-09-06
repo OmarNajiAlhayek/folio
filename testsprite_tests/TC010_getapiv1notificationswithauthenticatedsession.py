@@ -7,7 +7,7 @@ from folio_api_session import login_bearer
 BASE_URL = "http://localhost:5240"
 API_BASE = f"{BASE_URL}/api/v1"
 
-USERNAME = "k76462338@gmail.com"
+USERNAME = "editor@folio.dev"
 PASSWORD = "Editor123!"
 
 

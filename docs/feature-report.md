@@ -23,12 +23,15 @@
 - Use the **Word Constructor** (TipTap) to build a structured document section-by-section, then export as a styled **`.docx`** file (profile: `damascus-university-journal-v1`)
 - Upload files by kind (`cover_letter`, `title_page`, `manuscript`, `figure`, …); download or delete own files
 - **Submit** draft to the editorial queue
-- Resubmit after *revisions requested* decisions
+- Resubmit after *revisions requested* decisions, which are labelled **minor** or **major**
+- Track progress on a **submission timeline**: anonymised per-reviewer state (`Reviewer 1`, `Reviewer 2`, …) with dates, revision severity, and revision round
+- Download **reviewer review files** the editor has released, under an anonymised filename
 - **AI-assisted (optional):** suggest Arabic discipline; LLM keyword suggestions (EN/AR); auto-classify discipline on submit when enabled
 
 ### 2. Editor
 - View the full **submission queue** with status filters
 - Change submission **status** (`submitted → under_review → accepted / rejected / revisions_requested`; from `accepted`, assign copyeditors → `copyediting`)
+- Choose **minor** or **major** when requesting revisions (required), and pick which reviewer review files to **release to the author** with the decision
 - Set **review method** per submission (single-blind, double-blind, open)
 - **Assign reviewers** from `willingToReview` candidates; optionally pass `X-Folio-Locale` to localise the invite email
 - **Assign copyeditors** after acceptance (`POST /submissions/:slug/copyedit-assignments`)
@@ -53,7 +56,8 @@
 - View **pending assignments** (`invited` status)
 - **Accept or decline** an assignment; file access is granted only after acceptance
 - Download submission files in the **review package** only (`file_stage = review`; granted after acceptance)
-- Submit a **review**: author-facing comments, confidential editor feedback, and a final recommendation (`accept` / `reject` / `revisions`)
+- Submit a **review**: author-facing comments, confidential editor feedback, and a final recommendation (`accept` / `minor_revisions` / `major_revisions` / `resubmit_for_review` / `resubmit_elsewhere` / `reject` / `see_comments`)
+- Attach a **review file** (annotated manuscript or notes, PDF/DOCX) to the assignment, and withdraw it before an editor releases it
 - Receive **email reminders** automatically (due-soon + overdue) scheduled at invite time
 - **AI-assisted (optional):** view corpus similarity on assigned submissions (when enabled)
 

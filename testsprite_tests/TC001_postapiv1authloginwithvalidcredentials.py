@@ -11,7 +11,7 @@ def test_postapiv1authloginwithvalidcredentials():
         'Accept': 'application/json',
     }
     payload = {
-        "email": "k76462338@gmail.com",
+        "email": "editor@folio.dev",
         "password": "Editor123!"
     }
     try:
