@@ -2,6 +2,8 @@ import { z } from 'zod';
 import {
   MAX_UPLOAD_BYTES,
   SUBMISSION_ARTICLE_TYPES,
+  REVIEW_RECOMMENDATIONS,
+  REVISION_SEVERITIES,
   SUBMISSION_STATUSES,
 } from './constants';
 
@@ -201,14 +203,7 @@ export const createReviewSchema = z
   .object({
     commentsForAuthor: reviewCommentTrim,
     commentsToEditorOnly: reviewCommentTrim,
-    recommendation: z.enum([
-      'accept',
-      'revisions',
-      'resubmit_for_review',
-      'resubmit_elsewhere',
-      'reject',
-      'see_comments',
-    ]),
+    recommendation: z.enum(REVIEW_RECOMMENDATIONS),
   })
   .refine(
     (d) =>
@@ -234,10 +229,17 @@ export const assignReviewerSchema = z.object({
 });
 
 /** backend/src/submissions/dto/update-status.dto.ts */
-export const updateSubmissionStatusSchema = z.object({
-  status: z.enum(SUBMISSION_STATUSES),
-  messageForAuthor: z.string().max(4000).optional(),
-});
+export const updateSubmissionStatusSchema = z
+  .object({
+    status: z.enum(SUBMISSION_STATUSES),
+    messageForAuthor: z.string().max(4000).optional(),
+    revisionSeverity: z.enum(REVISION_SEVERITIES).optional(),
+    releaseReviewFileIds: z.array(z.string().uuid()).max(20).optional(),
+  })
+  .refine(
+    (d) => d.status !== 'revisions_requested' || d.revisionSeverity != null,
+    { message: 'revisionSeverityRequired', path: ['revisionSeverity'] },
+  );
 
 export function fileExceedsUploadLimit(file: File): boolean {
   return file.size > MAX_UPLOAD_BYTES;

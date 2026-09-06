@@ -222,7 +222,7 @@ export async function apiPostJsonOrBlob<T>(
   options: RequestInit = {},
 ): Promise<ApiPostJsonOrBlobResult<T>> {
   if (needsCsrfForRequest(path, 'POST')) {
-    await ensureCsrfToken(true);
+    await ensureCsrfToken();
   }
 
   const run = async (): Promise<ApiPostJsonOrBlobResult<T>> => {

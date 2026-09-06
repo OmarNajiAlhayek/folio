@@ -4,9 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiJson } from '@/lib/api';
 import { ApiError } from '@/lib/api-response';
 import { queryKeys } from '@/lib/query-keys';
-import { PERMISSION_SLUGS } from '@/lib/permissions';
+import {
+  canManageAssignmentReminders,
+  PERMISSION_SLUGS,
+} from '@/lib/permissions';
 import type { MeProfile } from '@/lib/permissions';
 import type { PreSubmitAnalysis } from '@/lib/pre-submit-validation';
+import { useMe } from '@/lib/queries/auth';
 
 export type SubmissionListItem = {
   id: string;
@@ -37,6 +41,43 @@ export type SubmissionFileRow = {
   kind?: string;
   fileStage?: string;
   isPublic?: boolean;
+  /**
+   * Set for reviewer `review_response` files once an editor releases them.
+   * Null means editor-only; the backend hides those from the author entirely.
+   */
+  releasedToAuthorAt?: string | null;
+  /**
+   * Anonymized filename the author sees for a released reviewer file
+   * (`Reviewer 2 — review file.docx`). Editors get `originalName` instead.
+   * Align with backend/src/submissions/submission-response.mapper.ts
+   */
+  displayName?: string;
+  /** Editors and section editors only — used to group reviewer files by reviewer. */
+  reviewAssignmentId?: string | null;
+};
+
+/** Align with backend/src/submissions/submission-workflow.constants.ts */
+export type RevisionSeverity = 'minor' | 'major';
+
+/**
+ * Anonymized per-reviewer progress shown to the author.
+ * Align with backend/src/reviews/author-review-progress.view.ts —
+ * it deliberately carries no identity and no per-reviewer recommendation.
+ */
+export type AuthorReviewerProgress = {
+  index: number;
+  status: 'invited' | 'accepted' | 'declined' | 'completed';
+  invitedAt: string;
+  respondedAt: string | null;
+  reviewDueAt: string | null;
+  reviewSubmittedAt: string | null;
+};
+
+export type AuthorReviewProgressSummary = {
+  invited: number;
+  accepted: number;
+  declined: number;
+  completed: number;
 };
 
 export type SubmissionRecord = {
@@ -72,6 +113,12 @@ export type SubmissionRecord = {
     | 'accepted'
     | 'revisions_requested'
     | null;
+  revisionSeverity?: RevisionSeverity | null;
+  /** 0 until the first revisions_requested decision. */
+  revisionRound?: number;
+  /** Author viewer only. */
+  reviewProgress?: AuthorReviewerProgress[];
+  reviewProgressSummary?: AuthorReviewProgressSummary;
   authorResponseToReviewers?: string | null;
   files?: SubmissionFileRow[];
   constructorContent?: unknown | null;
@@ -170,20 +217,19 @@ export type SubmissionDetailPayload = {
 
 export async function fetchSubmissionDetail(
   slug: string,
+  me: MeProfile,
 ): Promise<SubmissionDetailPayload> {
   const enc = encodeURIComponent(slug);
 
-  // Round 1: identity + submission base (always needed)
-  const [m, s] = await Promise.all([
-    apiJson<MeProfile>('/auth/me'),
-    apiJson<SubmissionRecord>(`/submissions/${enc}`),
-  ]);
+  // Identity comes from the shared `useMe()` cache — this page already
+  // mounted AuthGate / Nav, so a second GET /auth/me is wasted.
+  const s = await apiJson<SubmissionRecord>(`/submissions/${enc}`);
 
-  const permissions = m.permissions ?? [];
+  const permissions = me.permissions ?? [];
   const isEditorView = permissions.includes(
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
   );
-  const isOwner = s.authorId === m.id;
+  const isOwner = s.authorId === me.id;
   const canListAssignments =
     isEditorView &&
     permissions.includes(PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS);
@@ -232,8 +278,10 @@ export async function fetchSubmissionDetail(
   const canAssignSectionEditor = permissions.includes(
     PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
   );
+  const canLoadReminders =
+    canManageAssignmentReminders(permissions) && assignmentsWithSlug.length > 0;
 
-  const [candidatesResult, seCandidatesResult, ...reminderEntries] =
+  const [candidatesResult, seCandidatesResult, remindersResult] =
     await Promise.all([
       canAssignReviewer
         ? apiJson<SubmissionDetailPayload['reviewerCandidates']>(
@@ -250,14 +298,13 @@ export async function fetchSubmissionDetail(
               data: [] as SectionEditorCandidate[],
             }))
         : Promise.resolve(null),
-      ...assignmentsWithSlug.map((a) => {
-        const asg = String(a.slug);
-        return apiJson<ReminderRow[]>(
-          `/submissions/${enc}/assignments/${encodeURIComponent(asg)}/reminders`,
-        )
-          .then((rows) => ({ asg, rows, failed: false }))
-          .catch(() => ({ asg, rows: [] as ReminderRow[], failed: true }));
-      }),
+      canLoadReminders
+        ? apiJson<Record<string, ReminderRow[]>>(
+            `/submissions/${enc}/assignment-reminders`,
+          )
+            .then((data) => ({ ok: true as const, data }))
+            .catch(() => ({ ok: false as const }))
+        : Promise.resolve(null),
     ]);
 
   let candidates: SubmissionDetailPayload['reviewerCandidates'] = [];
@@ -276,18 +323,19 @@ export async function fetchSubmissionDetail(
     }
   }
 
-  const reminderMap = Object.fromEntries(
-    reminderEntries.map((e) => [e.asg, e.rows]),
-  );
+  const reminderMap: Record<string, ReminderRow[]> =
+    remindersResult?.ok === true ? remindersResult.data : {};
   const reminderLoadFailedByAssignment = Object.fromEntries(
-    reminderEntries.filter((e) => e.failed).map((e) => [e.asg, true]),
+    remindersResult?.ok === false
+      ? assignmentsWithSlug.map((a) => [String(a.slug), true])
+      : [],
   );
 
   const sectionEditorCandidates: SectionEditorCandidate[] =
     seCandidatesResult?.ok ? seCandidatesResult.data : [];
 
   return {
-    me: { id: m.id, permissions },
+    me: { id: me.id, permissions },
     sub: s,
     isEditorView,
     isOwner,
@@ -322,10 +370,11 @@ export function useSubmission(slug: string, enabled = true) {
 }
 
 export function useSubmissionDetail(slug: string, enabled = true) {
+  const meQuery = useMe();
   return useQuery({
     queryKey: queryKeys.submissionDetail(slug),
-    queryFn: () => fetchSubmissionDetail(slug),
-    enabled: enabled && !!slug,
+    queryFn: () => fetchSubmissionDetail(slug, meQuery.data!),
+    enabled: enabled && !!slug && !!meQuery.data,
     retry: false,
   });
 }

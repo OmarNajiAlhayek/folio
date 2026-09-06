@@ -37,7 +37,7 @@ const EDITOR_CREDS = {
 };
 
 const REVIEWER_CREDS = {
-  email: 'ysryrwthqsdthwy@gmail.com',
+  email: 'reviewer@folio.dev',
   password: 'Reviewer123!',
   displayName: 'R. Reviewer',
 };

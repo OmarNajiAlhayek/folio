@@ -63,6 +63,51 @@ export function assignmentStatusPillClass(status: string): string {
   }
 }
 
+/**
+ * Revision severity is rendered as its own chip next to the status pill rather
+ * than as a status variant, matching how it is modelled on the backend.
+ */
+export function revisionSeverityPillClass(severity: string): string {
+  const base =
+    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border tabular-nums';
+  return severity === 'major'
+    ? `${base} bg-rose-500/8 border-rose-500/15 text-rose-600 dark:text-rose-400`
+    : `${base} bg-amber-500/8 border-amber-500/15 text-amber-600 dark:text-amber-400`;
+}
+
+export function revisionSeverityLabel(
+  severity: string,
+  t: (key: 'severityMinor' | 'severityMajor') => string,
+): string {
+  return severity === 'major' ? t('severityMajor') : t('severityMinor');
+}
+
+/**
+ * Author-facing wording for one anonymized reviewer's state. Deliberately
+ * distinct from `assignmentStatusLabel`, which is editor-facing.
+ */
+export function reviewerProgressLabel(
+  status: string,
+  t: (
+    key:
+      | 'workflowReviewerInvited'
+      | 'workflowReviewerAccepted'
+      | 'workflowReviewerDeclined'
+      | 'workflowReviewerCompleted',
+  ) => string,
+): string {
+  switch (status) {
+    case 'accepted':
+      return t('workflowReviewerAccepted');
+    case 'declined':
+      return t('workflowReviewerDeclined');
+    case 'completed':
+      return t('workflowReviewerCompleted');
+    default:
+      return t('workflowReviewerInvited');
+  }
+}
+
 export function assignmentStatusLabel(
   status: string,
   t: (
@@ -98,7 +143,8 @@ export function submissionStatusLabel(
       | 'stAccepted'
       | 'stRejected'
       | 'stCopyediting'
-      | 'stPublished',
+      | 'stPublished'
+      | 'stRetracted',
   ) => string,
 ): string {
   switch (status) {
@@ -118,6 +164,8 @@ export function submissionStatusLabel(
       return t('stCopyediting');
     case 'published':
       return t('stPublished');
+    case 'retracted':
+      return t('stRetracted');
     default:
       return status;
   }

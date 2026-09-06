@@ -171,6 +171,10 @@
       "title": "Manuscript published",
       "body": "{submissionTitle} is now in the public catalog."
     },
+    "submissionRetracted": {
+      "title": "Manuscript retracted",
+      "body": "{submissionTitle} has been removed from the public catalog."
+    },
     "corpusSimilarityDone": {
       "title": "Plagiarism check complete",
       "body": "The plagiarism report for \"{submissionTitle}\" is ready."
@@ -395,6 +399,7 @@
     "hasAccount": "Already have an account?",
     "loginLink": "Log in",
     "registrationFailed": "Registration failed",
+    "accountUnavailable": "Unable to create this account. If you already have one, sign in.",
     "registrationSuccess": "Account created. Welcome!",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
@@ -495,6 +500,7 @@
     "stRejectedPostReview": "Reject (after review)",
     "stCopyediting": "Copyediting",
     "stPublished": "Published",
+    "stRetracted": "Retracted",
     "updatedLabel": "Updated {date}",
     "emptyHint": "When you create a submission, it will appear here.",
     "emptyCta": "Start your first submission",
@@ -784,6 +790,11 @@
     "resubmitResponseLabel": "Response to reviewers (optional)",
     "resubmitResponseHint": "Summarize how you addressed the editor's and reviewers' feedback. Shown to the editor alongside your revised files.",
     "resubmitResponsePlaceholder": "e.g. We revised Section 3 per Reviewer 2's comment on methodology...",
+    "retractButton": "Retract from catalog",
+    "retractHint": "Removes the article from the public catalog. Files stop being world-readable. This cannot be undone from the app.",
+    "retractConfirm": "Retract this article? It will disappear from the public catalog.",
+    "retracted": "Article retracted.",
+    "retractFailed": "Could not retract the article.",
     "editorCommandCenter": "Editor Command Center",
     "editorAdminBadge": "Admin",
     "updateStatus": "Update Status",
@@ -809,7 +820,26 @@
     "corpusSimilarityExactQuotedSpan": "quoted",
     "corpusSimilarityExactUnreadable": "The manuscript text is unreadable (broken PDF encoding or scan garbage). Exact-match cannot run — re-upload a clean DOCX or a PDF with a real text layer.",
     "corpusSimilarityExactEstimated": "Estimated (fingerprint only — no quotable source text)",
-    "corpusSimilarityExactVerified": "Verified against stored source text"
+    "corpusSimilarityExactVerified": "Verified against stored source text",
+    "workflowReviewer": "Reviewer {index}",
+    "workflowReviewerProgress": "{done} of {total} complete",
+    "workflowReviewerInvited": "Invited",
+    "workflowReviewerAccepted": "Accepted invitation",
+    "workflowReviewerDeclined": "Declined",
+    "workflowReviewerCompleted": "Review submitted",
+    "workflowReviewerDue": "due {date}",
+    "workflowRevisionRound": "Revision round {round}",
+    "severityMinor": "Minor revisions",
+    "severityMajor": "Major revisions",
+    "revisionSeverityLabel": "Revision severity",
+    "revisionSeverityHint": "Minor: limited, targeted changes. Major: substantial rework, and the revised manuscript may go back to the reviewers.",
+    "releaseFilesLabel": "Release reviewer files to author",
+    "releaseFilesHint": "Reviewer files stay editor-only until you release them. Released files reach the author under an anonymised name.",
+    "releaseFilesAlreadyReleased": "Already released to the author",
+    "reviewerFeedbackFiles": "Reviewer feedback files",
+    "reviewerFeedbackFilesHint": "Files the editor has shared with you from the reviewers. Reviewer identities are not disclosed.",
+    "reviewerFeedbackFileFallback": "Reviewer file",
+    "consensusSuggestedSeverity": "Reviewers suggest: {severity}"
   },
   "SubmissionWorkflow": {
     "metadataReadonlyTitle": "Submission metadata",
@@ -963,7 +993,9 @@
     "error_PRE_SUBMIT_ANALYSIS_REQUIRED": "Run manuscript validation before submitting for review.",
     "error_PRE_SUBMIT_ANALYSIS_STALE": "Your manuscript changed after the last validation. Re-run validation before submitting.",
     "error_PRE_SUBMIT_BLOCKING_ISSUES": "Fix structure, format, or citation issues shown in manuscript validation before submitting.",
-    "error_PRE_SUBMIT_WARNINGS_UNACKNOWLEDGED": "Review and acknowledge the language notes in manuscript validation before submitting."
+    "error_PRE_SUBMIT_WARNINGS_UNACKNOWLEDGED": "Review and acknowledge the language notes in manuscript validation before submitting.",
+    "fileKind_review_response": "Reviewer review file",
+    "fileKindHint_review_response": "Annotated manuscript or review notes uploaded by a reviewer."
   },
   "Editor": {
     "title": "Editor queue",
@@ -979,6 +1011,7 @@
     "stAccepted": "accepted",
     "stRejected": "rejected",
     "stPublished": "published",
+    "stRetracted": "retracted",
     "searchCuration": "Search Curation"
   },
   "SectionEditor": {
@@ -1281,7 +1314,7 @@
     "doubleBlindNote": "This is a double-blind review. Files shown are the anonymized manuscript prepared by the editor.",
     "uploadSection": "Upload review file",
     "uploadLabel": "Label (optional)",
-    "uploadHint": "Upload your annotated manuscript or review notes (PDF or DOCX, max 20 MB).",
+    "uploadHint": "Upload your annotated manuscript or review notes (PDF or DOCX, max 25 MB).",
     "uploadSuccess": "File uploaded.",
     "uploadFailed": "Upload failed. Please try again.",
     "discussionsSection": "Review discussions",
@@ -1300,7 +1333,13 @@
     "recHintSeeComments": "Decision deferred — please read the confidential comments.",
     "completedHeading": "Review submitted",
     "completedRecommendation": "Your recommendation",
-    "completedAt": "Submitted"
+    "completedAt": "Submitted",
+    "recHintMinorRevisions": "Sound work needing limited, targeted changes before acceptance.",
+    "recHintMajorRevisions": "Promising work needing substantial rework; it should come back for review.",
+    "uploadTooLarge": "That file is too large. Maximum {max} MB.",
+    "uploadRemoved": "File removed.",
+    "uploadRemoveFailed": "Could not remove that file.",
+    "uploadRemoveLabel": "Remove file"
   },
   "Publications": {
     "eyebrow": "Open catalog",
@@ -1693,6 +1732,7 @@
     "approveReadySuccess": "Approved — ready to publish.",
     "approveReadyFailed": "Could not approve for publication.",
     "publishButton": "Publish to catalog",
+    "publishEditorHint": "All copyedit assignments are ready. You can publish even if you are not the assigned copyeditor.",
     "published": "Published.",
     "publishFailed": "Could not publish.",
     "assignmentStatus_active": "Active",
@@ -1747,7 +1787,9 @@
     "recResubmitForReview": "Resubmit for review",
     "recResubmitElsewhere": "Resubmit elsewhere",
     "recReject": "Decline submission",
-    "recSeeComments": "See comments"
+    "recSeeComments": "See comments",
+    "recMinorRevisions": "Minor revisions",
+    "recMajorRevisions": "Major revisions"
   },
   "UI": {
     "searchPlaceholder": "Search…",
@@ -1773,7 +1815,8 @@
     "abstractMaxWordsEn": "English abstract must be at most {max} words.",
     "abstractMaxWordsAr": "Arabic abstract must be at most {max} words.",
     "reviewCommentsRequired": "For reject or revisions, enter comments for the author and/or confidential comments for the editor (at least one).",
-    "passwordMismatch": "Passwords do not match."
+    "passwordMismatch": "Passwords do not match.",
+    "revisionSeverityRequired": "Choose whether the revisions requested are minor or major."
   },
   "SearchCuration": {
     "title": "Search curation",

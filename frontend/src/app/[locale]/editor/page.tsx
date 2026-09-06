@@ -36,6 +36,7 @@ const EDITOR_FILTER_STATUSES = [
   'rejected',
   'copyediting',
   'published',
+  'retracted',
 ] as const;
 
 export default function EditorPage() {

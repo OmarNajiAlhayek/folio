@@ -9,6 +9,7 @@ import {
   ThumbsUp,
   Ban,
   ShieldCheck,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -66,6 +67,12 @@ export function getNotificationVisuals(
       return {
         bg: 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-500/20',
         icon: FileCheck,
+      };
+    case 'submission_retracted':
+    case 'submissionRetracted':
+      return {
+        bg: 'bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400 border-red-500/20',
+        icon: TriangleAlert,
       };
     case 'review_submitted':
     case 'reviewSubmitted':

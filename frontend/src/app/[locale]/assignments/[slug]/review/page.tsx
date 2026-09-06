@@ -1,11 +1,20 @@
 'use client';
 
-import { CircleX, ChevronDown, ChevronUp, Paperclip, Plus } from 'lucide-react';
+import {
+  CircleX,
+  ChevronDown,
+  ChevronUp,
+  Paperclip,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useParams } from 'next/navigation';
-import { apiBlob, apiJson, apiUpload, ApiError } from '@/lib/api';
+import { apiBlob, apiFetch, apiJson, apiUpload, ApiError } from '@/lib/api';
+import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { ACCEPT_MANUSCRIPT } from '@/lib/upload-accept';
 import { redirectToLogin } from '@/lib/auth-redirect';
 import { ApiErrorState } from '@/components/api-error-state';
 import { toast } from '@/lib/toast';
@@ -18,19 +27,20 @@ import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import {
   createReviewSchema,
+  fileExceedsUploadLimit,
   formatZodIssues,
   joinValidationBulletList,
+  MAX_UPLOAD_MB,
+  REVIEW_RECOMMENDATION_CHOICES,
   safeParseResult,
 } from '@/lib/validation';
 
-const recs = [
-  'accept',
-  'revisions',
-  'resubmit_for_review',
-  'resubmit_elsewhere',
-  'reject',
-  'see_comments',
-] as const;
+/**
+ * The legacy undifferentiated `revisions` value is intentionally absent: it is
+ * still accepted by the API for rows written before the minor/major split, but
+ * reviewers now choose a severity.
+ */
+const recs = REVIEW_RECOMMENDATION_CHOICES;
 type Rec = (typeof recs)[number];
 
 const ABSTRACT_PREVIEW_LEN = 420;
@@ -289,9 +299,13 @@ export default function ReviewFormPage() {
     }
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleFileUpload(file: File) {
+    if (fileExceedsUploadLimit(file)) {
+      toast.error(t('uploadTooLarge', { max: MAX_UPLOAD_MB }), {
+        id: 'assignment-review-upload',
+      });
+      return;
+    }
     setUploading(true);
     try {
       const saved = (await apiUpload(
@@ -306,7 +320,27 @@ export default function ReviewFormPage() {
       showApiError(err, t('uploadFailed'), { id: 'assignment-review-upload' });
     } finally {
       setUploading(false);
-      e.target.value = '';
+    }
+  }
+
+  /** Only possible before an editor releases the file to the author. */
+  async function removeReviewerFile(fileId: string) {
+    setUploading(true);
+    try {
+      await apiFetch(
+        `/assignments/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`,
+        { method: 'DELETE' },
+      );
+      setReviewerFiles((prev) => prev.filter((f) => f.id !== fileId));
+      toast.success(t('uploadRemoved'), {
+        id: 'assignment-review-upload-removed',
+      });
+    } catch (err) {
+      showApiError(err, t('uploadRemoveFailed'), {
+        id: 'assignment-review-upload',
+      });
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -376,10 +410,14 @@ export default function ReviewFormPage() {
   const statusLabel =
     statusKey != null ? tSub(statusKey) : (sub?.status ?? '—');
 
-  const recLabel = (r: Rec): string => {
-    const map: Record<Rec, string> = {
-      accept: tCommon('recAccept'),
+  /** Accepts the legacy `revisions` value so reviews filed before the
+   *  minor/major split still render a translated label. */
+  const recLabel = (r: Rec | 'revisions'): string => {
+    const map: Record<Rec | 'revisions', string> = {
       revisions: tCommon('recRevisions'),
+      accept: tCommon('recAccept'),
+      minor_revisions: tCommon('recMinorRevisions'),
+      major_revisions: tCommon('recMajorRevisions'),
       resubmit_for_review: tCommon('recResubmitForReview'),
       resubmit_elsewhere: tCommon('recResubmitElsewhere'),
       reject: tCommon('recReject'),
@@ -391,7 +429,8 @@ export default function ReviewFormPage() {
   const recHint = (r: Rec): string => {
     const map: Record<Rec, string> = {
       accept: t('recHintAccept'),
-      revisions: t('recHintRevisions'),
+      minor_revisions: t('recHintMinorRevisions'),
+      major_revisions: t('recHintMajorRevisions'),
       resubmit_for_review: t('recHintResubmitForReview'),
       resubmit_elsewhere: t('recHintResubmitElsewhere'),
       reject: t('recHintReject'),
@@ -512,8 +551,9 @@ export default function ReviewFormPage() {
                     {t('completedRecommendation')}
                   </dt>
                   <dd className="mt-1 text-sm font-medium text-ink">
-                    {recLabel(assignment.review.recommendation as Rec) ??
-                      assignment.review.recommendation}
+                    {recLabel(
+                      assignment.review.recommendation as Rec | 'revisions',
+                    ) ?? assignment.review.recommendation}
                   </dd>
                 </div>
                 <div className="rounded-lg bg-white/60 px-4 py-3">
@@ -753,30 +793,48 @@ export default function ReviewFormPage() {
                           aria-hidden
                         />
                         <span
-                          className="min-w-0 truncate text-ink"
+                          className="min-w-0 flex-1 truncate text-ink"
                           title={file.originalName}
                         >
                           {file.originalName}
                         </span>
+                        <button
+                          type="button"
+                          disabled={uploading}
+                          onClick={() => void removeReviewerFile(file.id)}
+                          className="shrink-0 rounded-md p-1 text-ink/40 transition-colors hover:bg-rose-500/10 hover:text-rose-600 disabled:opacity-50"
+                          aria-label={t('uploadRemoveLabel')}
+                          title={t('uploadRemoveLabel')}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
-                <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-ink/20 bg-paper/50 px-4 py-3 text-sm font-medium text-accent hover:bg-paper transition-colors">
-                  {uploading ? (
-                    <Spinner className="size-4" aria-hidden />
-                  ) : (
-                    <Plus className="size-4" aria-hidden />
-                  )}
-                  {t('uploadLabel')}
-                  <input
-                    type="file"
-                    accept=".pdf,.docx"
-                    className="sr-only"
-                    disabled={uploading}
-                    onChange={(e) => void handleFileUpload(e)}
-                  />
-                </label>
+                <FileDropZone
+                  inputId="reviewer-response-file"
+                  accept={ACCEPT_MANUSCRIPT}
+                  disabled={uploading}
+                  uploading={uploading}
+                  onFile={(file) => void handleFileUpload(file)}
+                  ariaLabel={t('uploadLabel')}
+                  className="mt-3"
+                >
+                  <label
+                    htmlFor="reviewer-response-file"
+                    className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-ink/20 bg-paper/50 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-paper ${
+                      uploading ? 'pointer-events-none opacity-50' : ''
+                    }`}
+                  >
+                    {uploading ? (
+                      <Spinner className="size-4" aria-hidden />
+                    ) : (
+                      <Plus className="size-4" aria-hidden />
+                    )}
+                    {t('uploadLabel')}
+                  </label>
+                </FileDropZone>
               </div>
 
               {sub?.slug ? (

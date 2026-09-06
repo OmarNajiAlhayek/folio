@@ -78,6 +78,7 @@ const FALLBACK_BY_CODE = new Set([
   'AI_SERVICE_UNAVAILABLE',
   'AI_KEYWORDS_SUGGESTION_FAILED',
   'AI_CLASSIFICATION_FAILED',
+  'REGISTRATION_FAILED',
 ]);
 
 export function isCsrfApiError(err: unknown): boolean {

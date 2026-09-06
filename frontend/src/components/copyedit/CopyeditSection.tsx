@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
 import { apiJson, apiUpload } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useToastApiError } from '@/lib/use-toast-api-error';
@@ -134,6 +133,22 @@ export function CopyeditSection({
     }
   }
 
+  async function publishToCatalog() {
+    setBusy(true);
+    try {
+      await apiJson(`/submissions/${submissionSlug}/publish`, {
+        method: 'POST',
+      });
+      toast.success(t('published'));
+      onReload();
+      await load();
+    } catch (err) {
+      showApiError(err, t('publishFailed'), { id: 'copyedit-publish' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function uploadRevision(file: File) {
     if (fileExceedsUploadLimit(file)) {
       toast.error(t('fileTooLarge', { maxMb: String(MAX_UPLOAD_MB) }), {
@@ -159,6 +174,13 @@ export function CopyeditSection({
   if (submissionStatus !== 'copyediting' && submissionStatus !== 'accepted') {
     return null;
   }
+
+  const canPublishOverride =
+    isEditor &&
+    submissionStatus === 'copyediting' &&
+    permissions.includes(PERMISSION_SLUGS.COPYEDIT_PUBLISH) &&
+    assignments.length > 0 &&
+    assignments.every((a) => a.status === 'ready_for_review');
 
   const notesByAssignment = new Map<string, CopyeditNoteRow[]>();
   for (const n of notes) {
@@ -200,6 +222,20 @@ export function CopyeditSection({
             onClick={() => void assignCopyeditor()}
           >
             {t('assignButton')}
+          </button>
+        </div>
+      )}
+
+      {canPublishOverride && (
+        <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 p-4">
+          <p className="text-sm text-ink/70">{t('publishEditorHint')}</p>
+          <button
+            type="button"
+            disabled={busy}
+            className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            onClick={() => void publishToCatalog()}
+          >
+            {t('publishButton')}
           </button>
         </div>
       )}

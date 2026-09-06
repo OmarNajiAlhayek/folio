@@ -127,7 +127,7 @@ function RegisterForm() {
       router.push(verifyNext);
       router.refresh();
     } catch (err) {
-      showApiError(err, t('registrationFailed'), { id: 'register-failed' });
+      showApiError(err, t('accountUnavailable'), { id: 'register-failed' });
     }
   }
 

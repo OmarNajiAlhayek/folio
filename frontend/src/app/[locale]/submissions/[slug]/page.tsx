@@ -19,6 +19,7 @@ import {
 } from '@/lib/upload-accept';
 import { ApiErrorState } from '@/components/api-error-state';
 import { ReviewConsensusPanel } from '@/components/ReviewConsensusPanel';
+import { SubmissionStatusTimeline } from '@/components/submission-status-timeline';
 import { EditorAssignmentDiscussion } from '@/components/EditorAssignmentDiscussion';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,12 +45,15 @@ import {
   type SubmissionRecord,
   type ReviewForEditor,
   type ReviewForAuthor,
+  type RevisionSeverity,
+  type SubmissionFileRow,
 } from '@/lib/queries/submissions';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { SimpleSelect } from '@/components/ui/select';
 import {
   assignmentStatusLabel,
   assignmentStatusPillClass,
+  revisionSeverityLabel,
   statusPillClass,
   submissionStatusLabel,
   submissionQueueShellCls,
@@ -61,6 +65,7 @@ import {
   formatZodIssues,
   joinValidationBulletList,
   MAX_UPLOAD_MB,
+  REVISION_SEVERITIES,
   safeParseResult,
   updateSubmissionStatusSchema,
 } from '@/lib/validation';
@@ -229,9 +234,10 @@ function SubmissionFileRow({
           </div>
           <p
             className="mt-1 truncate text-sm font-medium text-ink transition-colors group-hover:text-accent"
-            title={f.originalName}
+            title={f.displayName ?? f.originalName}
           >
-            {f.originalName}
+            {/* Released reviewer files carry an anonymized displayName. */}
+            {f.displayName ?? f.originalName}
           </p>
         </div>
       </div>
@@ -444,6 +450,10 @@ export default function SubmissionDetailPage() {
   const [sectionEditorPick, setSectionEditorPick] = useState('');
   const [statusPick, setStatusPick] = useState('');
   const [messageForAuthor, setMessageForAuthor] = useState('');
+  const [revisionSeverity, setRevisionSeverity] = useState<
+    RevisionSeverity | ''
+  >('');
+  const [releaseFileIds, setReleaseFileIds] = useState<string[]>([]);
   const [authorResponseToReviewers, setAuthorResponseToReviewers] =
     useState('');
   const [busy, setBusy] = useState(false);
@@ -867,15 +877,40 @@ export default function SubmissionDetailPage() {
     }
   }
 
+  async function retractSubmission() {
+    if (!sub) return;
+    if (!confirm(t('retractConfirm'))) return;
+    setBusy(true);
+    try {
+      await apiJson(`/submissions/${encodeURIComponent(sub.slug)}/retract`, {
+        method: 'POST',
+      });
+      toast.success(t('retracted'));
+      invalidateDetail(slug);
+    } catch (err) {
+      showApiError(err, t('retractFailed'), { id: 'retract' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function updateStatus() {
     if (!sub) return;
     const body: {
       status: string;
       messageForAuthor?: string;
+      revisionSeverity?: RevisionSeverity;
+      releaseReviewFileIds?: string[];
     } = { status: statusPick };
     const trimmedMessage = messageForAuthor.trim();
     if (isEditorDecisionStatus(statusPick) && trimmedMessage) {
       body.messageForAuthor = trimmedMessage;
+    }
+    if (statusPick === 'revisions_requested' && revisionSeverity) {
+      body.revisionSeverity = revisionSeverity;
+    }
+    if (isEditorDecisionStatus(statusPick) && releaseFileIds.length > 0) {
+      body.releaseReviewFileIds = releaseFileIds;
     }
     const parsed = safeParseResult(updateSubmissionStatusSchema, body);
     if (!parsed.ok) {
@@ -894,6 +929,8 @@ export default function SubmissionDetailPage() {
       });
       toast.success(t('statusUpdated'));
       setMessageForAuthor('');
+      setRevisionSeverity('');
+      setReleaseFileIds([]);
       invalidateDetail(slug);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'REVIEW_PACKAGE_INCOMPLETE') {
@@ -1162,6 +1199,22 @@ export default function SubmissionDetailPage() {
         }),
   };
   const files = sub.files ?? [];
+  /**
+   * Reviewer-uploaded review files. The backend hides these from the author
+   * until released, so for an author viewer this list only ever contains files
+   * an editor has already shared.
+   */
+  const reviewerResponseFiles = files.filter(
+    (f) => f.kind === 'review_response',
+  );
+  const authorFiles = files.filter((f) => f.kind !== 'review_response');
+  /** Editors see who wrote each review file; the author sees `displayName`. */
+  const reviewerLabelForFile = (f: SubmissionFileRow): string => {
+    const row = editorAssignmentRows.find((a) => a.id === f.reviewAssignmentId);
+    const name =
+      row?.reviewer?.displayName?.trim() || row?.reviewer?.email?.trim();
+    return name || f.displayName || t('reviewerFeedbackFileFallback');
+  };
   const constructorContent = sub.constructorContent as
     | ConstructorContent
     | null
@@ -1696,13 +1749,13 @@ export default function SubmissionDetailPage() {
                   />
                 </div>
               ) : null}
-              {files.length > 0 && (
+              {authorFiles.length > 0 && (
                 <div className="pt-4 border-t border-ink/[0.05] dark:border-white/[0.05]">
                   <h3 className="text-sm font-semibold text-ink mb-3">
                     {t('yourFiles')}
                   </h3>
                   <ul className="mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]">
-                    {files.map((f) => (
+                    {authorFiles.map((f) => (
                       <SubmissionFileRow
                         key={f.id}
                         f={f}
@@ -1749,7 +1802,7 @@ export default function SubmissionDetailPage() {
                     : 'mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]'
                 }
               >
-                {files.map((f) => (
+                {(isEditorView ? files : authorFiles).map((f) => (
                   <SubmissionFileRow
                     key={f.id}
                     f={f}
@@ -1766,6 +1819,37 @@ export default function SubmissionDetailPage() {
                         ? (row) => void patchFileReviewStage(row)
                         : undefined
                     }
+                    onDownload={(row) => void downloadSubmissionFile(row)}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/*
+            Reviewer feedback files, kept out of the author's own file list.
+            The backend only sends these once an editor has released them, and
+            under an anonymized `displayName`.
+          */}
+          {isAuthor && !isEditorView && reviewerResponseFiles.length > 0 && (
+            <section
+              className={`${cardRounded} border border-ink/10 dark:border-white/10 bg-surface shadow-xs ${contentPad}`}
+            >
+              <h2 className="font-serif text-lg font-semibold text-ink">
+                {t('reviewerFeedbackFiles')}
+              </h2>
+              <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-ink/70">
+                {t('reviewerFeedbackFilesHint')}
+              </p>
+              <ul className="mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]">
+                {reviewerResponseFiles.map((f) => (
+                  <SubmissionFileRow
+                    key={f.id}
+                    f={f}
+                    showRemove={false}
+                    busy={busy}
+                    t={t}
+                    tWf={tWf}
                     onDownload={(row) => void downloadSubmissionFile(row)}
                   />
                 ))}
@@ -2153,128 +2237,14 @@ export default function SubmissionDetailPage() {
 
           {/* Author Submission Workflow Stage Tracker */}
           {isAuthor && !isEditorView && sub.status !== 'draft' && (
-            <div className="rounded-2xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-5">
-              <h3 className="font-serif text-base font-semibold text-ink border-b border-ink/[0.06] dark:border-white/[0.06] pb-3">
-                {t('workflowProgress')}
-              </h3>
-
-              <div className="relative ps-6 space-y-6 before:absolute before:start-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-ink/[0.06] dark:before:bg-white/[0.06]">
-                {/* Step 1: Submitted */}
-                <div className="relative">
-                  <span className="absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-                    ✓
-                  </span>
-                  <p className="text-xs font-bold text-ink">
-                    {t('workflowSubmitted')}
-                  </p>
-                  <p className="text-[10px] text-ink/50">
-                    {t('workflowSubmittedHint')}
-                  </p>
-                </div>
-
-                {/* Step 2: Under Review */}
-                <div className="relative">
-                  <span
-                    className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                      sub.status === 'under_review' ||
-                      sub.status === 'revisions_requested'
-                        ? 'border-blue-500 bg-blue-500 text-white animate-pulse'
-                        : sub.status === 'accepted' ||
-                            sub.status === 'published'
-                          ? 'border-emerald-500 bg-emerald-500 text-white'
-                          : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
-                    }`}
-                  >
-                    {sub.status === 'accepted' || sub.status === 'published'
-                      ? '✓'
-                      : '2'}
-                  </span>
-                  <p
-                    className={`text-xs font-bold ${
-                      sub.status === 'under_review'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : sub.status === 'revisions_requested'
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-ink'
-                    }`}
-                  >
-                    {t('workflowPeerReview')}
-                  </p>
-                  <p className="text-[10px] text-ink/50">
-                    {sub.status === 'under_review'
-                      ? t('workflowPeerReviewActive')
-                      : sub.status === 'revisions_requested'
-                        ? t('workflowPeerReviewRevisions')
-                        : sub.status === 'accepted' ||
-                            sub.status === 'published'
-                          ? t('workflowPeerReviewDone')
-                          : t('workflowPeerReviewWaiting')}
-                  </p>
-                </div>
-
-                {/* Step 3: Decision */}
-                <div className="relative">
-                  <span
-                    className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                      sub.status === 'accepted'
-                        ? 'border-emerald-500 bg-emerald-500 text-white animate-pulse'
-                        : sub.status === 'published'
-                          ? 'border-emerald-500 bg-emerald-500 text-white'
-                          : sub.status === 'rejected'
-                            ? 'border-rose-500 bg-rose-500 text-white'
-                            : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
-                    }`}
-                  >
-                    {sub.status === 'published'
-                      ? '✓'
-                      : sub.status === 'rejected'
-                        ? '✕'
-                        : '3'}
-                  </span>
-                  <p
-                    className={`text-xs font-bold ${sub.status === 'rejected' ? 'text-rose-600 dark:text-rose-400' : 'text-ink'}`}
-                  >
-                    {t('workflowDecision')}
-                  </p>
-                  <p className="text-[10px] text-ink/50">
-                    {sub.status === 'accepted'
-                      ? t('workflowDecisionAccepted')
-                      : sub.status === 'published'
-                        ? t('workflowDecisionPublished')
-                        : sub.status === 'rejected'
-                          ? t('workflowDecisionRejected')
-                          : sub.status === 'revisions_requested'
-                            ? t('workflowDecisionRevisions')
-                            : t('workflowDecisionWaiting')}
-                  </p>
-                </div>
-
-                {/* Step 4: Published */}
-                {sub.status !== 'rejected' && (
-                  <div className="relative">
-                    <span
-                      className={`absolute -start-6 top-0.5 flex size-4.5 items-center justify-center rounded-full border text-[10px] font-bold ${
-                        sub.status === 'published'
-                          ? 'border-emerald-500 bg-emerald-500 text-white'
-                          : 'border-ink/20 dark:border-white/20 bg-paper text-ink/40'
-                      }`}
-                    >
-                      {sub.status === 'published' ? '✓' : '4'}
-                    </span>
-                    <p
-                      className={`text-xs font-bold ${sub.status === 'published' ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink'}`}
-                    >
-                      {t('workflowPublished')}
-                    </p>
-                    <p className="text-[10px] text-ink/50">
-                      {sub.status === 'published'
-                        ? t('workflowPublishedLive')
-                        : t('workflowPublishedPending')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <SubmissionStatusTimeline
+              status={sub.status}
+              revisionSeverity={sub.revisionSeverity}
+              revisionRound={sub.revisionRound}
+              reviewProgress={sub.reviewProgress}
+              reviewProgressSummary={sub.reviewProgressSummary}
+              locale={locale}
+            />
           )}
 
           {/* Editor Command Center in Sidebar */}
@@ -2290,6 +2260,25 @@ export default function SubmissionDetailPage() {
                   {t('editorAdminBadge')}
                 </span>
               </div>
+
+              {isPublishedSubmission &&
+                me.permissions.includes(
+                  PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+                ) && (
+                  <div className="rounded-xl border border-red-200/80 dark:border-red-900/50 bg-red-50/60 dark:bg-red-950/20 p-4 space-y-2">
+                    <p className="text-[10px] leading-relaxed text-ink/65">
+                      {t('retractHint')}
+                    </p>
+                    <Button
+                      variant="danger-soft"
+                      disabled={busy}
+                      onClick={() => void retractSubmission()}
+                      className="w-full text-xs font-bold"
+                    >
+                      {t('retractButton')}
+                    </Button>
+                  </div>
+                )}
 
               {showReviewConfiguration && (
                 <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
@@ -2353,6 +2342,95 @@ export default function SubmissionDetailPage() {
                     aria-labelledby="status-select-label"
                   />
                 </div>
+                {statusPick === 'revisions_requested' && (
+                  <fieldset className="space-y-1.5">
+                    <legend className="text-xs font-semibold text-ink">
+                      {t('revisionSeverityLabel')}
+                    </legend>
+                    <p className="text-[10px] text-ink/50">
+                      {t('revisionSeverityHint')}
+                    </p>
+                    <div className="flex gap-2">
+                      {REVISION_SEVERITIES.map((sev) => (
+                        <label
+                          key={sev}
+                          className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors ${
+                            revisionSeverity === sev
+                              ? 'border-accent bg-accent/10 text-accent'
+                              : 'border-ink/15 dark:border-white/15 bg-paper text-ink/70 hover:border-accent/40'
+                          } ${busy ? 'pointer-events-none opacity-50' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="revision-severity"
+                            className="sr-only"
+                            checked={revisionSeverity === sev}
+                            disabled={busy}
+                            onChange={() => setRevisionSeverity(sev)}
+                          />
+                          {revisionSeverityLabel(sev, t)}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
+                {isEditorDecisionStatus(statusPick) &&
+                  reviewerResponseFiles.length > 0 && (
+                    <fieldset className="space-y-1.5">
+                      <legend className="text-xs font-semibold text-ink">
+                        {t('releaseFilesLabel')}
+                      </legend>
+                      <p className="text-[10px] text-ink/50">
+                        {t('releaseFilesHint')}
+                      </p>
+                      <ul className="space-y-1.5">
+                        {reviewerResponseFiles.map((f) => {
+                          const alreadyReleased = f.releasedToAuthorAt != null;
+                          return (
+                            <li key={f.id}>
+                              <label
+                                className={`flex items-start gap-2 rounded-lg border border-ink/10 dark:border-white/10 bg-paper px-3 py-2 text-[11px] ${
+                                  alreadyReleased || busy
+                                    ? 'opacity-60'
+                                    : 'cursor-pointer hover:border-accent/40'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5 size-3.5 accent-[var(--accent)]"
+                                  disabled={busy || alreadyReleased}
+                                  checked={
+                                    alreadyReleased ||
+                                    releaseFileIds.includes(f.id)
+                                  }
+                                  onChange={(e) =>
+                                    setReleaseFileIds((prev) =>
+                                      e.target.checked
+                                        ? [...prev, f.id]
+                                        : prev.filter((id) => id !== f.id),
+                                    )
+                                  }
+                                />
+                                <span className="min-w-0">
+                                  <span className="block font-semibold text-ink">
+                                    {reviewerLabelForFile(f)}
+                                  </span>
+                                  <span className="block truncate text-ink/50">
+                                    {f.originalName}
+                                  </span>
+                                  {alreadyReleased && (
+                                    <span className="block text-emerald-600 dark:text-emerald-400">
+                                      {t('releaseFilesAlreadyReleased')}
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </fieldset>
+                  )}
                 {isEditorDecisionStatus(statusPick) && (
                   <div className="space-y-1.5">
                     <label

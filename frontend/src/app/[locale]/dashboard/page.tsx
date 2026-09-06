@@ -247,13 +247,12 @@ export default function DashboardPage() {
   async function saveEmailPref() {
     setEmailPrefBusy(true);
     try {
-      await apiJson('/auth/me', {
+      const profile = await apiJson<MeProfile>('/auth/me', {
         method: 'PATCH',
         body: JSON.stringify({
           preferredLocale: emailPref === '' ? null : emailPref,
         }),
       });
-      const profile = await apiJson<MeProfile>('/auth/me');
       queryClient.setQueryData(queryKeys.me, profile);
       toast.success(t('emailLanguageSaved'));
     } catch (err) {

@@ -23,6 +23,10 @@ function recommendationLabel(
       return tCommon('recAccept');
     case 'reject':
       return tCommon('recReject');
+    case 'minor_revisions':
+      return tCommon('recMinorRevisions');
+    case 'major_revisions':
+      return tCommon('recMajorRevisions');
     case 'revisions':
       return tCommon('recRevisions');
     case 'resubmit_for_review':
@@ -44,8 +48,11 @@ function recommendationPillClass(r: string): string {
       return `${base} bg-emerald-500/8 border-emerald-500/15 text-emerald-600 dark:text-emerald-400`;
     case 'reject':
       return `${base} bg-rose-500/8 border-rose-500/15 text-rose-600 dark:text-rose-400`;
-    case 'revisions':
+    case 'major_revisions':
     case 'resubmit_for_review':
+      return `${base} bg-orange-500/8 border-orange-500/15 text-orange-600 dark:text-orange-400`;
+    case 'minor_revisions':
+    case 'revisions':
       return `${base} bg-amber-500/8 border-amber-500/15 text-amber-600 dark:text-amber-400`;
     default:
       return `${base} bg-ink/5 border-ink/10 text-ink/70 dark:bg-white/5 dark:border-white/10 dark:text-white/60`;
@@ -79,6 +86,24 @@ export function ReviewConsensusPanel({
     reviews.map((r) => [r.assignmentId, r.recommendation]),
   );
 
+  /**
+   * Advisory only — the editor still chooses. Any reviewer asking for major
+   * revisions (or a full resubmission) outweighs the ones asking for minor:
+   * the heavier ask sets the amount of work the author actually faces.
+   */
+  const revisionRecs = reviews.filter((r) =>
+    ['minor_revisions', 'major_revisions', 'revisions'].includes(
+      r.recommendation,
+    ),
+  );
+  const suggestedSeverity =
+    revisionRecs.length === 0
+      ? null
+      : revisionRecs.some((r) => r.recommendation === 'major_revisions') ||
+          reviews.some((r) => r.recommendation === 'resubmit_for_review')
+        ? 'major'
+        : 'minor';
+
   return (
     <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -97,6 +122,16 @@ export function ReviewConsensusPanel({
           {t('consensusPending', { count: pendingCount })}
         </span>
       </div>
+      {suggestedSeverity && (
+        <p className="text-[10px] text-ink/50">
+          {t('consensusSuggestedSeverity', {
+            severity:
+              suggestedSeverity === 'major'
+                ? t('severityMajor')
+                : t('severityMinor'),
+          })}
+        </p>
+      )}
       <ul className="flex flex-wrap gap-1.5">
         {assignments.map((a) => {
           const name =
