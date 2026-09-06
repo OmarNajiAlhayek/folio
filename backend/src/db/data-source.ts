@@ -18,6 +18,9 @@ import { Review } from '../entities/review.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { JournalSetting } from '../entities/journal-settings.entity';
+import { Journal } from '../entities/journal.entity';
+import { JournalIssue } from '../entities/journal-issue.entity';
+import { JournalMembership } from '../entities/journal-membership.entity';
 import { RevokedToken } from '../entities/revoked-token.entity';
 import { RoleInvitation } from '../entities/role-invitation.entity';
 import { RolePermission } from '../entities/role-permission.entity';
@@ -55,6 +58,9 @@ export const dataSourceOptions: DataSourceOptions = {
     SectionEditorAssignment,
     UserSectionEditorDiscipline,
     JournalSetting,
+    Journal,
+    JournalIssue,
+    JournalMembership,
     CopyeditAssignment,
     CopyeditNote,
     RoleInvitation,

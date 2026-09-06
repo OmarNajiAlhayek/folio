@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   UploadedFile,
   UseGuards,
@@ -117,6 +119,19 @@ export class AssignmentsController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     return this.fileService.addReviewerFile(slug, user.sub, file);
+  }
+
+  /** Withdraw a review file uploaded by mistake, before an editor releases it. */
+  @Delete(':slug/files/:fileId')
+  @HttpCode(204)
+  @UseGuards(EmailVerifiedGuard)
+  @Permissions(PERMISSION_SLUGS.REVIEW_SUBMIT)
+  deleteReviewFile(
+    @Param('slug') slug: string,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.fileService.deleteReviewerFile(slug, user.sub, fileId);
   }
 
   // ── Review discussions ───────────────────────────────────────────────────

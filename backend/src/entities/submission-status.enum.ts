@@ -7,4 +7,6 @@ export enum SubmissionStatus {
   REJECTED = 'rejected',
   COPYEDITING = 'copyediting',
   PUBLISHED = 'published',
+  /** Removed from the public catalog after publication. Terminal. */
+  RETRACTED = 'retracted',
 }

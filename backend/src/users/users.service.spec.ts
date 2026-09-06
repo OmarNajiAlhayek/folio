@@ -8,6 +8,7 @@ import {
   RoleInvitation,
   RoleInvitationStatus,
 } from '../entities/role-invitation.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -50,6 +51,16 @@ describe('UsersService', () => {
         {
           provide: getRepositoryToken(RoleInvitation),
           useValue: { find: roleInvFind },
+        },
+        {
+          // Added with the section-editor feature; this suite predates it.
+          provide: getRepositoryToken(UserSectionEditorDiscipline),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+            findBy: jest.fn().mockResolvedValue([]),
+            delete: jest.fn().mockResolvedValue({ affected: 0 }),
+            save: jest.fn((rows: unknown) => Promise.resolve(rows)),
+          },
         },
         {
           provide: RbacService,

@@ -1,6 +1,6 @@
 import { join } from 'path';
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { ClassSerializerInterceptor, Module } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -90,6 +90,15 @@ import {
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,
+    },
+    // Applies `@Exclude()` on entities (notably `User.passwordHash`) to every
+    // response. Handlers should still map to explicit JSON — this is the
+    // backstop for a relation someone loads and returns without thinking.
+    {
+      provide: APP_INTERCEPTOR,
+      useFactory: (reflector: Reflector) =>
+        new ClassSerializerInterceptor(reflector),
+      inject: [Reflector],
     },
   ],
 })

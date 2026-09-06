@@ -50,6 +50,15 @@ export function resolveDetailedDecisionKind(
   return kind === 'accepted' || kind === 'revisions_requested' ? kind : null;
 }
 
+/**
+ * Severity of a `revisions_requested` decision. Deliberately a separate axis from
+ * `SubmissionStatus`: the status stays `revisions_requested`, so every existing
+ * status guard (author edit, resubmit, file upload/delete) keeps working unchanged.
+ */
+export const REVISION_SEVERITIES = ['minor', 'major'] as const;
+
+export type RevisionSeverity = (typeof REVISION_SEVERITIES)[number];
+
 /** Statuses where editors may invite reviewers or reconfigure the review package. */
 export const REVIEW_CONFIGURATION_STATUSES: readonly SubmissionStatus[] = [
   SubmissionStatus.SUBMITTED,

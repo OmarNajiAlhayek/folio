@@ -5,7 +5,8 @@ import type { RequestUser } from '../common/types/request-user';
 import { classifyAuditAction } from './audit-action';
 import { AuditLogService } from './audit-log.service';
 
-const REDACTED_KEYS = new Set([
+/** Credentials and one-time secrets. Never stored, in any form. */
+const SECRET_KEYS = new Set([
   'password',
   'passwordhash',
   'token',
@@ -16,6 +17,45 @@ const REDACTED_KEYS = new Set([
   'hash',
   'authorization',
 ]);
+
+/**
+ * Confidential editorial free text.
+ *
+ * The audit log answers "who did what, when" — it is not a second copy of the
+ * manuscript pipeline. Storing these verbatim put reviewer comments, decision
+ * letters and copyedit notes in a table that any journal manager can read via
+ * `audit_log.view`, alongside the acting user's id and email. That bypasses the
+ * masking in `submission-response.mapper.ts`, where the same text is carefully
+ * withheld — a double-anonymous review leaks if the audit log does not respect
+ * the same boundary. The key stays in the record so the action is still legible;
+ * only the content is dropped.
+ */
+const CONFIDENTIAL_CONTENT_KEYS = new Set([
+  'commentsforauthor',
+  'commentstoeditoronly',
+  'messageforauthor',
+  'noteforauthor',
+  'notetoeditoronly',
+  'authorresponsetoreviewers',
+  'editorinstructions',
+  'recommendation',
+  'body',
+  'subject',
+  'abstract',
+  'abstractar',
+  'constructorcontent',
+  'aiusagestatement',
+  'conflictofintereststatement',
+  'fundingstatement',
+]);
+
+function shouldRedact(key: string): boolean {
+  const k = key.toLowerCase();
+  if (SECRET_KEYS.has(k) || CONFIDENTIAL_CONTENT_KEYS.has(k)) return true;
+  // Catches newPassword / currentPassword / confirmPassword and friends,
+  // which the exact-match set above would miss.
+  return k.endsWith('password') || k.endsWith('token') || k.endsWith('secret');
+}
 
 function routePatternFromRequest(req: Request): string | null {
   const route = req.route as { path?: unknown } | undefined;
@@ -36,13 +76,17 @@ function extractIp(req: Request): string | null {
 function redactObject(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (REDACTED_KEYS.has(key.toLowerCase())) {
+    if (shouldRedact(key)) {
       result[key] = '[REDACTED]';
-    } else if (
-      value !== null &&
-      typeof value === 'object' &&
-      !Array.isArray(value)
-    ) {
+    } else if (Array.isArray(value)) {
+      // Arrays were previously stored whole — `contributors` carries names and
+      // email addresses, so recurse into their objects too.
+      result[key] = (value as unknown[]).map((item) =>
+        item !== null && typeof item === 'object' && !Array.isArray(item)
+          ? redactObject(item as Record<string, unknown>)
+          : item,
+      );
+    } else if (value !== null && typeof value === 'object') {
       result[key] = redactObject(value as Record<string, unknown>);
     } else {
       result[key] = value;

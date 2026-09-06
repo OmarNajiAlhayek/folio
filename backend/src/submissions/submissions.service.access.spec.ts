@@ -9,6 +9,9 @@ import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
@@ -99,6 +102,7 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
         SubmissionEventsService,
         ReviewWorkflowService,
         CopyeditWorkflowService,
+        SectionEditorWorkflowService,
         SubmissionLifecycleService,
         SubmissionAiService,
         { provide: ManuscriptAnalysisService, useValue: {} },
@@ -116,6 +120,14 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
         },
         { provide: getRepositoryToken(CopyeditNote), useValue: {} },
         { provide: getRepositoryToken(User), useValue: {} },
+        {
+          provide: getRepositoryToken(SectionEditorAssignment),
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(UserSectionEditorDiscipline),
+          useValue: {},
+        },
         { provide: RbacService, useValue: {} },
         { provide: DocxGeneratorService, useValue: {} },
         {

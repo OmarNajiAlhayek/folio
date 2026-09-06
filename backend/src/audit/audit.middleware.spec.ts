@@ -235,3 +235,77 @@ describe('AuditMiddleware — IP extraction', () => {
     );
   });
 });
+
+describe('AuditMiddleware — confidential editorial content', () => {
+  function bodyRecordedFor(body: Record<string, unknown>) {
+    const svc = makeService();
+    const mw = makeMiddleware(svc);
+    const req = makeReq({ body });
+    const res = makeRes(201);
+    mw.use(req as never, res as never, next);
+    res.emit('finish');
+    return (svc.record as jest.Mock).mock.calls[0][0].requestBody as Record<
+      string,
+      unknown
+    >;
+  }
+
+  it('does not store reviewer comments or the recommendation', () => {
+    const recorded = bodyRecordedFor({
+      commentsForAuthor: 'The methodology in section 3 is unsound.',
+      commentsToEditorOnly: 'I suspect this overlaps the authors 2021 paper.',
+      recommendation: 'reject',
+    });
+    expect(recorded).toEqual({
+      commentsForAuthor: '[REDACTED]',
+      commentsToEditorOnly: '[REDACTED]',
+      recommendation: '[REDACTED]',
+    });
+  });
+
+  it('does not store the decision letter sent to the author', () => {
+    expect(
+      bodyRecordedFor({ status: 'rejected', messageForAuthor: 'We regret…' }),
+    ).toEqual({ status: 'rejected', messageForAuthor: '[REDACTED]' });
+  });
+
+  it('does not store copyedit notes or discussion messages', () => {
+    expect(
+      bodyRecordedFor({ noteForAuthor: 'x', noteToEditorOnly: 'y', body: 'z' }),
+    ).toEqual({
+      noteForAuthor: '[REDACTED]',
+      noteToEditorOnly: '[REDACTED]',
+      body: '[REDACTED]',
+    });
+  });
+
+  it('catches password variants the exact-match set would miss', () => {
+    expect(
+      bodyRecordedFor({
+        currentPassword: 'a',
+        newPassword: 'b',
+        resetToken: 'c',
+      }),
+    ).toEqual({
+      currentPassword: '[REDACTED]',
+      newPassword: '[REDACTED]',
+      resetToken: '[REDACTED]',
+    });
+  });
+
+  it('recurses into arrays of objects', () => {
+    expect(
+      bodyRecordedFor({
+        contributors: [{ fullName: 'A. Author', password: 'leak' }],
+      }),
+    ).toEqual({
+      contributors: [{ fullName: 'A. Author', password: '[REDACTED]' }],
+    });
+  });
+
+  it('keeps non-confidential fields so the action stays legible', () => {
+    expect(
+      bodyRecordedFor({ status: 'under_review', revisionSeverity: 'minor' }),
+    ).toEqual({ status: 'under_review', revisionSeverity: 'minor' });
+  });
+});

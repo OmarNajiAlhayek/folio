@@ -43,6 +43,7 @@ import { SectionEditorWorkflowService } from './section-editor-workflow.service'
 import { AssignCopyeditorDto } from './dto/assign-copyeditor.dto';
 import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
 import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage.dto';
+import { UpdateReviewFileReleaseDto } from './dto/update-review-file-release.dto';
 import { GenerateDocxDto } from './dto/constructor-content.dto';
 import { SubmitSubmissionDto } from './dto/submit-submission.dto';
 import { PatchDisciplineDto } from './dto/patch-discipline.dto';
@@ -256,6 +257,27 @@ export class SubmissionsController {
     );
   }
 
+  /**
+   * Release (or revoke) a reviewer's review file to the author. Gated on
+   * `submission.change_status` rather than the review-config permissions: sharing
+   * reviewer feedback is a decision act, not review-package curation.
+   */
+  @Patch(':slug/files/:fileId/release')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS)
+  setReviewFileRelease(
+    @Param('slug') slug: string,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: UpdateReviewFileReleaseDto,
+  ) {
+    return this.submissionsService.setReviewFileRelease(
+      slug,
+      fileId,
+      user,
+      dto.released,
+    );
+  }
+
   @Patch(':slug/files/:fileId/stage')
   @Permissions(...EDITOR_REVIEW_CONFIG_PERMISSIONS)
   updateSubmissionFileStage(
@@ -375,6 +397,10 @@ export class SubmissionsController {
       dto.status,
       folioLocale,
       dto.messageForAuthor,
+      {
+        revisionSeverity: dto.revisionSeverity,
+        releaseReviewFileIds: dto.releaseReviewFileIds,
+      },
     );
   }
 
@@ -452,6 +478,12 @@ export class SubmissionsController {
     return this.submissionsService.publishSubmission(slug, user);
   }
 
+  @Post(':slug/retract')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
+  retract(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
+    return this.submissionsService.retractSubmission(slug, user);
+  }
+
   @Post(':slug/files')
   @UseGuards(FolioThrottlerGuard)
   @Throttle({ upload: {} })
@@ -495,14 +527,11 @@ export class SubmissionsController {
     @Param('fileId', ParseUUIDPipe) fileId: string,
     @CurrentUser() user: RequestUser,
   ) {
-    const { file, path } = await this.submissionsService.getFileForUser(
-      slug,
-      fileId,
-      user,
-    );
+    const { file, path, downloadName } =
+      await this.submissionsService.getFileForUser(slug, fileId, user);
     return new StreamableFile(createReadStream(path), {
       type: file.mimeType,
-      disposition: `inline; filename="${encodeURIComponent(file.originalName)}"`,
+      disposition: `inline; filename="${encodeURIComponent(downloadName)}"`,
     });
   }
 

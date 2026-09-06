@@ -19,6 +19,23 @@ import { ASSIGNMENT_REMINDER_PERMISSIONS } from '../rbac/permission-slugs';
 import { PatchReminderDto } from './dto/patch-reminder.dto';
 
 @ApiTags('reminders')
+@Controller('submissions/:submissionSlug')
+@UseGuards(AuthGuard('jwt'), PermissionsGuard)
+@ApiBearerAuth('JWT')
+export class SubmissionRemindersController {
+  constructor(private readonly reminders: RemindersService) {}
+
+  @Get('assignment-reminders')
+  @Permissions(...ASSIGNMENT_REMINDER_PERMISSIONS)
+  listForSubmission(
+    @Param('submissionSlug') submissionSlug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.reminders.listForSubmission(submissionSlug, user);
+  }
+}
+
+@ApiTags('reminders')
 @Controller('submissions/:submissionSlug/assignments/:assignmentSlug')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
 @ApiBearerAuth('JWT')

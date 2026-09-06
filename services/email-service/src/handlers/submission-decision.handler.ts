@@ -28,7 +28,11 @@ export class SubmissionDecisionHandler {
   async handle(event: SubmissionDecisionEvent): Promise<HandlerOutcome> {
     if (
       event.idempotencyKey !==
-      submissionDecisionKey(event.submissionSlug, event.decision)
+      submissionDecisionKey(
+        event.submissionSlug,
+        event.decision,
+        event.revisionRound ?? 0,
+      )
     ) {
       this.logger.warn(
         `idempotencyKey mismatch ${JSON.stringify(redactEventPayload(event))}`,
@@ -59,6 +63,8 @@ export class SubmissionDecisionHandler {
     }
 
     const { decision } = event;
+    const isRevisionsRequested = decision === 'revisions_requested';
+    const releasedReviewFileCount = event.releasedReviewFileCount ?? 0;
     return renderAndSendCopyeditEmail(
       {
         dataSource: this.dataSource,
@@ -79,8 +85,15 @@ export class SubmissionDecisionHandler {
           decidedByDisplayName: event.decidedBy.displayName,
           isAccepted: decision === 'accepted',
           isRejected: decision === 'rejected',
-          isRevisionsRequested: decision === 'revisions_requested',
+          isRevisionsRequested,
           isDeskReject: decision === 'rejected' && Boolean(event.isDeskReject),
+          isMinorRevision:
+            isRevisionsRequested && event.revisionSeverity === 'minor',
+          isMajorRevision:
+            isRevisionsRequested && event.revisionSeverity === 'major',
+          revisionRound: event.revisionRound ?? 0,
+          hasReviewFiles: releasedReviewFileCount > 0,
+          reviewFileCount: releasedReviewFileCount,
           messageForAuthor: event.messageForAuthor ?? '',
           hasMessageForAuthor: Boolean(event.messageForAuthor?.trim()),
         },

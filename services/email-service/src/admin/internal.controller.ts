@@ -84,8 +84,16 @@ export class InternalController {
   }
 
   @Get('reminders')
-  listReminders(@Query('assignmentSlug') assignmentSlug: string) {
-    return this.reminders.listForAssignment(assignmentSlug);
+  listReminders(
+    @Query('assignmentSlug') assignmentSlug?: string,
+    @Query('assignmentSlugs') assignmentSlugs?: string,
+  ) {
+    if (assignmentSlugs != null && assignmentSlugs.trim() !== '') {
+      return this.reminders.listForAssignments(
+        assignmentSlugs.split(',').map((s) => s.trim()),
+      );
+    }
+    return this.reminders.listForAssignment(assignmentSlug ?? '');
   }
 
   @Get('reminders/:reminderId')

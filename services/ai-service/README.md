@@ -25,6 +25,11 @@ For the Arabic discipline classifier (local only):
 pip install -e ".[dev,ml]"
 ```
 
+`ml` requires `torch>=2.6.0,<2.7` (CVE-2025-32434; the training pin `2.5.1` is
+unpatched and has no current default-index wheels). For GPU, install a CUDA
+wheel from the matching [pytorch.org index](https://pytorch.org/get-started/locally/)
+first, then the extra.
+
 Place fine-tuned weights under `arabert_clean_model_FINAL-20260525T161953Z-3-001/arabert_clean_model_FINAL/` (or set `ARABERT_MODEL_PATH`). Weights are not committed to git.
 
 ## Run locally

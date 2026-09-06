@@ -11,11 +11,18 @@ import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
 import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
-import { mockSubmissionsRepoFindBySlug } from './submissions-service.testing';
+import {
+  fakeUpdateQueryBuilder,
+  mockSubmissionsRepoFindBySlug,
+  withStatusClaimSupport,
+} from './submissions-service.testing';
 
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
 import { aiJobsServiceMock } from '../ai-jobs/ai-jobs.service.mock';
@@ -94,10 +101,14 @@ describe('SubmissionsService phase2 email (outbox)', () => {
             const mockEm = {
               getRepository: jest.fn((entity: unknown) => {
                 if (entity === Submission) {
-                  return { save: submissionsRepo.save };
+                  return withStatusClaimSupport({ save: submissionsRepo.save });
                 }
                 if (entity === SubmissionFile) {
-                  return { update: jest.fn().mockResolvedValue(undefined) };
+                  return {
+                    update: jest.fn().mockResolvedValue(undefined),
+                    findOne: jest.fn().mockResolvedValue(null),
+                    createQueryBuilder: jest.fn(() => fakeUpdateQueryBuilder()),
+                  };
                 }
                 if (entity === User) {
                   return {
@@ -129,6 +140,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
         SubmissionEventsService,
         ReviewWorkflowService,
         CopyeditWorkflowService,
+        SectionEditorWorkflowService,
         SubmissionLifecycleService,
         SubmissionAiService,
         { provide: ManuscriptAnalysisService, useValue: {} },
@@ -150,6 +162,14 @@ describe('SubmissionsService phase2 email (outbox)', () => {
         { provide: getRepositoryToken(CopyeditAssignment), useValue: {} },
         { provide: getRepositoryToken(CopyeditNote), useValue: {} },
         { provide: getRepositoryToken(User), useValue: usersRepo },
+        {
+          provide: getRepositoryToken(SectionEditorAssignment),
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(UserSectionEditorDiscipline),
+          useValue: {},
+        },
         {
           provide: RbacService,
           useValue: {
@@ -197,6 +217,10 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     files = moduleRef.get(SubmissionFileService);
     submission.status = SubmissionStatus.UNDER_REVIEW;
     submission.messageForAuthor = null;
+    // updateStatus mutates the shared fixture in place, so reset the revision
+    // fields too or a decision in one test leaks into the next.
+    submission.revisionSeverity = null;
+    submission.revisionRound = 0;
     jest
       .spyOn(files, 'assertHasReviewManuscriptPackage')
       .mockResolvedValue(undefined);
@@ -255,12 +279,15 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       SubmissionStatus.REVISIONS_REQUESTED,
       'en',
       '  Please revise the methods section.  ',
+      { revisionSeverity: 'major' },
     );
 
     expect(submissionsRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         messageForAuthor: 'Please revise the methods section.',
         status: SubmissionStatus.REVISIONS_REQUESTED,
+        revisionSeverity: 'major',
+        revisionRound: 1,
       }),
     );
     const [, payload] = eventPublisher.enqueue.mock.calls[0] as [
@@ -268,6 +295,70 @@ describe('SubmissionsService phase2 email (outbox)', () => {
       Record<string, unknown>,
     ];
     expect(payload.messageForAuthor).toBe('Please revise the methods section.');
+    expect(payload.revisionSeverity).toBe('major');
+    expect(payload.revisionRound).toBe(1);
+  });
+
+  it('requires a revision severity when requesting revisions', async () => {
+    await expect(
+      service.updateStatus(
+        'paper-one',
+        editorUser,
+        SubmissionStatus.REVISIONS_REQUESTED,
+        'en',
+        'Please revise.',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a revision severity on a non-revision decision', async () => {
+    await expect(
+      service.updateStatus(
+        'paper-one',
+        editorUser,
+        SubmissionStatus.ACCEPTED,
+        'en',
+        undefined,
+        { revisionSeverity: 'minor' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('scopes the decision idempotency key by revision round so round 2 is not deduped', async () => {
+    await service.updateStatus(
+      'paper-one',
+      editorUser,
+      SubmissionStatus.REVISIONS_REQUESTED,
+      'en',
+      undefined,
+      { revisionSeverity: 'minor' },
+    );
+    const [, first] = eventPublisher.enqueue.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+
+    eventPublisher.enqueue.mockClear();
+    submissionsRepo.findOne.mockResolvedValueOnce({
+      ...submission,
+      status: SubmissionStatus.UNDER_REVIEW,
+      revisionRound: 1,
+    } as Submission);
+
+    await service.updateStatus(
+      'paper-one',
+      editorUser,
+      SubmissionStatus.REVISIONS_REQUESTED,
+      'en',
+      undefined,
+      { revisionSeverity: 'major' },
+    );
+    const [, second] = eventPublisher.enqueue.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
   });
 
   it('rejects messageForAuthor when status is not a decision', async () => {

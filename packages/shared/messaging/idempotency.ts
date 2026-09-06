@@ -74,9 +74,15 @@ export function copyeditAuthorReadyKey(
   return `copyedit_author_ready:${assignmentSlug}:${round}`;
 }
 
+/**
+ * `revisionRound` is required to distinguish a resubmission from the original
+ * submission: without it every resubmission collides with round 0 and editors are
+ * never notified.
+ */
 export function submissionSubmittedKey(
   submissionSlug: string,
   editorUserId: string,
+  revisionRound = 0,
 ): string {
   if (!submissionSlug) {
     throw new Error('submissionSubmittedKey: submissionSlug is required');
@@ -84,12 +90,18 @@ export function submissionSubmittedKey(
   if (!editorUserId) {
     throw new Error('submissionSubmittedKey: editorUserId is required');
   }
-  return `submission_submitted:${submissionSlug}:${editorUserId}`;
+  return `submission_submitted:${submissionSlug}:${editorUserId}:${revisionRound}`;
 }
 
+/**
+ * `revisionRound` is required so a second `revisions_requested` on the same
+ * submission is not deduped against the first (which would silently drop both the
+ * email and the in-app notification for round 2).
+ */
 export function submissionDecisionKey(
   submissionSlug: string,
   decision: string,
+  revisionRound = 0,
 ): string {
   if (!submissionSlug) {
     throw new Error('submissionDecisionKey: submissionSlug is required');
@@ -97,7 +109,7 @@ export function submissionDecisionKey(
   if (!decision) {
     throw new Error('submissionDecisionKey: decision is required');
   }
-  return `submission_decision:${submissionSlug}:${decision}`;
+  return `submission_decision:${submissionSlug}:${decision}:${revisionRound}`;
 }
 
 export function reviewSubmittedEmailKey(
@@ -169,6 +181,13 @@ export function submissionPublishedKey(submissionSlug: string): string {
     throw new Error('submissionPublishedKey: submissionSlug is required');
   }
   return `submission_published:${submissionSlug}`;
+}
+
+export function submissionRetractedKey(submissionSlug: string): string {
+  if (!submissionSlug) {
+    throw new Error('submissionRetractedKey: submissionSlug is required');
+  }
+  return `submission_retracted:${submissionSlug}`;
 }
 
 export function roleInvitationEmailKey(invitationId: string): string {

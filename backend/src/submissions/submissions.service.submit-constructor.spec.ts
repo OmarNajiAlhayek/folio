@@ -10,11 +10,15 @@ import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import {
   getSubmissionTestServices,
   mockSubmissionsRepoFindBySlug,
+  withStatusClaimSupport,
 } from './submissions-service.testing';
 
 import { aiClientServiceMock } from '../ai/ai-client.service.mock';
@@ -151,9 +155,9 @@ describe('SubmissionsService.submit (constructor files)', () => {
       save: jest.fn(async (row: Submission) => row),
       manager: {
         transaction: jest.fn(async (fn: (em: unknown) => unknown) => {
-          const submissionRepo = {
+          const submissionRepo = withStatusClaimSupport({
             save: jest.fn(async (row: Submission) => row),
-          };
+          });
           return fn({
             getRepository: () => submissionRepo,
           });
@@ -171,6 +175,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
         SubmissionEventsService,
         ReviewWorkflowService,
         CopyeditWorkflowService,
+        SectionEditorWorkflowService,
         SubmissionLifecycleService,
         SubmissionAiService,
         ManuscriptAnalysisService,
@@ -184,6 +189,14 @@ describe('SubmissionsService.submit (constructor files)', () => {
         {
           provide: getRepositoryToken(User),
           useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: getRepositoryToken(SectionEditorAssignment),
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(UserSectionEditorDiscipline),
+          useValue: {},
         },
         {
           provide: RbacService,

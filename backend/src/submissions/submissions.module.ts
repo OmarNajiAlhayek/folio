@@ -11,6 +11,9 @@ import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
+import { Journal } from '../entities/journal.entity';
+import { JournalIssue } from '../entities/journal-issue.entity';
+import { JournalMembership } from '../entities/journal-membership.entity';
 import { SubmissionsService } from './submissions.service';
 import { SubmissionAccessService } from './submission-access.service';
 import { PublicationCatalogService } from './publication-catalog.service';
@@ -26,7 +29,10 @@ import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 import { SubmissionsController } from './submissions.controller';
 import { AssignmentsController } from './assignments.controller';
 import { CopyeditAssignmentsController } from './copyedit-assignments.controller';
-import { AssignmentRemindersController } from './assignment-reminders.controller';
+import {
+  AssignmentRemindersController,
+  SubmissionRemindersController,
+} from './assignment-reminders.controller';
 import { DocxGeneratorService } from './docx-generator.service';
 import { DocxImportService } from './docx-import.service';
 import { EquationRenderService } from './equation-render.service';
@@ -67,6 +73,9 @@ import { AuthModule } from '../auth/auth.module';
       User,
       SectionEditorAssignment,
       UserSectionEditorDiscipline,
+      Journal,
+      JournalIssue,
+      JournalMembership,
     ]),
   ],
   controllers: [
@@ -74,6 +83,7 @@ import { AuthModule } from '../auth/auth.module';
     AssignmentsController,
     CopyeditAssignmentsController,
     AssignmentRemindersController,
+    SubmissionRemindersController,
   ],
   providers: [
     SubmissionAccessService,

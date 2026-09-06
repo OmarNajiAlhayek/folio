@@ -24,21 +24,26 @@ describe('RemindersService', () => {
   let emailClient: jest.Mocked<
     Pick<
       EmailServiceClient,
-      'listReminders' | 'getReminder' | 'patchReminderSendAt' | 'cancelReminder'
+      | 'listReminders'
+      | 'listRemindersForAssignments'
+      | 'getReminder'
+      | 'patchReminderSendAt'
+      | 'cancelReminder'
     >
   >;
   let submissionsRepo: { findOne: jest.Mock };
-  let assignmentsRepo: { findOne: jest.Mock };
+  let assignmentsRepo: { findOne: jest.Mock; find: jest.Mock };
 
   beforeEach(() => {
     emailClient = {
       listReminders: jest.fn(),
+      listRemindersForAssignments: jest.fn(),
       getReminder: jest.fn(),
       patchReminderSendAt: jest.fn(),
       cancelReminder: jest.fn(),
     };
     submissionsRepo = { findOne: jest.fn() };
-    assignmentsRepo = { findOne: jest.fn() };
+    assignmentsRepo = { findOne: jest.fn(), find: jest.fn() };
     service = new RemindersService(
       emailClient as unknown as EmailServiceClient,
       submissionsRepo as unknown as Repository<Submission>,
@@ -95,6 +100,40 @@ describe('RemindersService', () => {
       sentAt: null,
     });
     expect(emailClient.listReminders).toHaveBeenCalledWith('asg-1');
+  });
+
+  it('listForSubmission batches every assignment into one email-service call', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assignmentsRepo.find.mockResolvedValue([
+      { slug: 'asg-1' },
+      { slug: 'asg-2' },
+    ]);
+    emailClient.listRemindersForAssignments.mockResolvedValue([
+      {
+        id: 'r1',
+        assignmentSlug: 'asg-1',
+        reviewerId: 'rev1',
+        reviewerEmail: 'r@test.dev',
+        reviewerDisplayName: 'R',
+        kind: 'review_due_soon',
+        sendAt: '2026-06-01T12:00:00.000Z',
+        status: 'pending',
+        sentAt: null,
+        createdAt: '2026-05-01T00:00:00.000Z',
+      },
+    ]);
+
+    const out = await service.listForSubmission(
+      'sub-1',
+      user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
+    );
+
+    expect(emailClient.listRemindersForAssignments).toHaveBeenCalledWith([
+      'asg-1',
+      'asg-2',
+    ]);
+    expect(out['asg-1']).toHaveLength(1);
+    expect(out['asg-2']).toEqual([]);
   });
 
   it('patchSendAt rejects sendAt within 2 minutes via email client', async () => {

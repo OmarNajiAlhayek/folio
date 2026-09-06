@@ -45,6 +45,15 @@ import {
   parseJournalAllowedDisciplines,
 } from './ai/discipline-labels';
 import { ensurePublicationSearchSchema } from './common/ensure-publication-search-schema';
+import {
+  assertSeedAllowed,
+  describeSeedTarget,
+  SeedNotAllowedError,
+} from './seed-guard';
+import {
+  placeDemoSubmissions,
+  seedPressFixtures,
+} from './journals/seed-journals';
 
 config({ path: join(__dirname, '..', '.env') });
 
@@ -1018,7 +1027,9 @@ async function resetAllDevData(dataSource: DataSource): Promise<void> {
       oauth_identities,
       article_summary_embeddings,
       article_chunk_embeddings,
-      reviewer_bio_embeddings
+      reviewer_bio_embeddings,
+      journal_memberships,
+      journal_issues
     RESTART IDENTITY CASCADE
   `);
   console.log(
@@ -1195,11 +1206,19 @@ async function ensureInvitePendingReviewerAssignment(
 }
 
 async function run() {
+  // Before anything touches the database. See seed-guard.ts for why.
+  assertSeedAllowed();
+
   const resetAll = process.env.SEED_RESET_ALL === '1';
   const resetSample =
     !resetAll &&
     (process.env.SEED_RESET_SAMPLE === '1' ||
       process.env.SEED_RESET_DEMO === '1');
+
+  if (resetAll || resetSample) {
+    console.log(`Destructive seed confirmed — target ${describeSeedTarget()}`);
+  }
+
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
@@ -1222,7 +1241,7 @@ async function run() {
   await submissionsService.backfillSlugs();
 
   const author = await ensureUser(usersService, rbacService, {
-    email: 'o65834757@gmail.com',
+    email: 'author@folio.dev',
     password: 'Author123!',
     displayName: 'A. Researcher',
     roleSlugs: [ROLE_SLUGS.AUTHOR],
@@ -1253,7 +1272,7 @@ async function run() {
     },
   });
   const reviewer = await ensureUser(usersService, rbacService, {
-    email: 'ysryrwthqsdthwy@gmail.com',
+    email: 'reviewer@folio.dev',
     password: 'Reviewer123!',
     displayName: 'R. Reviewer',
     roleSlugs: [ROLE_SLUGS.REVIEWER],
@@ -1265,7 +1284,7 @@ async function run() {
     },
   });
   const copyeditor = await ensureUser(usersService, rbacService, {
-    email: 'h90196124@gmail.com',
+    email: 'copyeditor@folio.local',
     password: 'Copyeditor123!',
     displayName: 'P. Copyeditor',
     roleSlugs: [ROLE_SLUGS.COPYEDITOR],
@@ -1281,6 +1300,12 @@ async function run() {
     rbacService,
     copyeditor.id,
   );
+
+  const press = await seedPressFixtures(dataSource, [
+    { userId: editor.id, roleSlug: ROLE_SLUGS.EDITOR },
+    { userId: reviewer.id, roleSlug: ROLE_SLUGS.REVIEWER },
+    { userId: copyeditor.id, roleSlug: ROLE_SLUGS.COPYEDITOR },
+  ]);
 
   const pdfBytes = Buffer.from('%PDF-1.4 sample manuscript placeholder\n');
 
@@ -1686,6 +1711,12 @@ async function run() {
       logLabel: 'published, related-articles distant peer',
     });
 
+  const placement = await placeDemoSubmissions(
+    dataSource,
+    press.journalsBySlug,
+    press.publishedIssueByJournalId,
+  );
+
   if (!skipPublishedForPerf && aiClient.isSimilarityEnabled()) {
     const indexJobs =
       await submissionsService.enqueueMissingSimilarityIndexJobs();
@@ -1703,6 +1734,18 @@ async function run() {
   console.log('reviewer@folio.dev          / Reviewer123!    roles: reviewer');
   console.log(
     'copyeditor@folio.local      / Copyeditor123!  roles: copyeditor',
+  );
+  console.log(
+    '\n--- Journals (catalog rows from migration; seed looks up by slug) ---',
+  );
+  console.log(
+    `${press.journalsBySlug.size} journals × 3 issues (published 2025/2, published 2026/1, open 2026/2)`,
+  );
+  console.log(
+    `Staff memberships: editor/reviewer/copyeditor on every journal (${press.membershipsCreated} new). journal_manager stays global.`,
+  );
+  console.log(
+    `Placed ${placement.placed} demo submission(s) onto journals (${placement.publishedPlaced} into العدد 1، 2026).`,
   );
   console.log('\n--- Demo submissions (title prefix [Demo]) ---');
   console.log(`${tDraft} — author: draft with file`);
@@ -1802,6 +1845,12 @@ async function run() {
 }
 
 run().catch((e) => {
+  // A refused seed is an operator mistake, not a crash — print the reason
+  // rather than a stack trace nobody reads.
+  if (e instanceof SeedNotAllowedError) {
+    console.error(`\n${e.message}\n`);
+    process.exit(1);
+  }
   console.error(e);
   process.exit(1);
 });

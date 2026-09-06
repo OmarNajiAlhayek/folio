@@ -456,9 +456,18 @@ export class UsersService {
     return user.emailVerifiedAt != null;
   }
 
+  /**
+   * @param actorUserId the caller, when this is reached over HTTP. Roles the
+   * caller does not already hold cannot be self-assigned — editor and
+   * journal_manager already require an invitation, but without this a journal
+   * manager could grant themselves `copyeditor` and then publish, or
+   * `section_editor` and enter the section queue. Omitted by seed and tests,
+   * which have no acting user.
+   */
   async setRolesForUser(
     targetUserId: string,
     roleSlugs: string[],
+    actorUserId?: string,
   ): Promise<PublicUserProfile> {
     const target = await this.findById(targetUserId);
     if (!target) {
@@ -469,6 +478,17 @@ export class UsersService {
     }
     const unique = [...new Set(roleSlugs)];
     const before = await this.rbacService.getEffectiveForUser(targetUserId);
+
+    if (actorUserId && actorUserId === targetUserId) {
+      const added = unique.filter((slug) => !before.roleSlugs.includes(slug));
+      if (added.length > 0) {
+        throw new BadRequestException({
+          message:
+            'You cannot grant yourself additional roles. Ask another journal manager to invite you.',
+          code: 'SELF_ROLE_ELEVATION',
+        });
+      }
+    }
     const hadEditor = before.roleSlugs.includes(ROLE_SLUGS.EDITOR);
     const willHaveEditor = unique.includes(ROLE_SLUGS.EDITOR);
     if (!hadEditor && willHaveEditor) {

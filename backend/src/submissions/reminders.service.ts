@@ -55,6 +55,41 @@ export class RemindersService {
     return this.emailClient.listReminders(assignmentSlug);
   }
 
+  /**
+   * All reminders for every assignment on a submission, keyed by assignment slug.
+   * One email-service round-trip instead of one per assignment.
+   */
+  async listForSubmission(
+    submissionSlug: string,
+    user: RequestUser,
+  ): Promise<Record<string, ReminderAdminDto[]>> {
+    void user;
+    const sub = await this.submissionsRepo.findOne({
+      where: { slug: submissionSlug },
+    });
+    if (!sub) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    const assignments = await this.assignmentsRepo.find({
+      where: { submissionId: sub.id },
+      select: ['slug'],
+    });
+    const slugs = assignments
+      .map((a) => a.slug)
+      .filter((slug): slug is string => Boolean(slug));
+    const rows = await this.emailClient.listRemindersForAssignments(slugs);
+    const bySlug: Record<string, ReminderAdminDto[]> = Object.fromEntries(
+      slugs.map((slug) => [slug, []]),
+    );
+    for (const row of rows) {
+      (bySlug[row.assignmentSlug] ??= []).push(row);
+    }
+    return bySlug;
+  }
+
   async getOne(
     submissionSlug: string,
     assignmentSlug: string,

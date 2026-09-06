@@ -100,7 +100,6 @@ export class UsersController {
     @Body() dto: UpdateUserRolesDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    void actor;
-    return this.usersService.setRolesForUser(id, dto.roleSlugs);
+    return this.usersService.setRolesForUser(id, dto.roleSlugs, actor.sub);
   }
 }

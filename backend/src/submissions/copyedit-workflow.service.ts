@@ -25,6 +25,12 @@ import { assertCallerPermission } from '../common/authorization/permission-check
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
 import { submissionToViewerJson } from './submission-response.mapper';
+import { copyeditAssignmentToEditorJson } from './assignment-response.mapper';
+import {
+  clearPublicSubmissionFiles,
+  setPublishedManuscriptFile,
+} from './publish-public-files';
+import { claimStatusTransition } from './claim-status-transition';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { PublicationCatalogService } from './publication-catalog.service';
@@ -201,18 +207,23 @@ export class CopyeditWorkflowService {
       });
   }
 
+  /**
+   * Copyeditor roster for one submission. Scoped per submission for the same
+   * reason as `listAssignments`, and mapped because `copyeditor` is a `User`.
+   */
   async listCopyeditAssignments(
     submissionSlug: string,
     user: RequestUser,
-  ): Promise<CopyeditAssignment[]> {
-    void user;
+  ): Promise<Array<Record<string, unknown>>> {
     const sub = await this.access.getBySlugOrThrow(submissionSlug);
     this.access.assertEditorQueueSubmissionVisible(sub);
-    return this.copyeditAssignmentsRepo.find({
+    await this.access.assertCanRead(sub, user);
+    const rows = await this.copyeditAssignmentsRepo.find({
       where: { submissionId: sub.id },
       relations: ['copyeditor', 'notes'],
       order: { assignedAt: 'ASC' },
     });
+    return rows.map(copyeditAssignmentToEditorJson);
   }
 
   async listMyCopyeditAssignments(
@@ -519,7 +530,7 @@ export class CopyeditWorkflowService {
     assertCallerPermission(
       user,
       PERMISSION_SLUGS.COPYEDIT_PUBLISH,
-      'Copyeditor role required',
+      'Copyeditor or editor role required',
     );
     const s = await this.access.getBySlugOrThrow(slug);
     if (s.status !== SubmissionStatus.COPYEDITING) {
@@ -538,7 +549,11 @@ export class CopyeditWorkflowService {
       });
     }
     const mine = assignments.some((a) => a.copyeditorId === user.sub);
-    if (!mine) {
+    const editorOverride = this.access.hasPerm(
+      user,
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    );
+    if (!mine && !editorOverride) {
       throw new ForbiddenException({
         message: 'You are not assigned as copyeditor on this submission',
         code: 'FORBIDDEN',
@@ -557,11 +572,19 @@ export class CopyeditWorkflowService {
     const pending: Notification[] = [];
     const saved = await this.submissionsRepo.manager.transaction(async (em) => {
       const submissionRepo = em.getRepository(Submission);
+      // One publish only: a second concurrent call must not re-stamp
+      // publishedAt or re-announce the article.
+      await claimStatusTransition(
+        em,
+        s.id,
+        SubmissionStatus.COPYEDITING,
+        SubmissionStatus.PUBLISHED,
+      );
       s.status = SubmissionStatus.PUBLISHED;
       s.publishedAt = new Date();
-      await em
-        .getRepository(SubmissionFile)
-        .update({ submissionId: s.id, kind: 'manuscript' }, { isPublic: true });
+      // Only the final manuscript becomes public — never the whole revision
+      // history. See publish-public-files.ts.
+      await setPublishedManuscriptFile(em, s.id);
       const row = await submissionRepo.save(s);
       const n = await this.events.enqueueSubmissionPublishedEvent(
         { submission: row },
@@ -591,6 +614,58 @@ export class CopyeditWorkflowService {
             `Failed to index published submission in Typesense: ${err instanceof Error ? err.message : String(err)}`,
           );
         });
+    }
+    return saved;
+  }
+
+  /**
+   * Removes a published article from the public catalog. Chief editors and
+   * journal managers (VIEW_EDITOR_QUEUE) can do this; copyeditors cannot.
+   * Files are demoted so the unauthenticated download route stops serving them.
+   * Terminal: there is no transition out of `retracted`.
+   */
+  async retractSubmission(
+    slug: string,
+    user: RequestUser,
+  ): Promise<Submission> {
+    assertCallerPermission(
+      user,
+      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      'Editor role required',
+    );
+    const s = await this.access.getBySlugOrThrow(slug);
+    this.access.assertEditorQueueSubmissionVisible(s);
+    if (s.status !== SubmissionStatus.PUBLISHED) {
+      throw new BadRequestException({
+        message: 'Only a published article can be retracted',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const pending: Notification[] = [];
+    const saved = await this.submissionsRepo.manager.transaction(async (em) => {
+      await claimStatusTransition(
+        em,
+        s.id,
+        SubmissionStatus.PUBLISHED,
+        SubmissionStatus.RETRACTED,
+      );
+      s.status = SubmissionStatus.RETRACTED;
+      await clearPublicSubmissionFiles(em, s.id);
+      const row = await em.getRepository(Submission).save(s);
+      const n = await this.events.enqueueSubmissionRetractedNotification(
+        { submission: row },
+        em,
+      );
+      if (n) pending.push(n);
+      return row;
+    });
+    this.events.emitPendingNotifications(pending);
+    if (this.searchService?.isEnabled()) {
+      void this.searchService.deleteDocument(saved.id).catch((err) => {
+        this.logger.warn(
+          `Failed to drop retracted submission from Typesense: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     }
     return saved;
   }

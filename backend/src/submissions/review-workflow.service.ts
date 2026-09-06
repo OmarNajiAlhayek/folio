@@ -43,6 +43,7 @@ import { SubmissionReviewMethod } from '../entities/submission-review-method.enu
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
 import { submissionToViewerJson } from './submission-response.mapper';
+import { reviewAssignmentToEditorJson } from './assignment-response.mapper';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { SubmissionFileService } from './submission-file.service';
@@ -140,6 +141,44 @@ export class ReviewWorkflowService {
     return this.filesRepo.save(file);
   }
 
+  /**
+   * Blocks the conflicts of interest the system can actually see: the
+   * submitting author, and anyone listed as a contributor on the manuscript.
+   *
+   * Previously the only checks were "holds review.submit" and "not already
+   * assigned", both of which the author passes — a faculty member who is also
+   * a reviewer could be invited to review their own paper.
+   *
+   * This is deliberately not a full COI policy (shared affiliation, recent
+   * co-authorship, supervisor relationships are editorial judgement); it closes
+   * the cases where the data is unambiguous.
+   */
+  private assertNoReviewerConflictOfInterest(
+    submission: Submission,
+    reviewer: User,
+  ): void {
+    if (submission.authorId === reviewer.id) {
+      throw new BadRequestException({
+        message: 'The submitting author cannot review their own manuscript',
+        code: 'REVIEWER_CONFLICT_OF_INTEREST',
+      });
+    }
+
+    const reviewerEmail = reviewer.email?.trim().toLowerCase();
+    if (!reviewerEmail) return;
+
+    const isContributor = (submission.contributors ?? []).some(
+      (c) => c.email?.trim().toLowerCase() === reviewerEmail,
+    );
+    if (isContributor) {
+      throw new BadRequestException({
+        message:
+          'This user is listed as a contributor on the manuscript and cannot review it',
+        code: 'REVIEWER_CONFLICT_OF_INTEREST',
+      });
+    }
+  }
+
   async assignReviewer(
     submissionSlug: string,
     reviewerId: string,
@@ -182,6 +221,8 @@ export class ReviewWorkflowService {
         code: 'VALIDATION_ERROR',
       });
     }
+    this.assertNoReviewerConflictOfInterest(submission, reviewer);
+
     const activeDup = await this.assignmentsRepo.findOne({
       where: {
         submissionId,
@@ -244,7 +285,7 @@ export class ReviewWorkflowService {
   async acceptReviewInvitation(
     assignmentSlug: string,
     reviewerId: string,
-  ): Promise<ReviewAssignment> {
+  ): Promise<Record<string, unknown>> {
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug, reviewerId },
       relations: ['submission', 'reviewer'],
@@ -275,6 +316,7 @@ export class ReviewWorkflowService {
     const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
       const assignmentRepo = em.getRepository(ReviewAssignment);
       assignment.status = AssignmentStatus.ACCEPTED;
+      assignment.respondedAt = new Date();
       const row = await assignmentRepo.save(assignment);
       let underReviewNotification: Notification | null = null;
       if (submissionRow?.status === SubmissionStatus.SUBMITTED) {
@@ -345,13 +387,16 @@ export class ReviewWorkflowService {
       return row;
     });
     this.events.emitPendingNotifications(pending);
-    return saved;
+    // Reviewer-facing: must go through the same masking as every other reviewer
+    // screen. `saved.submission` is the raw row and carries authorId,
+    // messageForAuthor and constructorContent.
+    return this.assignmentToReviewerListJson(saved);
   }
 
   async declineReviewInvitation(
     assignmentSlug: string,
     reviewerId: string,
-  ): Promise<ReviewAssignment> {
+  ): Promise<Record<string, unknown>> {
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug, reviewerId },
       relations: ['submission', 'reviewer'],
@@ -378,6 +423,7 @@ export class ReviewWorkflowService {
     const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
       const assignmentRepo = em.getRepository(ReviewAssignment);
       assignment.status = AssignmentStatus.DECLINED;
+      assignment.respondedAt = new Date();
       const row = await assignmentRepo.save(assignment);
       if (assignment.slug && reviewer) {
         await this.events.enqueueReviewerResponded(em, {
@@ -433,20 +479,30 @@ export class ReviewWorkflowService {
       return row;
     });
     this.events.emitPendingNotifications(pending);
-    return saved;
+    // Same masking as accept — see the note there.
+    return this.assignmentToReviewerListJson(saved);
   }
 
+  /**
+   * Reviewer roster for one submission.
+   *
+   * The route guard only proves the caller holds `submission.list_assignments`,
+   * which section editors also hold — so the per-submission check is required
+   * here, or a section editor could read the roster of any submission outside
+   * their own scope. Mapped rather than returned raw: `reviewer` is a `User`.
+   */
   async listAssignments(
     submissionSlug: string,
     user: RequestUser,
-  ): Promise<ReviewAssignment[]> {
-    void user;
+  ): Promise<Array<Record<string, unknown>>> {
     const sub = await this.access.getBySlugOrThrow(submissionSlug);
     this.access.assertEditorQueueSubmissionVisible(sub);
-    return this.assignmentsRepo.find({
+    await this.access.assertCanRead(sub, user);
+    const rows = await this.assignmentsRepo.find({
       where: { submissionId: sub.id },
       relations: ['reviewer'],
     });
+    return rows.map(reviewAssignmentToEditorJson);
   }
 
   private assignmentToReviewerListJson(

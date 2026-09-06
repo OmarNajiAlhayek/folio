@@ -1,7 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { skipAllThrottles } from '../common/throttle-profiles';
+import { OpsMetricsGuard } from '../common/guards/ops-metrics.guard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -34,11 +35,13 @@ function emptyStatusCounts(): StatusCounts {
 
 /**
  * Operational aggregate of async AI jobs — counts by status and type.
- * Public read-only endpoint for perf harness and deploy monitoring.
+ * Read-only, for the perf harness and deploy monitoring. Open by default;
+ * set `OPS_METRICS_TOKEN` to require `x-folio-ops-token`. See OpsMetricsGuard.
  */
 @ApiTags('health')
 @Controller('health/ai-jobs')
 @SkipThrottle(skipAllThrottles())
+@UseGuards(OpsMetricsGuard)
 export class AiJobsHealthController {
   constructor(
     @InjectRepository(AiJob)

@@ -11,7 +11,15 @@ After editorial consideration, your manuscript "{{submissionTitle}}" has been de
 {{/if}}
 {{/if}}
 {{#if isRevisionsRequested}}
-The editor has requested revisions for your manuscript "{{submissionTitle}}".
+{{#if isMajorRevision}}
+The editor has requested MAJOR revisions for your manuscript "{{submissionTitle}}". Substantial changes are needed, and the revised manuscript may be sent back to the reviewers.
+{{else}}
+The editor has requested MINOR revisions for your manuscript "{{submissionTitle}}". The changes required are limited in scope.
+{{/if}}
+{{#if hasReviewFiles}}
+
+{{reviewFileCount}} reviewer file(s) have been shared with you. You can download them from your submission page.
+{{/if}}
 {{/if}}
 
 {{#if hasMessageForAuthor}}

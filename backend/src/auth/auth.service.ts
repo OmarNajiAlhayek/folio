@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -44,6 +45,12 @@ import { JwtPayload } from './strategies/jwt.strategy';
 
 const SALT_ROUNDS = 10;
 
+/** Same body for every rejected register — do not confirm that an email or ORCID exists. */
+const REGISTRATION_FAILED = {
+  message: 'Unable to create this account. If you already have one, sign in.',
+  code: 'REGISTRATION_FAILED',
+} as const;
+
 type VerifiedJwt = JwtPayload & { exp: number };
 
 export type SessionPair = {
@@ -86,18 +93,15 @@ export class AuthService {
     const willingToReview = dto.willingToReview === true;
     const existing = await this.usersService.findByEmail(email);
     if (existing) {
-      throw new ConflictException({
-        message: 'Email already registered',
-        code: 'CONFLICT',
-      });
+      // Same cost as a new account so a timing side-channel does not confirm the email.
+      await bcrypt.hash(password, SALT_ROUNDS);
+      throw new BadRequestException(REGISTRATION_FAILED);
     }
     if (orcid) {
       const orcidTaken = await this.usersService.findByOrcid(orcid);
       if (orcidTaken) {
-        throw new ConflictException({
-          message: 'This ORCID is already linked to an account',
-          code: 'CONFLICT',
-        });
+        await bcrypt.hash(password, SALT_ROUNDS);
+        throw new BadRequestException(REGISTRATION_FAILED);
       }
     }
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);

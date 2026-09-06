@@ -5,19 +5,29 @@ import {
   OneToMany,
   UpdateDateColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { BaseEntity } from '../common/base.entity';
 import { Submission } from './submission.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
 import { UserRole } from './user-role.entity';
 import { UserSectionEditorDiscipline } from './user-section-editor-discipline.entity';
+import { JournalMembership } from './journal-membership.entity';
 
 @Entity('users')
 export class User extends BaseEntity {
   @Column({ unique: true })
   email: string;
 
-  /** Null for ORCID-only accounts until a password is set. */
+  /**
+   * Null for ORCID-only accounts until a password is set.
+   *
+   * `@Exclude()` + the global `ClassSerializerInterceptor` strip this from any
+   * response that serializes a `User` instance. That is the backstop; handlers
+   * are still expected to map through `users/user-summary.ts` rather than
+   * return user rows or relations directly.
+   */
+  @Exclude()
   @Column({ name: 'password_hash', type: 'varchar', nullable: true })
   passwordHash: string | null;
 
@@ -72,4 +82,8 @@ export class User extends BaseEntity {
 
   @OneToMany(() => UserSectionEditorDiscipline, (d) => d.user)
   sectionEditorDisciplines: UserSectionEditorDiscipline[];
+
+  /** Journals this user may act in, per staff role. Global roles are not listed. */
+  @OneToMany(() => JournalMembership, (m) => m.user)
+  journalMemberships: JournalMembership[];
 }

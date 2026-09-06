@@ -187,6 +187,14 @@ export class EmailServiceClient {
     return this.request('GET', `/internal/reminders${q}`);
   }
 
+  listRemindersForAssignments(
+    assignmentSlugs: string[],
+  ): Promise<ReminderAdminDto[]> {
+    if (assignmentSlugs.length === 0) return Promise.resolve([]);
+    const q = `?assignmentSlugs=${encodeURIComponent(assignmentSlugs.join(','))}`;
+    return this.request('GET', `/internal/reminders${q}`);
+  }
+
   getReminder(
     reminderId: string,
     assignmentSlug: string,

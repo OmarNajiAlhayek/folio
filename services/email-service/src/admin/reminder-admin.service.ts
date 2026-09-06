@@ -107,6 +107,23 @@ export class ReminderAdminService {
     return rows.map((r) => this.mapRow(r));
   }
 
+  /** One query for every assignment on a submission — used by the editor detail page. */
+  async listForAssignments(
+    assignmentSlugs: string[],
+  ): Promise<ReminderAdminDto[]> {
+    const slugs = [...new Set(assignmentSlugs.filter((s) => s.trim() !== ''))];
+    if (slugs.length === 0) return [];
+    const rows = await this.query(
+      `SELECT id, assignment_slug, reviewer_id, reviewer_email, reviewer_display_name,
+              kind, send_at, status, sent_at, created_at
+         FROM "email"."reminder"
+        WHERE assignment_slug = ANY($1::text[])
+        ORDER BY assignment_slug ASC, send_at ASC`,
+      [slugs],
+    );
+    return rows.map((r) => this.mapRow(r));
+  }
+
   async getOne(
     reminderId: string,
     assignmentSlug: string,

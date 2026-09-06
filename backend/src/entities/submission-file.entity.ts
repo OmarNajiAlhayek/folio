@@ -9,6 +9,7 @@ import { BaseEntity } from '../common/base.entity';
 import { Submission } from './submission.entity';
 import { SubmissionFileStage } from './submission-file-stage.enum';
 import { ReviewAssignment } from './review-assignment.entity';
+import { User } from './user.entity';
 
 @Entity('submission_files')
 export class SubmissionFile extends BaseEntity {
@@ -51,6 +52,24 @@ export class SubmissionFile extends BaseEntity {
   @ManyToOne(() => ReviewAssignment, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'review_assignment_id' })
   reviewAssignment: ReviewAssignment | null;
+
+  /**
+   * Set when an editor releases a reviewer-uploaded `review_response` file to the
+   * author. Null means editor-only; the author must not see or download it.
+   */
+  @Column({
+    name: 'released_to_author_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  releasedToAuthorAt: Date | null;
+
+  @Column({ name: 'released_by_id', type: 'varchar', nullable: true })
+  releasedById: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'released_by_id' })
+  releasedBy: User | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

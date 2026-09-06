@@ -25,10 +25,43 @@ import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
+import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
 import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
+
+/**
+ * Chainable stand-in for the update query builder used by
+ * `claimStatusTransition`. `affected` decides whether the compare-and-swap
+ * wins: 1 for the normal path, 0 to simulate a concurrent editor.
+ */
+export function fakeUpdateQueryBuilder(
+  affected = 1,
+): Record<string, jest.Mock> {
+  const qb: Record<string, jest.Mock> = {};
+  for (const method of ['update', 'set', 'where', 'andWhere']) {
+    qb[method] = jest.fn(() => qb);
+  }
+  qb.execute = jest.fn(() => Promise.resolve({ affected }));
+  return qb;
+}
+
+/**
+ * Adds `createQueryBuilder` to a repository double so status transitions can
+ * claim their row. Every workflow write goes through the CAS in
+ * `claim-status-transition.ts`, so a transaction manager double needs this.
+ */
+export function withStatusClaimSupport<T extends object>(
+  repo: T,
+  affected = 1,
+): T & { createQueryBuilder: jest.Mock } {
+  return Object.assign(repo, {
+    createQueryBuilder: jest.fn(() => fakeUpdateQueryBuilder(affected)),
+  });
+}
 
 /** Resolve slug lookups via {@link SubmissionAccessService.getBySlugOrThrow}. */
 export function mockSubmissionsRepoFindBySlug(
@@ -67,6 +100,8 @@ export type SubmissionsRepoMocks = {
   usersRepo?: Record<string, unknown>;
   rbacService?: Record<string, unknown>;
   eventPublisher?: Record<string, unknown>;
+  sectionEditorAssignmentsRepo?: Record<string, unknown>;
+  sectionEditorDisciplinesRepo?: Record<string, unknown>;
   configService?: { get: jest.Mock };
   docxGenerator?: Record<string, unknown>;
   manuscriptStyles?: Record<string, unknown>;
@@ -84,6 +119,7 @@ export function submissionsServiceTestProviders(
     SubmissionEventsService,
     ReviewWorkflowService,
     CopyeditWorkflowService,
+    SectionEditorWorkflowService,
     SubmissionLifecycleService,
     SubmissionAiService,
     ManuscriptAnalysisService,
@@ -110,6 +146,14 @@ export function submissionsServiceTestProviders(
       useValue: mocks.copyeditNotesRepo ?? {},
     },
     { provide: getRepositoryToken(User), useValue: mocks.usersRepo ?? {} },
+    {
+      provide: getRepositoryToken(SectionEditorAssignment),
+      useValue: mocks.sectionEditorAssignmentsRepo ?? {},
+    },
+    {
+      provide: getRepositoryToken(UserSectionEditorDiscipline),
+      useValue: mocks.sectionEditorDisciplinesRepo ?? {},
+    },
     { provide: RbacService, useValue: mocks.rbacService ?? {} },
     { provide: DocxGeneratorService, useValue: mocks.docxGenerator ?? {} },
     {

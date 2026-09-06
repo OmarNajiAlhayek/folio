@@ -23,10 +23,13 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-  # Pin to the training/eval stack used with the fine-tuned AraBERT weights
-  # (Muhyiddin): torch 2.5.1+cu121, transformers 4.57.6, arabert 1.0.1.
-  # Install torch from the cu121 index first, then: pip install -e ".[ml]"
-  "torch==2.5.1",
+  # Fine-tuned AraBERT weights (Muhyiddin) were trained on torch 2.5.1+cu121.
+  # 2.5.1 is unpatched for CVE-2025-32434 (torch.load RCE) and has no wheels
+  # on the default PyPI index for current CPython (3.13; 2.6.0 is the floor).
+  # Stay on the 2.6 line so inference stays close to the training stack.
+  # GPU: install a CUDA wheel from the matching pytorch.org index first, then
+  #   pip install -e ".[ml]"
+  "torch>=2.6.0,<2.7",
   "transformers==4.57.6",
   "arabert==1.0.1",
   "safetensors>=0.4.0",

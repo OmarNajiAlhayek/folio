@@ -151,6 +151,8 @@ export class SubmissionAccessService {
         'author',
         'reviewAssignments',
         'reviewAssignments.reviewer',
+        // Needed for the author's anonymized review-progress timeline.
+        'reviewAssignments.review',
         'copyeditAssignments',
         'sectionEditorAssignment',
         'sectionEditorAssignment.sectionEditor',

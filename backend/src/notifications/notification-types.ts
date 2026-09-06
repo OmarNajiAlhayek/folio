@@ -11,6 +11,7 @@ export const NOTIFICATION_TYPE = {
   REVIEW_SUBMITTED: 'review_submitted',
   ROLE_INVITATION_CREATED: 'role_invitation_created',
   SUBMISSION_PUBLISHED: 'submission_published',
+  SUBMISSION_RETRACTED: 'submission_retracted',
   AI_CORPUS_SIMILARITY_COMPLETED: 'ai_corpus_similarity_completed',
   AI_CORPUS_SIMILARITY_FAILED: 'ai_corpus_similarity_failed',
   SECTION_EDITOR_ASSIGNED: 'section_editor_assigned',
@@ -70,6 +71,10 @@ export const NOTIFICATION_I18N: Record<
   [NOTIFICATION_TYPE.SUBMISSION_PUBLISHED]: {
     titleKey: 'Notifications.submissionPublished.title',
     bodyKey: 'Notifications.submissionPublished.body',
+  },
+  [NOTIFICATION_TYPE.SUBMISSION_RETRACTED]: {
+    titleKey: 'Notifications.submissionRetracted.title',
+    bodyKey: 'Notifications.submissionRetracted.body',
   },
   [NOTIFICATION_TYPE.AI_CORPUS_SIMILARITY_COMPLETED]: {
     titleKey: 'Notifications.corpusSimilarityDone.title',

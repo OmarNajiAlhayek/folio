@@ -14,6 +14,7 @@ import { ReviewDiscussion } from '../entities/review-discussion.entity';
 import { ReviewDiscussionMessage } from '../entities/review-discussion-message.entity';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { SubmissionAccessService } from './submission-access.service';
+import { reviewDiscussionToJson } from './assignment-response.mapper';
 import type { RequestUser } from '../common/types/request-user';
 
 @Injectable()
@@ -69,13 +70,15 @@ export class ReviewDiscussionService {
   async listDiscussions(
     assignmentSlug: string,
     actor: RequestUser,
-  ): Promise<ReviewDiscussion[]> {
+  ): Promise<Array<Record<string, unknown>>> {
     const assignment = await this.loadAssignmentForActor(assignmentSlug, actor);
-    return this.discussionsRepo.find({
+    const rows = await this.discussionsRepo.find({
       where: { assignmentId: assignment.id },
       relations: ['messages', 'messages.author'],
       order: { createdAt: 'ASC' },
     });
+    // `messages.author` is a `User`; reviewers get identity only, never the row.
+    return rows.map(reviewDiscussionToJson);
   }
 
   async createDiscussion(
@@ -83,7 +86,7 @@ export class ReviewDiscussionService {
     actor: RequestUser,
     subject: string,
     body: string,
-  ): Promise<ReviewDiscussion> {
+  ): Promise<Record<string, unknown>> {
     const assignment = await this.loadAssignmentForActor(assignmentSlug, actor);
     const trimSubject = (subject ?? '').trim();
     const trimBody = (body ?? '').trim();
@@ -107,10 +110,11 @@ export class ReviewDiscussionService {
     });
     await this.messagesRepo.save(message);
 
-    return this.discussionsRepo.findOneOrFail({
+    const created = await this.discussionsRepo.findOneOrFail({
       where: { id: savedDiscussion.id },
       relations: ['messages', 'messages.author'],
     });
+    return reviewDiscussionToJson(created);
   }
 
   async addMessage(
@@ -118,7 +122,7 @@ export class ReviewDiscussionService {
     discussionId: string,
     actor: RequestUser,
     body: string,
-  ): Promise<ReviewDiscussionMessage> {
+  ): Promise<Record<string, unknown>> {
     const assignment = await this.loadAssignmentForActor(assignmentSlug, actor);
     const discussion = await this.discussionsRepo.findOne({
       where: { id: discussionId, assignmentId: assignment.id },
@@ -141,6 +145,13 @@ export class ReviewDiscussionService {
       authorId: actor.sub,
       body: trimBody,
     });
-    return this.messagesRepo.save(message);
+    const saved = await this.messagesRepo.save(message);
+    return {
+      id: saved.id,
+      discussionId: saved.discussionId,
+      authorId: saved.authorId,
+      body: saved.body,
+      createdAt: saved.createdAt,
+    };
   }
 }

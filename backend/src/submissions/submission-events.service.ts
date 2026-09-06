@@ -11,6 +11,7 @@ import { NOTIFICATION_TYPE } from '../notifications/notification-types';
 import { Notification } from '../entities/notification.entity';
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import type {
+  RevisionSeverity,
   CopyeditAssignedEvent,
   CopyeditAuthorReadyEvent,
   CopyeditQueriesSentEvent,
@@ -34,6 +35,7 @@ import {
   sectionEditorAssignedKey,
   submissionDecisionKey,
   submissionPublishedKey,
+  submissionRetractedKey,
   submissionSubmittedKey,
   submissionUnderReviewKey,
 } from '@folio/shared/messaging/idempotency';
@@ -189,6 +191,9 @@ export class SubmissionEventsService {
     const siteDefault = this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en');
     const editorQueueUrl = `${this.appBaseUrl()}/submissions/${slug}`;
     const occurredAt = new Date().toISOString();
+    // Without the round, every resubmission collides with the original submission
+    // and editors are never notified.
+    const round = submission.revisionRound ?? 0;
     const outboxEvents = editors.map((editor) => {
       const emailLocale = resolveEmailLocale({
         recipientPreferred: editor.preferredLocale,
@@ -197,7 +202,7 @@ export class SubmissionEventsService {
       const payload: SubmissionSubmittedEvent = {
         type: 'SubmissionSubmitted',
         occurredAt,
-        idempotencyKey: submissionSubmittedKey(slug, editor.id),
+        idempotencyKey: submissionSubmittedKey(slug, editor.id, round),
         submissionSlug: slug,
         submissionTitle: submission.title,
         isResubmission,
@@ -230,7 +235,7 @@ export class SubmissionEventsService {
           isResubmission: isResubmission ? 'true' : 'false',
         },
         href: `/submissions/${slug}`,
-        idempotencyKey: submissionSubmittedKey(slug, editor.id),
+        idempotencyKey: submissionSubmittedKey(slug, editor.id, round),
       })),
       em,
     );
@@ -244,6 +249,9 @@ export class SubmissionEventsService {
       editorFolioLocale?: string;
       messageForAuthor?: string | null;
       isDeskReject?: boolean;
+      revisionSeverity?: RevisionSeverity;
+      revisionRound?: number;
+      releasedReviewFileCount?: number;
     },
     em: EntityManager,
   ): Promise<Notification | null> {
@@ -254,6 +262,9 @@ export class SubmissionEventsService {
       editorFolioLocale,
       messageForAuthor,
       isDeskReject,
+      revisionSeverity,
+      revisionRound,
+      releasedReviewFileCount,
     } = args;
     if (!submission.slug) {
       throw new InternalServerErrorException({
@@ -287,10 +298,16 @@ export class SubmissionEventsService {
       editorHeaderLocale: editorFolioLocale?.trim() || undefined,
       siteDefault,
     });
+    const round = revisionRound ?? submission.revisionRound ?? 0;
+    const idempotencyKey = submissionDecisionKey(
+      submission.slug,
+      decision,
+      round,
+    );
     const payload: SubmissionDecisionEvent = {
       type: 'SubmissionDecision',
       occurredAt: new Date().toISOString(),
-      idempotencyKey: submissionDecisionKey(submission.slug, decision),
+      idempotencyKey,
       submissionSlug: submission.slug,
       submissionTitle: submission.title,
       decision,
@@ -305,10 +322,15 @@ export class SubmissionEventsService {
         displayName: editorRow.displayName,
       },
       submissionUrl: `${this.appBaseUrl()}/submissions/${submission.slug}`,
+      revisionRound: round,
       ...(messageForAuthor ? { messageForAuthor } : {}),
       ...(decision === 'rejected'
         ? { isDeskReject: Boolean(isDeskReject) }
         : {}),
+      ...(decision === 'revisions_requested' && revisionSeverity
+        ? { revisionSeverity }
+        : {}),
+      ...(releasedReviewFileCount ? { releasedReviewFileCount } : {}),
     };
     await this.eventPublisher.enqueue(
       ROUTING_KEY.submissionDecision,
@@ -322,9 +344,10 @@ export class SubmissionEventsService {
         params: {
           submissionTitle: submission.title,
           decision,
+          ...(revisionSeverity ? { revisionSeverity } : {}),
         },
         href: `/submissions/${submission.slug}`,
-        idempotencyKey: submissionDecisionKey(submission.slug, decision),
+        idempotencyKey,
       },
       em,
     );
@@ -751,6 +774,29 @@ export class SubmissionEventsService {
         params: { submissionTitle: submission.title },
         href: `/publications/${slug}`,
         idempotencyKey: submissionPublishedKey(slug),
+      },
+      em,
+    );
+  }
+
+  async enqueueSubmissionRetractedNotification(
+    args: { submission: Submission },
+    em: EntityManager,
+  ): Promise<Notification | null> {
+    const { submission } = args;
+    if (!submission.slug) {
+      throw new InternalServerErrorException({
+        message: 'Cannot enqueue submission retracted: missing slug',
+        code: 'INTERNAL_ERROR',
+      });
+    }
+    return this.notifications.createIfAbsent(
+      {
+        userId: submission.authorId,
+        type: NOTIFICATION_TYPE.SUBMISSION_RETRACTED,
+        params: { submissionTitle: submission.title },
+        href: `/submissions/${submission.slug}`,
+        idempotencyKey: submissionRetractedKey(submission.slug),
       },
       em,
     );

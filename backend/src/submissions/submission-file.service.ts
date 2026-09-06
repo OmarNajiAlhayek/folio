@@ -337,7 +337,7 @@ export class SubmissionFileService {
     submissionSlug: string,
     fileId: string,
     user: RequestUser | null,
-  ): Promise<{ file: SubmissionFile; path: string }> {
+  ): Promise<{ file: SubmissionFile; path: string; downloadName: string }> {
     const subRow = await this.submissionsRepo.findOne({
       where: { slug: submissionSlug },
     });
@@ -360,7 +360,11 @@ export class SubmissionFileService {
     }
     const sub = file.submission;
     if (sub.status === SubmissionStatus.PUBLISHED && file.isPublic) {
-      return { file, path: join(this.uploadRoot(), file.storageKey) };
+      return {
+        file,
+        path: join(this.uploadRoot(), file.storageKey),
+        downloadName: file.originalName,
+      };
     }
     if (!user) {
       throw new ForbiddenException({
@@ -374,6 +378,19 @@ export class SubmissionFileService {
       PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
     );
     const isAuthor = sub.authorId === user.sub;
+    // The author owns every other file on their submission, but a reviewer's
+    // review file is editor-only until an editor releases it.
+    if (
+      isAuthor &&
+      !isEditor &&
+      file.kind === 'review_response' &&
+      file.releasedToAuthorAt == null
+    ) {
+      throw new ForbiddenException({
+        message: 'This review file has not been released to the author',
+        code: 'FORBIDDEN',
+      });
+    }
     if (!isEditor && !isAuthor) {
       // Review-response files are only visible to the reviewer who uploaded them
       if (file.kind === 'review_response' && file.reviewAssignmentId) {
@@ -394,7 +411,38 @@ export class SubmissionFileService {
         });
       }
     }
-    return { file, path: join(this.uploadRoot(), file.storageKey) };
+    return {
+      file,
+      path: join(this.uploadRoot(), file.storageKey),
+      // The author must never see the reviewer's own filename, which routinely
+      // carries their name.
+      downloadName:
+        isAuthor && !isEditor && file.kind === 'review_response'
+          ? await this.anonymizedReviewFileName(file)
+          : file.originalName,
+    };
+  }
+
+  /**
+   * `Reviewer {n} — review file.{ext}`, where n is the same 1-based index the
+   * author sees on the review timeline (assignments ordered by assignedAt, id).
+   */
+  private async anonymizedReviewFileName(
+    file: SubmissionFile,
+  ): Promise<string> {
+    let index: number | undefined;
+    if (file.reviewAssignmentId) {
+      const assignments = await this.assignmentsRepo.find({
+        where: { submissionId: file.submissionId },
+        order: { assignedAt: 'ASC', id: 'ASC' },
+        select: ['id'],
+      });
+      const at = assignments.findIndex((a) => a.id === file.reviewAssignmentId);
+      if (at >= 0) index = at + 1;
+    }
+    const dot = file.originalName.lastIndexOf('.');
+    const ext = dot > 0 ? file.originalName.slice(dot) : '';
+    return `${index ? `Reviewer ${index}` : 'Reviewer'} — review file${ext}`;
   }
 
   async listReviewerFiles(
@@ -467,6 +515,84 @@ export class SubmissionFileService {
       await this.unlinkUploadTemp(file);
       throw e;
     }
+  }
+
+  /**
+   * Reviewers may withdraw a review file they uploaded by mistake, but only
+   * before an editor has released it to the author.
+   */
+  async deleteReviewerFile(
+    assignmentSlug: string,
+    reviewerId: string,
+    fileId: string,
+  ): Promise<void> {
+    const assignment = await this.assignmentsRepo.findOne({
+      where: { slug: assignmentSlug, reviewerId },
+    });
+    if (!assignment) {
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    const file = await this.filesRepo.findOne({
+      where: {
+        id: fileId,
+        reviewAssignmentId: assignment.id,
+        kind: 'review_response',
+      },
+    });
+    if (!file) {
+      throw new NotFoundException({
+        message: 'File not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    if (file.releasedToAuthorAt != null) {
+      throw new BadRequestException({
+        message:
+          'This file has been released to the author and cannot be removed',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    await this.filesRepo.remove(file);
+    try {
+      unlinkSync(join(this.uploadRoot(), file.storageKey));
+    } catch {
+      // Storage already gone; the DB row is what matters.
+    }
+  }
+
+  /**
+   * Editor-controlled release of a reviewer's review file to the author. Kept
+   * separate from the decision so an editor can also revoke a release, or share a
+   * file without changing the submission status.
+   */
+  async setReviewFileRelease(
+    submissionSlug: string,
+    fileId: string,
+    user: RequestUser,
+    released: boolean,
+  ): Promise<SubmissionFile> {
+    const s = await this.access.getBySlugOrThrow(submissionSlug);
+    const file = await this.filesRepo.findOne({
+      where: { id: fileId, submissionId: s.id },
+    });
+    if (!file) {
+      throw new NotFoundException({
+        message: 'File not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    if (file.kind !== 'review_response') {
+      throw new BadRequestException({
+        message: 'Only reviewer review files can be released to the author',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    file.releasedToAuthorAt = released ? new Date() : null;
+    file.releasedById = released ? user.sub : null;
+    return this.filesRepo.save(file);
   }
 
   async deleteFile(

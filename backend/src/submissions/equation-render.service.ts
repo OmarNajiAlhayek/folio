@@ -13,6 +13,8 @@ const EQUATION_PNG_CACHE_VERSION = 'v6-katex-16pt';
 let cachedKatexCss: string | undefined;
 
 const MAX_EQUATION_WIDTH_PX = 500;
+/** Cap the in-process PNG cache so DOCX generation cannot grow the heap without bound. */
+const MAX_EQUATION_PNG_CACHE = 200;
 
 type CachedEquation = {
   png: Buffer;
@@ -69,7 +71,11 @@ export class EquationRenderService implements OnModuleDestroy {
       .update(`${EQUATION_PNG_CACHE_VERSION}\0${trimmed}`)
       .digest('hex');
     const cached = this.cache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      this.cache.delete(key);
+      this.cache.set(key, cached);
+      return cached;
+    }
 
     katex.renderToString(trimmed, { throwOnError: true, displayMode: true });
 
@@ -79,6 +85,11 @@ export class EquationRenderService implements OnModuleDestroy {
     const heightPx = meta.height ?? Math.round(widthPx / 5);
     const entry: CachedEquation = { png, widthPx, heightPx };
     this.cache.set(key, entry);
+    while (this.cache.size > MAX_EQUATION_PNG_CACHE) {
+      const oldest = this.cache.keys().next();
+      if (oldest.done) break;
+      this.cache.delete(oldest.value);
+    }
     return entry;
   }
 

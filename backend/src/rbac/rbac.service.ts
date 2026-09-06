@@ -122,6 +122,10 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
       PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
+      // Chief editor can publish when the assigned copyeditor cannot
+      // (leave, lockout). The service still requires every assignment
+      // ready_for_review — this is an actor override, not a quality skip.
+      PERMISSION_SLUGS.COPYEDIT_PUBLISH,
     ];
     const sectionEditorPerms = [
       PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,

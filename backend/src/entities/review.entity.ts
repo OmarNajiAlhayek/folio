@@ -4,6 +4,9 @@ import { ReviewAssignment } from './review-assignment.entity';
 
 export enum ReviewRecommendation {
   ACCEPT = 'accept',
+  MINOR_REVISIONS = 'minor_revisions',
+  MAJOR_REVISIONS = 'major_revisions',
+  /** Legacy undifferentiated value; kept so pre-severity rows still validate. */
   REVISIONS = 'revisions',
   RESUBMIT_FOR_REVIEW = 'resubmit_for_review',
   RESUBMIT_ELSEWHERE = 'resubmit_elsewhere',

@@ -220,6 +220,9 @@ export type SubmissionDecisionKind =
   | 'accepted'
   | 'rejected';
 
+/** Severity of a `revisions_requested` decision. Orthogonal to the decision kind. */
+export type RevisionSeverity = 'minor' | 'major';
+
 export type SubmissionSubmittedEvent = {
   type: 'SubmissionSubmitted';
 
@@ -273,6 +276,18 @@ export type SubmissionDecisionEvent = {
 
   /** Only meaningful when `decision === 'rejected'`: true if rejected before peer review started (desk reject) vs after (post-review reject). */
   isDeskReject?: boolean;
+
+  /** Only meaningful when `decision === 'revisions_requested'`. */
+  revisionSeverity?: RevisionSeverity;
+
+  /**
+   * Revision round this decision produced (1 for the first `revisions_requested`).
+   * Part of the idempotency key so round N+1 is not deduped against round N.
+   */
+  revisionRound?: number;
+
+  /** How many reviewer files the editor released to the author with this decision. */
+  releasedReviewFileCount?: number;
 };
 
 export type ReviewSubmittedEvent = {

@@ -54,6 +54,10 @@ export class ReviewAssignment extends BaseEntity {
   @CreateDateColumn({ name: 'assigned_at' })
   assignedAt: Date;
 
+  /** When the reviewer accepted or declined the invitation. Null while `invited`. */
+  @Column({ name: 'responded_at', type: 'timestamptz', nullable: true })
+  respondedAt: Date | null;
+
   @Column({ name: 'response_due_at', type: 'timestamptz', nullable: true })
   responseDueAt: Date | null;
 

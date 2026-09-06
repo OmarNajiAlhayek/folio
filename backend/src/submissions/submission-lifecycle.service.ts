@@ -51,11 +51,21 @@ import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
+import { setPublishedManuscriptFile } from './publish-public-files';
+import { claimStatusTransition } from './claim-status-transition';
 import {
   DECISION_STATUS_TO_KIND,
   EDITOR_TRANSITIONS,
   resolveDetailedDecisionKind,
+  type RevisionSeverity,
 } from './submission-workflow.constants';
+
+export type UpdateStatusOptions = {
+  /** Required when moving to `revisions_requested`, rejected otherwise. */
+  revisionSeverity?: RevisionSeverity;
+  /** Reviewer `review_response` files to release to the author with this decision. */
+  releaseReviewFileIds?: string[];
+};
 
 @Injectable()
 export class SubmissionLifecycleService {
@@ -168,32 +178,12 @@ export class SubmissionLifecycleService {
         code: 'SUBMISSION_INCOMPLETE_KEYWORDS',
       });
     }
-    const abstractLower = (s.abstract ?? '').toLowerCase();
-    const missingKw = kw.filter(
-      (k) => !abstractLower.includes(k.toLowerCase()),
-    );
-    if (missingKw.length > 0) {
-      throw new BadRequestException({
-        message: `Each keyword must appear in the abstract. Missing: ${missingKw.join(', ')}`,
-        code: 'SUBMISSION_KEYWORDS_NOT_IN_ABSTRACT',
-      });
-    }
     const kwAr = this.parseKeywordList(s.keywordsAr);
     if (kwAr.length !== 5) {
       throw new BadRequestException({
         message:
           'Provide exactly 5 Arabic keywords, separated by commas or semicolons',
         code: 'SUBMISSION_INCOMPLETE_KEYWORDS_AR',
-      });
-    }
-    const abstractArLower = (s.abstractAr ?? '').toLowerCase();
-    const missingKwAr = kwAr.filter(
-      (k) => !abstractArLower.includes(k.toLowerCase()),
-    );
-    if (missingKwAr.length > 0) {
-      throw new BadRequestException({
-        message: `Each Arabic keyword must appear in the Arabic abstract. Missing: ${missingKwAr.join(', ')}`,
-        code: 'SUBMISSION_KEYWORDS_NOT_IN_ABSTRACT_AR',
       });
     }
     if (!s.titleAr?.trim()) {
@@ -623,6 +613,14 @@ export class SubmissionLifecycleService {
     return this.submissionsRepo.manager
       .transaction(async (em) => {
         const submissionRepo = em.getRepository(Submission);
+        // Guards a double-submit: the second request finds the status already
+        // moved and is rejected instead of notifying every editor twice.
+        await claimStatusTransition(
+          em,
+          s.id,
+          previousStatus,
+          SubmissionStatus.SUBMITTED,
+        );
         s.status = SubmissionStatus.SUBMITTED;
         const saved = await submissionRepo.save(s);
         const created = await this.events.enqueueSubmissionSubmittedForEditors(
@@ -727,6 +725,7 @@ export class SubmissionLifecycleService {
     next: SubmissionStatus,
     editorFolioLocale?: string,
     messageForAuthorInput?: string,
+    options?: UpdateStatusOptions,
   ): Promise<Submission> {
     assertCallerPermission(
       user,
@@ -755,6 +754,30 @@ export class SubmissionLifecycleService {
         code: 'VALIDATION_ERROR',
       });
     }
+    const revisionSeverity = options?.revisionSeverity;
+    const isRevisionDecision = next === SubmissionStatus.REVISIONS_REQUESTED;
+    if (isRevisionDecision && !revisionSeverity) {
+      throw new BadRequestException({
+        message:
+          'revisionSeverity (minor or major) is required when requesting revisions',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (!isRevisionDecision && revisionSeverity) {
+      throw new BadRequestException({
+        message:
+          'revisionSeverity is only allowed when setting revisions_requested',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const releaseReviewFileIds = options?.releaseReviewFileIds ?? [];
+    if (releaseReviewFileIds.length > 0 && !decisionKind) {
+      throw new BadRequestException({
+        message:
+          'releaseReviewFileIds is only allowed when setting accepted, rejected, or revisions_requested',
+        code: 'VALIDATION_ERROR',
+      });
+    }
     const previousStatus = s.status;
     const submittedCycleAt =
       next === SubmissionStatus.UNDER_REVIEW &&
@@ -769,21 +792,43 @@ export class SubmissionLifecycleService {
     return this.submissionsRepo.manager
       .transaction(async (em) => {
         const submissionRepo = em.getRepository(Submission);
+        // Claim the transition before anything observable happens. Two editors
+        // deciding at once must not both send the author a decision letter.
+        await claimStatusTransition(em, s.id, previousStatus, next);
         s.status = next;
         if (decisionKind) {
           s.messageForAuthor = trimmedMessage || null;
           s.lastDecisionKind = detailedDecisionKind;
+          if (isRevisionDecision) {
+            s.revisionSeverity = revisionSeverity ?? null;
+            s.revisionRound = (s.revisionRound ?? 0) + 1;
+          } else {
+            // Accept/reject ends the revision cycle; the round is kept as history.
+            s.revisionSeverity = null;
+          }
         }
         if (next === SubmissionStatus.PUBLISHED) {
           s.publishedAt = new Date();
-          await em
-            .getRepository(SubmissionFile)
-            .update(
-              { submissionId: s.id, kind: 'manuscript' },
-              { isPublic: true },
-            );
+          // Same single-file rule as the copyedit publish path. Unreachable via
+          // EDITOR_TRANSITIONS today, but kept correct so it cannot regress if
+          // a direct publish transition is ever added.
+          await setPublishedManuscriptFile(em, s.id);
         }
         const saved = await submissionRepo.save(s);
+        let releasedReviewFileCount = 0;
+        if (releaseReviewFileIds.length > 0) {
+          // Ids that do not resolve to a reviewer file on this submission are
+          // ignored rather than failing the decision.
+          const result = await em.getRepository(SubmissionFile).update(
+            {
+              id: In(releaseReviewFileIds),
+              submissionId: saved.id,
+              kind: 'review_response',
+            },
+            { releasedToAuthorAt: new Date(), releasedById: user.sub },
+          );
+          releasedReviewFileCount = result.affected ?? 0;
+        }
         if (decisionKind) {
           const n = await this.events.enqueueSubmissionDecisionEvent(
             {
@@ -793,6 +838,11 @@ export class SubmissionLifecycleService {
               editorFolioLocale,
               messageForAuthor: saved.messageForAuthor,
               isDeskReject: detailedDecisionKind === 'desk_reject',
+              revisionSeverity: isRevisionDecision
+                ? (revisionSeverity ?? undefined)
+                : undefined,
+              revisionRound: saved.revisionRound,
+              releasedReviewFileCount,
             },
             em,
           );

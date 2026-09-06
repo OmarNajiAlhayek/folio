@@ -11,6 +11,8 @@ import {
 } from 'typeorm';
 import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
+import { Journal } from './journal.entity';
+import { JournalIssue } from './journal-issue.entity';
 import { SubmissionStatus } from './submission-status.enum';
 import { SubmissionArticleType } from './submission-article-type.enum';
 import { SubmissionReviewMethod } from './submission-review-method.enum';
@@ -24,6 +26,7 @@ import type { SubmissionContributorJson } from '../submissions/submission-json.t
 import type { ConstructorContent } from '../submissions/constructor-content.types';
 import type { ReviewManuscriptPresentation } from '../submissions/review-manuscript-presentation.types';
 import type { PreSubmitAnalysisData } from '../submissions/pre-submit-analysis.types';
+import type { RevisionSeverity } from '../submissions/submission-workflow.constants';
 
 @Entity('submissions')
 @Index('ix_submissions_status_updated_at', ['status', 'updatedAt'])
@@ -32,6 +35,14 @@ import type { PreSubmitAnalysisData } from '../submissions/pre-submit-analysis.t
 @Index('ix_submissions_editor_queue', ['updatedAt'], {
   where: `"status" <> 'draft'`,
 })
+// Journal-scoped editor queue: an editor of one journal filters by journal_id
+// first, so the composite beats the status-only index above for that path.
+@Index('ix_submissions_journal_status_updated_at', [
+  'journalId',
+  'status',
+  'updatedAt',
+])
+@Index('ix_submissions_issue_published_at', ['issueId', 'publishedAt'])
 export class Submission extends BaseEntity {
   @Column({ name: 'author_id' })
   authorId: string;
@@ -39,6 +50,30 @@ export class Submission extends BaseEntity {
   @ManyToOne(() => User, (u) => u.submissions, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'author_id' })
   author: User;
+
+  /**
+   * The journal this manuscript belongs to (the topic the author chose).
+   *
+   * Nullable only until the author journal picker lands; a follow-up migration
+   * tightens it to NOT NULL. Treat it as required in application code.
+   */
+  @Column({ name: 'journal_id', type: 'uuid', nullable: true })
+  journalId: string | null;
+
+  @ManyToOne(() => Journal, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'journal_id' })
+  journal: Journal | null;
+
+  /**
+   * Issue (العدد) the article is placed in. Null until publish; publishing
+   * without an issue is invalid. Always inside {@link journalId}'s journal.
+   */
+  @Column({ name: 'issue_id', type: 'uuid', nullable: true })
+  issueId: string | null;
+
+  @ManyToOne(() => JournalIssue, (i) => i.articles, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'issue_id' })
+  issue: JournalIssue | null;
 
   @Column({ type: 'varchar', length: 220, unique: true, nullable: true })
   slug: string | null;
@@ -200,6 +235,26 @@ export class Submission extends BaseEntity {
     | 'accepted'
     | 'revisions_requested'
     | null;
+
+  /**
+   * Severity of the current `revisions_requested` decision. Null in every other
+   * status; cleared when the submission is accepted or rejected.
+   */
+  @Column({
+    name: 'revision_severity',
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+  })
+  revisionSeverity: RevisionSeverity | null;
+
+  /**
+   * How many revision rounds this submission has been through. 0 until the first
+   * `revisions_requested`. Kept as history after accept/reject, and threaded into
+   * the decision/submitted idempotency keys so round N+1 is not deduped against N.
+   */
+  @Column({ name: 'revision_round', type: 'int', default: 0 })
+  revisionRound: number;
 
   /** Author's reply to reviewer/editor feedback, set on resubmission after revisions_requested. */
   @Column({

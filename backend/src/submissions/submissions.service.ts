@@ -37,7 +37,10 @@ import { PublicationCatalogService } from './publication-catalog.service';
 import { SubmissionFileService } from './submission-file.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
-import { SubmissionLifecycleService } from './submission-lifecycle.service';
+import {
+  SubmissionLifecycleService,
+  type UpdateStatusOptions,
+} from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
@@ -354,6 +357,7 @@ export class SubmissionsService implements OnModuleInit {
     next: SubmissionStatus,
     editorFolioLocale?: string,
     messageForAuthorInput?: string,
+    options?: UpdateStatusOptions,
   ): Promise<Submission> {
     return this.lifecycle.updateStatus(
       slug,
@@ -361,6 +365,7 @@ export class SubmissionsService implements OnModuleInit {
       next,
       editorFolioLocale,
       messageForAuthorInput,
+      options,
     );
   }
 
@@ -370,6 +375,28 @@ export class SubmissionsService implements OnModuleInit {
     method: SubmissionReviewMethod,
   ) {
     return this.reviewWorkflow.updateReviewMethod(slug, user, method);
+  }
+
+  async setReviewFileRelease(
+    submissionSlug: string,
+    fileId: string,
+    user: RequestUser,
+    released: boolean,
+  ): Promise<SubmissionFile> {
+    return this.files.setReviewFileRelease(
+      submissionSlug,
+      fileId,
+      user,
+      released,
+    );
+  }
+
+  async deleteReviewerFile(
+    assignmentSlug: string,
+    reviewerId: string,
+    fileId: string,
+  ): Promise<void> {
+    return this.files.deleteReviewerFile(assignmentSlug, reviewerId, fileId);
   }
 
   async updateSubmissionFileStage(
@@ -525,7 +552,7 @@ export class SubmissionsService implements OnModuleInit {
   async listCopyeditAssignments(
     submissionSlug: string,
     user: RequestUser,
-  ): Promise<CopyeditAssignment[]> {
+  ): Promise<Array<Record<string, unknown>>> {
     return this.copyeditWorkflow.listCopyeditAssignments(submissionSlug, user);
   }
 
@@ -581,6 +608,13 @@ export class SubmissionsService implements OnModuleInit {
     user: RequestUser,
   ): Promise<Submission> {
     return this.copyeditWorkflow.publishSubmission(slug, user);
+  }
+
+  async retractSubmission(
+    slug: string,
+    user: RequestUser,
+  ): Promise<Submission> {
+    return this.copyeditWorkflow.retractSubmission(slug, user);
   }
 
   /**
