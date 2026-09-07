@@ -12,6 +12,8 @@ import type {
   TypesenseSynonym,
 } from './search.types';
 import { Submission } from '../entities/submission.entity';
+import { Journal } from '../entities/journal.entity';
+import { journalEntryForSlug } from '../journals/journal-catalog';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { User } from '../entities/user.entity';
 import type { PublicationCatalogFilters } from '../submissions/publication-catalog-search.util';
@@ -31,6 +33,12 @@ const COLLECTION_SCHEMA = {
     {
       name: 'authorDisplayName',
       type: 'string' as const,
+      optional: true as const,
+    },
+    {
+      name: 'journalSlug',
+      type: 'string' as const,
+      facet: true as const,
       optional: true as const,
     },
     {
@@ -71,8 +79,28 @@ export class SearchService {
     private readonly rawCollectionName: string,
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
+    @InjectRepository(Journal)
+    private readonly journalsRepo: Repository<Journal>,
   ) {
     this.collectionName = rawCollectionName;
+  }
+
+  /**
+   * `journal_id` → slug, read once per process.
+   *
+   * Journals are frozen reference data seeded by migration (see
+   * `journals/journal-catalog.ts`), so this cannot go stale within a process
+   * without a deploy. Resolving here rather than at the call sites means an
+   * indexing path never has to remember to load the `journal` relation.
+   */
+  private journalSlugCache: Map<string, string> | null = null;
+
+  private async journalSlugById(): Promise<Map<string, string>> {
+    if (!this.journalSlugCache) {
+      const rows = await this.journalsRepo.find({ select: ['id', 'slug'] });
+      this.journalSlugCache = new Map(rows.map((j) => [j.id, j.slug]));
+    }
+    return this.journalSlugCache;
   }
 
   isEnabled(): boolean {
@@ -83,15 +111,51 @@ export class SearchService {
     if (!this.client) return;
     const schema = { ...COLLECTION_SCHEMA, name: this.collectionName };
     try {
-      await this.client.collections(this.collectionName).retrieve();
+      const existing = await this.client
+        .collections(this.collectionName)
+        .retrieve();
       this.collectionReady = true;
       this.logger.log(
         `Typesense collection "${this.collectionName}" already exists`,
       );
+      await this.addMissingFields(existing);
     } catch {
       await this.client.collections().create(schema as CollectionCreateSchema);
       this.collectionReady = true;
       this.logger.log(`Typesense collection "${this.collectionName}" created`);
+    }
+  }
+
+  /**
+   * A collection created by an earlier release keeps its old schema, and
+   * filtering on a field it does not have is a Typesense error, not an empty
+   * result. Adding fields is safe and additive; documents backfill on the next
+   * reindex (`POST /search/reindex`).
+   */
+  private async addMissingFields(existing: {
+    fields?: Array<{ name: string }>;
+  }): Promise<void> {
+    if (!this.client) return;
+    const present = new Set((existing.fields ?? []).map((f) => f.name));
+    const missing = COLLECTION_SCHEMA.fields.filter(
+      (f) => !present.has(f.name),
+    );
+    if (missing.length === 0) return;
+    try {
+      await this.client.collections(this.collectionName).update({
+        fields: missing.map((f) => ({ ...f, optional: true })),
+      } as never);
+      this.logger.log(
+        `Typesense collection "${this.collectionName}" gained field(s): ${missing
+          .map((f) => f.name)
+          .join(', ')} — run a reindex to populate them`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Could not add field(s) to "${this.collectionName}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 
@@ -110,6 +174,8 @@ export class SearchService {
       keywords: submission.keywords ?? '',
       keywordsAr: submission.keywordsAr ?? '',
       authorDisplayName,
+      journalSlug:
+        (await this.journalSlugById()).get(submission.journalId) ?? '',
       disciplines: submission.disciplines ?? [],
       articleType: submission.articleType ?? '',
       publishedAt: submission.publishedAt
@@ -289,6 +355,9 @@ export class SearchService {
     const q = filters.q?.trim() || '*';
 
     const filterParts: string[] = [];
+    if (filters.journal) {
+      filterParts.push(`journalSlug:=${JSON.stringify(filters.journal)}`);
+    }
     if (filters.discipline) {
       filterParts.push(`disciplines:=${JSON.stringify(filters.discipline)}`);
     }
@@ -356,6 +425,16 @@ export class SearchService {
       sub.abstract = doc.abstract;
       sub.abstractAr = doc.abstractAr || null;
       sub.keywords = doc.keywords || null;
+      // Titles come from the frozen catalog rather than a second query: the
+      // slug in the index is the same contract the portal URLs use.
+      const journalEntry = journalEntryForSlug(doc.journalSlug ?? '');
+      if (journalEntry) {
+        const journal = new Journal();
+        journal.slug = journalEntry.slug;
+        journal.titleAr = journalEntry.titleAr;
+        journal.titleEn = journalEntry.titleEn;
+        sub.journal = journal;
+      }
       sub.keywordsAr = doc.keywordsAr || null;
       sub.disciplines = doc.disciplines ?? [];
       sub.articleType = (doc.articleType as Submission['articleType']) || null;

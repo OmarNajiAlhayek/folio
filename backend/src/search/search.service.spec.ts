@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SearchService } from './search.service';
 import { TYPESENSE_CLIENT } from './typesense.client';
 import { Submission } from '../entities/submission.entity';
+import { Journal } from '../entities/journal.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 
 // ── Typesense client mock factory ─────────────────────────────────────────────
@@ -81,11 +82,20 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
   s.status = SubmissionStatus.PUBLISHED;
   s.publishedAt = new Date('2024-01-01');
   s.authorId = 'author-1';
+  s.journalId = 'journal-engj';
   return Object.assign(s, overrides);
 }
 
 const mockSubmissionsRepo = {
   find: jest.fn().mockResolvedValue([]),
+};
+
+/** Nine rows of frozen reference data; the service caches this per process. */
+const mockJournalsRepo = {
+  find: jest.fn().mockResolvedValue([
+    { id: 'journal-engj', slug: 'engj' },
+    { id: 'journal-medj', slug: 'medj' },
+  ]),
 };
 
 function searchServiceProviders(client: unknown) {
@@ -94,6 +104,7 @@ function searchServiceProviders(client: unknown) {
     { provide: TYPESENSE_CLIENT, useValue: client },
     { provide: 'TYPESENSE_COLLECTION_NAME', useValue: 'publications' },
     { provide: getRepositoryToken(Submission), useValue: mockSubmissionsRepo },
+    { provide: getRepositoryToken(Journal), useValue: mockJournalsRepo },
   ];
 }
 
@@ -173,6 +184,36 @@ describe('SearchService', () => {
           publishedAt: sub.publishedAt!.getTime(),
         }),
       );
+    });
+
+    // The index carries the slug, not the id: it is the same public contract
+    // the portal URLs and the `?journal=` catalog filter use.
+    it('resolves the journal id to its slug', async () => {
+      await service.upsertDocument(makeSubmission(), 'Jane Doe');
+
+      expect(mocks.mockDocuments.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ journalSlug: 'engj' }),
+      );
+    });
+
+    it('indexes an empty slug when the journal row is unknown', async () => {
+      await service.upsertDocument(
+        makeSubmission({ journalId: 'journal-gone' }),
+        'Jane Doe',
+      );
+
+      expect(mocks.mockDocuments.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ journalSlug: '' }),
+      );
+    });
+
+    it('reads the journal table once and caches it for the process', async () => {
+      mockJournalsRepo.find.mockClear();
+
+      await service.upsertDocument(makeSubmission(), 'A');
+      await service.upsertDocument(makeSubmission({ id: 'sub-2' }), 'B');
+
+      expect(mockJournalsRepo.find).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to Date.now() when publishedAt is null', async () => {
@@ -361,6 +402,16 @@ describe('SearchService', () => {
       expect(total).toBe(1);
       expect(items[0].slug).toBe('test-article');
       expect(items[0].author.displayName).toBe('Jane Doe');
+    });
+
+    it('applies journal filter_by by slug', async () => {
+      mocks.mockDocuments.search.mockResolvedValueOnce({ found: 0, hits: [] });
+      await service.searchAsSubmissions({ journal: 'engj' });
+      const searchCall = mocks.mockDocuments.search.mock.calls[0][0] as Record<
+        string,
+        unknown
+      >;
+      expect(searchCall['filter_by']).toContain('journalSlug:="engj"');
     });
 
     it('applies discipline filter_by', async () => {

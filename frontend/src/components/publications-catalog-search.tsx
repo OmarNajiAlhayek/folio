@@ -1,6 +1,13 @@
 'use client';
 
-import { FileText, Landmark, Search, UserRound, X } from 'lucide-react';
+import {
+  BookMarked,
+  FileText,
+  Landmark,
+  Search,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -9,6 +16,7 @@ import {
 } from '@/lib/use-debounced-value';
 import { useTranslations, useLocale } from 'next-intl';
 import { useDisciplineLabel } from '@/lib/use-discipline-label';
+import { useJournals } from '@/lib/queries/journals';
 import { formatMediumDate } from '@/lib/format-date';
 import type {
   PublicationCatalogFilters,
@@ -56,6 +64,9 @@ export function PublicationsCatalogSearch({
   const t = useTranslations('Publications');
   const tWf = useTranslations('SubmissionWorkflow');
   const locale = useLocale();
+  // The public portal endpoint: this catalog is readable signed out, so the
+  // authenticated picker options are not available here.
+  const { data: journals } = useJournals();
   const { selectableOptions, format: formatDiscipline } = useDisciplineLabel();
   const [quickQ, setQuickQ] = useState(filters.q ?? '');
   const debouncedQ = useDebouncedValue(
@@ -68,6 +79,7 @@ export function PublicationsCatalogSearch({
   }, [onQuickQueryChange]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [author, setAuthor] = useState(filters.author ?? '');
+  const [journal, setJournal] = useState(filters.journal ?? '');
   const [discipline, setDiscipline] = useState(filters.discipline ?? '');
   const [articleType, setArticleType] = useState(filters.articleType ?? '');
   const [publishedFrom, setPublishedFrom] = useState<Date | undefined>(
@@ -86,6 +98,7 @@ export function PublicationsCatalogSearch({
 
   useEffect(() => {
     setAuthor(filters.author ?? '');
+    setJournal(filters.journal ?? '');
     setDiscipline(filters.discipline ?? '');
     setArticleType(filters.articleType ?? '');
     setPublishedFrom(
@@ -96,6 +109,7 @@ export function PublicationsCatalogSearch({
     );
   }, [
     filters.author,
+    filters.journal,
     filters.discipline,
     filters.articleType,
     filters.publishedFrom,
@@ -115,6 +129,7 @@ export function PublicationsCatalogSearch({
       q: filters.q,
       searchMode: filters.searchMode,
       author: author.trim() || undefined,
+      journal: journal || undefined,
       discipline: discipline || undefined,
       articleType: articleType || undefined,
       publishedFrom: publishedFrom
@@ -126,6 +141,7 @@ export function PublicationsCatalogSearch({
     filters.q,
     filters.searchMode,
     author,
+    journal,
     discipline,
     articleType,
     publishedFrom,
@@ -136,6 +152,14 @@ export function PublicationsCatalogSearch({
   const disciplineOptions = [
     { value: '', label: t('disciplineAny') },
     ...selectableOptions,
+  ];
+
+  const journalOptions = [
+    { value: '', label: t('journalAny') },
+    ...(journals ?? []).map((j) => ({
+      value: j.slug,
+      label: locale === 'ar' ? j.titleAr : j.titleEn,
+    })),
   ];
 
   const articleTypeOptions = [
@@ -150,6 +174,7 @@ export function PublicationsCatalogSearch({
     () =>
       [
         filters.author,
+        filters.journal,
         filters.discipline,
         filters.articleType,
         filters.publishedFrom,
@@ -157,6 +182,7 @@ export function PublicationsCatalogSearch({
       ].filter((value) => Boolean(value?.trim())).length,
     [
       filters.author,
+      filters.journal,
       filters.discipline,
       filters.articleType,
       filters.publishedFrom,
@@ -164,7 +190,7 @@ export function PublicationsCatalogSearch({
     ],
   );
 
-  const activeFilterChips = useMemo(() => {
+  const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
     const chips: ActiveFilterChip[] = [];
 
     if (filters.q?.trim()) {
@@ -183,6 +209,19 @@ export function PublicationsCatalogSearch({
       chips.push({
         key: 'author',
         label: t('filterChipAuthor', { value: filters.author.trim() }),
+      });
+    }
+    if (filters.journal?.trim()) {
+      const match = (journals ?? []).find((j) => j.slug === filters.journal);
+      chips.push({
+        key: 'journal',
+        label: t('filterChipJournal', {
+          value: match
+            ? locale === 'ar'
+              ? match.titleAr
+              : match.titleEn
+            : filters.journal.trim(),
+        }),
       });
     }
     if (filters.discipline?.trim()) {
@@ -219,7 +258,7 @@ export function PublicationsCatalogSearch({
     }
 
     return chips;
-  }, [filters, formatDiscipline, locale, t, tWf]);
+  }, [filters, formatDiscipline, journals, locale, t, tWf]);
 
   const handleClearSearch = useCallback(() => {
     setQuickQ('');
@@ -396,6 +435,33 @@ export function PublicationsCatalogSearch({
             <p className="mt-1 text-[10px] text-ink/50 leading-tight">
               {t('advancedAuthorHint')}
             </p>
+          </div>
+
+          {/* Journal */}
+          <div>
+            <label
+              htmlFor="pub-adv-journal"
+              className="block text-[11px] font-bold uppercase tracking-wider text-ink/45"
+            >
+              {t('journal')}
+            </label>
+            <div className="relative flex items-center mt-1.5 w-full">
+              <div
+                className="absolute start-3 pointer-events-none text-ink/35 z-10"
+                aria-hidden
+              >
+                <BookMarked className="size-4" strokeWidth={2} aria-hidden />
+              </div>
+              <SearchableSelect
+                options={journalOptions}
+                value={journal}
+                onValueChange={setJournal}
+                placeholder={t('journalAny')}
+                searchPlaceholder={t('journalSearchPlaceholder')}
+                emptyText={t('journalEmpty')}
+                className="ps-9 w-full text-start"
+              />
+            </div>
           </div>
 
           {/* Academic Discipline */}

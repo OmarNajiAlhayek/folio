@@ -71,14 +71,13 @@ export class JournalMembershipService {
   }
 
   /**
-   * `userId` → the Arabic discipline labels of the journals they serve.
+   * Journal slugs a user serves for `roleSlug`, keyed by user id.
    *
-   * The staff-admin API still speaks discipline labels; this is the one place
-   * that translates. Both directions go through the `journals` table rather
-   * than the in-code catalog so a row that is missing from the database
-   * surfaces as absent instead of as a phantom assignment.
+   * Slugs, not ids, because this is what the staff-admin API speaks: they are
+   * the same stable public identifiers the portal URLs use, so an admin screen
+   * and a reader's URL name a journal the same way.
    */
-  async disciplineLabelsByUser(
+  async journalSlugsByUser(
     userIds: string[],
     roleSlug: string,
   ): Promise<Map<string, string[]>> {
@@ -89,41 +88,41 @@ export class JournalMembershipService {
       select: ['userId', 'journalId'],
     });
     if (rows.length === 0) return result;
-    const labelByJournalId = await this.labelByJournalId();
+    const slugByJournalId = await this.slugByJournalId();
     for (const row of rows) {
-      const label = labelByJournalId.get(row.journalId);
-      if (!label) continue;
+      const slug = slugByJournalId.get(row.journalId);
+      if (!slug) continue;
       const arr = result.get(row.userId) ?? [];
-      arr.push(label);
+      arr.push(slug);
       result.set(row.userId, arr);
     }
     return result;
   }
 
-  /** Discipline labels for one user, sorted for a stable API response. */
-  async disciplineLabelsForUser(
+  /** Journal slugs for one user, sorted for a stable API response. */
+  async journalSlugsForUser(
     userId: string,
     roleSlug: string,
   ): Promise<string[]> {
-    const map = await this.disciplineLabelsByUser([userId], roleSlug);
+    const map = await this.journalSlugsByUser([userId], roleSlug);
     return (map.get(userId) ?? []).sort((a, b) => a.localeCompare(b));
   }
 
   /**
-   * Replaces this user's journals for `roleSlug` with the journals matching
-   * `disciplineLabels`. Returns the labels actually stored, so a caller that
-   * passed an unknown label sees it dropped rather than silently accepted.
+   * Replaces this user's journals for `roleSlug`. Returns the slugs actually
+   * stored, so a caller that passed an unknown slug sees it dropped rather
+   * than silently accepted.
    */
-  async setDisciplineLabelsForUser(
+  async setJournalSlugsForUser(
     userId: string,
     roleSlug: string,
-    disciplineLabels: string[],
+    slugs: string[],
   ): Promise<string[]> {
-    const journalIdByLabel = await this.journalIdByLabel();
+    const journalIdBySlug = await this.journalIdBySlug();
     const wanted = new Map<string, string>();
-    for (const label of disciplineLabels) {
-      const journalId = journalIdByLabel.get(label);
-      if (journalId) wanted.set(journalId, label);
+    for (const slug of slugs) {
+      const journalId = journalIdBySlug.get(slug);
+      if (journalId) wanted.set(journalId, slug);
     }
 
     await this.membershipsRepo.delete({ userId, roleSlug });
@@ -146,17 +145,13 @@ export class JournalMembershipService {
     return journal?.disciplineLabel ?? null;
   }
 
-  private async labelByJournalId(): Promise<Map<string, string>> {
-    const journals = await this.journalsRepo.find({
-      select: ['id', 'disciplineLabel'],
-    });
-    return new Map(journals.map((j) => [j.id, j.disciplineLabel]));
+  private async slugByJournalId(): Promise<Map<string, string>> {
+    const journals = await this.journalsRepo.find({ select: ['id', 'slug'] });
+    return new Map(journals.map((j) => [j.id, j.slug]));
   }
 
-  private async journalIdByLabel(): Promise<Map<string, string>> {
-    const journals = await this.journalsRepo.find({
-      select: ['id', 'disciplineLabel'],
-    });
-    return new Map(journals.map((j) => [j.disciplineLabel, j.id]));
+  private async journalIdBySlug(): Promise<Map<string, string>> {
+    const journals = await this.journalsRepo.find({ select: ['id', 'slug'] });
+    return new Map(journals.map((j) => [j.slug, j.id]));
   }
 }

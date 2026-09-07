@@ -2507,7 +2507,7 @@ export default function SubmissionDetailPage() {
                       options={sectionEditorCandidates.map((c) => ({
                         value: c.id,
                         label: `${c.displayName} (${c.email})`,
-                        keywords: [c.displayName, c.email, ...c.disciplines],
+                        keywords: [c.displayName, c.email, ...c.journals],
                       }))}
                       value={sectionEditorPick}
                       onValueChange={setSectionEditorPick}

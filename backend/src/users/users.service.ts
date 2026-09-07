@@ -781,19 +781,19 @@ export class UsersService {
   }
 
   async listSectionEditorCandidates(): Promise<
-    { id: string; displayName: string; email: string; disciplines: string[] }[]
+    { id: string; displayName: string; email: string; journals: string[] }[]
   > {
     const ids = await this.rbacService.listUserIdsWithPermission(
       PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
     );
     if (ids.length === 0) return [];
-    const [users, disciplineMap] = await Promise.all([
+    const [users, journalMap] = await Promise.all([
       this.usersRepo.find({
         where: { id: In(ids) },
         select: ['id', 'displayName', 'email'],
         order: { displayName: 'ASC' },
       }),
-      this.journalMemberships.disciplineLabelsByUser(
+      this.journalMemberships.journalSlugsByUser(
         ids,
         ROLE_SLUGS.SECTION_EDITOR,
       ),
@@ -802,27 +802,28 @@ export class UsersService {
       id: u.id,
       displayName: u.displayName,
       email: u.email,
-      disciplines: disciplineMap.get(u.id) ?? [],
+      journals: journalMap.get(u.id) ?? [],
     }));
   }
 
   /**
-   * Section-editor scope, still expressed as discipline labels.
+   * Section-editor scope, as journal slugs.
    *
-   * Storage moved to `journal_memberships`; the label is derived from the
-   * journal it maps to. The staff-admin UI keeps speaking labels until the
-   * journal picker lands, so the wire contract here is deliberately unchanged.
+   * Slice 3 moved storage to `journal_memberships` but kept the wire speaking
+   * discipline labels because no journal picker existed yet. Slice 6 gave
+   * authors that picker, so slice 7 makes this surface name journals too —
+   * the same slugs the portal URLs use.
    */
-  async getSectionEditorDisciplines(userId: string): Promise<string[]> {
-    return this.journalMemberships.disciplineLabelsForUser(
+  async getSectionEditorJournals(userId: string): Promise<string[]> {
+    return this.journalMemberships.journalSlugsForUser(
       userId,
       ROLE_SLUGS.SECTION_EDITOR,
     );
   }
 
-  async setSectionEditorDisciplines(
+  async setSectionEditorJournals(
     userId: string,
-    disciplines: string[],
+    journals: string[],
   ): Promise<string[]> {
     const user = await this.findById(userId);
     if (!user) {
@@ -831,10 +832,10 @@ export class UsersService {
         code: 'NOT_FOUND',
       });
     }
-    return this.journalMemberships.setDisciplineLabelsForUser(
+    return this.journalMemberships.setJournalSlugsForUser(
       userId,
       ROLE_SLUGS.SECTION_EDITOR,
-      disciplines,
+      journals,
     );
   }
 }

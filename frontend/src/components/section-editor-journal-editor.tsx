@@ -1,20 +1,30 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiJson } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Spinner } from '@/components/ui/spinner';
-import { ARABIC_DISCIPLINE_LABELS } from '@/lib/discipline-labels';
+import { useJournalOptions } from '@/lib/queries/journals';
 
 type Props = {
   userId: string;
 };
 
-export function SectionEditorDisciplineEditor({ userId }: Props) {
-  const t = useTranslations('JournalManager');
-  const [disciplines, setDisciplines] = useState<string[]>([]);
+/**
+ * Which journals a section editor serves.
+ *
+ * Values are journal slugs — the same identifiers the portal URLs use — so an
+ * admin screen and a reader's URL name a journal the same way. Until slice 7
+ * this surface spoke Arabic discipline labels, which only worked because
+ * journals happen to be 1:1 with classifier labels.
+ */
+export function SectionEditorJournalEditor({ userId }: Props) {
+  const t = useTranslations('JournalManagerUsers');
+  const locale = useLocale();
+  const { data: journalOptions } = useJournalOptions();
+  const [journals, setJournals] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -23,12 +33,12 @@ export function SectionEditorDisciplineEditor({ userId }: Props) {
     setLoading(true);
     try {
       const data = await apiJson<string[]>(
-        `/users/${userId}/section-editor-disciplines`,
+        `/users/${userId}/section-editor-journals`,
       );
-      setDisciplines(data);
+      setJournals(data);
       setDirty(false);
     } catch {
-      // ignore — disciplines default to empty
+      // ignore — scope defaults to empty, which means "no journals"
     } finally {
       setLoading(false);
     }
@@ -41,9 +51,9 @@ export function SectionEditorDisciplineEditor({ userId }: Props) {
   async function save() {
     setSaving(true);
     try {
-      await apiJson(`/users/${userId}/section-editor-disciplines`, {
+      await apiJson(`/users/${userId}/section-editor-journals`, {
         method: 'PUT',
-        body: JSON.stringify({ disciplines }),
+        body: JSON.stringify({ journals }),
       });
       setDirty(false);
     } catch {
@@ -53,13 +63,20 @@ export function SectionEditorDisciplineEditor({ userId }: Props) {
     }
   }
 
-  const options = ARABIC_DISCIPLINE_LABELS.map((d) => ({ value: d, label: d }));
+  const options = useMemo(
+    () =>
+      (journalOptions ?? []).map((j) => ({
+        value: j.slug,
+        label: locale === 'ar' ? j.titleAr : j.titleEn,
+      })),
+    [journalOptions, locale],
+  );
 
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-[10px] text-ink/50">
         <Spinner className="h-3 w-3" />
-        {t('loadingDisciplines')}
+        {t('loadingJournals')}
       </div>
     );
   }
@@ -68,13 +85,13 @@ export function SectionEditorDisciplineEditor({ userId }: Props) {
     <div className="space-y-2">
       <MultiSelect
         options={options}
-        value={disciplines}
+        value={journals}
         onChange={(next) => {
-          setDisciplines(next);
+          setJournals(next);
           setDirty(true);
         }}
-        emptyLabel={t('noDisciplinesSelected')}
-        manySelectedLabel={(c) => `${c} ${t('disciplinesSelected')}`}
+        emptyLabel={t('noJournalsSelected')}
+        manySelectedLabel={(c) => `${c} ${t('journalsSelected')}`}
         className="w-full"
       />
       {dirty && (
@@ -85,7 +102,7 @@ export function SectionEditorDisciplineEditor({ userId }: Props) {
           className="w-full text-xs"
         >
           {saving ? <Spinner className="h-3 w-3 me-1" /> : null}
-          {t('saveDisciplines')}
+          {t('saveJournals')}
         </Button>
       )}
     </div>

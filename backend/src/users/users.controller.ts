@@ -21,7 +21,7 @@ import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { CreateRoleInvitationDto } from './dto/create-role-invitation.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
 import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
-import { SetSectionEditorDisciplinesDto } from './dto/set-section-editor-disciplines.dto';
+import { SetSectionEditorJournalsDto } from './dto/set-section-editor-journals.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
@@ -68,19 +68,19 @@ export class UsersController {
     return this.usersService.listSectionEditorCandidates();
   }
 
-  @Get(':id/section-editor-disciplines')
+  @Get(':id/section-editor-journals')
   @AllowAuthenticated()
-  getSectionEditorDisciplines(@Param('id', ParseUUIDPipe) id: string) {
-    return this.usersService.getSectionEditorDisciplines(id);
+  getSectionEditorJournals(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getSectionEditorJournals(id);
   }
 
-  @Put(':id/section-editor-disciplines')
+  @Put(':id/section-editor-journals')
   @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
-  setSectionEditorDisciplines(
+  setSectionEditorJournals(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: SetSectionEditorDisciplinesDto,
+    @Body() dto: SetSectionEditorJournalsDto,
   ) {
-    return this.usersService.setSectionEditorDisciplines(id, dto.disciplines);
+    return this.usersService.setSectionEditorJournals(id, dto.journals);
   }
 
   @Post(':id/role-invitations')

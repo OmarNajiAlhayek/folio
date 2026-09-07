@@ -7,6 +7,7 @@ import { SearchCurationController } from './search-curation.controller';
 import { SearchAnalyticsController } from './search-analytics.controller';
 import { TYPESENSE_CLIENT, createTypesenseClient } from './typesense.client';
 import { Submission } from '../entities/submission.entity';
+import { Journal } from '../entities/journal.entity';
 import { User } from '../entities/user.entity';
 import { SearchSyncCheckpoint } from './search-sync-checkpoint.entity';
 import { RbacModule } from '../rbac/rbac.module';
@@ -17,7 +18,7 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
   imports: [
     ConfigModule,
     RbacModule,
-    TypeOrmModule.forFeature([Submission, User, SearchSyncCheckpoint]),
+    TypeOrmModule.forFeature([Submission, User, Journal, SearchSyncCheckpoint]),
   ],
   controllers: [SearchCurationController, SearchAnalyticsController],
   providers: [

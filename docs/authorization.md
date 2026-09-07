@@ -20,14 +20,16 @@ narrows it.
 - **An editor with no memberships is scoped to nothing**, not to everything. The
   opposite default would silently leave the scope unenforced for exactly the
   accounts nobody has configured yet.
-- **Unplaced submissions stay visible to every editor.** `submissions.journal_id`
-  is nullable until the author journal picker ships, and a row no editor can see
-  is a row nobody can triage. When the column becomes `NOT NULL`, drop the
-  `journal_id IS NULL` disjunct in `SubmissionsService.findAllForUser`.
+- **Every submission has a journal.** `submissions.journal_id` is `NOT NULL`
+  since `SubmissionJournalRequired`, so there is no unplaced triage bucket: an
+  editor sees their journals and nothing else, and one with no memberships gets
+  an empty queue without a database round-trip.
 - Section-editor suggestions match on the submission's **journal**, not on its
-  discipline tags. `journals.discipline_label` is unique and 1:1 with the AraBERT
-  classifier labels, so the staff-admin API still speaks labels while storage is
-  journal-keyed (`user_section_editor_disciplines` was dropped in
+  discipline tags. The staff-admin surface speaks journal slugs
+  (`GET/PUT /users/:id/section-editor-journals`) — the same identifiers the
+  portal URLs use. It spoke Arabic discipline labels until slice 7, which only
+  worked because `journals.discipline_label` is unique and 1:1 with the
+  classifier labels (`user_section_editor_disciplines` was dropped in
   `1783200000000-JournalScopedSectionEditors`).
 
 Shared helpers live in `backend/src/common/authorization/permission-checks.ts`. The guard uses the same `hasAnyPermission()` implementation as services.

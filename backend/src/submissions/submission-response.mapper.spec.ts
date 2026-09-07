@@ -42,6 +42,42 @@ describe('submissionToViewerJson messageForAuthor', () => {
   });
 });
 
+/**
+ * The viewer JSON is an explicit allow-list: a column that is not named here is
+ * invisible to every client no matter what the entity carries. `journalId` has
+ * to be in it or the author's metadata form cannot round-trip the journal.
+ */
+describe('submissionToViewerJson journal', () => {
+  const base = {
+    id: 'sub-1',
+    slug: 'paper-one',
+    title: 'Title',
+    titleAr: null,
+    abstract: 'Abstract',
+    abstractAr: null,
+    articleType: null,
+    keywords: null,
+    keywordsAr: null,
+    status: SubmissionStatus.DRAFT,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    publishedAt: null,
+    reviewMethod: 'double_anonymous',
+    files: [],
+    authorId: 'author-1',
+    journalId: 'journal-engj',
+  } as unknown as Submission;
+
+  it.each(['author', 'editor', 'reviewer', 'copyeditor'] as const)(
+    'exposes journalId to the %s viewer',
+    (viewer) => {
+      expect(submissionToViewerJson(base, viewer).journalId).toBe(
+        'journal-engj',
+      );
+    },
+  );
+});
+
 describe('submissionToViewerJson preSubmitAnalysis', () => {
   const analysis = {
     id: 'psa-1',

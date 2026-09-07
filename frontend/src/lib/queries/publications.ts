@@ -28,6 +28,8 @@ export type PublicationListItem = {
   keywords?: string | null;
   keywordsAr?: string | null;
   disciplines?: string[];
+  /** Journal this article was published in; null if the query did not load it. */
+  journal?: { slug: string; titleAr: string; titleEn: string } | null;
   publishedAt: string | null;
   author?: { displayName: string };
   searchSnippet?: string;

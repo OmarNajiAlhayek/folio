@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CollapsibleSection } from '@/components/ui/collapsible-section';
-import { SectionEditorDisciplineEditor } from '@/components/section-editor-discipline-editor';
+import { SectionEditorJournalEditor } from '@/components/section-editor-journal-editor';
 import { SimpleSelect } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -873,7 +873,7 @@ export default function JournalManagerUsersPage() {
                       <p className="mb-2.5 text-[10px] font-bold uppercase tracking-wider text-ink/40">
                         {t('sectionEditorDisciplines')}
                       </p>
-                      <SectionEditorDisciplineEditor userId={row.id} />
+                      <SectionEditorJournalEditor userId={row.id} />
                     </div>
                   )}
                 </li>

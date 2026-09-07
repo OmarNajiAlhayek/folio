@@ -40,6 +40,8 @@ export type PublicationListItem = {
   keywords: string | null;
   keywordsAr: string | null;
   disciplines: string[] | null;
+  /** Null only when the journal relation was not loaded for this query. */
+  journal: { slug: string; titleAr: string; titleEn: string } | null;
   publishedAt: Date | null;
   author?: { displayName: string };
 };
@@ -68,6 +70,13 @@ export class PublicationCatalogService {
       keywords: s.keywords,
       keywordsAr: s.keywordsAr,
       disciplines: s.disciplines,
+      journal: s.journal
+        ? {
+            slug: s.journal.slug,
+            titleAr: s.journal.titleAr,
+            titleEn: s.journal.titleEn,
+          }
+        : null,
       publishedAt: s.publishedAt,
       author: s.author
         ? {
@@ -103,7 +112,7 @@ export class PublicationCatalogService {
       const [items, total] = await this.submissionsRepo.findAndCount({
         where: { status: SubmissionStatus.PUBLISHED },
         order: { publishedAt: 'DESC' },
-        relations: ['author'],
+        relations: ['author', 'journal'],
         take: limit,
         skip: offset,
       });
@@ -114,6 +123,11 @@ export class PublicationCatalogService {
     applyPublicationCatalogQuery(qb, filters);
     if (!publicationCatalogNeedsAuthorJoin(filters)) {
       qb.leftJoinAndSelect('s.author', 'author');
+    }
+    // A journal filter already joined-and-selected the relation under the same
+    // alias; joining twice would be valid SQL and pure waste.
+    if (!filters.journal) {
+      qb.leftJoinAndSelect('s.journal', 'journal');
     }
     const total = await qb.getCount();
     const items = await qb.skip(offset).take(limit).getMany();

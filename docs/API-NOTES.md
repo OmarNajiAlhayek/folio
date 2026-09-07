@@ -92,6 +92,12 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 
 ### Users (minimal)
 
+> **Section-editor scope** is expressed as journal slugs:
+> `GET /users/:id/section-editor-journals` (any authenticated user) and
+> `PUT /users/:id/section-editor-journals` with `{ "journals": ["engj", …] }`
+> (`users.manage_roles`). Unknown slugs are rejected. This surface spoke Arabic
+> discipline labels before slice 7.
+
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
 | GET | `/users` | Journal manager (`users.manage_roles`) | Query: `q` (email/display name), `limit` (1–50, default 20), `offset`. Returns `{ items, total }` with `roleSlugs`, `willingToReview`, `pendingRoleInvitations`. UI: `/journal-manager/users`. |
@@ -109,9 +115,10 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 |--------|------|-----|--------|
 | GET | `/submissions` | Author | Own submissions only. |
 | GET | `/submissions` | Editor | Queue filter by status query params. |
-| POST | `/submissions` | Author | Create `draft`. Body: `title`, `abstract`; optional article metadata (type, keywords, contributors JSON, funding, declarations, suggested/opposed reviewers). |
+| POST | `/submissions` | Author | Create `draft`. Body: **`journalId` (required)**, `title`, `abstract`; optional article metadata (type, keywords, contributors JSON, funding, declarations, suggested/opposed reviewers). A retired or unknown journal is `400 JOURNAL_NOT_AVAILABLE`. |
+| GET | `/submissions/journal-options` | Author / Editor | Journals accepting submissions — the author picker's options: `{ id, slug, titleAr, titleEn, disciplineLabel }[]`. |
 | GET | `/submissions/:slug` | Author / Editor / Assigned reviewer | Slug in path. JSON is **viewer-specific** (see Peer review policy above). |
-| PATCH | `/submissions/:slug` | Author | Full metadata when `draft` or `revisions_requested` (title, abstract, article type, keywords, contributors, declarations, reviewer preferences). |
+| PATCH | `/submissions/:slug` | Author | Full metadata when `draft` or `revisions_requested` (title, abstract, article type, keywords, contributors, declarations, reviewer preferences). Optional `journalId` moves the manuscript to another journal while it is still editable. |
 | PATCH | `/submissions/:slug/review-method` | Editor | Body: `{ "reviewMethod": "open" \| "anonymous" \| "double_anonymous" }`. Requires `submission.change_status` **or** `submission.assign_reviewer`. |
 | POST | `/submissions/:slug/submit` | Author | `draft` → `submitted` (or resubmit from `revisions_requested`). Validates journal-style checklist; new author uploads default `file_stage = submission`. |
 | PATCH | `/submissions/:slug/status` | Editor | Body: `{ "status": "…", "messageForAuthor"?: string, "revisionSeverity"?: "minor" \| "major", "releaseReviewFileIds"?: string[] }`. `revisionSeverity` is **required** for `revisions_requested` and rejected otherwise; it also bumps `revision_round`. `releaseReviewFileIds` releases reviewer `review_response` files to the author in the same transaction. Optional `messageForAuthor` (max 4000 chars) when setting `accepted`, `rejected`, or `revisions_requested`; persisted on the submission and included in the author decision email. `under_review` requires a review-package manuscript (see policy). |
@@ -122,6 +129,8 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | PATCH | `/submissions/:slug/discipline` | Author / Editor | Body: `{ "disciplines": ["<label>", ...] }` (1–3 labels) — confirm or override; sets `discipline_source` to `author` or `editor`. |
 | GET | `/submissions/:slug/corpus-similarity` | Editor / assigned reviewer (accepted or completed) | Corpus overlap report via `PlagiarismService`. **Not** available to authors or copyeditors-only. Requires `AI_SIMILARITY_ENABLED`. Returns `{ status: "unavailable" \| "no_text" \| "ok", ... }` when disabled or insufficient text. |
 | GET | `/submissions/:slug/suggested-reviewers` | Editor | Ranked reviewer candidates via `ReviewerMatchingService`. Requires `AI_REVIEWER_MATCHING_ENABLED`. |
+| GET | `/submissions/:slug/publishable-issues` | Copyeditor / Editor | Issues of **this submission's journal** that can receive it (`open` or `published`). Read through the submission so an unplaced manuscript leaks no other journal's issues. |
+| POST | `/submissions/:slug/publish` | Copyeditor / Editor | Body: `{ "issueId": "<uuid>" }`. Files the article into an issue and flips to `published` in one transaction. |
 
 ### AI feature flags and errors
 
@@ -186,11 +195,14 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
-| GET | `/public/submissions` | Public | Paginated list of `published` submissions. Response: `{ items, total, limit, offset }`. Query filters: `q`, `author`, `discipline`, `articleType`, `publishedFrom`, `publishedTo`. Keyword mode: optional `limit` (1–100, default 20), `offset` (default 0). |
+| GET | `/public/submissions` | Public | Paginated list of `published` submissions. Response: `{ items, total, limit, offset }`. Query filters: `q`, `author`, `journal` (slug, e.g. `engj`), `discipline`, `articleType`, `publishedFrom`, `publishedTo`. Keyword mode: optional `limit` (1–100, default 20), `offset` (default 0). |
 | GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`; or **Typesense** when `TYPESENSE_ENABLED=true` (weighted multi-field, typo tolerance, prefix match). `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20); returns same paginated envelope with `offset` 0. |
 | GET | `/public/submissions/author-suggestions` | Public | Typeahead for catalog author filter. Query: `q` (min 2 chars), optional `limit` (1–20, default 10). |
 | GET | `/public/submissions/:slug` | Public | Published metadata + downloadable files. |
 | GET | `/public/manuscript-styles` | Public | Constructor / DOCX style profiles. |
+| GET | `/public/journals` | Public | The press: every active journal with article count and latest released issue. |
+| GET | `/public/journals/:slug` | Public | One journal with its **published** issues, newest first. |
+| GET | `/public/journals/:slug/issues/:year/:number` | Public | Issue table of contents — journal, issue citation (العدد N، السنة YYYY), and published articles. |
 | POST | `/public/search/click` | Public | Record a Typesense click event for search analytics. Body: `{ q, docId, userId? }`. No-op when Typesense is disabled. Fire-and-forget (always 204). |
 
 Legacy alias `GET /publications` may redirect or mirror catalog list depending on deployment; prefer `/public/submissions`.

@@ -9,6 +9,8 @@ export const PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN = 0.35;
 export type PublicationCatalogFilters = {
   q?: string;
   author?: string;
+  /** Journal slug from the URL (`?journal=engj`), not the internal id. */
+  journal?: string;
   discipline?: string;
   articleType?: SubmissionArticleType;
   publishedFrom?: Date;
@@ -29,6 +31,7 @@ export function publicationCatalogHasTextOrFilters(
   return Boolean(
     filters.q ||
     filters.author ||
+    filters.journal ||
     filters.discipline ||
     filters.articleType ||
     filters.publishedFrom ||
@@ -173,6 +176,16 @@ export function applyPublicationCatalogQuery(
       pubAuthor: author,
       pubAuthorSimMin: PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
     });
+  }
+
+  if (filters.journal) {
+    // Join rather than resolve the slug first: `journals` is nine rows of
+    // reference data and `journal_id` is indexed, so this costs nothing and
+    // keeps an unknown slug returning nothing instead of everything.
+    qb.innerJoinAndSelect('s.journal', 'journal').andWhere(
+      'journal.slug = :pubJournal',
+      { pubJournal: filters.journal },
+    );
   }
 
   if (filters.discipline) {

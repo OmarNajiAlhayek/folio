@@ -1065,10 +1065,6 @@
     "hasSectionEditorRole": "Already section editor",
     "pendingSectionEditorInvite": "Section editor invite pending",
     "sectionEditorDisciplines": "Discipline scope",
-    "loadingDisciplines": "Loading disciplines…",
-    "noDisciplinesSelected": "No disciplines",
-    "disciplinesSelected": "disciplines",
-    "saveDisciplines": "Save disciplines",
     "showingCount": "Showing {count} of {total}",
     "prevPage": "Previous",
     "nextPage": "Next",
@@ -1085,7 +1081,11 @@
     "clearSearchAria": "Clear search",
     "removeRoleFilterAria": "Remove role filter",
     "removeJoinedFromAria": "Remove joined-from filter",
-    "removeJoinedToAria": "Remove joined-to filter"
+    "removeJoinedToAria": "Remove joined-to filter",
+    "loadingJournals": "Loading journals…",
+    "noJournalsSelected": "No journals",
+    "journalsSelected": "journals",
+    "saveJournals": "Save journals"
   },
   "JournalManagerAuditLog": {
     "title": "Audit log",
@@ -1397,7 +1397,12 @@
     "filterChipArticleType": "Type: {value}",
     "filterChipPublishedFrom": "From {date}",
     "filterChipPublishedTo": "To {date}",
-    "updatingResults": "Updating results…"
+    "updatingResults": "Updating results…",
+    "journal": "Journal",
+    "journalAny": "All journals",
+    "journalSearchPlaceholder": "Search journals…",
+    "journalEmpty": "No journal matches",
+    "filterChipJournal": "Journal: {value}"
   },
   "Journals": {
     "eyebrow": "Damascus University",

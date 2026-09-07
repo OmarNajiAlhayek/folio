@@ -84,6 +84,14 @@ function CatalogArticle({
   return (
     <article className="group relative rounded-2xl border border-ink/10 dark:border-white/10 bg-surface/90 p-5 shadow-[0_2px_12px_rgba(15,23,42,0.03)] backdrop-blur-md transition-all duration-300 hover:border-accent-2/20 hover:shadow-[0_16px_36px_-16px_rgba(15,23,42,0.12)] sm:p-6">
       <div className="flex flex-wrap gap-2 items-center mb-4">
+        {item.journal ? (
+          <Link
+            href={`/journals/${encodeURIComponent(item.journal.slug)}`}
+            className="inline-flex items-center rounded-full bg-accent/8 border border-accent/25 px-2.5 py-0.5 text-[10px] font-semibold text-accent hover:bg-accent/15 transition-colors"
+          >
+            {locale === 'ar' ? item.journal.titleAr : item.journal.titleEn}
+          </Link>
+        ) : null}
         {(item.disciplines?.length ?? 0) > 0 ? (
           <DisciplineBadges labels={item.disciplines ?? []} />
         ) : null}

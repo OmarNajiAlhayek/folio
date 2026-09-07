@@ -7,10 +7,12 @@ import { JournalMembershipService } from './journal-membership.service';
 
 const MEDJ = {
   id: 'journal-medj',
+  slug: 'medj',
   disciplineLabel: 'العلوم الطبية',
 } as Journal;
 const ENGJ = {
   id: 'journal-engj',
+  slug: 'engj',
   disciplineLabel: 'العلوم الهندسية',
 } as Journal;
 
@@ -90,20 +92,20 @@ describe('JournalMembershipService', () => {
     expect(membershipsRepo.find).not.toHaveBeenCalled();
   });
 
-  it('translates memberships back to discipline labels per user', async () => {
+  it('translates memberships back to journal slugs per user', async () => {
     membershipsRepo.find.mockResolvedValue([
       { userId: 'se-1', journalId: 'journal-medj' },
       { userId: 'se-1', journalId: 'journal-engj' },
       { userId: 'se-2', journalId: 'journal-engj' },
     ]);
 
-    const map = await service.disciplineLabelsByUser(
+    const map = await service.journalSlugsByUser(
       ['se-1', 'se-2'],
       ROLE_SLUGS.SECTION_EDITOR,
     );
 
-    expect(map.get('se-1')).toEqual(['العلوم الطبية', 'العلوم الهندسية']);
-    expect(map.get('se-2')).toEqual(['العلوم الهندسية']);
+    expect(map.get('se-1')).toEqual(['medj', 'engj']);
+    expect(map.get('se-2')).toEqual(['engj']);
   });
 
   it('drops a membership whose journal row is missing', async () => {
@@ -111,7 +113,7 @@ describe('JournalMembershipService', () => {
       { userId: 'se-1', journalId: 'journal-deleted' },
     ]);
 
-    const map = await service.disciplineLabelsByUser(
+    const map = await service.journalSlugsByUser(
       ['se-1'],
       ROLE_SLUGS.SECTION_EDITOR,
     );
@@ -119,11 +121,25 @@ describe('JournalMembershipService', () => {
     expect(map.get('se-1')).toBeUndefined();
   });
 
-  it('replaces a user scope with the journals matching the labels', async () => {
-    const stored = await service.setDisciplineLabelsForUser(
+  it('sorts the slugs of one user so the API response is stable', async () => {
+    membershipsRepo.find.mockResolvedValue([
+      { userId: 'se-1', journalId: 'journal-medj' },
+      { userId: 'se-1', journalId: 'journal-engj' },
+    ]);
+
+    const slugs = await service.journalSlugsForUser(
       'se-1',
       ROLE_SLUGS.SECTION_EDITOR,
-      ['العلوم الهندسية'],
+    );
+
+    expect(slugs).toEqual(['engj', 'medj']);
+  });
+
+  it('replaces a user scope with the journals matching the slugs', async () => {
+    const stored = await service.setJournalSlugsForUser(
+      'se-1',
+      ROLE_SLUGS.SECTION_EDITOR,
+      ['engj'],
     );
 
     expect(membershipsRepo.delete).toHaveBeenCalledWith({
@@ -137,24 +153,24 @@ describe('JournalMembershipService', () => {
         roleSlug: ROLE_SLUGS.SECTION_EDITOR,
       },
     ]);
-    expect(stored).toEqual(['العلوم الهندسية']);
+    expect(stored).toEqual(['engj']);
   });
 
-  it('drops an unknown label instead of storing it', async () => {
-    const stored = await service.setDisciplineLabelsForUser(
+  it('drops an unknown slug instead of storing it', async () => {
+    const stored = await service.setJournalSlugsForUser(
       'se-1',
       ROLE_SLUGS.SECTION_EDITOR,
-      ['العلوم الهندسية', 'not-a-real-label'],
+      ['engj', 'not-a-real-journal'],
     );
 
-    expect(stored).toEqual(['العلوم الهندسية']);
+    expect(stored).toEqual(['engj']);
     expect(membershipsRepo.save).toHaveBeenCalledWith([
       expect.objectContaining({ journalId: 'journal-engj' }),
     ]);
   });
 
-  it('clears the scope when given no labels', async () => {
-    const stored = await service.setDisciplineLabelsForUser(
+  it('clears the scope when given no slugs', async () => {
+    const stored = await service.setJournalSlugsForUser(
       'se-1',
       ROLE_SLUGS.SECTION_EDITOR,
       [],
@@ -163,5 +179,13 @@ describe('JournalMembershipService', () => {
     expect(stored).toEqual([]);
     expect(membershipsRepo.delete).toHaveBeenCalled();
     expect(membershipsRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('still resolves the classifier label for one journal', async () => {
+    journalsRepo.findOne.mockResolvedValue(MEDJ);
+
+    await expect(
+      service.disciplineLabelForJournal('journal-medj'),
+    ).resolves.toBe('العلوم الطبية');
   });
 });

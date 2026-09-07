@@ -1065,10 +1065,6 @@
     "hasSectionEditorRole": "محرر قسم بالفعل",
     "pendingSectionEditorInvite": "دعوة محرر القسم معلّقة",
     "sectionEditorDisciplines": "نطاق التخصص",
-    "loadingDisciplines": "جاري تحميل التخصصات…",
-    "noDisciplinesSelected": "لا تخصصات",
-    "disciplinesSelected": "تخصصات",
-    "saveDisciplines": "حفظ التخصصات",
     "showingCount": "عرض {count} من {total}",
     "prevPage": "السابق",
     "nextPage": "التالي",
@@ -1085,7 +1081,11 @@
     "clearSearchAria": "مسح البحث",
     "removeRoleFilterAria": "إزالة عامل تصفية الدور",
     "removeJoinedFromAria": "إزالة عامل تصفية تاريخ البداية",
-    "removeJoinedToAria": "إزالة عامل تصفية تاريخ النهاية"
+    "removeJoinedToAria": "إزالة عامل تصفية تاريخ النهاية",
+    "loadingJournals": "جاري تحميل المجلات…",
+    "noJournalsSelected": "لا مجلات",
+    "journalsSelected": "مجلات",
+    "saveJournals": "حفظ المجلات"
   },
   "JournalManagerAuditLog": {
     "title": "سجل التدقيق",
@@ -1397,7 +1397,12 @@
     "filterChipArticleType": "النوع: {value}",
     "filterChipPublishedFrom": "من {date}",
     "filterChipPublishedTo": "إلى {date}",
-    "updatingResults": "جارٍ تحديث النتائج…"
+    "updatingResults": "جارٍ تحديث النتائج…",
+    "journal": "المجلة",
+    "journalAny": "كل المجلات",
+    "journalSearchPlaceholder": "ابحث في المجلات…",
+    "journalEmpty": "لا مجلة مطابقة",
+    "filterChipJournal": "المجلة: {value}"
   },
   "Journals": {
     "eyebrow": "جامعة دمشق",

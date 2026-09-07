@@ -35,7 +35,8 @@ export type SectionEditorCandidate = {
   id: string;
   displayName: string;
   email: string;
-  disciplines: string[];
+  /** Journal slugs this section editor serves (`engj`), not discipline labels. */
+  journals: string[];
 };
 
 @Injectable()
@@ -242,12 +243,12 @@ export class SectionEditorWorkflowService {
     );
     if (candidateIds.length === 0) return [];
 
-    const [users, disciplineMap] = await Promise.all([
+    const [users, journalMap] = await Promise.all([
       this.usersRepo.find({
         where: { id: In(candidateIds) },
         select: ['id', 'displayName', 'email'],
       }),
-      this.journalMemberships.disciplineLabelsByUser(
+      this.journalMemberships.journalSlugsByUser(
         candidateIds,
         ROLE_SLUGS.SECTION_EDITOR,
       ),
@@ -257,7 +258,7 @@ export class SectionEditorWorkflowService {
       id: u.id,
       displayName: u.displayName,
       email: u.email,
-      disciplines: disciplineMap.get(u.id) ?? [],
+      journals: journalMap.get(u.id) ?? [],
     }));
   }
 }

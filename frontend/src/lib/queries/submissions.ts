@@ -193,7 +193,8 @@ export type SectionEditorCandidate = {
   id: string;
   displayName: string;
   email: string;
-  disciplines: string[];
+  /** Journal slugs this section editor serves (`engj`). */
+  journals: string[];
 };
 
 export type SubmissionDetailPayload = {

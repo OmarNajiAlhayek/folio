@@ -19,6 +19,7 @@ import {
   ARABIC_DISCIPLINE_LABELS,
   isValidDisciplineLabel,
 } from '../../ai/discipline-labels';
+import { JOURNAL_SLUGS } from '../../journals/journal-catalog';
 import { SubmissionArticleType } from '../../entities/submission-article-type.enum';
 import {
   normalizePublicationPublishedAt,
@@ -73,6 +74,16 @@ export class ListPublicSubmissionsQueryDto {
   @MaxLength(120)
   @Transform(({ value }) => trimOptional(value))
   author?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Journal slug, matching the portal URLs (`engj`). Unknown slugs match nothing.',
+    enum: [...JOURNAL_SLUGS],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn([...JOURNAL_SLUGS])
+  journal?: string;
 
   @ApiPropertyOptional({
     description: 'Exact discipline label (Arabic taxonomy).',
@@ -182,6 +193,9 @@ export function toPublicationCatalogFilters(
   }
   if (dto.author) {
     filters.author = dto.author;
+  }
+  if (dto.journal) {
+    filters.journal = dto.journal;
   }
   if (dto.discipline && isValidDisciplineLabel(dto.discipline)) {
     filters.discipline = dto.discipline;

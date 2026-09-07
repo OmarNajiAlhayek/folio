@@ -1,5 +1,6 @@
 import {
   applyPublicationCatalogQuery,
+  publicationCatalogHasTextOrFilters,
   clampPublicationCatalogPagination,
   normalizePublicationPublishedAt,
   publicationCatalogBoundParamNames,
@@ -71,6 +72,33 @@ describe('publication-catalog-search.util', () => {
     expect(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL).toMatch(/plainto_tsquery/);
     expect(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL).toMatch(/similarity\(/);
     expect(PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL).toMatch(/ts_rank_cd/);
+  });
+
+  it('applyPublicationCatalogQuery filters by journal slug via a join', () => {
+    const andWhere = jest.fn().mockReturnThis();
+    const innerJoinAndSelect = jest.fn().mockReturnValue({ andWhere });
+    const qb = {
+      where: jest.fn().mockReturnThis(),
+      andWhere,
+      innerJoinAndSelect,
+      addSelect: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+    } as unknown as import('typeorm').SelectQueryBuilder<Submission>;
+
+    applyPublicationCatalogQuery(qb, { journal: 'engj' });
+
+    // Joined-and-selected under the `journal` alias so the catalog card can
+    // name the journal without a second query.
+    expect(innerJoinAndSelect).toHaveBeenCalledWith('s.journal', 'journal');
+    expect(andWhere).toHaveBeenCalledWith('journal.slug = :pubJournal', {
+      pubJournal: 'engj',
+    });
+  });
+
+  it('publicationCatalogHasTextOrFilters counts a journal-only filter', () => {
+    expect(publicationCatalogHasTextOrFilters({ journal: 'engj' })).toBe(true);
+    expect(publicationCatalogHasTextOrFilters({})).toBe(false);
   });
 
   it('applyPublicationCatalogQuery wires status and optional filters', () => {

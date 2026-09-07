@@ -6,9 +6,47 @@ PostgreSQL as the system of record. Role workflows: [`feature-report.md`](./feat
 
 ## Entities
 
-### Journal (optional stub)
+### Journal
 
-Single row for “the one journal” (name, slug, ISSN optional). Simplifies future multi-journal expansion without MVP complexity. Omit the table if you hard-code journal metadata in config.
+Folio is a **university press of many journals**, not one journal with topic
+tags. `journals` holds one row per Damascus University series (`artsj`, `hisj`,
+`basj`, `econj`, `eduj`, `agrj`, `medj`, `lawj`, `engj`).
+
+- `slug` (unique) — **public URL contract**, mirrors the DU OJS paths
+  (`/journals/engj/issues/2026/3`). Frozen: changing one breaks live links.
+- `title_ar` / `title_en`, optional `issn` / `eissn`, optional descriptions.
+- `discipline_label` (unique) — the exact Arabic label the AraBERT classifier
+  emits, so a classification maps to at most one journal and there is no second
+  taxonomy. `غير محدد` is deliberately **not** a journal.
+- `is_active` — soft hide from the author picker and the public portal; rows are
+  never deleted, so an archive survives a journal being retired.
+- `sort_order` — catalog display order.
+
+Rows are reference data: the `MultiJournalIssues` migration inserts them from
+`backend/src/journals/journal-catalog.ts` so the foreign key is satisfiable on
+any database, and `seed.ts` looks them up by slug rather than re-creating them.
+
+### JournalIssue (العدد)
+
+One issue of one journal, cited as **العدد N، السنة YYYY**.
+
+- `journal_id`, `year`, `number`, optional `volume`, optional bilingual titles.
+- Unique on `(journal_id, year, number)`.
+- `status`: `open` | `published` | `closed`. Issues that can receive an article
+  are **open OR published** — a released issue gains rolling additions, which is
+  how the DU series actually works.
+- `published_at` when released.
+
+### JournalMembership
+
+Which journals a staff user serves, and in what role — the single source of
+truth for journal-scoped queues.
+
+- `(journal_id, user_id, role_slug)` unique.
+- Replaced the old `user_section_editor_disciplines` table (migration
+  `JournalScopedSectionEditors`).
+- `journal_manager` is deliberately **not** scoped by membership: it is a
+  university-wide role.
 
 ### User
 
@@ -19,7 +57,15 @@ Single row for “the one journal” (name, slug, ISSN optional). Simplifies fut
 ### Submission
 
 - Belongs to one **author** (`User` as `author_id`).
-- Optional `journal_id` if you use the `Journal` table.
+- **`journal_id` (NOT NULL)** — the editorial home, chosen by the author in the
+  submission wizard. Landed nullable in `MultiJournalIssues` (no picker existed
+  yet) and was tightened by `SubmissionJournalRequired` once
+  `CreateSubmissionDto` could set it. Everything downstream keys on it: the
+  editor queue scope, the issues an article may be published into, and the
+  public portal.
+- **`issue_id`** (nullable) — the issue the article was filed into. Null until
+  publish; publishing without an issue is rejected. Always inside `journal_id`'s
+  journal.
 - Metadata: **title**, **abstract**, **article type** (enum), **keywords** (comma/semicolon-separated; 3–6 on submit), **contributors** (JSON array: full name, optional email, affiliation, sort order, corresponding flag), **funding statement**, **declarations** (conflict of interest, ethics/IRB reference, originality confirmation, AI-use statement), **suggested / opposed reviewers** (JSON arrays, max 5 each).
 - **Discipline (Arabic journal scope, OJS category-like):** optional **`disciplines`** (`text[]`, confirmed labels, max 3), **`discipline_source`** (`ai` \| `author` \| `editor`), **`discipline_suggested_labels`** (`text[]`) + **`discipline_suggested_confidence`** (from AraBERT on suggest/submit), **`discipline_classification`** (JSONB snapshot of top labels/scores). Authors confirm via API; editors may override. Catalog filter and corpus similarity can scope by any confirmed label (similarity uses first).
 - **`constructor_content`** (JSONB, nullable): Word Constructor document when the author uses builder mode; omitted from reviewer payloads.
@@ -130,7 +176,7 @@ Adjust edge cases in implementation, but **keep the same status strings** as [`A
 
 Mermaid `erDiagram` attributes must use `type name [PK|FK|UK]` only — no commas (`FK,UK`), no quoted `"nullable"`, avoid `enum` / `jsonb` / `timestamptz` as types (use `string`, `json`, `datetime`).
 
-Simplified MVP view (no `Journal` table in code yet):
+Simplified view (journal → issue → article is the spine of the press):
 
 ```mermaid
 erDiagram
@@ -231,6 +277,9 @@ erDiagram
 
 ## Indexes (implementation hint)
 
+- `submissions(journal_id, status, updated_at DESC)` — journal-scoped editor queue (`ix_submissions_journal_status_updated_at`).
+- `submissions(issue_id, published_at)` — issue table of contents (`ix_submissions_issue_published_at`).
+- `journal_memberships(user_id, role_slug)` and `(journal_id, role_slug)` — staff scope lookups both directions.
 - `submissions(status, updated_at DESC)` — editor queue (`ix_submissions_status_updated_at`).
 - `submissions(author_id, updated_at DESC)` — author list (`ix_submissions_author_updated_at`).
 - `submissions(status, published_at)` — catalog ordering, search sync (`ix_submissions_status_published_at`).

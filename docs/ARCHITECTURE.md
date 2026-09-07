@@ -181,6 +181,37 @@ report**.
 
 ---
 
+## 5b. The press: journal → issue → article
+
+Folio models a **university press of nine journals**, not one journal with topic
+tags. That shape is load-bearing across components, so it is worth stating once:
+
+```
+Press (portal)  →  Journal (engj)  →  Issue (العدد 2، 2026)  →  Article
+```
+
+- **Journals are reference data, not user content.** Nine rows, one per Damascus
+  University series, inserted by migration from
+  `backend/src/journals/journal-catalog.ts` and 1:1 with the AraBERT classifier
+  labels — so a classification maps to exactly one journal and no second
+  taxonomy exists. Slugs are a **frozen public URL contract**.
+- **Every submission has a journal from creation** (`submissions.journal_id`,
+  `NOT NULL`). The author chooses it in the submission wizard.
+- **Staff scope is a membership, not a role.** `journal_memberships` answers
+  "which journals may this editor act in"; RBAC answers "what may they do".
+  `journal_manager` is university-wide and holds no membership rows.
+- **Publishing requires an issue.** Without one an article has no citation and
+  the public archive has nowhere to list it, so `publishSubmission` takes an
+  `issueId` and stamps it in the same transaction as the status flip.
+- **The portal exposes only `published` issues and `published` articles**, so a
+  retraction disappears from the public site without deleting history.
+
+The reader-facing surface (`/public/journals*`, unauthenticated) and the
+editorial surface (journal-scoped queues) read the same tables from opposite
+ends: the portal filters on publication status, the queue filters on membership.
+
+---
+
 ## 6. Data ownership
 
 | Store | Owner | Notes |
