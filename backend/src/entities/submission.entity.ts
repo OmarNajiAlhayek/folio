@@ -52,17 +52,17 @@ export class Submission extends BaseEntity {
   author: User;
 
   /**
-   * The journal this manuscript belongs to (the topic the author chose).
-   *
-   * Nullable only until the author journal picker lands; a follow-up migration
-   * tightens it to NOT NULL. Treat it as required in application code.
+   * The journal this manuscript belongs to — chosen by the author at
+   * submission and required since slice 6 (`SubmissionJournalRequired`).
+   * Every manuscript has an editorial home, so the editor queue, the issue it
+   * is published into and the portal all have exactly one journal to key on.
    */
-  @Column({ name: 'journal_id', type: 'uuid', nullable: true })
-  journalId: string | null;
+  @Column({ name: 'journal_id', type: 'uuid' })
+  journalId: string;
 
   @ManyToOne(() => Journal, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'journal_id' })
-  journal: Journal | null;
+  journal: Journal;
 
   /**
    * Issue (العدد) the article is placed in. Null until publish; publishing

@@ -555,15 +555,8 @@ export class CopyeditWorkflowService {
         code: 'VALIDATION_ERROR',
       });
     }
-    // `journal_id` is nullable until the author picker lands, so a submission
-    // created through the API before then has no journal and cannot be filed.
-    if (!s.journalId) {
-      throw new BadRequestException({
-        message:
-          'Submission is not assigned to a journal, so it cannot be published into an issue',
-        code: 'SUBMISSION_WITHOUT_JOURNAL',
-      });
-    }
+    // No journal check: `submissions.journal_id` is NOT NULL since slice 6, so
+    // the issue is always looked up inside the manuscript's own journal.
     const issue = await this.journalIssues.getIssueAcceptingArticleOrThrow(
       s.journalId,
       issueId,

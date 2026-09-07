@@ -6,6 +6,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -16,6 +17,16 @@ import { ContributorDto } from './contributor.dto';
 import { ConstructorContentDto } from './constructor-content.dto';
 
 export class UpdateSubmissionDto {
+  /**
+   * Authors may still move a manuscript between journals while it is editable
+   * (draft or revisions requested); `update` rejects any later status, so a
+   * placed article can never drift away from the issue it was filed into.
+   */
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  journalId?: string;
+
   @ApiPropertyOptional({ minLength: 1, maxLength: 500 })
   @IsOptional()
   @IsString()

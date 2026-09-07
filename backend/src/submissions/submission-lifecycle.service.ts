@@ -46,6 +46,7 @@ import {
   extractConstructorReferenceTexts,
 } from './journal-self-citation.util';
 import { AiClientService } from '../ai/ai-client.service';
+import { JournalDirectoryService } from '../journals/journal-directory.service';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
@@ -86,6 +87,7 @@ export class SubmissionLifecycleService {
     private readonly events: SubmissionEventsService,
     private readonly ai: SubmissionAiService,
     private readonly preSubmitAnalysis: PreSubmitAnalysisService,
+    private readonly journals: JournalDirectoryService,
   ) {}
 
   private parseKeywordList(raw: string | null | undefined): string[] {
@@ -350,10 +352,14 @@ export class SubmissionLifecycleService {
     dto: CreateSubmissionDto,
   ): Promise<Submission> {
     this.assertAbstractWordLimits(dto.abstract, dto.abstractAr ?? '');
+    // Reject a retired or unknown journal here so the author sees a validation
+    // error, not the foreign key's 500.
+    await this.journals.assertSubmittableJournal(dto.journalId);
     const slug = slugifySubmissionTitle(dto.title);
     await this.assertSubmissionSlugAvailable(slug);
     const s = this.submissionsRepo.create({
       authorId,
+      journalId: dto.journalId,
       title: dto.title,
       titleAr: dto.titleAr,
       abstract: dto.abstract,
@@ -396,6 +402,10 @@ export class SubmissionLifecycleService {
         message: 'Cannot edit submission in current status',
         code: 'VALIDATION_ERROR',
       });
+    }
+    if (dto.journalId !== undefined && dto.journalId !== s.journalId) {
+      await this.journals.assertSubmittableJournal(dto.journalId);
+      s.journalId = dto.journalId;
     }
     if (dto.title !== undefined) {
       const nextSlug = slugifySubmissionTitle(dto.title);

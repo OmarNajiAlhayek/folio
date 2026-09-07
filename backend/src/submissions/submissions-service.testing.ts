@@ -8,6 +8,7 @@ import { Review } from '../entities/review.entity';
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
+import { JournalDirectoryService } from '../journals/journal-directory.service';
 import { JournalIssuesService } from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import { RbacService } from '../rbac/rbac.service';
@@ -104,6 +105,7 @@ export type SubmissionsRepoMocks = {
   sectionEditorAssignmentsRepo?: Record<string, unknown>;
   journalMembershipService?: Record<string, unknown>;
   journalIssuesService?: Record<string, unknown>;
+  journalDirectoryService?: Record<string, unknown>;
   configService?: { get: jest.Mock };
   docxGenerator?: Record<string, unknown>;
   manuscriptStyles?: Record<string, unknown>;
@@ -168,6 +170,15 @@ export function submissionsServiceTestProviders(
       useValue: mocks.journalIssuesService ?? {
         listPublishableIssues: jest.fn().mockResolvedValue([]),
         getIssueAcceptingArticleOrThrow: jest.fn(),
+      },
+    },
+    {
+      provide: JournalDirectoryService,
+      useValue: mocks.journalDirectoryService ?? {
+        listOptions: jest.fn().mockResolvedValue([]),
+        // Default: the journal an author picked is accepted. Specs that care
+        // about a retired journal override this to throw.
+        assertSubmittableJournal: jest.fn().mockResolvedValue({}),
       },
     },
     { provide: RbacService, useValue: mocks.rbacService ?? {} },

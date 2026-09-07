@@ -11,6 +11,9 @@ import type { RequestUser } from '../common/types/request-user';
  * Slice 3: `GET /submissions` is scoped to the journals a staff user actually
  * serves. Asserted at the query-builder level because the interesting part is
  * the predicate, not the rows Postgres would return.
+ *
+ * Slice 6 removed the `journal_id IS NULL` triage bucket: the column is NOT
+ * NULL, so there is nothing unplaced left to fall back to.
  */
 describe('SubmissionsService journal-scoped editor queue', () => {
   let service: SubmissionsService;
@@ -75,21 +78,22 @@ describe('SubmissionsService journal-scoped editor queue', () => {
     });
   });
 
-  it('keeps unplaced submissions visible so they can still be triaged', async () => {
+  it('no longer keeps an unplaced bucket now that every submission has a journal', async () => {
     listJournalIdsForUser.mockResolvedValue(['journal-medj']);
 
     await service.findAllForUser(editor());
 
-    const scoped = predicates().find((p) => p.includes('journal_id'));
-    expect(scoped).toContain('s.journal_id IS NULL OR');
+    expect(predicates().some((p) => p.includes('IS NULL'))).toBe(false);
   });
 
-  it('scopes an editor with no memberships to unplaced submissions only', async () => {
+  it('shows an editor with no memberships nothing at all', async () => {
     listJournalIdsForUser.mockResolvedValue([]);
 
-    await service.findAllForUser(editor());
+    await expect(service.findAllForUser(editor())).resolves.toEqual([]);
 
-    expect(predicates()).toContain('s.journal_id IS NULL');
+    // Empty scope short-circuits: `IN ()` is not valid SQL, and there is no
+    // longer a NULL bucket that would justify running the query anyway.
+    expect(qb.getMany).not.toHaveBeenCalled();
   });
 
   it('leaves the journal_manager queue unscoped', async () => {

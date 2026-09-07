@@ -138,6 +138,16 @@ export class SubmissionsController {
     return this.submissionsService.suggestKeywordsPreview(user, dto);
   }
 
+  /** Journals the author picker offers. Declared before `:slug`. */
+  @Get('journal-options')
+  @Permissions(
+    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+  )
+  listJournalOptions() {
+    return this.submissionsService.listJournalOptions();
+  }
+
   @Get('discipline-labels')
   @Permissions(
     PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,

@@ -20,6 +20,10 @@ import {
   type PublishableIssue,
 } from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
+import {
+  JournalDirectoryService,
+  type JournalOption,
+} from '../journals/journal-directory.service';
 import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
@@ -69,6 +73,7 @@ export class SubmissionsService implements OnModuleInit {
     private readonly preSubmitAnalysis: PreSubmitAnalysisService,
     private readonly sectionEditorWorkflow: SectionEditorWorkflowService,
     private readonly journalMemberships: JournalMembershipService,
+    private readonly journalDirectory: JournalDirectoryService,
     private readonly journalIssues: JournalIssuesService,
   ) {}
 
@@ -77,6 +82,11 @@ export class SubmissionsService implements OnModuleInit {
     journalScope: string[];
   } {
     return this.ai.listDisciplineLabels();
+  }
+
+  /** Journals an author may submit to — the picker's options. */
+  listJournalOptions(): Promise<JournalOption[]> {
+    return this.journalDirectory.listOptions();
   }
 
   async suggestDiscipline(
@@ -204,18 +214,13 @@ export class SubmissionsService implements OnModuleInit {
       }
       const journalIds = await this.editorQueueJournalIds(user);
       if (journalIds !== 'all') {
-        // Unplaced submissions (`journal_id IS NULL`) stay visible to every
-        // editor: the column is nullable until the author picker lands, and a
-        // row nobody can see is a row nobody can triage. Once slice 6 makes it
-        // NOT NULL this disjunct becomes dead and should be dropped.
+        // Every submission has a journal since slice 6, so there is no triage
+        // bucket left to keep visible: an editor sees their journals and
+        // nothing else, and one with no memberships sees nothing at all.
         if (journalIds.length === 0) {
-          qb.andWhere('s.journal_id IS NULL');
-        } else {
-          qb.andWhere(
-            '(s.journal_id IS NULL OR s.journal_id IN (:...journalIds))',
-            { journalIds },
-          );
+          return [];
         }
+        qb.andWhere('s.journal_id IN (:...journalIds)', { journalIds });
       }
       return qb.getMany();
     }
@@ -665,7 +670,6 @@ export class SubmissionsService implements OnModuleInit {
   ): Promise<PublishableIssue[]> {
     const submission = await this.access.getBySlugOrThrow(slug);
     await this.access.assertCanRead(submission, user);
-    if (!submission.journalId) return [];
     return this.journalIssues.listPublishableIssues(submission.journalId);
   }
 

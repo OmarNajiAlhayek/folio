@@ -146,6 +146,9 @@ export function submissionToViewerJson(
     abstract: s.abstract,
     abstractAr: s.abstractAr,
     articleType: s.articleType,
+    // The editorial home. Every viewer may know it — the portal publishes the
+    // journal anyway — and the author's metadata form needs it to round-trip.
+    journalId: s.journalId,
     keywords: s.keywords,
     keywordsAr: s.keywordsAr,
     status: s.status,

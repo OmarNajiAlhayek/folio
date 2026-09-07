@@ -72,6 +72,8 @@ describe('CopyeditWorkflowService publish override and retract', () => {
     title: string;
     status: SubmissionStatus;
     authorId: string;
+    journalId: string;
+    issueId?: string | null;
     publishedAt?: Date;
   };
 
@@ -159,20 +161,6 @@ describe('CopyeditWorkflowService publish override and retract', () => {
     );
 
     expect(saved.issueId).toBe(ISSUE_ID);
-  });
-
-  it('refuses to publish a submission that has no journal', async () => {
-    submission.journalId = null;
-    copyeditAssignmentsRepo.find.mockResolvedValue([
-      {
-        copyeditorId: copyeditor.sub,
-        status: CopyeditAssignmentStatus.READY_FOR_REVIEW,
-      },
-    ]);
-
-    await expect(
-      service.publishSubmission('paper-one', copyeditor, ISSUE_ID),
-    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('lets the assigned copyeditor publish when every assignment is ready', async () => {

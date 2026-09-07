@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -14,6 +15,15 @@ import { SubmissionArticleType } from '../../entities/submission-article-type.en
 import { ContributorDto } from './contributor.dto';
 
 export class CreateSubmissionDto {
+  /**
+   * The journal the author is submitting to. Required since slice 6: every
+   * manuscript has an editorial home from the moment it is created, which is
+   * what lets `submissions.journal_id` be NOT NULL.
+   */
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  journalId: string;
+
   @ApiProperty({ minLength: 1, maxLength: 500 })
   @IsString()
   @MinLength(1)

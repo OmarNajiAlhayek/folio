@@ -4,6 +4,7 @@ import { Journal } from '../entities/journal.entity';
 import { JournalIssue } from '../entities/journal-issue.entity';
 import { JournalMembership } from '../entities/journal-membership.entity';
 import { Submission } from '../entities/submission.entity';
+import { JournalDirectoryService } from './journal-directory.service';
 import { JournalIssuesService } from './journal-issues.service';
 import { JournalPortalService } from './journal-portal.service';
 import { JournalMembershipService } from './journal-membership.service';
@@ -26,11 +27,13 @@ import { JournalMembershipService } from './journal-membership.service';
     JournalMembershipService,
     JournalIssuesService,
     JournalPortalService,
+    JournalDirectoryService,
   ],
   exports: [
     JournalMembershipService,
     JournalIssuesService,
     JournalPortalService,
+    JournalDirectoryService,
   ],
 })
 export class JournalsModule {}

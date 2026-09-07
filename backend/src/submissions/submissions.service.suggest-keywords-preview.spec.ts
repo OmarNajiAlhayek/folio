@@ -11,6 +11,7 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { JournalDirectoryService } from '../journals/journal-directory.service';
 import { JournalIssuesService } from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
@@ -100,6 +101,13 @@ describe('SubmissionsService.suggestKeywordsPreview', () => {
           useValue: {
             listPublishableIssues: jest.fn().mockResolvedValue([]),
             getIssueAcceptingArticleOrThrow: jest.fn(),
+          },
+        },
+        {
+          provide: JournalDirectoryService,
+          useValue: {
+            listOptions: jest.fn().mockResolvedValue([]),
+            assertSubmittableJournal: jest.fn().mockResolvedValue({}),
           },
         },
         { provide: AiClientService, useValue: aiClient },

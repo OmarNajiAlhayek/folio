@@ -51,6 +51,7 @@ import {
   SeedNotAllowedError,
 } from './seed-guard';
 import {
+  journalSlugForSampleLabel,
   placeDemoSubmissions,
   placeSampleForPublication,
   seedPressFixtures,
@@ -197,19 +198,41 @@ type SampleMetaOverrides = Pick<
   'titleAr' | 'abstractAr' | 'keywords' | 'keywordsAr' | 'articleType'
 >;
 
+/**
+ * The journal a demo manuscript is created in — the same discipline-to-slug
+ * rule `placeDemoSubmissions` sweeps with, applied up front because
+ * `submissions.journal_id` is NOT NULL since slice 6. It stands in for the
+ * choice a real author makes in the picker.
+ */
+function seedJournalId(
+  press: SeededPress,
+  disciplineLabel?: string | null,
+): string {
+  const slug = journalSlugForSampleLabel(disciplineLabel);
+  const journal = press.journalsBySlug.get(slug);
+  if (!journal) {
+    throw new Error(`Seed: no journal row for slug "${slug}"`);
+  }
+  return journal.id;
+}
+
 /** Journal form fields for a published sample; overrides generic Arabic boilerplate. */
 function samplePublicationMetadata(
+  journalId: string,
   overrides: SampleMetaOverrides,
 ): Omit<CreateSubmissionDto, 'title' | 'abstract'> {
-  return { ...sampleJournalMetadata(), ...overrides };
+  return { ...sampleJournalMetadata(journalId), ...overrides };
 }
 
 /** Shared journal form fields; pair with a SAMPLE_*_META bundle for Arabic text. */
-function sampleJournalMetadata(): Omit<
+function sampleJournalMetadata(
+  journalId: string,
+): Omit<
   CreateSubmissionDto,
   'title' | 'abstract' | 'titleAr' | 'abstractAr' | 'keywords' | 'keywordsAr'
 > {
   return {
+    journalId,
     articleType: SubmissionArticleType.ORIGINAL_RESEARCH,
     contributors: [
       {
@@ -549,7 +572,10 @@ async function seedPublishedSample(options: {
   const s = await submissionsService.create(author.id, {
     title,
     abstract,
-    ...samplePublicationMetadata(publicationMeta),
+    ...samplePublicationMetadata(
+      seedJournalId(press, discipline.topLabel),
+      publicationMeta,
+    ),
   });
   await attachStandardFilePackage(
     submissionsService,
@@ -662,13 +688,14 @@ async function ensureUser(
 const PERF_TITLE_PREFIX = '[Perf]';
 
 function perfSubmissionMetadata(
+  journalId: string,
   titleAr: string,
   abstractAr: string,
   keywords: string,
   keywordsAr: string,
 ): Omit<CreateSubmissionDto, 'title' | 'abstract'> {
   return {
-    ...sampleJournalMetadata(),
+    ...sampleJournalMetadata(journalId),
     titleAr,
     abstractAr,
     keywords,
@@ -736,9 +763,14 @@ async function seedPerfFixtures(options: {
   usersService: UsersService;
   rbacService: RbacService;
   submissionsService: SubmissionsService;
+  press: SeededPress;
 }): Promise<void> {
-  const { dataSource, usersService, rbacService, submissionsService } = options;
+  const { dataSource, usersService, rbacService, submissionsService, press } =
+    options;
   await resetPerfSubmissions(dataSource);
+  // Load-test rows are not about topic; the catch-all journal keeps them out
+  // of the editorial journals a demo actually walks through.
+  const perfJournalId = seedJournalId(press, null);
   const reviewCount = Math.max(
     1,
     parseInt(process.env.SEED_PERF_REVIEW_COUNT ?? '20', 10),
@@ -816,6 +848,7 @@ async function seedPerfFixtures(options: {
           3,
         ),
       ...perfSubmissionMetadata(
+        perfJournalId,
         `عنوان اختبار الأداء ${i}`,
         'ملخص عربي لاختبار تقديم المراجعات المتزامنة. '.repeat(4),
         'perf, load-test, peer-review',
@@ -864,6 +897,7 @@ async function seedPerfFixtures(options: {
           3,
         ),
       ...perfSubmissionMetadata(
+        perfJournalId,
         `عنوان اختبار البريد ${i}`,
         'ملخص عربي لاختبار خط أنابيب البريد. '.repeat(4),
         'perf, email, pipeline',
@@ -894,6 +928,7 @@ async function seedPerfFixtures(options: {
         3,
       ),
     ...perfSubmissionMetadata(
+      perfJournalId,
       'عنوان اختبار تشابه المؤلفات',
       'ملخص عربي لاختبار تشابه المؤلفات. '.repeat(4),
       'perf, corpus, similarity',
@@ -915,6 +950,7 @@ async function seedPerfFixtures(options: {
       title,
       abstract: 'Perf fixture for editor queue list benchmarks. '.repeat(4),
       ...perfSubmissionMetadata(
+        perfJournalId,
         `قائمة المحرر ${i}`,
         'ملخص عربي لاختبار قائمة المحرر. '.repeat(3),
         'perf, editor, queue',
@@ -940,6 +976,7 @@ async function seedPerfFixtures(options: {
       title,
       abstract: 'Perf fixture for public catalog search benchmarks. '.repeat(4),
       ...perfSubmissionMetadata(
+        perfJournalId,
         `منشور اختبار ${i}`,
         'ملخص عربي لاختبار البحث في الكتالوج. '.repeat(3),
         'perf, published, catalog',
@@ -956,6 +993,7 @@ async function seedPerfFixtures(options: {
     title: `${PERF_TITLE_PREFIX} Upload draft`,
     abstract: 'Draft submission for file-upload perf benchmarks.',
     ...perfSubmissionMetadata(
+      perfJournalId,
       'مسودة رفع الملفات',
       'ملخص عربي لاختبار رفع الملفات.',
       'perf, upload',
@@ -1346,7 +1384,9 @@ async function run() {
       title: tDraft,
       abstract:
         'This study develops and validates a scale for measuring digital learning competencies among undergraduate students and examines the effect of immediate formative feedback on academic achievement in higher-education courses.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(
+        seedJournalId(press, SAMPLE_DISCIPLINE_EDUCATION),
+      ),
       ...SAMPLE_DRAFT_META,
     });
     await attachStandardFilePackage(
@@ -1370,7 +1410,9 @@ async function run() {
       title: tQueue,
       abstract:
         'This study examines the impact of open-access and digital-publishing policies on the dissemination of knowledge in Arabic peer-reviewed journals, comparing funding models and article processing charges across ten journals over the period 2020–2024.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(
+        seedJournalId(press, queueSampleDisciplineLabel()),
+      ),
       ...SAMPLE_QUEUE_META,
     });
     await attachStandardFilePackage(
@@ -1396,7 +1438,7 @@ async function run() {
       title: tReview,
       abstract:
         'This paper analyses open-access and digital-publishing policy frameworks adopted by Arabic scholarly journals, evaluating their effect on knowledge diffusion and comparing sustainability models across regional and international peer-reviewed outlets.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_DISCIPLINE_DEFAULT)),
       ...SAMPLE_REVIEW_META,
     });
     await attachStandardFilePackage(
@@ -1433,7 +1475,7 @@ async function run() {
       title: tCompleted,
       abstract:
         'This study reviews personal-data protection provisions in selected contemporary Arab legal frameworks and compares them with the principles of the General Data Protection Regulation, focusing on data-subject consent, cross-border data transfers, and controller liability.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_DISCIPLINE_LEGAL)),
       ...SAMPLE_COMPLETED_META,
     });
     await attachStandardFilePackage(
@@ -1477,7 +1519,9 @@ async function run() {
       title: tRev,
       abstract:
         'This study experimentally evaluates an immediate-feedback programme delivered through an e-learning platform in an introductory statistics course, comparing short-test and final-project outcomes between two groups while analysing student perceptions of instructional clarity.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(
+        seedJournalId(press, SAMPLE_DISCIPLINE_EDUCATION),
+      ),
       ...SAMPLE_REVISIONS_META,
     });
     await attachStandardFilePackage(
@@ -1583,7 +1627,7 @@ async function run() {
       title: tInvitePending,
       abstract:
         'This paper investigates open-access policies in Arabic peer-reviewed journals and their influence on knowledge dissemination, drawing on a comparative documentary analysis of ten journals from 2020 to 2024.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_DISCIPLINE_DEFAULT)),
       ...SAMPLE_QUEUE_META,
     });
     await attachStandardFilePackage(
@@ -1638,7 +1682,9 @@ async function run() {
       title: tCopyedit,
       abstract:
         'This paper proposes an energy-efficient routing protocol for wireless sensor networks deployed in industrial IoT environments, comparing response time and power consumption against reference protocols across three load scenarios.',
-      ...sampleJournalMetadata(),
+      ...sampleJournalMetadata(
+        seedJournalId(press, SAMPLE_DISCIPLINE_ENGINEERING),
+      ),
       ...SAMPLE_COPYEDIT_META,
     });
     await attachStandardFilePackage(
@@ -1871,6 +1917,7 @@ async function run() {
       usersService,
       rbacService,
       submissionsService,
+      press,
     });
     console.log(
       '  SEED_PERF_FIXTURES=1   — perf/fixtures.json written (npm run seed:perf)',
