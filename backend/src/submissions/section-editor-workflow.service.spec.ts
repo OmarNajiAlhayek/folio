@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
+import { JournalMembershipService } from '../journals/journal-membership.service';
 import { User } from '../entities/user.entity';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
@@ -28,6 +28,7 @@ const SUBMISSION: Submission = {
   title: 'Test Paper',
   status: SubmissionStatus.SUBMITTED,
   disciplines: ['العلوم الطبية'],
+  journalId: 'journal-medj',
 } as Submission;
 
 const SECTION_EDITOR_ENTITY: User = {
@@ -52,7 +53,11 @@ describe('SectionEditorWorkflowService', () => {
     findOne: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
-  let seDisciplinesRepo: { find: jest.Mock };
+  let journalMemberships: {
+    filterUserIdsInJournal: jest.Mock;
+    disciplineLabelForJournal: jest.Mock;
+    disciplineLabelsByUser: jest.Mock;
+  };
   let submissionsRepo: { find: jest.Mock; createQueryBuilder: jest.Mock };
   let usersRepo: { findOne: jest.Mock; find: jest.Mock };
   let rbacService: {
@@ -74,7 +79,11 @@ describe('SectionEditorWorkflowService', () => {
       findOne: jest.fn().mockResolvedValue(null),
       createQueryBuilder: jest.fn(),
     };
-    seDisciplinesRepo = { find: jest.fn().mockResolvedValue([]) };
+    journalMemberships = {
+      filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
+      disciplineLabelForJournal: jest.fn().mockResolvedValue('العلوم الطبية'),
+      disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
+    };
     submissionsRepo = {
       find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn(),
@@ -103,8 +112,8 @@ describe('SectionEditorWorkflowService', () => {
           useValue: seAssignmentsRepo,
         },
         {
-          provide: getRepositoryToken(UserSectionEditorDiscipline),
-          useValue: seDisciplinesRepo,
+          provide: JournalMembershipService,
+          useValue: journalMemberships,
         },
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         { provide: getRepositoryToken(User), useValue: usersRepo },
@@ -196,10 +205,10 @@ describe('SectionEditorWorkflowService', () => {
   });
 
   describe('getSuggestedSectionEditors', () => {
-    it('returns no_disciplines when submission has no disciplines', async () => {
+    it('returns no_disciplines when the submission has no journal', async () => {
       access.getBySlugOrThrow.mockResolvedValue({
         ...SUBMISSION,
-        disciplines: [],
+        journalId: null,
       });
       const result = await service.getSuggestedSectionEditors(
         'test-paper',
@@ -217,9 +226,9 @@ describe('SectionEditorWorkflowService', () => {
       expect(result.status).toBe('no_candidates');
     });
 
-    it('returns no_candidates when no section editors match disciplines', async () => {
+    it('returns no_candidates when no section editor serves the journal', async () => {
       rbacService.listUserIdsWithPermission.mockResolvedValue(['se-1']);
-      seDisciplinesRepo.find.mockResolvedValue([]); // no discipline match
+      journalMemberships.filterUserIdsInJournal.mockResolvedValue([]);
       const result = await service.getSuggestedSectionEditors(
         'test-paper',
         EDITOR_USER,
@@ -229,9 +238,9 @@ describe('SectionEditorWorkflowService', () => {
 
     it('returns ok with candidates sorted by workload ASC', async () => {
       rbacService.listUserIdsWithPermission.mockResolvedValue(['se-1', 'se-2']);
-      seDisciplinesRepo.find.mockResolvedValue([
-        { userId: 'se-1', disciplineLabel: 'العلوم الطبية' },
-        { userId: 'se-2', disciplineLabel: 'العلوم الطبية' },
+      journalMemberships.filterUserIdsInJournal.mockResolvedValue([
+        'se-1',
+        'se-2',
       ]);
 
       const qb = {

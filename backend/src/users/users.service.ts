@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
+import { JournalMembershipService } from '../journals/journal-membership.service';
 import {
   OAuthIdentity,
   OAUTH_PROVIDER_ORCID,
@@ -98,8 +98,7 @@ export class UsersService {
     private readonly oauthRepo: Repository<OAuthIdentity>,
     @InjectRepository(RoleInvitation)
     private readonly roleInvRepo: Repository<RoleInvitation>,
-    @InjectRepository(UserSectionEditorDiscipline)
-    private readonly seDisciplinesRepo: Repository<UserSectionEditorDiscipline>,
+    private readonly journalMemberships: JournalMembershipService,
     private readonly rbacService: RbacService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
@@ -788,20 +787,17 @@ export class UsersService {
       PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
     );
     if (ids.length === 0) return [];
-    const [users, disciplineRows] = await Promise.all([
+    const [users, disciplineMap] = await Promise.all([
       this.usersRepo.find({
         where: { id: In(ids) },
         select: ['id', 'displayName', 'email'],
         order: { displayName: 'ASC' },
       }),
-      this.seDisciplinesRepo.find({ where: { userId: In(ids) } }),
+      this.journalMemberships.disciplineLabelsByUser(
+        ids,
+        ROLE_SLUGS.SECTION_EDITOR,
+      ),
     ]);
-    const disciplineMap = new Map<string, string[]>();
-    for (const row of disciplineRows) {
-      const arr = disciplineMap.get(row.userId) ?? [];
-      arr.push(row.disciplineLabel);
-      disciplineMap.set(row.userId, arr);
-    }
     return users.map((u) => ({
       id: u.id,
       displayName: u.displayName,
@@ -810,11 +806,18 @@ export class UsersService {
     }));
   }
 
+  /**
+   * Section-editor scope, still expressed as discipline labels.
+   *
+   * Storage moved to `journal_memberships`; the label is derived from the
+   * journal it maps to. The staff-admin UI keeps speaking labels until the
+   * journal picker lands, so the wire contract here is deliberately unchanged.
+   */
   async getSectionEditorDisciplines(userId: string): Promise<string[]> {
-    const rows = await this.seDisciplinesRepo.find({
-      where: { userId },
-    });
-    return rows.map((r) => r.disciplineLabel);
+    return this.journalMemberships.disciplineLabelsForUser(
+      userId,
+      ROLE_SLUGS.SECTION_EDITOR,
+    );
   }
 
   async setSectionEditorDisciplines(
@@ -828,13 +831,10 @@ export class UsersService {
         code: 'NOT_FOUND',
       });
     }
-    await this.seDisciplinesRepo.delete({ userId });
-    if (disciplines.length > 0) {
-      const rows = disciplines.map((disciplineLabel) =>
-        this.seDisciplinesRepo.create({ userId, disciplineLabel }),
-      );
-      await this.seDisciplinesRepo.save(rows);
-    }
-    return disciplines;
+    return this.journalMemberships.setDisciplineLabelsForUser(
+      userId,
+      ROLE_SLUGS.SECTION_EDITOR,
+      disciplines,
+    );
   }
 }

@@ -8,7 +8,7 @@ import {
   RoleInvitation,
   RoleInvitationStatus,
 } from '../entities/role-invitation.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
+import { JournalMembershipService } from '../journals/journal-membership.service';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -54,12 +54,15 @@ describe('UsersService', () => {
         },
         {
           // Added with the section-editor feature; this suite predates it.
-          provide: getRepositoryToken(UserSectionEditorDiscipline),
+          provide: JournalMembershipService,
           useValue: {
-            find: jest.fn().mockResolvedValue([]),
-            findBy: jest.fn().mockResolvedValue([]),
-            delete: jest.fn().mockResolvedValue({ affected: 0 }),
-            save: jest.fn((rows: unknown) => Promise.resolve(rows)),
+            disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
+            disciplineLabelsForUser: jest.fn().mockResolvedValue([]),
+            setDisciplineLabelsForUser: jest
+              .fn()
+              .mockImplementation((_u: string, _r: string, labels: string[]) =>
+                Promise.resolve(labels),
+              ),
           },
         },
         {

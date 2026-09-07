@@ -3,8 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
 import { OAuthIdentity } from '../entities/oauth-identity.entity';
 import { RoleInvitation } from '../entities/role-invitation.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { JournalsModule } from '../journals/journals.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -16,12 +16,8 @@ import { EmailVerifiedGuard } from './email-verified.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      User,
-      OAuthIdentity,
-      RoleInvitation,
-      UserSectionEditorDiscipline,
-    ]),
+    TypeOrmModule.forFeature([User, OAuthIdentity, RoleInvitation]),
+    JournalsModule,
     RbacModule,
     forwardRef(() => AuthModule),
     NotificationsModule,

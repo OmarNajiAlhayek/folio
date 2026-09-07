@@ -10,7 +10,6 @@ import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { Journal } from '../entities/journal.entity';
 import { JournalIssue } from '../entities/journal-issue.entity';
 import { JournalMembership } from '../entities/journal-membership.entity';
@@ -42,6 +41,7 @@ import { LanguageToolService } from './language-tool.service';
 import { RemindersService } from './reminders.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { JournalsModule } from '../journals/journals.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -53,6 +53,7 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
+    JournalsModule,
     RbacModule,
     MessagingModule,
     NotificationsModule,
@@ -72,7 +73,6 @@ import { AuthModule } from '../auth/auth.module';
       CopyeditNote,
       User,
       SectionEditorAssignment,
-      UserSectionEditorDiscipline,
       Journal,
       JournalIssue,
       JournalMembership,

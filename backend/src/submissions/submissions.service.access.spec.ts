@@ -11,7 +11,7 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
+import { JournalMembershipService } from '../journals/journal-membership.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
@@ -125,8 +125,13 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
           useValue: {},
         },
         {
-          provide: getRepositoryToken(UserSectionEditorDiscipline),
-          useValue: {},
+          provide: JournalMembershipService,
+          useValue: {
+            listJournalIdsForUser: jest.fn().mockResolvedValue([]),
+            filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
+            disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
+            disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
+          },
         },
         { provide: RbacService, useValue: {} },
         { provide: DocxGeneratorService, useValue: {} },

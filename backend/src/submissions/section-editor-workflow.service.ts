@@ -9,11 +9,11 @@ import { In, Repository } from 'typeorm';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { User } from '../entities/user.entity';
 import type { RequestUser } from '../common/types/request-user';
 import { assertCallerPermission } from '../common/authorization/permission-checks';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { JournalMembershipService } from '../journals/journal-membership.service';
+import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionEventsService } from './submission-events.service';
@@ -43,8 +43,6 @@ export class SectionEditorWorkflowService {
   constructor(
     @InjectRepository(SectionEditorAssignment)
     private readonly seAssignmentsRepo: Repository<SectionEditorAssignment>,
-    @InjectRepository(UserSectionEditorDiscipline)
-    private readonly seDisciplinesRepo: Repository<UserSectionEditorDiscipline>,
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
     @InjectRepository(User)
@@ -52,6 +50,7 @@ export class SectionEditorWorkflowService {
     private readonly rbacService: RbacService,
     private readonly access: SubmissionAccessService,
     private readonly events: SubmissionEventsService,
+    private readonly journalMemberships: JournalMembershipService,
     private readonly config: ConfigService,
   ) {}
 
@@ -142,9 +141,14 @@ export class SectionEditorWorkflowService {
     );
 
     const submission = await this.access.getBySlugOrThrow(submissionSlug);
-    const disciplines: string[] = submission.disciplines ?? [];
 
-    if (disciplines.length === 0) {
+    // Candidates are now the section editors of the submission's journal, not
+    // everyone tagged with a matching discipline. `journal_id` is nullable
+    // until the author picker lands, so an unplaced submission still reports
+    // `no_disciplines` — the wire value the UI already renders as "nothing to
+    // match on".
+    const journalId = submission.journalId;
+    if (!journalId) {
       return { status: 'no_disciplines' };
     }
 
@@ -155,24 +159,18 @@ export class SectionEditorWorkflowService {
       return { status: 'no_candidates' };
     }
 
-    const matchingRows = await this.seDisciplinesRepo.find({
-      where: {
-        userId: In(candidateIds),
-        disciplineLabel: In(disciplines),
-      },
-    });
-
-    const matchMap = new Map<string, string[]>();
-    for (const row of matchingRows) {
-      const arr = matchMap.get(row.userId) ?? [];
-      arr.push(row.disciplineLabel);
-      matchMap.set(row.userId, arr);
-    }
-
-    const matchingIds = [...matchMap.keys()];
+    const [matchingIds, journalLabel] = await Promise.all([
+      this.journalMemberships.filterUserIdsInJournal(
+        candidateIds,
+        journalId,
+        ROLE_SLUGS.SECTION_EDITOR,
+      ),
+      this.journalMemberships.disciplineLabelForJournal(journalId),
+    ]);
     if (matchingIds.length === 0) {
       return { status: 'no_candidates' };
     }
+    const matchingDisciplines = journalLabel ? [journalLabel] : [];
 
     const activeCountRows = await this.seAssignmentsRepo
       .createQueryBuilder('a')
@@ -195,7 +193,7 @@ export class SectionEditorWorkflowService {
       userId: u.id,
       displayName: u.displayName,
       email: u.email,
-      matchingDisciplines: matchMap.get(u.id) ?? [],
+      matchingDisciplines,
       activeAssignmentCount: countMap.get(u.id) ?? 0,
     }));
 
@@ -244,22 +242,16 @@ export class SectionEditorWorkflowService {
     );
     if (candidateIds.length === 0) return [];
 
-    const [users, disciplineRows] = await Promise.all([
+    const [users, disciplineMap] = await Promise.all([
       this.usersRepo.find({
         where: { id: In(candidateIds) },
         select: ['id', 'displayName', 'email'],
       }),
-      this.seDisciplinesRepo.find({
-        where: { userId: In(candidateIds) },
-      }),
+      this.journalMemberships.disciplineLabelsByUser(
+        candidateIds,
+        ROLE_SLUGS.SECTION_EDITOR,
+      ),
     ]);
-
-    const disciplineMap = new Map<string, string[]>();
-    for (const row of disciplineRows) {
-      const arr = disciplineMap.get(row.userId) ?? [];
-      arr.push(row.disciplineLabel);
-      disciplineMap.set(row.userId, arr);
-    }
 
     return users.map((u) => ({
       id: u.id,

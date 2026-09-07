@@ -8,6 +8,7 @@ import { Review } from '../entities/review.entity';
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
+import { JournalMembershipService } from '../journals/journal-membership.service';
 import { RbacService } from '../rbac/rbac.service';
 import { DocxGeneratorService } from './docx-generator.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
@@ -27,7 +28,6 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
@@ -101,7 +101,7 @@ export type SubmissionsRepoMocks = {
   rbacService?: Record<string, unknown>;
   eventPublisher?: Record<string, unknown>;
   sectionEditorAssignmentsRepo?: Record<string, unknown>;
-  sectionEditorDisciplinesRepo?: Record<string, unknown>;
+  journalMembershipService?: Record<string, unknown>;
   configService?: { get: jest.Mock };
   docxGenerator?: Record<string, unknown>;
   manuscriptStyles?: Record<string, unknown>;
@@ -151,8 +151,15 @@ export function submissionsServiceTestProviders(
       useValue: mocks.sectionEditorAssignmentsRepo ?? {},
     },
     {
-      provide: getRepositoryToken(UserSectionEditorDiscipline),
-      useValue: mocks.sectionEditorDisciplinesRepo ?? {},
+      provide: JournalMembershipService,
+      useValue: mocks.journalMembershipService ?? {
+        // Default: staff scoped to no journal. Specs that exercise a
+        // journal-scoped queue override this explicitly.
+        listJournalIdsForUser: jest.fn().mockResolvedValue([]),
+        filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
+        disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
+        disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
+      },
     },
     { provide: RbacService, useValue: mocks.rbacService ?? {} },
     { provide: DocxGeneratorService, useValue: mocks.docxGenerator ?? {} },

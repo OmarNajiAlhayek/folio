@@ -11,7 +11,6 @@ import { Submission } from './submission.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
 import { UserRole } from './user-role.entity';
-import { UserSectionEditorDiscipline } from './user-section-editor-discipline.entity';
 import { JournalMembership } from './journal-membership.entity';
 
 @Entity('users')
@@ -79,9 +78,6 @@ export class User extends BaseEntity {
 
   @OneToMany(() => CopyeditAssignment, (a) => a.copyeditor)
   copyeditAssignments: CopyeditAssignment[];
-
-  @OneToMany(() => UserSectionEditorDiscipline, (d) => d.user)
-  sectionEditorDisciplines: UserSectionEditorDiscipline[];
 
   /** Journals this user may act in, per staff role. Global roles are not listed. */
   @OneToMany(() => JournalMembership, (m) => m.user)

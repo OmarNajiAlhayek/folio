@@ -15,7 +15,8 @@ import {
 } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import type { RequestUser } from '../common/types/request-user';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { JournalMembershipService } from '../journals/journal-membership.service';
+import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { slugifySubmissionTitle } from './slugify-submission-title';
@@ -63,6 +64,7 @@ export class SubmissionsService implements OnModuleInit {
     private readonly ai: SubmissionAiService,
     private readonly preSubmitAnalysis: PreSubmitAnalysisService,
     private readonly sectionEditorWorkflow: SectionEditorWorkflowService,
+    private readonly journalMemberships: JournalMembershipService,
   ) {}
 
   listDisciplineLabels(): {
@@ -161,6 +163,26 @@ export class SubmissionsService implements OnModuleInit {
     return this.lifecycle.create(authorId, dto);
   }
 
+  /**
+   * Journals whose queue this editor may see, or `'all'` for the
+   * university-wide `journal_manager`.
+   *
+   * An editor with no memberships is scoped to nothing rather than to
+   * everything — the opposite default would make the scope silently
+   * unenforced for exactly the accounts nobody has configured yet.
+   */
+  private async editorQueueJournalIds(
+    user: RequestUser,
+  ): Promise<string[] | 'all'> {
+    if (user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) {
+      return 'all';
+    }
+    return this.journalMemberships.listJournalIdsForUser(
+      user.sub,
+      ROLE_SLUGS.EDITOR,
+    );
+  }
+
   async findAllForUser(
     user: RequestUser,
     status?: SubmissionStatus,
@@ -174,6 +196,21 @@ export class SubmissionsService implements OnModuleInit {
         .orderBy('s.updatedAt', 'DESC');
       if (status) {
         qb.andWhere('s.status = :status', { status });
+      }
+      const journalIds = await this.editorQueueJournalIds(user);
+      if (journalIds !== 'all') {
+        // Unplaced submissions (`journal_id IS NULL`) stay visible to every
+        // editor: the column is nullable until the author picker lands, and a
+        // row nobody can see is a row nobody can triage. Once slice 6 makes it
+        // NOT NULL this disjunct becomes dead and should be dropped.
+        if (journalIds.length === 0) {
+          qb.andWhere('s.journal_id IS NULL');
+        } else {
+          qb.andWhere(
+            '(s.journal_id IS NULL OR s.journal_id IN (:...journalIds))',
+            { journalIds },
+          );
+        }
       }
       return qb.getMany();
     }

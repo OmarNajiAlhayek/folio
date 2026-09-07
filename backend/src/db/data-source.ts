@@ -16,7 +16,6 @@ import { ReviewDiscussion } from '../entities/review-discussion.entity';
 import { ReviewDiscussionMessage } from '../entities/review-discussion-message.entity';
 import { Review } from '../entities/review.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
-import { UserSectionEditorDiscipline } from '../entities/user-section-editor-discipline.entity';
 import { JournalSetting } from '../entities/journal-settings.entity';
 import { Journal } from '../entities/journal.entity';
 import { JournalIssue } from '../entities/journal-issue.entity';
@@ -56,7 +55,6 @@ export const dataSourceOptions: DataSourceOptions = {
     ReviewDiscussionMessage,
     Review,
     SectionEditorAssignment,
-    UserSectionEditorDiscipline,
     JournalSetting,
     Journal,
     JournalIssue,

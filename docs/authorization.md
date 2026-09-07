@@ -1,12 +1,34 @@
 # Authorization layers
 
-Damascus University Journal uses three complementary checks. They are not duplicates of the same rule — each layer answers a different question.
+Damascus University Journal uses four complementary checks. They are not duplicates of the same rule — each layer answers a different question.
 
 | Layer | Where | Question |
 |-------|-------|----------|
 | **Route gate** | `@Permissions()` + `PermissionsGuard` on HTTP controllers | Does the caller hold at least one required permission slug (OR)? |
 | **Caller gate** | `assertCallerPermission()` / `assertCallerHasAnyPermission()` / `assertCallerHasEveryPermission()` in services | Same slug logic, for methods also reached from seed, tests, or future non-HTTP callers |
+| **Journal scope** | `JournalMembershipService` + `journal_memberships` | Which journals may this staff user exercise that permission in? |
 | **Resource gate** | `assertCanRead`, ownership, assignment, workflow state | Can this caller access **this** submission, file, or assignment? |
+
+## Journal scope
+
+Now that Folio is a press of nine journals, a permission says *what* a staff user
+may do and a membership says *where*. RBAC stays university-wide; `journal_memberships`
+narrows it.
+
+- **`journal_manager` is never scoped.** It is the university-wide role and reads
+  as "every journal"; it holds no membership rows.
+- **An editor with no memberships is scoped to nothing**, not to everything. The
+  opposite default would silently leave the scope unenforced for exactly the
+  accounts nobody has configured yet.
+- **Unplaced submissions stay visible to every editor.** `submissions.journal_id`
+  is nullable until the author journal picker ships, and a row no editor can see
+  is a row nobody can triage. When the column becomes `NOT NULL`, drop the
+  `journal_id IS NULL` disjunct in `SubmissionsService.findAllForUser`.
+- Section-editor suggestions match on the submission's **journal**, not on its
+  discipline tags. `journals.discipline_label` is unique and 1:1 with the AraBERT
+  classifier labels, so the staff-admin API still speaks labels while storage is
+  journal-keyed (`user_section_editor_disciplines` was dropped in
+  `1783200000000-JournalScopedSectionEditors`).
 
 Shared helpers live in `backend/src/common/authorization/permission-checks.ts`. The guard uses the same `hasAnyPermission()` implementation as services.
 
