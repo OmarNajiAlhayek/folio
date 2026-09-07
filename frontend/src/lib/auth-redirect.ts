@@ -14,12 +14,15 @@ const PUBLIC_PATHNAMES = new Set([
   '/reset-password',
 ]);
 
+/** Prefixes whose whole subtree is public (portal and catalog reading). */
+const PUBLIC_PREFIXES = ['/publications', '/journals'];
+
 export function isPublicPathname(pathname: string): boolean {
   const norm = normalizePathname(pathname);
   if (PUBLIC_PATHNAMES.has(norm)) return true;
-  if (norm === '/publications' || norm.startsWith('/publications/'))
-    return true;
-  return false;
+  return PUBLIC_PREFIXES.some(
+    (prefix) => norm === prefix || norm.startsWith(`${prefix}/`),
+  );
 }
 
 export function requiresAuthPathname(pathname: string): boolean {

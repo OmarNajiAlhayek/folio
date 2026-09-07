@@ -45,6 +45,7 @@
     "brand": "Damascus University Journal",
     "brandShort": "DU Journal",
     "publications": "Publications",
+    "journals": "Journals",
     "dashboard": "Dashboard",
     "submissions": "Submissions",
     "editor": "Editor",
@@ -1391,6 +1392,22 @@
     "filterChipPublishedFrom": "From {date}",
     "filterChipPublishedTo": "To {date}",
     "updatingResults": "Updating results…"
+  },
+  "Journals": {
+    "eyebrow": "Damascus University",
+    "title": "Journals",
+    "hint": "Browse the university's peer-reviewed journals, their issues, and the articles each issue contains.",
+    "empty": "No journals are available yet.",
+    "articleCount": "{count, plural, =0 {No articles} one {# article} other {# articles}}",
+    "latestIssue": "Latest: {issue}",
+    "issuesHeading": "Issues",
+    "noIssues": "This journal has no published issue yet.",
+    "contentsHeading": "Contents",
+    "noArticles": "This issue has no published articles yet.",
+    "loading": "Loading journals…",
+    "loadFailed": "Could not load journals.",
+    "notFound": "Not found",
+    "back": "Back to journals"
   },
   "PublicationDetail": {
     "back": "← Catalog",

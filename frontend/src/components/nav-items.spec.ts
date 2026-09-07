@@ -17,16 +17,20 @@ const ALL_PERMISSIONS = Object.values(PERMISSION_SLUGS);
 
 describe('visibleNavItems', () => {
   it('shows only public links when signed out', () => {
-    expect(labels([], false)).toEqual(['publications']);
+    expect(labels([], false)).toEqual(['publications', 'journals']);
   });
 
   it('ignores permissions when signed out', () => {
-    expect(labels(ALL_PERMISSIONS, false)).toEqual(['publications']);
+    expect(labels(ALL_PERMISSIONS, false)).toEqual([
+      'publications',
+      'journals',
+    ]);
   });
 
   it('shows the author set for a plain author', () => {
     expect(labels([PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN])).toEqual([
       'publications',
+      'journals',
       'dashboard',
       'submissions',
     ]);
@@ -35,6 +39,7 @@ describe('visibleNavItems', () => {
   it('shows reviewer links without author links', () => {
     expect(labels([PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN])).toEqual([
       'publications',
+      'journals',
       'dashboard',
       'myReviews',
     ]);
@@ -47,6 +52,7 @@ describe('visibleNavItems', () => {
   it('gates the editor queue and search curation on the same permission', () => {
     expect(labels([PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE])).toEqual([
       'publications',
+      'journals',
       'dashboard',
       'editor',
       'searchCuration',

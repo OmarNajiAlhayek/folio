@@ -1,5 +1,13 @@
 <!-- BEGIN:nextjs-agent-rules -->
 
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
 # Next.js 16 (App Router)
 
 Damascus University Journal frontend uses **Next.js 16.x** with the **App Router** (`src/app/[locale]/…`). Before changing routing, data fetching, or build config, read the matching guide:
@@ -19,5 +27,3 @@ Damascus University Journal frontend uses **Next.js 16.x** with the **App Router
 - **Instant navigation:** Next.js 16 may require `unstable_instant` exports for fast client navigations — see `node_modules/next/dist/docs/01-app/02-guides/instant-navigation.mdx` before tuning Suspense-only fixes.
 
 Heed deprecation notices in the bundled docs and prefer patterns already used in this codebase over older Next 13/14 examples from training data.
-
-<!-- END:nextjs-agent-rules -->

@@ -45,6 +45,7 @@
     "brand": "مجلة جامعة دمشق",
     "brandShort": "مجلة دمشق",
     "publications": "المنشورات",
+    "journals": "المجلات",
     "dashboard": "لوحة التحكم",
     "submissions": "الطلبات",
     "editor": "التحرير",
@@ -1391,6 +1392,22 @@
     "filterChipPublishedFrom": "من {date}",
     "filterChipPublishedTo": "إلى {date}",
     "updatingResults": "جارٍ تحديث النتائج…"
+  },
+  "Journals": {
+    "eyebrow": "جامعة دمشق",
+    "title": "المجلات",
+    "hint": "تصفح مجلات الجامعة المحكّمة وأعدادها والمقالات المنشورة في كل عدد.",
+    "empty": "لا توجد مجلات متاحة بعد.",
+    "articleCount": "{count, plural, =0 {لا مقالات} one {مقال واحد} two {مقالان} few {# مقالات} many {# مقالاً} other {# مقال}}",
+    "latestIssue": "الأحدث: {issue}",
+    "issuesHeading": "الأعداد",
+    "noIssues": "لا يوجد عدد منشور في هذه المجلة بعد.",
+    "contentsHeading": "المحتويات",
+    "noArticles": "لا توجد مقالات منشورة في هذا العدد بعد.",
+    "loading": "جارٍ تحميل المجلات…",
+    "loadFailed": "تعذّر تحميل المجلات.",
+    "notFound": "غير موجود",
+    "back": "العودة إلى المجلات"
   },
   "PublicationDetail": {
     "back": "← الفهرس",

@@ -40,6 +40,7 @@ testsprite_tests/tmp/
 
 # Cursor / tool noise
 .cursor/
+.cursorignore
 
 # OS / IDE
 .DS_Store
@@ -81,4 +82,7 @@ using-arabert-with-analysis.py
 # Local scratch: one-off conversion experiments and throwaway probe specs
 exp/
 backend/src/submissions/ztmp-*.spec.ts
+
+# Local LaTeX write-up (not part of the product)
+report/
 

@@ -6,6 +6,7 @@ import {
   FileText,
   Globe,
   LayoutDashboard,
+  Library,
   Mail,
   Pencil,
   ScrollText,
@@ -20,6 +21,7 @@ import {
 /** Route literals, kept narrow so `next-intl`'s typed `Link` accepts them without a cast. */
 export type NavHref =
   | '/publications'
+  | '/journals'
   | '/dashboard'
   | '/submissions'
   | '/editor'
@@ -34,6 +36,7 @@ export type NavHref =
 /** Message key inside the `Nav` namespace (`messages/{en,ar}.json`). */
 export type NavLabelKey =
   | 'publications'
+  | 'journals'
   | 'dashboard'
   | 'submissions'
   | 'editor'
@@ -71,6 +74,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     labelKey: 'publications',
     match: 'prefix',
     icon: Globe,
+    isVisible: () => true,
+  },
+  {
+    href: '/journals',
+    labelKey: 'journals',
+    match: 'prefix',
+    icon: Library,
     isVisible: () => true,
   },
   {
