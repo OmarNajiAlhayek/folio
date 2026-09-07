@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { JournalIssuesService } from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import { User } from '../entities/user.entity';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
@@ -114,6 +115,13 @@ describe('SectionEditorWorkflowService', () => {
         {
           provide: JournalMembershipService,
           useValue: journalMemberships,
+        },
+        {
+          provide: JournalIssuesService,
+          useValue: {
+            listPublishableIssues: jest.fn().mockResolvedValue([]),
+            getIssueAcceptingArticleOrThrow: jest.fn(),
+          },
         },
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
         { provide: getRepositoryToken(User), useValue: usersRepo },

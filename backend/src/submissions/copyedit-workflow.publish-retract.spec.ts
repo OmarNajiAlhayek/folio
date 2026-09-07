@@ -27,6 +27,11 @@ jest.mock('./publish-public-files', () => ({
 }));
 
 describe('CopyeditWorkflowService publish override and retract', () => {
+  const ISSUE_ID = 'issue-2026-1';
+  let journalIssues: {
+    getIssueAcceptingArticleOrThrow: jest.Mock;
+    listPublishableIssues: jest.Mock;
+  };
   const copyeditor: RequestUser = {
     sub: 'ce-1',
     email: 'ce@test.dev',
@@ -72,12 +77,19 @@ describe('CopyeditWorkflowService publish override and retract', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    journalIssues = {
+      getIssueAcceptingArticleOrThrow: jest
+        .fn()
+        .mockResolvedValue({ id: ISSUE_ID, journalId: 'journal-medj' }),
+      listPublishableIssues: jest.fn().mockResolvedValue([]),
+    };
     submission = {
       id: 'sub-1',
       slug: 'paper-one',
       title: 'Paper',
       status: SubmissionStatus.COPYEDITING,
       authorId: 'auth-1',
+      journalId: 'journal-medj',
     };
     access = {
       getBySlugOrThrow: jest.fn().mockResolvedValue(submission),
@@ -127,8 +139,40 @@ describe('CopyeditWorkflowService publish override and retract', () => {
       events as never,
       catalog as never,
       {} as never,
+      journalIssues as never,
       searchService as never,
     );
+  });
+
+  it('files the article into the issue it is published under', async () => {
+    copyeditAssignmentsRepo.find.mockResolvedValue([
+      {
+        copyeditorId: copyeditor.sub,
+        status: CopyeditAssignmentStatus.READY_FOR_REVIEW,
+      },
+    ]);
+
+    const saved = await service.publishSubmission(
+      'paper-one',
+      copyeditor,
+      ISSUE_ID,
+    );
+
+    expect(saved.issueId).toBe(ISSUE_ID);
+  });
+
+  it('refuses to publish a submission that has no journal', async () => {
+    submission.journalId = null;
+    copyeditAssignmentsRepo.find.mockResolvedValue([
+      {
+        copyeditorId: copyeditor.sub,
+        status: CopyeditAssignmentStatus.READY_FOR_REVIEW,
+      },
+    ]);
+
+    await expect(
+      service.publishSubmission('paper-one', copyeditor, ISSUE_ID),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('lets the assigned copyeditor publish when every assignment is ready', async () => {
@@ -139,7 +183,11 @@ describe('CopyeditWorkflowService publish override and retract', () => {
       },
     ]);
 
-    const saved = await service.publishSubmission('paper-one', copyeditor);
+    const saved = await service.publishSubmission(
+      'paper-one',
+      copyeditor,
+      ISSUE_ID,
+    );
     expect(saved.status).toBe(SubmissionStatus.PUBLISHED);
     expect(setPublishedManuscriptFile).toHaveBeenCalled();
     expect(claimStatusTransition).toHaveBeenCalled();
@@ -153,7 +201,11 @@ describe('CopyeditWorkflowService publish override and retract', () => {
       },
     ]);
 
-    const saved = await service.publishSubmission('paper-one', editor);
+    const saved = await service.publishSubmission(
+      'paper-one',
+      editor,
+      ISSUE_ID,
+    );
     expect(saved.status).toBe(SubmissionStatus.PUBLISHED);
   });
 
@@ -166,7 +218,7 @@ describe('CopyeditWorkflowService publish override and retract', () => {
     ]);
 
     await expect(
-      service.publishSubmission('paper-one', copyeditor),
+      service.publishSubmission('paper-one', copyeditor, ISSUE_ID),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 

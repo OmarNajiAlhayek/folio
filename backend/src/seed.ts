@@ -52,7 +52,9 @@ import {
 } from './seed-guard';
 import {
   placeDemoSubmissions,
+  placeSampleForPublication,
   seedPressFixtures,
+  type SeededPress,
 } from './journals/seed-journals';
 
 config({ path: join(__dirname, '..', '.env') });
@@ -398,6 +400,8 @@ async function resumePublishedSampleSeed(options: {
   pdfBytes: Buffer;
   revisionFilename: string;
   existing: Submission;
+  press: SeededPress;
+  disciplineLabel: string;
   logLabel: string;
 }): Promise<void> {
   const {
@@ -409,6 +413,8 @@ async function resumePublishedSampleSeed(options: {
     pdfBytes,
     revisionFilename,
     existing,
+    press,
+    disciplineLabel,
     logLabel,
   } = options;
 
@@ -456,7 +462,17 @@ async function resumePublishedSampleSeed(options: {
     );
   }
 
-  await submissionsService.publishSubmission(existing.slug, copyeditorReq);
+  const resumeIssue = await placeSampleForPublication(
+    dataSource,
+    existing.id,
+    disciplineLabel,
+    press,
+  );
+  await submissionsService.publishSubmission(
+    existing.slug,
+    copyeditorReq,
+    resumeIssue.id,
+  );
   console.log(`Resumed: ${existing.title} (${logLabel})`);
 }
 
@@ -480,9 +496,11 @@ async function seedPublishedSample(options: {
     suggestedLabels?: string[];
     disciplines?: string[];
   };
+  press: SeededPress;
   logLabel: string;
 }): Promise<void> {
   const {
+    press,
     dataSource,
     submissionsService,
     author,
@@ -521,6 +539,8 @@ async function seedPublishedSample(options: {
       pdfBytes,
       revisionFilename,
       existing,
+      press,
+      disciplineLabel: discipline.topLabel,
       logLabel,
     });
     return;
@@ -573,7 +593,14 @@ async function seedPublishedSample(options: {
     ceAssignment.slug!,
     author.id,
   );
-  await submissionsService.publishSubmission(s.slug!, copyeditorReq);
+  // Publishing requires an issue, so place the article first.
+  const issue = await placeSampleForPublication(
+    dataSource,
+    s.id,
+    discipline.topLabel,
+    press,
+  );
+  await submissionsService.publishSubmission(s.slug!, copyeditorReq, issue.id);
   console.log(`Seeded: ${title} (${logLabel})`);
 }
 
@@ -1669,6 +1696,7 @@ async function run() {
       manuscriptFilename: 'published.pdf',
       revisionFilename: 'published-revision.pdf',
       discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 90 },
+      press,
       logLabel: 'published',
     });
 
@@ -1689,6 +1717,7 @@ async function run() {
       manuscriptFilename: 'published-peer.pdf',
       revisionFilename: 'published-peer-revision.pdf',
       discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 88 },
+      press,
       logLabel: 'published, related-articles peer',
     });
 
@@ -1714,6 +1743,7 @@ async function run() {
         suggestedLabels: [SAMPLE_DISCIPLINE_MEDICAL, 'العلوم الأساسية'],
         disciplines: [SAMPLE_DISCIPLINE_MEDICAL, 'العلوم الأساسية'],
       },
+      press,
       logLabel: 'published, related-articles distant peer',
     });
 

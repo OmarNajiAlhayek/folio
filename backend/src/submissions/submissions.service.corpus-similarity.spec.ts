@@ -12,6 +12,7 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { JournalIssuesService } from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
@@ -147,6 +148,13 @@ describe('SubmissionsService.startCorpusSimilarityJob', () => {
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
             disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
             disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
+          },
+        },
+        {
+          provide: JournalIssuesService,
+          useValue: {
+            listPublishableIssues: jest.fn().mockResolvedValue([]),
+            getIssueAcceptingArticleOrThrow: jest.fn(),
           },
         },
         { provide: RbacService, useValue: {} },

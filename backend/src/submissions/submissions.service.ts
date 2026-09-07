@@ -15,6 +15,10 @@ import {
 } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import type { RequestUser } from '../common/types/request-user';
+import {
+  JournalIssuesService,
+  type PublishableIssue,
+} from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
@@ -65,6 +69,7 @@ export class SubmissionsService implements OnModuleInit {
     private readonly preSubmitAnalysis: PreSubmitAnalysisService,
     private readonly sectionEditorWorkflow: SectionEditorWorkflowService,
     private readonly journalMemberships: JournalMembershipService,
+    private readonly journalIssues: JournalIssuesService,
   ) {}
 
   listDisciplineLabels(): {
@@ -643,8 +648,25 @@ export class SubmissionsService implements OnModuleInit {
   async publishSubmission(
     slug: string,
     user: RequestUser,
+    issueId: string,
   ): Promise<Submission> {
-    return this.copyeditWorkflow.publishSubmission(slug, user);
+    return this.copyeditWorkflow.publishSubmission(slug, user, issueId);
+  }
+
+  /**
+   * Issues of this submission's journal that can receive it. Read through the
+   * submission rather than the journal so the caller's existing access to the
+   * submission is what governs, and an unplaced submission returns nothing
+   * instead of leaking another journal's issue list.
+   */
+  async listPublishableIssues(
+    slug: string,
+    user: RequestUser,
+  ): Promise<PublishableIssue[]> {
+    const submission = await this.access.getBySlugOrThrow(slug);
+    await this.access.assertCanRead(submission, user);
+    if (!submission.journalId) return [];
+    return this.journalIssues.listPublishableIssues(submission.journalId);
   }
 
   async retractSubmission(

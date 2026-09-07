@@ -23,6 +23,7 @@ import { Notification } from '../entities/notification.entity';
 import type { RequestUser } from '../common/types/request-user';
 import { assertCallerPermission } from '../common/authorization/permission-checks';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { JournalIssuesService } from '../journals/journal-issues.service';
 import { RbacService } from '../rbac/rbac.service';
 import { submissionToViewerJson } from './submission-response.mapper';
 import { copyeditAssignmentToEditorJson } from './assignment-response.mapper';
@@ -57,6 +58,7 @@ export class CopyeditWorkflowService {
     private readonly events: SubmissionEventsService,
     private readonly catalog: PublicationCatalogService,
     private readonly manuscriptAnalysis: ManuscriptAnalysisService,
+    private readonly journalIssues: JournalIssuesService,
     @Optional() private readonly searchService: SearchService | null = null,
   ) {}
 
@@ -531,9 +533,15 @@ export class CopyeditWorkflowService {
     return rows;
   }
 
+  /**
+   * Publishing files an article into an issue (العدد). Slice 4 makes that
+   * mandatory: without an issue the article has no citation, and the public
+   * archive has nowhere to list it.
+   */
   async publishSubmission(
     slug: string,
     user: RequestUser,
+    issueId: string,
   ): Promise<Submission> {
     assertCallerPermission(
       user,
@@ -547,6 +555,19 @@ export class CopyeditWorkflowService {
         code: 'VALIDATION_ERROR',
       });
     }
+    // `journal_id` is nullable until the author picker lands, so a submission
+    // created through the API before then has no journal and cannot be filed.
+    if (!s.journalId) {
+      throw new BadRequestException({
+        message:
+          'Submission is not assigned to a journal, so it cannot be published into an issue',
+        code: 'SUBMISSION_WITHOUT_JOURNAL',
+      });
+    }
+    const issue = await this.journalIssues.getIssueAcceptingArticleOrThrow(
+      s.journalId,
+      issueId,
+    );
     const assignments = await this.copyeditAssignmentsRepo.find({
       where: { submissionId: s.id },
     });
@@ -590,6 +611,7 @@ export class CopyeditWorkflowService {
       );
       s.status = SubmissionStatus.PUBLISHED;
       s.publishedAt = new Date();
+      s.issueId = issue.id;
       // Only the final manuscript becomes public — never the whole revision
       // history. See publish-public-files.ts.
       await setPublishedManuscriptFile(em, s.id);

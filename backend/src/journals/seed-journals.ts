@@ -139,6 +139,36 @@ export async function ensureStaffMemberships(
  * and, when already published, at that journal's latest seeded published issue.
  * In-flight manuscripts keep `issue_id` null until slice 4.
  */
+/**
+ * Files one sample onto its journal and returns the issue to publish it into.
+ *
+ * Publishing requires an issue (slice 4), so a sample must be placed *before*
+ * `publishSubmission` rather than by the bulk `placeDemoSubmissions` sweep that
+ * runs at the end of the seed.
+ */
+export async function placeSampleForPublication(
+  dataSource: DataSource,
+  submissionId: string,
+  disciplineLabel: string | null | undefined,
+  press: SeededPress,
+): Promise<JournalIssue> {
+  const slug = journalSlugForSampleLabel(disciplineLabel);
+  const journal = press.journalsBySlug.get(slug);
+  if (!journal) {
+    throw new Error(`Seed: no journal row for slug "${slug}"`);
+  }
+  const issue = press.publishedIssueByJournalId.get(journal.id);
+  if (!issue) {
+    throw new Error(
+      `Seed: journal "${slug}" has no published issue to file into`,
+    );
+  }
+  await dataSource
+    .getRepository(Submission)
+    .update(submissionId, { journalId: journal.id });
+  return issue;
+}
+
 export async function placeDemoSubmissions(
   dataSource: DataSource,
   journalsBySlug: Map<string, Journal>,

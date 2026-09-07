@@ -8,6 +8,7 @@ import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PERMISSION_SLUGS } from '@/lib/permissions';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { PublishIssuePicker } from '@/components/copyedit/PublishIssuePicker';
 import { statusPillClass } from '@/lib/submission-list-ui';
 import { fileExceedsUploadLimit, MAX_UPLOAD_MB } from '@/lib/validation';
 import { ACCEPT_MANUSCRIPT } from '@/lib/upload-accept';
@@ -59,6 +60,7 @@ export function CopyeditSection({
   );
   const [candidates, setCandidates] = useState<CopyeditorCandidate[]>([]);
   const [selectedCopyeditor, setSelectedCopyeditor] = useState('');
+  const [publishIssueId, setPublishIssueId] = useState('');
   const [assignments, setAssignments] = useState<CopyeditAssignmentRow[]>([]);
   const [notes, setNotes] = useState<CopyeditNoteRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -134,10 +136,12 @@ export function CopyeditSection({
   }
 
   async function publishToCatalog() {
+    if (!publishIssueId) return;
     setBusy(true);
     try {
       await apiJson(`/submissions/${submissionSlug}/publish`, {
         method: 'POST',
+        body: JSON.stringify({ issueId: publishIssueId }),
       });
       toast.success(t('published'));
       onReload();
@@ -229,9 +233,15 @@ export function CopyeditSection({
       {canPublishOverride && (
         <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 p-4">
           <p className="text-sm text-ink/70">{t('publishEditorHint')}</p>
+          <PublishIssuePicker
+            submissionSlug={submissionSlug}
+            value={publishIssueId}
+            onValueChange={setPublishIssueId}
+            disabled={busy}
+          />
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !publishIssueId}
             className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={() => void publishToCatalog()}
           >

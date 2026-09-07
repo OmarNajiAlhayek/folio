@@ -8,6 +8,7 @@ import { Review } from '../entities/review.entity';
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
+import { JournalIssuesService } from '../journals/journal-issues.service';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import { RbacService } from '../rbac/rbac.service';
 import { DocxGeneratorService } from './docx-generator.service';
@@ -102,6 +103,7 @@ export type SubmissionsRepoMocks = {
   eventPublisher?: Record<string, unknown>;
   sectionEditorAssignmentsRepo?: Record<string, unknown>;
   journalMembershipService?: Record<string, unknown>;
+  journalIssuesService?: Record<string, unknown>;
   configService?: { get: jest.Mock };
   docxGenerator?: Record<string, unknown>;
   manuscriptStyles?: Record<string, unknown>;
@@ -159,6 +161,13 @@ export function submissionsServiceTestProviders(
         filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
         disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
         disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
+      },
+    },
+    {
+      provide: JournalIssuesService,
+      useValue: mocks.journalIssuesService ?? {
+        listPublishableIssues: jest.fn().mockResolvedValue([]),
+        getIssueAcceptingArticleOrThrow: jest.fn(),
       },
     },
     { provide: RbacService, useValue: mocks.rbacService ?? {} },

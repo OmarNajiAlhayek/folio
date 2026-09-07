@@ -36,6 +36,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/types/request-user';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
+import { PublishSubmissionDto } from './dto/publish-submission.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
 import { AssignSectionEditorDto } from './dto/assign-section-editor.dto';
@@ -472,10 +473,24 @@ export class SubmissionsController {
     return this.submissionsService.listCopyeditNotes(slug, user);
   }
 
+  /** Issues (الأعداد) of this submission's journal that can receive it. */
+  @Get(':slug/publishable-issues')
+  @Permissions(PERMISSION_SLUGS.COPYEDIT_PUBLISH)
+  publishableIssues(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.listPublishableIssues(slug, user);
+  }
+
   @Post(':slug/publish')
   @Permissions(PERMISSION_SLUGS.COPYEDIT_PUBLISH)
-  publish(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
-    return this.submissionsService.publishSubmission(slug, user);
+  publish(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: PublishSubmissionDto,
+  ) {
+    return this.submissionsService.publishSubmission(slug, user, dto.issueId);
   }
 
   @Post(':slug/retract')

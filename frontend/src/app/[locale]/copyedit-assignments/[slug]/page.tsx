@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonLoadingStatus } from '@/components/ui/skeleton-loading-status';
 import { submissionQueueShellCls } from '@/lib/submission-list-ui';
 import { CopyeditAiPanel } from '@/components/copyedit/CopyeditAiPanel';
+import { PublishIssuePicker } from '@/components/copyedit/PublishIssuePicker';
 
 type NoteRow = {
   id: string;
@@ -115,6 +116,7 @@ export default function CopyeditWorkbenchPage() {
   const [noteToEditor, setNoteToEditor] = useState('');
 
   const [busy, setBusy] = useState(false);
+  const [publishIssueId, setPublishIssueId] = useState('');
 
   const [loading, setLoading] = useState(true);
 
@@ -225,12 +227,15 @@ export default function CopyeditWorkbenchPage() {
   async function publish() {
     const subSlug = row?.submission?.slug;
 
-    if (!subSlug) return;
+    if (!subSlug || !publishIssueId) return;
 
     setBusy(true);
 
     try {
-      await apiJson(`/submissions/${subSlug}/publish`, { method: 'POST' });
+      await apiJson(`/submissions/${subSlug}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({ issueId: publishIssueId }),
+      });
 
       toast.success(t('published'));
 
@@ -388,15 +393,23 @@ export default function CopyeditWorkbenchPage() {
         </section>
       )}
 
-      {canPublish && (
-        <button
-          type="button"
-          disabled={busy}
-          className="mt-6 rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 disabled:opacity-50"
-          onClick={() => void publish()}
-        >
-          {t('publishButton')}
-        </button>
+      {canPublish && row.submission?.slug && (
+        <section className="mt-6">
+          <PublishIssuePicker
+            submissionSlug={row.submission.slug}
+            value={publishIssueId}
+            onValueChange={setPublishIssueId}
+            disabled={busy}
+          />
+          <button
+            type="button"
+            disabled={busy || !publishIssueId}
+            className="mt-3 rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 disabled:opacity-50"
+            onClick={() => void publish()}
+          >
+            {t('publishButton')}
+          </button>
+        </section>
       )}
 
       {row.slug && <CopyeditAiPanel assignmentSlug={row.slug} />}

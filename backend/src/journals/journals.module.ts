@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Journal } from '../entities/journal.entity';
+import { JournalIssue } from '../entities/journal-issue.entity';
 import { JournalMembership } from '../entities/journal-membership.entity';
+import { JournalIssuesService } from './journal-issues.service';
 import { JournalMembershipService } from './journal-membership.service';
 
 /**
@@ -10,8 +12,10 @@ import { JournalMembershipService } from './journal-membership.service';
  * one owner.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Journal, JournalMembership])],
-  providers: [JournalMembershipService],
-  exports: [JournalMembershipService],
+  imports: [
+    TypeOrmModule.forFeature([Journal, JournalIssue, JournalMembership]),
+  ],
+  providers: [JournalMembershipService, JournalIssuesService],
+  exports: [JournalMembershipService, JournalIssuesService],
 })
 export class JournalsModule {}
