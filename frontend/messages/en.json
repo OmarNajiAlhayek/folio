@@ -996,7 +996,13 @@
     "error_PRE_SUBMIT_BLOCKING_ISSUES": "Fix structure, format, or citation issues shown in manuscript validation before submitting.",
     "error_PRE_SUBMIT_WARNINGS_UNACKNOWLEDGED": "Review and acknowledge the language notes in manuscript validation before submitting.",
     "fileKind_review_response": "Reviewer review file",
-    "fileKindHint_review_response": "Annotated manuscript or review notes uploaded by a reviewer."
+    "fileKindHint_review_response": "Annotated manuscript or review notes uploaded by a reviewer.",
+    "journalLabel": "Journal",
+    "journalPlaceholder": "Select a journal…",
+    "journalHint": "The Damascus University journal your manuscript is submitted to. It decides which editorial team reviews it and which issue it can be published in.",
+    "journalLoading": "Loading journals…",
+    "journalLoadFailed": "Could not load the list of journals. Reload the page and try again.",
+    "validationJournalRequired": "Journal is required"
   },
   "Editor": {
     "title": "Editor queue",

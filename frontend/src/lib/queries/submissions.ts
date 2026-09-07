@@ -91,6 +91,8 @@ export type SubmissionRecord = {
   authorId: string;
   updatedAt: string;
   reviewMethod?: string;
+  /** The journal this manuscript belongs to; NOT NULL on the server. */
+  journalId?: string | null;
   articleType?: string | null;
   keywords?: string | null;
   keywordsAr?: string | null;

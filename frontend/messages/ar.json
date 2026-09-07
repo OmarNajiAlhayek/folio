@@ -996,7 +996,13 @@
     "error_PRE_SUBMIT_BLOCKING_ISSUES": "أصلح مشكلات البنية أو التنسيق أو الاستشهادات قبل الإرسال.",
     "error_PRE_SUBMIT_WARNINGS_UNACKNOWLEDGED": "راجع ملاحظات اللغة وأقرّ بها في التحقق قبل الإرسال.",
     "fileKind_review_response": "ملف تحكيم المحكّم",
-    "fileKindHint_review_response": "مخطوطة مُعلّقة أو ملاحظات تحكيم رفعها أحد المحكّمين."
+    "fileKindHint_review_response": "مخطوطة مُعلّقة أو ملاحظات تحكيم رفعها أحد المحكّمين.",
+    "journalLabel": "المجلة",
+    "journalPlaceholder": "اختر مجلة…",
+    "journalHint": "مجلة جامعة دمشق التي يُقدَّم إليها البحث. تحدّد هيئة التحرير التي تراجعه والعدد الذي يمكن نشره فيه.",
+    "journalLoading": "جارٍ تحميل المجلات…",
+    "journalLoadFailed": "تعذّر تحميل قائمة المجلات. أعد تحميل الصفحة وحاول مجدداً.",
+    "validationJournalRequired": "المجلة مطلوبة"
   },
   "Editor": {
     "title": "قائمة التحرير",

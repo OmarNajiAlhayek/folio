@@ -190,13 +190,35 @@ export function uniqueSubmissionTitle(prefix: string): string {
   return `${prefix} ${u}`;
 }
 
+/**
+ * Journals accepting submissions. `journalId` is required on create since
+ * slice 6, and specs that do not care which journal simply take the first.
+ */
+export async function firstJournalId(
+  api: APIRequestContext,
+  token: string,
+): Promise<string> {
+  const res = await api.get(apiV1Absolute('submissions/journal-options'), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`Failed to list journals: ${res.status()}`);
+  }
+  const rows = (await res.json()) as Array<{ id: string }>;
+  if (rows.length === 0) {
+    throw new Error('No journals seeded; run `npm run seed:fresh`');
+  }
+  return rows[0].id;
+}
+
 export async function createSubmission(
   api: APIRequestContext,
   token: string,
-  payload: { title: string; abstract: string },
+  payload: { title: string; abstract: string; journalId?: string },
 ): Promise<{ slug: string }> {
+  const journalId = payload.journalId ?? (await firstJournalId(api, token));
   const res = await api.post(apiV1Absolute('submissions'), {
-    data: payload,
+    data: { ...payload, journalId },
     headers: {
       Authorization: `Bearer ${token}`,
     },

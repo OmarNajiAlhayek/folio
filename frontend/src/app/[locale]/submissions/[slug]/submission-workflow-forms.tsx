@@ -58,6 +58,7 @@ import {
 
 type MetadataPayload = z.infer<typeof createSubmissionSchema>;
 import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
+import { SubmissionJournalPicker } from '@/components/submission-journal-picker';
 import type { SubmissionDisciplineFields } from '@/lib/discipline-labels';
 import { DisciplineBadges } from '@/components/discipline-badges';
 
@@ -70,6 +71,8 @@ export type ContributorRow = {
 };
 
 export type SubmissionMetadataFormInitial = {
+  /** Journal id — required on create, and always present on an existing draft. */
+  journalId: string;
   title: string;
   titleAr: string;
   abstract: string;
@@ -134,6 +137,8 @@ type SubmissionMetadataFormProps = SubmissionFieldErrorProps &
         hideSaveButton?: boolean;
         /** Article type is collected on wizard step 1 instead of inside the form. */
         hideArticleType?: boolean;
+        /** Journal is collected on wizard step 1 instead of inside the form. */
+        hideJournal?: boolean;
       }
     | {
         createMode?: false;
@@ -164,10 +169,12 @@ export type SubmissionMetadataFormHandle = {
   getSnapshot: () => SubmissionMetadataWizardSnapshot;
   mergeInitial: (partial: Partial<SubmissionMetadataFormInitial>) => void;
   setArticleType: (value: string) => void;
+  setJournalId: (value: string) => void;
 };
 
 export function emptySubmissionMetadataInitial(): SubmissionMetadataFormInitial {
   return {
+    journalId: '',
     title: '',
     titleAr: '',
     abstract: '',
@@ -185,6 +192,7 @@ export function emptySubmissionMetadataInitial(): SubmissionMetadataFormInitial 
 }
 
 type SubmissionMetadataFormValues = {
+  journalId: string;
   title: string;
   titleAr: string;
   abstract: string;
@@ -230,6 +238,7 @@ function initialToFormValues(
   initial: SubmissionMetadataFormInitial,
 ): SubmissionMetadataFormValues {
   return {
+    journalId: initial.journalId ?? '',
     title: initial.title,
     titleAr: initial.titleAr,
     abstract: initial.abstract,
@@ -282,6 +291,8 @@ export const SubmissionMetadataForm = forwardRef<
     isCreate && 'hideSaveButton' in props ? props.hideSaveButton : false;
   const hideArticleType =
     isCreate && 'hideArticleType' in props ? props.hideArticleType : false;
+  const hideJournal =
+    isCreate && 'hideJournal' in props ? props.hideJournal : false;
   const inputVariant = wizardStep ? 'wizard' : 'form';
   const showMetadataSection = !wizardStep || wizardStep === 2;
   const showAuthorsSection = !wizardStep || wizardStep === 3;
@@ -611,6 +622,7 @@ export const SubmissionMetadataForm = forwardRef<
       const current = getValues();
       const merged: SubmissionMetadataFormInitial = {
         ...initial,
+        journalId: partial.journalId ?? current.journalId,
         title: partial.title ?? current.title,
         titleAr: partial.titleAr ?? current.titleAr,
         abstract: partial.abstract ?? current.abstract,
@@ -657,6 +669,14 @@ export const SubmissionMetadataForm = forwardRef<
     (value: string) => {
       setValue('articleType', value);
       clearFormErr('articleType');
+    },
+    [setValue, clearFormErr],
+  );
+
+  const setJournalId = useCallback(
+    (value: string) => {
+      setValue('journalId', value);
+      clearFormErr('journalId');
     },
     [setValue, clearFormErr],
   );
@@ -839,8 +859,16 @@ export const SubmissionMetadataForm = forwardRef<
       getSnapshot,
       mergeInitial,
       setArticleType,
+      setJournalId,
     }),
-    [save, validateWizardStep, getSnapshot, mergeInitial, setArticleType],
+    [
+      save,
+      validateWizardStep,
+      getSnapshot,
+      mergeInitial,
+      setArticleType,
+      setJournalId,
+    ],
   );
 
   const onKeywordSuggestions = useCallback(
@@ -930,6 +958,23 @@ export const SubmissionMetadataForm = forwardRef<
               wizardStep ? 'flex flex-col gap-4' : 'mt-4 flex flex-col gap-4'
             }
           >
+            {!hideJournal ? (
+              <Controller
+                name="journalId"
+                control={control}
+                render={({ field }) => (
+                  <SubmissionJournalPicker
+                    value={field.value}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      clearFormErr('journalId');
+                    }}
+                    disabled={!canEdit}
+                    invalid={hasErr('journalId')}
+                  />
+                )}
+              />
+            ) : null}
             {!hideArticleType ? (
               <label
                 className="flex flex-col gap-1 text-sm"

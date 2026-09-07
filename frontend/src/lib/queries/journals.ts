@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { apiJson } from '@/lib/api';
 import { publicJson } from '@/lib/public-api';
 import { queryKeys } from '@/lib/query-keys';
 import type { PublicationListItem } from '@/lib/queries/publications';
@@ -29,6 +30,29 @@ export type PortalJournal = {
   articleCount: number;
   latestIssue: PortalIssueSummary | null;
 };
+
+/** One option in the author's journal picker (`GET /submissions/journal-options`). */
+export type JournalOption = {
+  id: string;
+  slug: string;
+  titleAr: string;
+  titleEn: string;
+  disciplineLabel: string;
+};
+
+/**
+ * Journals an author may submit to. Authenticated and thinner than
+ * {@link useJournals}: the picker needs the `id` the submission stores, which
+ * the public portal payload deliberately does not carry.
+ */
+export function useJournalOptions() {
+  return useQuery({
+    queryKey: queryKeys.journalOptions,
+    queryFn: () => apiJson<JournalOption[]>('/submissions/journal-options'),
+    // Reference data — nine rows that change when a journal is founded.
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export function useJournals() {
   return useQuery({

@@ -144,6 +144,7 @@ function refineAbstractWordLimits(
 /** backend/src/submissions/dto/create-submission.dto.ts */
 export const createSubmissionSchema = z
   .object({
+    journalId: z.string().uuid(),
     title: z.string().trim().min(1).max(500),
     titleAr: optionalTrimmedMinMax(1, 500),
     abstract: z.string().trim().min(1).max(20000),
@@ -172,6 +173,7 @@ export const createSubmissionSchema = z
  */
 export const submissionMetadataPatchSchema = z
   .object({
+    journalId: z.string().uuid(),
     title: z.string().trim().min(1).max(500),
     titleAr: z.string().trim().min(1).max(500),
     abstract: z.string().trim().min(1).max(20000),

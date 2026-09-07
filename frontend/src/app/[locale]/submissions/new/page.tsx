@@ -51,7 +51,9 @@ import {
 } from '@/lib/pre-slug-staged-manuscript';
 
 import { useMe } from '@/lib/queries/auth';
+import { useJournalOptions } from '@/lib/queries/journals';
 import { SimpleSelect } from '@/components/ui/select';
+import { SubmissionJournalPicker } from '@/components/submission-journal-picker';
 import { fileFieldKey, fileRowCls } from '@/lib/submission-field-errors';
 import { SUBMISSION_ARTICLE_TYPES } from '@/lib/validation';
 import { Spinner } from '@/components/ui/spinner';
@@ -107,6 +109,14 @@ export default function NewSubmissionPage() {
   }, []);
 
   const [articleType, setArticleType] = useState('');
+  const [journalId, setJournalId] = useState('');
+  const { data: journalOptions } = useJournalOptions();
+  const selectedJournal = journalOptions?.find((j) => j.id === journalId);
+  const selectedJournalTitle = selectedJournal
+    ? locale === 'ar'
+      ? selectedJournal.titleAr
+      : selectedJournal.titleEn
+    : null;
 
   // Staging files state
   const [stagedFiles, setStagedFiles] = useState<
@@ -342,6 +352,17 @@ export default function NewSubmissionPage() {
     [clearErr],
   );
 
+  // Journal lives in the form's state like the article type does, so the
+  // create payload stays a single RHF submit; step 1 only mirrors it.
+  const syncJournal = useCallback(
+    (value: string) => {
+      setJournalId(value);
+      metadataFormRef.current?.setJournalId(value);
+      clearErr('journalId');
+    },
+    [clearErr],
+  );
+
   const collectStepErrors = useCallback(
     (currentStep: number): { errors: Set<string>; message: string | null } => {
       const errors = new Set<string>();
@@ -351,6 +372,10 @@ export default function NewSubmissionPage() {
       };
 
       if (currentStep === 1) {
+        if (!journalId) {
+          errors.add('journalId');
+          setFirst(tWf('validationJournalRequired'));
+        }
         if (!articleType) {
           errors.add('articleType');
           setFirst(t('validationArticleTypeRequired'));
@@ -381,7 +406,7 @@ export default function NewSubmissionPage() {
 
       return { errors, message };
     },
-    [articleType, stagedFiles, showConstructorManuscript, t],
+    [journalId, articleType, stagedFiles, showConstructorManuscript, t, tWf],
   );
 
   const validateStep = useCallback(
@@ -450,7 +475,10 @@ export default function NewSubmissionPage() {
   const save = useCallback(async () => {
     setFormSaving(true);
     try {
+      // Steps 1's fields live on the page while the form is unmounted, so push
+      // them back in before the form validates and posts.
       metadataFormRef.current?.setArticleType(articleType);
+      metadataFormRef.current?.setJournalId(journalId);
 
       for (let s = 1; s <= 5; s++) {
         if (!(await validateStep(s))) {
@@ -471,7 +499,14 @@ export default function NewSubmissionPage() {
     } finally {
       setFormSaving(false);
     }
-  }, [articleType, reportValidationError, resolveApiError, tWf, validateStep]);
+  }, [
+    articleType,
+    journalId,
+    reportValidationError,
+    resolveApiError,
+    tWf,
+    validateStep,
+  ]);
 
   const tWfAny = tWf as unknown as (k: string) => string;
   const cardCls =
@@ -658,6 +693,15 @@ export default function NewSubmissionPage() {
               </button>
             </div>
 
+            {/* Journal selector */}
+            <div className="border-t border-ink/[0.06] pt-6">
+              <SubmissionJournalPicker
+                value={journalId}
+                onChange={syncJournal}
+                invalid={hasErr('journalId')}
+              />
+            </div>
+
             {/* Article type selector */}
             <div
               className="border-t border-ink/[0.06] pt-6 flex flex-col gap-2"
@@ -729,6 +773,7 @@ export default function NewSubmissionPage() {
               keepMounted={step > 4}
               hideSaveButton
               hideArticleType
+              hideJournal
               fieldErrors={fieldErrors}
               clearFieldError={clearErr}
               onFieldErrorsChange={setFieldErrors}
@@ -917,6 +962,14 @@ export default function NewSubmissionPage() {
                     </button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                    <div>
+                      <span className="text-ink/50 font-semibold">
+                        {tWf('journalLabel')}:
+                      </span>{' '}
+                      <span className="text-ink font-bold">
+                        {selectedJournalTitle ?? '—'}
+                      </span>
+                    </div>
                     <div>
                       <span className="text-ink/50 font-semibold">
                         {tWf('articleType')}:

@@ -1153,6 +1153,7 @@ export default function SubmissionDetailPage() {
   const showAbstractSection = !showMetadataForm;
 
   const metadataFormInitial = {
+    journalId: sub.journalId ?? '',
     title: sub.title,
     titleAr: sub.titleAr ?? '',
     abstract: sub.abstract,

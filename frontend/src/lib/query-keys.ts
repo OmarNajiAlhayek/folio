@@ -17,6 +17,7 @@ export const queryKeys = {
   publicationRelated: (slug: string) =>
     ['publication', slug, 'related'] as const,
   journals: ['journals'] as const,
+  journalOptions: ['journals', 'options'] as const,
   journal: (slug: string) => ['journal', slug] as const,
   journalIssue: (slug: string, year: number, number: number) =>
     ['journal', slug, 'issue', year, number] as const,
