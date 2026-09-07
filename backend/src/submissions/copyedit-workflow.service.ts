@@ -319,12 +319,20 @@ export class CopyeditWorkflowService {
         const round =
           (await noteRepo.count({ where: { assignmentId: assignment.id } })) +
           1;
+        // Stamp from the database clock, not the API host clock.
+        // `submission_files.created_at` is written by Postgres `now()`, and
+        // `assertManuscriptRevisionAfterNote` compares the two directly — so a
+        // host clock running even slightly ahead makes a genuinely later
+        // upload look earlier than the note and rejects the author's revision.
+        const [{ now }] = await em.query<[{ now: Date }]>(
+          'SELECT now() AS now',
+        );
         const note = noteRepo.create({
           assignmentId: assignment.id,
           round,
           noteForAuthor: authorPart,
           noteToEditorOnly: (noteToEditorOnly ?? '').trim(),
-          submittedAt: new Date(),
+          submittedAt: now,
         });
         await noteRepo.save(note);
         assignment.status = CopyeditAssignmentStatus.AWAITING_AUTHOR;

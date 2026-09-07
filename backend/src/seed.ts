@@ -183,8 +183,11 @@ const SAMPLE_PUB3_META = {
   titleAr: 'أخلاقيات البحوث السريرية ذات العينات الصغيرة',
   abstractAr:
     'يناقش المقال تحديات الموافقة المستنيرة والسرية في الدراسات السريرية محدودة العينة، مع التركيز على سياقات المستشفيات التعليمية. يقدّم الباحثون توصيات عملية لمراجعات الأخلاقيات المؤسسية عند ضعف القدرة الإحصائية.',
-  keywords: 'clinical research, research ethics, small samples, IRB',
-  keywordsAr: 'بحوث سريرية, أخلاقيات, عينات صغيرة, لجان أخلاقيات',
+  // Exactly five per language — `assertReadyForSubmit` rejects any other count.
+  keywords:
+    'clinical research, research ethics, small samples, IRB, informed consent',
+  keywordsAr:
+    'بحوث سريرية, أخلاقيات, عينات صغيرة, لجان أخلاقيات, الموافقة المستنيرة',
 } as const;
 
 type SampleMetaOverrides = Pick<
@@ -1487,6 +1490,9 @@ async function run() {
       SubmissionStatus.REVISIONS_REQUESTED,
       undefined,
       'Please address the reviewers’ comments on methodology and expand the discussion before resubmitting.',
+      // Required since the revision-severity decision landed; matches the
+      // reviewer note above ("recommend major revisions").
+      { revisionSeverity: 'major' },
     );
     await submissionsService.addFile(
       s.slug!,

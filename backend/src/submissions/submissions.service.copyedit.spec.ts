@@ -40,6 +40,9 @@ import { notificationsServiceMock } from '../notifications/notifications.service
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import type { RequestUser } from '../common/types/request-user';
 
+/** Timestamp the mocked database clock returns for `SELECT now()`. */
+const DB_NOW = new Date('2030-06-01T12:00:00.000Z');
+
 describe('SubmissionsService copyedit workflow', () => {
   let service: SubmissionsService;
   let copyeditAssignmentsRepo: {
@@ -140,6 +143,8 @@ describe('SubmissionsService copyedit workflow', () => {
               }
               throw new Error('unexpected entity');
             },
+            // `submitCopyeditNote` stamps the note from the database clock.
+            query: jest.fn().mockResolvedValue([{ now: DB_NOW }]),
           };
           return fn(mockEm);
         }),
@@ -180,7 +185,17 @@ describe('SubmissionsService copyedit workflow', () => {
           provide: getRepositoryToken(CopyeditNote),
           useValue: copyeditNotesRepo,
         },
-        { provide: getRepositoryToken(User), useValue: {} },
+        {
+          provide: getRepositoryToken(User),
+          useValue: {
+            findOne: jest.fn().mockResolvedValue({
+              id: 'ce-user',
+              email: 'ce@test.dev',
+              displayName: 'CE',
+              preferredLocale: 'en',
+            }),
+          },
+        },
         {
           provide: getRepositoryToken(SectionEditorAssignment),
           useValue: {},
@@ -240,6 +255,31 @@ describe('SubmissionsService copyedit workflow', () => {
         '',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('stamps a copyedit note from the database clock, not the API host clock', async () => {
+    // Regression: `assertManuscriptRevisionAfterNote` compares this value
+    // against `submission_files.created_at`, which Postgres writes. Stamping
+    // the note from the Node clock made a later upload look earlier whenever
+    // the API host ran ahead of the database.
+    copyeditAssignmentsRepo.findOne.mockResolvedValue({
+      ...assignment,
+      status: CopyeditAssignmentStatus.ACTIVE,
+    });
+    copyeditNotesRepo.findOneOrFail.mockResolvedValue({ id: 'n2' });
+    const hostClock = new Date('2031-01-01T00:00:00.000Z');
+    jest.spyOn(global, 'Date').mockImplementation(() => hostClock as never);
+
+    await service.submitCopyeditNote(
+      assignment.slug!,
+      assignment.copyeditorId,
+      'Please clarify Table 2.',
+      '',
+    );
+
+    expect(copyeditNotesRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ submittedAt: DB_NOW }),
+    );
   });
 
   it('markCopyeditAuthorReady requires manuscript after latest note', async () => {
