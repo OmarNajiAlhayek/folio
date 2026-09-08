@@ -1,58 +1,71 @@
-'use client';
-
-import { useLocale, useTranslations } from 'next-intl';
-import { useParams } from 'next/navigation';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { ChevronRight, FileText, UserRound } from 'lucide-react';
-import { ApiErrorState } from '@/components/api-error-state';
-import { getApiErrorKind } from '@/lib/api-error-message';
-import { useApiErrorMessages } from '@/lib/use-api-error-messages';
-import { LoadingCenter } from '@/components/ui/spinner';
 import { formatMediumDate } from '@/lib/format-date';
+import type { IssueWithArticles } from '@/lib/journal-types';
 import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
-import { useJournalIssue } from '@/lib/queries/journals';
+import { serverPublicJson } from '@/lib/server-api';
+import { absoluteLocaleUrl, localeAlternates } from '@/lib/site-url';
 
-export default function JournalIssuePage() {
-  const t = useTranslations('Journals');
-  const locale = useLocale();
-  const isAr = locale.startsWith('ar');
-  const params = useParams<{ slug: string; year: string; number: string }>();
-  const slug = params?.slug ?? '';
-  const year = Number(params?.year);
-  const number = Number(params?.number);
-  const { resolve: resolveApiError } = useApiErrorMessages();
-  const tApi = useTranslations('ApiErrors');
-  const { data, isLoading, error, refetch } = useJournalIssue(
-    slug,
-    year,
-    number,
+type Props = {
+  params: Promise<{
+    locale: string;
+    slug: string;
+    year: string;
+    number: string;
+  }>;
+};
+
+/**
+ * One issue's table of contents.
+ *
+ * `year` and `number` address the issue rather than an id, because
+ * `/journals/engj/issues/2026/3` is the public URL contract. A non-numeric
+ * segment is a 404 here rather than a wasted API call — the backend rejects
+ * out-of-range values the same way.
+ */
+async function loadIssue(
+  slug: string,
+  year: string,
+  number: string,
+): Promise<IssueWithArticles | null> {
+  if (!/^\d+$/.test(year) || !/^\d+$/.test(number)) return null;
+  return serverPublicJson<IssueWithArticles>(
+    `/public/journals/${encodeURIComponent(slug)}/issues/${year}/${number}`,
   );
+}
 
-  if (isLoading && !error) {
-    return (
-      <main className={PAGE_SHELL}>
-        <LoadingCenter label={t('loading')} className="mt-8 text-ink/70" />
-      </main>
-    );
-  }
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale, slug, year, number } = await params;
+  const data = await loadIssue(slug, year, number);
+  if (!data) return {};
 
-  if (error) {
-    const kind = getApiErrorKind(error);
-    return (
-      <ApiErrorState
-        message={resolveApiError(error, t('loadFailed'))}
-        error={error}
-        title={kind === 'notFound' ? t('notFound') : undefined}
-        hint={kind === 'rateLimit' ? tApi('rateLimitHint') : undefined}
-        onRetry={() => void refetch()}
-        retryLabel={tApi('retry')}
-        backHref="/journals"
-        backLabel={t('back')}
-      />
-    );
-  }
-  if (!data) return null;
+  const isAr = locale.startsWith('ar');
+  const journalTitle = isAr ? data.journal.titleAr : data.journal.titleEn;
+  const citation = isAr ? data.issue.citationAr : data.issue.citationEn;
+  const path = `/journals/${slug}/issues/${year}/${number}`;
 
+  return {
+    title: `${journalTitle} — ${citation}`,
+    description: (isAr ? data.issue.titleAr : data.issue.titleEn) ?? undefined,
+    alternates: {
+      canonical: absoluteLocaleUrl(locale, path) ?? undefined,
+      languages: localeAlternates(path),
+    },
+  };
+}
+
+export default async function JournalIssuePage({ params }: Props) {
+  const { locale, slug, year, number } = await params;
+  setRequestLocale(locale);
+
+  const data = await loadIssue(slug, year, number);
+  if (!data) notFound();
+
+  const t = await getTranslations({ locale, namespace: 'Journals' });
+  const isAr = locale.startsWith('ar');
   const { journal, issue, articles } = data;
   const journalTitle = isAr ? journal.titleAr : journal.titleEn;
   const issueTitle = isAr ? issue.titleAr : issue.titleEn;

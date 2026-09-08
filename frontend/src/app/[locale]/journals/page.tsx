@@ -1,48 +1,45 @@
-'use client';
-
-import { useLocale, useTranslations } from 'next-intl';
+import type { Metadata } from 'next';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { BookOpen, Library } from 'lucide-react';
-import { ApiErrorState } from '@/components/api-error-state';
-import { getApiErrorKind } from '@/lib/api-error-message';
-import { useApiErrorMessages } from '@/lib/use-api-error-messages';
-import { LoadingCenter } from '@/components/ui/spinner';
+import type { PortalJournal } from '@/lib/journal-types';
 import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
-import { useJournals } from '@/lib/queries/journals';
+import { serverPublicJson } from '@/lib/server-api';
+import { absoluteLocaleUrl, localeAlternates } from '@/lib/site-url';
 
-export default function JournalsPortalPage() {
-  const t = useTranslations('Journals');
-  const locale = useLocale();
+type Props = {
+  params: Promise<{ locale: string }>;
+};
+
+/**
+ * The press portal. A server component: unauthenticated, read-only, and one of
+ * the three routes a crawler needs to reach the archive at all.
+ */
+
+async function loadJournals(): Promise<PortalJournal[]> {
+  return (await serverPublicJson<PortalJournal[]>('/public/journals')) ?? [];
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'Journals' });
+  return {
+    title: t('title'),
+    description: t('hint'),
+    alternates: {
+      canonical: absoluteLocaleUrl(locale, '/journals') ?? undefined,
+      languages: localeAlternates('/journals'),
+    },
+  };
+}
+
+export default async function JournalsPortalPage({ params }: Props) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
+  const t = await getTranslations({ locale, namespace: 'Journals' });
   const isAr = locale.startsWith('ar');
-  const { resolve: resolveApiError } = useApiErrorMessages();
-  const tApi = useTranslations('ApiErrors');
-  const { data, isLoading, error, refetch } = useJournals();
-
-  if (isLoading && !error) {
-    return (
-      <main className={PAGE_SHELL}>
-        <LoadingCenter label={t('loading')} className="mt-8 text-ink/70" />
-      </main>
-    );
-  }
-
-  if (error) {
-    const kind = getApiErrorKind(error);
-    return (
-      <ApiErrorState
-        message={resolveApiError(error, t('loadFailed'))}
-        error={error}
-        title={kind === 'notFound' ? t('notFound') : undefined}
-        hint={kind === 'rateLimit' ? tApi('rateLimitHint') : undefined}
-        onRetry={() => void refetch()}
-        retryLabel={tApi('retry')}
-        backHref="/journals"
-        backLabel={t('back')}
-      />
-    );
-  }
-
-  const journals = data ?? [];
+  const journals = await loadJournals();
 
   return (
     <main className={PAGE_SHELL}>

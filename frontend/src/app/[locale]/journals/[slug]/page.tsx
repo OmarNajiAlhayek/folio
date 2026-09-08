@@ -1,52 +1,55 @@
-'use client';
-
-import { useLocale, useTranslations } from 'next-intl';
-import { useParams } from 'next/navigation';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { BookOpen, ChevronRight, Library } from 'lucide-react';
-import { ApiErrorState } from '@/components/api-error-state';
-import { getApiErrorKind } from '@/lib/api-error-message';
-import { useApiErrorMessages } from '@/lib/use-api-error-messages';
-import { LoadingCenter } from '@/components/ui/spinner';
 import { formatMediumDate } from '@/lib/format-date';
+import type { JournalWithIssues } from '@/lib/journal-types';
 import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
-import { useJournal } from '@/lib/queries/journals';
+import { serverPublicJson } from '@/lib/server-api';
+import { absoluteLocaleUrl, localeAlternates } from '@/lib/site-url';
 
-export default function JournalPage() {
-  const t = useTranslations('Journals');
-  const locale = useLocale();
+type Props = {
+  params: Promise<{ locale: string; slug: string }>;
+};
+
+async function loadJournal(slug: string): Promise<JournalWithIssues | null> {
+  return serverPublicJson<JournalWithIssues>(
+    `/public/journals/${encodeURIComponent(slug)}`,
+  );
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const data = await loadJournal(slug);
+  if (!data) return {};
+
   const isAr = locale.startsWith('ar');
-  const params = useParams<{ slug: string }>();
-  const slug = params?.slug ?? '';
-  const { resolve: resolveApiError } = useApiErrorMessages();
-  const tApi = useTranslations('ApiErrors');
-  const { data, isLoading, error, refetch } = useJournal(slug);
+  const { journal } = data;
+  const title = isAr ? journal.titleAr : journal.titleEn;
+  const description =
+    (isAr ? journal.descriptionAr : journal.descriptionEn) ?? undefined;
+  const path = `/journals/${slug}`;
 
-  if (isLoading && !error) {
-    return (
-      <main className={PAGE_SHELL}>
-        <LoadingCenter label={t('loading')} className="mt-8 text-ink/70" />
-      </main>
-    );
-  }
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: absoluteLocaleUrl(locale, path) ?? undefined,
+      languages: localeAlternates(path),
+    },
+  };
+}
 
-  if (error) {
-    const kind = getApiErrorKind(error);
-    return (
-      <ApiErrorState
-        message={resolveApiError(error, t('loadFailed'))}
-        error={error}
-        title={kind === 'notFound' ? t('notFound') : undefined}
-        hint={kind === 'rateLimit' ? tApi('rateLimitHint') : undefined}
-        onRetry={() => void refetch()}
-        retryLabel={tApi('retry')}
-        backHref="/journals"
-        backLabel={t('back')}
-      />
-    );
-  }
-  if (!data) return null;
+export default async function JournalPage({ params }: Props) {
+  const { locale, slug } = await params;
+  setRequestLocale(locale);
 
+  const data = await loadJournal(slug);
+  if (!data) notFound();
+
+  const t = await getTranslations({ locale, namespace: 'Journals' });
+  const isAr = locale.startsWith('ar');
   const { journal, issues } = data;
 
   return (
