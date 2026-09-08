@@ -22,6 +22,7 @@ import {
 } from '../submissions/publication-catalog-search.util';
 import { SubmissionArticleType } from '../entities/submission-article-type.enum';
 import { ARABIC_DISCIPLINE_LABELS } from '../ai/discipline-labels';
+import { toPublicArticleCitation } from './public-article-citation';
 
 @ApiTags('public')
 @Controller('public/submissions')
@@ -145,6 +146,7 @@ export class PublicSubmissionsController {
       disciplines: s.disciplines,
       articleType: s.articleType,
       publishedAt: s.publishedAt,
+      ...toPublicArticleCitation(s),
       author: s.author
         ? {
             displayName: s.author.displayName,

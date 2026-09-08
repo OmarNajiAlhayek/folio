@@ -241,7 +241,7 @@ export class PublicationCatalogService {
   async findPublishedOne(slug: string): Promise<Submission> {
     const s = await this.submissionsRepo.findOne({
       where: { slug, status: SubmissionStatus.PUBLISHED },
-      relations: ['author', 'files'],
+      relations: ['author', 'files', 'journal', 'issue'],
     });
     if (!s) {
       throw new NotFoundException({
