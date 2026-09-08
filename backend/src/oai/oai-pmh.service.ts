@@ -5,6 +5,10 @@ import { In, IsNull, Not, Repository } from 'typeorm';
 import { Journal } from '../entities/journal.entity';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
+import {
+  instantToNaiveColumn,
+  naiveColumnToInstant,
+} from './oai-naive-timestamp';
 
 /** Records returned per response before a resumptionToken is issued. */
 export const OAI_PAGE_SIZE = 100;
@@ -52,6 +56,25 @@ export type OaiItem = {
  * date — everything an OAI deleted-record header needs. Omitting them would
  * leave DOAJ and BASE serving a retracted paper indefinitely, because a
  * harvester that is never told about a deletion never performs one.
+ *
+ * KNOWN LIMITATION — retracting does not move `submissions.updated_at`.
+ * Verified against the running stack on 2026-09-08: after retracting a demo
+ * article, its `updated_at` was still the value written when it was seeded.
+ * `claimStatusTransition` performs the status flip through an
+ * `UpdateQueryBuilder` and the `save()` that follows does not advance the
+ * column either.
+ *
+ * The consequence is specific and worth stating plainly: the deleted record is
+ * correct in `GetRecord` and in any **full** `ListRecords`, but an
+ * **incremental** harvest (`?from=<previous harvest>`) will not see it, because
+ * the tombstone's datestamp still predates the harvester's last visit. Most
+ * aggregators re-harvest fully often enough that the retraction propagates
+ * eventually, but not promptly.
+ *
+ * Fixing it belongs in the retraction path, not here — an OAI datestamp can
+ * only report when the record changed, it cannot decide it. Left alone
+ * deliberately rather than patched blind: that transaction is editorial
+ * workflow and is outside this phase.
  */
 @Injectable()
 export class OaiPmhService {
@@ -137,7 +160,10 @@ export class OaiPmhService {
    * value, so a corrected abstract or a retraction has to move it forward.
    */
   datestampOf(s: Submission): Date {
-    return s.updatedAt ?? s.publishedAt ?? new Date();
+    // updated_at is a naive column and comes back displaced by the server's UTC
+    // offset; published_at is timestamptz and is already an instant.
+    if (s.updatedAt) return naiveColumnToInstant(s.updatedAt);
+    return s.publishedAt ?? new Date();
   }
 
   async listSets(): Promise<Journal[]> {
@@ -180,10 +206,14 @@ export class OaiPmhService {
       qb.andWhere('journal.slug = :oaiSet', { oaiSet: filters.set });
     }
     if (filters.from) {
-      qb.andWhere('s.updatedAt >= :oaiFrom', { oaiFrom: filters.from });
+      qb.andWhere('s.updatedAt >= :oaiFrom', {
+        oaiFrom: instantToNaiveColumn(filters.from),
+      });
     }
     if (filters.until) {
-      qb.andWhere('s.updatedAt <= :oaiUntil', { oaiUntil: filters.until });
+      qb.andWhere('s.updatedAt <= :oaiUntil', {
+        oaiUntil: instantToNaiveColumn(filters.until),
+      });
     }
 
     qb.orderBy('s.updatedAt', 'ASC').addOrderBy('s.id', 'ASC');
