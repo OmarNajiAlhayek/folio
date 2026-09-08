@@ -22,6 +22,7 @@ Central map of the Folio (Damascus University Journal) documentation. New here? 
 | [`../SECURITY.md`](../SECURITY.md) | Security model, secret handling, vulnerability reporting |
 | [`OBSERVABILITY.md`](./OBSERVABILITY.md) | Structured logs, trace/request correlation, OTLP export |
 | [`slo.md`](./slo.md) | Production SLO tiers (distinct from local perf baselines) |
+| [`EXTERNAL-ACTIONS.md`](./EXTERNAL-ACTIONS.md) | Registrations, fees and institutional decisions that cannot be done from the repository |
 
 ## Product and API
 

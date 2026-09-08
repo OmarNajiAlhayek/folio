@@ -33,6 +33,9 @@
     "packages/shared/**/*.ts": [
       "prettier --write --config backend/.prettierrc"
     ],
+    "packages/nest-observability/**/*.ts": [
+      "prettier --write --config backend/.prettierrc"
+    ],
     "backend/**/*.ts": [
       "eslint --fix --config backend/eslint.config.mjs"
     ],
