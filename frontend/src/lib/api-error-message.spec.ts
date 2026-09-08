@@ -1,165 +1,172 @@
-import { describe, expect, it } from "vitest";
-import { ApiError } from "@/lib/api-response";
+import { describe, expect, it } from 'vitest';
+import { ApiError } from '@/lib/api-response';
 import {
   getApiErrorKind,
   isCsrfApiError,
   isUserFacingApiMessage,
   resolveApiErrorMessage,
-} from "@/lib/api-error-message";
+} from '@/lib/api-error-message';
 
 const MESSAGES = {
-  tooManyRequests: "Slow down.",
-  notFound: "Missing.",
-  unauthorized: "Sign in.",
-  invalidCredentials: "Wrong login.",
-  forbidden: "Denied.",
-  badRequest: "Invalid.",
-  serverError: "Server broke.",
-  networkError: "Offline.",
+  tooManyRequests: 'Slow down.',
+  notFound: 'Missing.',
+  unauthorized: 'Sign in.',
+  invalidCredentials: 'Wrong login.',
+  forbidden: 'Denied.',
+  badRequest: 'Invalid.',
+  serverError: 'Server broke.',
+  networkError: 'Offline.',
+  orcidSignInRequired: 'Sign in with ORCID.',
 };
 
-describe("resolveApiErrorMessage", () => {
-  it("maps 429 to tooManyRequests", () => {
-    const msg = resolveApiErrorMessage(
-      new ApiError("ThrottlerException: Too Many Requests", "TOO_MANY_REQUESTS", 429),
-      "fallback",
-      MESSAGES,
-    );
-    expect(msg).toBe("Slow down.");
-  });
-
-  it("maps 404 to notFound", () => {
-    const msg = resolveApiErrorMessage(
-      new ApiError("Submission not found", "NOT_FOUND", 404),
-      "fallback",
-      MESSAGES,
-    );
-    expect(msg).toBe("Missing.");
-  });
-
-  it("keeps user-facing validation messages", () => {
-    const msg = resolveApiErrorMessage(
-      new ApiError("Title is required", "VALIDATION_ERROR", 400),
-      "fallback",
-      MESSAGES,
-    );
-    expect(msg).toBe("Title is required");
-  });
-
-  it("maps login failure to translated invalidCredentials", () => {
-    const msg = resolveApiErrorMessage(
-      new ApiError("Invalid email or password", "UNAUTHORIZED", 401),
-      "Login failed",
-      MESSAGES,
-    );
-    expect(msg).toBe("Wrong login.");
-  });
-
-  it("maps generic Unauthorized to translated copy", () => {
-    const msg = resolveApiErrorMessage(
-      new ApiError("Unauthorized", "UNAUTHORIZED", 401),
-      "fallback",
-      MESSAGES,
-    );
-    expect(msg).toBe("Sign in.");
-  });
-
-  it("uses fallback for unknown errors", () => {
-    expect(resolveApiErrorMessage(new Error("x"), "fallback", MESSAGES)).toBe(
-      "fallback",
-    );
-  });
-
-  it("uses fallback for CONSTRUCTOR_IMPORT_NO_CONTENT instead of English API text", () => {
+describe('resolveApiErrorMessage', () => {
+  it('maps 429 to tooManyRequests', () => {
     const msg = resolveApiErrorMessage(
       new ApiError(
-        "No recognizable content was found in this Word file.",
-        "CONSTRUCTOR_IMPORT_NO_CONTENT",
-        400,
+        'ThrottlerException: Too Many Requests',
+        'TOO_MANY_REQUESTS',
+        429,
       ),
-      "محتوى غير معروف",
+      'fallback',
       MESSAGES,
     );
-    expect(msg).toBe("محتوى غير معروف");
+    expect(msg).toBe('Slow down.');
   });
 
-  it("uses fallback for AI_SERVICE_UNAVAILABLE instead of English API text", () => {
+  it('maps 404 to notFound', () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError('Submission not found', 'NOT_FOUND', 404),
+      'fallback',
+      MESSAGES,
+    );
+    expect(msg).toBe('Missing.');
+  });
+
+  it('keeps user-facing validation messages', () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError('Title is required', 'VALIDATION_ERROR', 400),
+      'fallback',
+      MESSAGES,
+    );
+    expect(msg).toBe('Title is required');
+  });
+
+  it('maps login failure to translated invalidCredentials', () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError('Invalid email or password', 'UNAUTHORIZED', 401),
+      'Login failed',
+      MESSAGES,
+    );
+    expect(msg).toBe('Wrong login.');
+  });
+
+  it('maps generic Unauthorized to translated copy', () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError('Unauthorized', 'UNAUTHORIZED', 401),
+      'fallback',
+      MESSAGES,
+    );
+    expect(msg).toBe('Sign in.');
+  });
+
+  it('uses fallback for unknown errors', () => {
+    expect(resolveApiErrorMessage(new Error('x'), 'fallback', MESSAGES)).toBe(
+      'fallback',
+    );
+  });
+
+  it('uses fallback for CONSTRUCTOR_IMPORT_NO_CONTENT instead of English API text', () => {
     const msg = resolveApiErrorMessage(
       new ApiError(
-        "AI keyword suggestion service is not configured",
-        "AI_SERVICE_UNAVAILABLE",
+        'No recognizable content was found in this Word file.',
+        'CONSTRUCTOR_IMPORT_NO_CONTENT',
         400,
       ),
-      "الذكاء الاصطناعي غير مفعّل",
+      'محتوى غير معروف',
       MESSAGES,
     );
-    expect(msg).toBe("الذكاء الاصطناعي غير مفعّل");
+    expect(msg).toBe('محتوى غير معروف');
   });
 
-  it("uses fallback for CSRF errors instead of raw message", () => {
+  it('uses fallback for AI_SERVICE_UNAVAILABLE instead of English API text', () => {
     const msg = resolveApiErrorMessage(
-      new ApiError("Invalid or missing CSRF token", "CSRF_TOKEN_INVALID", 403),
-      "Could not update status",
+      new ApiError(
+        'AI keyword suggestion service is not configured',
+        'AI_SERVICE_UNAVAILABLE',
+        400,
+      ),
+      'الذكاء الاصطناعي غير مفعّل',
       MESSAGES,
     );
-    expect(msg).toBe("Could not update status");
+    expect(msg).toBe('الذكاء الاصطناعي غير مفعّل');
   });
 
-  it("uses codeMessages for submission incomplete errors instead of English API text", () => {
+  it('uses fallback for CSRF errors instead of raw message', () => {
+    const msg = resolveApiErrorMessage(
+      new ApiError('Invalid or missing CSRF token', 'CSRF_TOKEN_INVALID', 403),
+      'Could not update status',
+      MESSAGES,
+    );
+    expect(msg).toBe('Could not update status');
+  });
+
+  it('uses codeMessages for submission incomplete errors instead of English API text', () => {
     const msg = resolveApiErrorMessage(
       new ApiError(
         'Provide a conflict-of-interest statement (or "None declared")',
-        "SUBMISSION_INCOMPLETE_COI",
+        'SUBMISSION_INCOMPLETE_COI',
         400,
       ),
-      "فشل الإرسال",
+      'فشل الإرسال',
       MESSAGES,
       {
-        SUBMISSION_INCOMPLETE_COI: "أدخل بيان تعارض المصالح (أو «لا يوجد»).",
+        SUBMISSION_INCOMPLETE_COI: 'أدخل بيان تعارض المصالح (أو «لا يوجد»).',
       },
     );
-    expect(msg).toBe("أدخل بيان تعارض المصالح (أو «لا يوجد»).");
+    expect(msg).toBe('أدخل بيان تعارض المصالح (أو «لا يوجد»).');
   });
 });
 
-describe("isUserFacingApiMessage", () => {
-  it("rejects throttler strings", () => {
-    expect(isUserFacingApiMessage("ThrottlerException: Too Many Requests")).toBe(
-      false,
-    );
-  });
-
-  it("rejects generic Unauthorized", () => {
-    expect(isUserFacingApiMessage("Unauthorized")).toBe(false);
-  });
-
-  it("rejects CSRF strings", () => {
-    expect(isUserFacingApiMessage("Invalid or missing CSRF token")).toBe(false);
-  });
-
-  it("rejects English AI not-configured strings", () => {
+describe('isUserFacingApiMessage', () => {
+  it('rejects throttler strings', () => {
     expect(
-      isUserFacingApiMessage("AI keyword suggestion service is not configured"),
+      isUserFacingApiMessage('ThrottlerException: Too Many Requests'),
+    ).toBe(false);
+  });
+
+  it('rejects generic Unauthorized', () => {
+    expect(isUserFacingApiMessage('Unauthorized')).toBe(false);
+  });
+
+  it('rejects CSRF strings', () => {
+    expect(isUserFacingApiMessage('Invalid or missing CSRF token')).toBe(false);
+  });
+
+  it('rejects English AI not-configured strings', () => {
+    expect(
+      isUserFacingApiMessage('AI keyword suggestion service is not configured'),
     ).toBe(false);
   });
 });
 
-describe("isCsrfApiError", () => {
-  it("detects CSRF_TOKEN_INVALID code", () => {
+describe('isCsrfApiError', () => {
+  it('detects CSRF_TOKEN_INVALID code', () => {
     expect(
       isCsrfApiError(
-        new ApiError("Invalid or missing CSRF token", "CSRF_TOKEN_INVALID", 403),
+        new ApiError(
+          'Invalid or missing CSRF token',
+          'CSRF_TOKEN_INVALID',
+          403,
+        ),
       ),
     ).toBe(true);
   });
 });
 
-describe("getApiErrorKind", () => {
-  it("detects rate limit", () => {
-    expect(
-      getApiErrorKind(
-        new ApiError("x", "TOO_MANY_REQUESTS", 429),
-      ),
-    ).toBe("rateLimit");
+describe('getApiErrorKind', () => {
+  it('detects rate limit', () => {
+    expect(getApiErrorKind(new ApiError('x', 'TOO_MANY_REQUESTS', 429))).toBe(
+      'rateLimit',
+    );
   });
 });

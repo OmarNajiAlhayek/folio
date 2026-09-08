@@ -8,6 +8,7 @@
     "start": "next start -p 5240",
     "analyze": "cross-env ANALYZE=true next build",
     "lint": "eslint",
+    "lint:ci": "eslint .",
     "test:unit": "vitest run",
     "e2e:install": "playwright install chromium",
     "test:e2e": "playwright test --reporter=list",

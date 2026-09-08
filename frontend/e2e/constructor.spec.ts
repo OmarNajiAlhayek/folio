@@ -88,7 +88,9 @@ test('pre-slug to post-slug transition clears local draft and persists', async (
   await page.getByTestId('constructor-continue-submission').click();
   await expect(page).toHaveURL(/\/en\/submissions\/new$/);
 
-  await expect(page.getByDisplayValue(titleEn)).toBeVisible();
+  // `getByDisplayValue` is a Testing Library API, not a Playwright one — this
+  // threw a TypeError rather than asserting anything.
+  await expect(page.locator('input[name="title"]')).toHaveValue(titleEn);
   await expect(page.getByText(/Selected:/i)).toBeVisible();
   await expect(page.getByText(/\.docx/i).first()).toBeVisible();
   await expect(page.getByText(/Word Constructor/i)).toBeVisible();
@@ -554,7 +556,9 @@ test('expanded section kinds: IMRaD preset, table note, acknowledgments, numbere
 
   await openConstructorAddPicker(page);
   await page.getByTestId('constructor-add-preset-introduction').click();
-  await expect(page.getByDisplayValue('Introduction')).toBeVisible();
+  await expect(page.getByPlaceholder('Heading text…').first()).toHaveValue(
+    'Introduction',
+  );
 
   await openConstructorAddPicker(page);
   await page.getByTestId('constructor-add-kind-table').click();
