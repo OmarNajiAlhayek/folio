@@ -10,7 +10,7 @@ import {
 /**
  * Sitemap for the public archive.
  *
- * Empty until `NEXT_PUBLIC_SITE_URL` is configured — a sitemap of `localhost`
+ * Empty until `PUBLIC_SITE_URL` is configured — a sitemap of `localhost`
  * URLs is worse than no sitemap, and a preview deployment must not advertise
  * itself. Turning it on is docs/EXTERNAL-ACTIONS.md A3, and submitting it to
  * Search Console is A4.
