@@ -6,6 +6,10 @@ import {
   useQuery,
 } from '@tanstack/react-query';
 import { publicJson } from '@/lib/public-api';
+import type {
+  PublicationDetail,
+  PublicationListItem,
+} from '@/lib/publication-types';
 import {
   buildPublicSubmissionsQuery,
   publicationCatalogUsesSemanticSearch,
@@ -17,24 +21,7 @@ export const PUBLICATION_CATALOG_PAGE_SIZE = 20;
 /** Matches backend default for semantic catalog search (max 30). */
 export const PUBLICATION_SEMANTIC_DEFAULT_LIMIT = 20;
 
-export type PublicationListItem = {
-  id: string;
-  slug: string | null;
-  title: string;
-  titleAr?: string | null;
-  abstract: string;
-  abstractAr?: string | null;
-  articleType?: string | null;
-  keywords?: string | null;
-  keywordsAr?: string | null;
-  disciplines?: string[];
-  /** Journal this article was published in; null if the query did not load it. */
-  journal?: { slug: string; titleAr: string; titleEn: string } | null;
-  publishedAt: string | null;
-  author?: { displayName: string };
-  searchSnippet?: string;
-  searchScore?: number;
-};
+export type { PublicationListItem } from '@/lib/publication-types';
 
 export type PublicationCatalogPage = {
   items: PublicationListItem[];
@@ -43,21 +30,7 @@ export type PublicationCatalogPage = {
   offset: number;
 };
 
-export type PublicationDetail = {
-  id: string;
-  slug: string | null;
-  title: string;
-  titleAr?: string | null;
-  abstract: string;
-  abstractAr?: string | null;
-  disciplines?: string[];
-  articleType?: string | null;
-  keywords?: string | null;
-  keywordsAr?: string | null;
-  publishedAt: string | null;
-  author?: { displayName: string };
-  files: { id: string; originalName: string; mimeType: string }[];
-};
+export type { PublicationDetail } from '@/lib/publication-types';
 
 import type { RelatedPublication } from '@/components/related-publications';
 
