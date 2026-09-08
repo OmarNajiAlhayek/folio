@@ -12,6 +12,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SubmissionsModule } from './submissions/submissions.module';
 import { PublicModule } from './public/public.module';
+import { OaiModule } from './oai/oai.module';
 import { RbacModule } from './rbac/rbac.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { AiJobsModule } from './ai-jobs/ai-jobs.module';
@@ -79,6 +80,7 @@ import {
     SubmissionsModule,
     JournalSettingsModule,
     PublicModule,
+    OaiModule,
     AdminEmailModule,
     NotificationsModule,
   ],
