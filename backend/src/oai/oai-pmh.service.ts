@@ -81,7 +81,9 @@ export class OaiPmhService {
 
     let host = '';
     try {
-      host = new URL(siteUrl).host;
+      // hostname, not host: an OAI namespace identifier must be a domain
+      // name, and a :port would make every record identifier spec-invalid.
+      host = new URL(siteUrl).hostname;
     } catch {
       return { missing: ['PUBLIC_SITE_URL (not a valid absolute URL)'] };
     }
@@ -172,19 +174,19 @@ export class OaiPmhService {
         oaiStatuses: [SubmissionStatus.PUBLISHED, SubmissionStatus.RETRACTED],
       })
       .andWhere('s.slug IS NOT NULL')
-      .andWhere('s.published_at IS NOT NULL');
+      .andWhere('s.publishedAt IS NOT NULL');
 
     if (filters.set) {
       qb.andWhere('journal.slug = :oaiSet', { oaiSet: filters.set });
     }
     if (filters.from) {
-      qb.andWhere('s.updated_at >= :oaiFrom', { oaiFrom: filters.from });
+      qb.andWhere('s.updatedAt >= :oaiFrom', { oaiFrom: filters.from });
     }
     if (filters.until) {
-      qb.andWhere('s.updated_at <= :oaiUntil', { oaiUntil: filters.until });
+      qb.andWhere('s.updatedAt <= :oaiUntil', { oaiUntil: filters.until });
     }
 
-    qb.orderBy('s.updated_at', 'ASC').addOrderBy('s.id', 'ASC');
+    qb.orderBy('s.updatedAt', 'ASC').addOrderBy('s.id', 'ASC');
 
     const total = await qb.getCount();
     const rows = await qb.skip(offset).take(limit).getMany();
