@@ -14,4 +14,10 @@ export {
 } from './observability-env';
 export { RequestContextMiddleware } from './request-context.middleware';
 export { createLogMixin } from './log-mixin';
+export {
+  redactSensitiveHeaders,
+  REDACTED,
+  SENSITIVE_HEADERS,
+  type HeaderBag,
+} from './redact-headers';
 export { withRootSpan } from './root-span';
