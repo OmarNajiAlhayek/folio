@@ -37,10 +37,10 @@
       "prettier --write --config backend/.prettierrc"
     ],
     "backend/**/*.ts": [
-      "eslint --fix --config backend/eslint.config.mjs"
+      "node backend/node_modules/eslint/bin/eslint.js --fix --config backend/eslint.config.mjs"
     ],
     "frontend/**/*.{ts,tsx}": [
-      "eslint --fix --config frontend/eslint.config.mjs"
+      "node frontend/node_modules/eslint/bin/eslint.js --fix --config frontend/eslint.config.mjs"
     ]
   }
 }

@@ -41,7 +41,7 @@ export class CopyeditAssignment extends BaseEntity {
   @Column({ type: 'varchar', length: 32, default: 'active' })
   status: CopyeditAssignmentStatus;
 
-  @CreateDateColumn({ name: 'assigned_at' })
+  @CreateDateColumn({ name: 'assigned_at', type: 'timestamptz' })
   assignedAt: Date;
 
   @OneToMany(() => CopyeditNote, (n) => n.assignment)

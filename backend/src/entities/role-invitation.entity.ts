@@ -40,7 +40,7 @@ export class RoleInvitation extends BaseEntity {
   })
   status: RoleInvitationStatus;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
   @Column({ name: 'resolved_at', type: 'timestamptz', nullable: true })

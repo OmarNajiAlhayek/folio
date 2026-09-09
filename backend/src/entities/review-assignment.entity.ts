@@ -51,7 +51,7 @@ export class ReviewAssignment extends BaseEntity {
   })
   status: AssignmentStatus;
 
-  @CreateDateColumn({ name: 'assigned_at' })
+  @CreateDateColumn({ name: 'assigned_at', type: 'timestamptz' })
   assignedAt: Date;
 
   /** When the reviewer accepted or declined the invitation. Null while `invited`. */

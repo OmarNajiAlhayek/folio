@@ -71,6 +71,6 @@ export class SubmissionFile extends BaseEntity {
   @JoinColumn({ name: 'released_by_id' })
   releasedBy: User | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
