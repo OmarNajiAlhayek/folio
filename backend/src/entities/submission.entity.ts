@@ -275,10 +275,15 @@ export class Submission extends BaseEntity {
   })
   reviewMethod: SubmissionReviewMethod;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  /**
+   * Modification stamp. `timestamptz` since `SubmissionTimestampsUtc` — a naive
+   * column could not say which instant it held, because TypeORM wrote local
+   * wall clock into it and SQL `now()` wrote UTC.
+   */
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   @Column({ name: 'published_at', type: 'timestamptz', nullable: true })

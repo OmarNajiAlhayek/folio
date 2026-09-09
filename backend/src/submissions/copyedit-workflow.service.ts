@@ -673,6 +673,12 @@ export class CopyeditWorkflowService {
         SubmissionStatus.RETRACTED,
       );
       s.status = SubmissionStatus.RETRACTED;
+      // `s` was read before the claim, so its `updatedAt` is the pre-retraction
+      // value; `save` writes that back verbatim and undoes the stamp the claim
+      // just advanced. Refresh it here so the modification time survives.
+      // A retraction that does not move `updated_at` is invisible to an
+      // incremental OAI harvest, which is how aggregators learn to drop it.
+      s.updatedAt = new Date();
       await clearPublicSubmissionFiles(em, s.id);
       const row = await em.getRepository(Submission).save(s);
       const n = await this.events.enqueueSubmissionRetractedNotification(

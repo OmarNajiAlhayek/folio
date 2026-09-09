@@ -33,7 +33,19 @@ export async function claimStatusTransition(
     .getRepository(Submission)
     .createQueryBuilder()
     .update(Submission)
-    .set({ status: next })
+    .set({
+      status: next,
+      // Advance the modification stamp here, because nothing else will.
+      //
+      // Callers follow this with `save(entity)`, and by then the database
+      // already holds `next` — TypeORM diffs against current database state,
+      // finds nothing changed, skips the UPDATE, and `@UpdateDateColumn` never
+      // fires. Two writes that each look correct cancelled each other out, so
+      // a status change left `updated_at` untouched: the editor queue's
+      // `ix_submissions_journal_status_updated_at` ordering never saw a
+      // decision, and an OAI harvester was never told a retraction happened.
+      updatedAt: () => 'now()',
+    })
     .where('id = :id', { id: submissionId })
     .andWhere('status = :expectedCurrent', { expectedCurrent })
     .execute();
