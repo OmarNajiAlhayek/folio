@@ -6,6 +6,7 @@ import { AuditLog } from '../entities/audit-log.entity';
 import { AuthChallenge } from '../entities/auth-challenge.entity';
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
+import { EditorialBoardMember } from '../entities/editorial-board-member.entity';
 import { Notification } from '../entities/notification.entity';
 import { OAuthIdentity } from '../entities/oauth-identity.entity';
 import { OutboundEvent } from '../entities/outbound-event.entity';
@@ -59,6 +60,7 @@ export const dataSourceOptions: DataSourceOptions = {
     Journal,
     JournalIssue,
     JournalMembership,
+    EditorialBoardMember,
     CopyeditAssignment,
     CopyeditNote,
     RoleInvitation,

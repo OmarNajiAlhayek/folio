@@ -7,11 +7,13 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { EditorialBoardService } from '../journals/editorial-board.service';
 import { JournalPortalService } from '../journals/journal-portal.service';
 import { PublicationCatalogService } from '../submissions/publication-catalog.service';
 
 /**
- * The public press: portal → journal → issue → article.
+ * The public press: portal → journal → issue → article, plus each journal's
+ * editorial board.
  *
  * Unauthenticated like the rest of `public/*`, and throttled the same way.
  * Article rows go through `toPublicationListItem` so a card here is identical
@@ -24,6 +26,7 @@ export class PublicJournalsController {
   constructor(
     private readonly portal: JournalPortalService,
     private readonly catalog: PublicationCatalogService,
+    private readonly board: EditorialBoardService,
   ) {}
 
   @Get()
@@ -34,6 +37,12 @@ export class PublicJournalsController {
   @Get(':slug')
   getJournal(@Param('slug') slug: string) {
     return this.portal.getJournalBySlug(slug);
+  }
+
+  /** The page URL given to DOAJ as the journal's editorial board. */
+  @Get(':slug/editorial-board')
+  getEditorialBoard(@Param('slug') slug: string) {
+    return this.board.listPublic(slug);
   }
 
   @Get(':slug/issues/:year/:number')

@@ -22,6 +22,18 @@ export const PERMISSION_SLUGS = {
   SUBMISSION_VIEW_SECTION_QUEUE: 'submission.view_section_queue',
   /** Assign a section editor to a submission (chief editor only). */
   SUBMISSION_ASSIGN_SECTION_EDITOR: 'submission.assign_section_editor',
+  /**
+   * Edit a journal's ISSNs and aims and scope. Journal-scoped: an editor edits
+   * only journals they hold an `editor` membership in; the journal manager
+   * edits all of them. Enforced in `JournalMetadataService`.
+   */
+  JOURNAL_EDIT_METADATA: 'journal.edit_metadata',
+  /**
+   * Edit a journal's registered Arabic and English titles — journal manager
+   * only (Damascus University, 2026-09-14). Scholar and DOAJ match on the
+   * title, so it must not change with each year's editor-in-chief.
+   */
+  JOURNAL_EDIT_TITLES: 'journal.edit_titles',
 } as const;
 
 export type PermissionSlug =

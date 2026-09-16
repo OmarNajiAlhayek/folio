@@ -31,6 +31,29 @@ narrows it.
   worked because `journals.discipline_label` is unique and 1:1 with the
   classifier labels (`user_section_editor_disciplines` was dropped in
   `1783200000000-JournalScopedSectionEditors`).
+- **Editors-in-chief are placed the same way**, through
+  `GET/PUT /users/:id/editor-journals` (role `editor`, "Editor-in-chief of" on
+  the users screen). Before this endpoint only the seed could create editor
+  memberships, so a real editor-in-chief had an empty queue. Damascus
+  University changes editors-in-chief yearly and enters them itself, so this is
+  the handover step.
+
+## Journal metadata
+
+Titles, ISSNs and aims and scope are edited in the app (`PATCH /journals/:slug`,
+page `/journal-manager/journals`), under a split the university set on
+2026-09-14:
+
+| Field | Permission | Held by | Scope |
+|-------|------------|---------|-------|
+| `issn`, `eissn`, `description_ar`, `description_en` | `journal.edit_metadata` | `editor`, `journal_manager` | an editor: journals with an `editor` membership; the journal manager: all |
+| `title_ar`, `title_en` | `journal.edit_titles` | `journal_manager` only | all |
+| Editorial board (`editorial_board_members`) | `journal.edit_metadata` | `editor`, `journal_manager` | same as ISSNs |
+
+The guard checks `journal.edit_metadata`; `JournalMetadataService` checks the
+membership and the title permission, because the guard can see neither. An
+unchanged title in the request body is not an edit, so a form that always sends
+every field does not trip the title rule for an editor.
 
 Shared helpers live in `backend/src/common/authorization/permission-checks.ts`. The guard uses the same `hasAnyPermission()` implementation as services.
 

@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  BookCopy,
   BookMarked,
   BookOpen,
   ClipboardList,
@@ -28,6 +29,7 @@ export type NavHref =
   | '/section-editor'
   | '/assignments'
   | '/copyedit-assignments'
+  | '/journal-manager/journals'
   | '/journal-manager/users'
   | '/journal-manager/email-settings'
   | '/journal-manager/audit-log'
@@ -43,6 +45,7 @@ export type NavLabelKey =
   | 'sectionEditor'
   | 'myReviews'
   | 'copyediting'
+  | 'journalSettings'
   | 'users'
   | 'emailSettings'
   | 'auditLog'
@@ -129,6 +132,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Pencil,
     isVisible: ({ signedIn, perms }) =>
       signedIn && perms.has(PERMISSION_SLUGS.COPYEDIT_VIEW_QUEUE),
+  },
+  {
+    // First of the admin group: editors-in-chief hold this one too.
+    href: '/journal-manager/journals',
+    labelKey: 'journalSettings',
+    match: 'prefix',
+    icon: BookCopy,
+    isVisible: ({ signedIn, perms }) =>
+      signedIn && perms.has(PERMISSION_SLUGS.JOURNAL_EDIT_METADATA),
   },
   {
     href: '/journal-manager/users',

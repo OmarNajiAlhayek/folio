@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   forwardRef,
   Inject,
   Injectable,
@@ -170,8 +171,18 @@ export class UsersService {
     return saved;
   }
 
+  /**
+   * Incomplete until the account has a real display name (ORCID sign-up starts
+   * from an `ORCID 0000-…` placeholder) **and** an ORCID iD. ORCID is the
+   * primary identifier of every participant (Damascus University,
+   * 2026-09-14): registration requires it, and this catches accounts created
+   * before the rule, which the frontend holds at `/complete-profile`.
+   */
   needsProfileCompletionForUser(user: User): boolean {
-    return /^ORCID \d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(user.displayName);
+    return (
+      !user.orcid ||
+      /^ORCID \d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(user.displayName)
+    );
   }
 
   async needsProfileCompletion(userId: string): Promise<boolean> {
@@ -393,6 +404,7 @@ export class UsersService {
     data: {
       displayName?: string;
       affiliation?: string | null;
+      orcid?: string | null;
       reviewKeywords?: string | null;
       willingToReview?: boolean;
     },
@@ -416,6 +428,27 @@ export class UsersService {
       patch.displayName = name;
     }
     if (data.affiliation !== undefined) patch.affiliation = data.affiliation;
+    // Set or corrected, never cleared: every account keeps an ORCID iD.
+    if (typeof data.orcid === 'string' && data.orcid !== user.orcid) {
+      const verified = await this.oauthRepo.exists({
+        where: { userId, provider: OAUTH_PROVIDER_ORCID },
+      });
+      if (verified) {
+        throw new ConflictException({
+          message:
+            'Your ORCID iD is verified through ORCID sign-in. Unlink ORCID sign-in before entering a different iD.',
+          code: 'ORCID_VERIFIED',
+        });
+      }
+      const holder = await this.findByOrcid(data.orcid);
+      if (holder && holder.id !== userId) {
+        throw new ConflictException({
+          message: 'This ORCID iD is already linked to another account',
+          code: 'ORCID_ALREADY_LINKED',
+        });
+      }
+      patch.orcid = data.orcid;
+    }
     if (data.reviewKeywords !== undefined)
       patch.reviewKeywords = data.reviewKeywords;
     if (data.willingToReview !== undefined)
@@ -825,6 +858,37 @@ export class UsersService {
     userId: string,
     journals: string[],
   ): Promise<string[]> {
+    return this.setJournalScope(userId, ROLE_SLUGS.SECTION_EDITOR, journals);
+  }
+
+  /**
+   * Editor-in-chief scope, as journal slugs. Same storage and wire shape as
+   * the section-editor scope, on separate endpoints because the roles are
+   * granted separately.
+   *
+   * An editor with no rows here has an empty queue and can edit no journal
+   * (docs/authorization.md), so this is how the journal manager puts each
+   * year's editor-in-chief in charge of their journal.
+   */
+  async getEditorJournals(userId: string): Promise<string[]> {
+    return this.journalMemberships.journalSlugsForUser(
+      userId,
+      ROLE_SLUGS.EDITOR,
+    );
+  }
+
+  async setEditorJournals(
+    userId: string,
+    journals: string[],
+  ): Promise<string[]> {
+    return this.setJournalScope(userId, ROLE_SLUGS.EDITOR, journals);
+  }
+
+  private async setJournalScope(
+    userId: string,
+    roleSlug: string,
+    journals: string[],
+  ): Promise<string[]> {
     const user = await this.findById(userId);
     if (!user) {
       throw new NotFoundException({
@@ -834,7 +898,7 @@ export class UsersService {
     }
     return this.journalMemberships.setJournalSlugsForUser(
       userId,
-      ROLE_SLUGS.SECTION_EDITOR,
+      roleSlug,
       journals,
     );
   }

@@ -45,6 +45,8 @@ export const AuditResourceType = {
   EMAIL_ADMIN: 'email_admin',
   SEARCH_CONFIG: 'search_config',
   PUBLIC_SUBMISSION: 'public_submission',
+  JOURNAL: 'journal',
+  EDITORIAL_BOARD: 'editorial_board',
   UNKNOWN: 'unknown',
 } as const;
 
@@ -61,6 +63,7 @@ const RESOURCE_BY_FIRST_SEGMENT: Record<string, AuditResourceType> = {
   notifications: AuditResourceType.NOTIFICATION,
   audit: AuditResourceType.AUDIT_LOG,
   public: AuditResourceType.PUBLIC_SUBMISSION,
+  journals: AuditResourceType.JOURNAL,
 };
 
 // Nested segments that refine the resource to a child entity
@@ -71,6 +74,7 @@ const SUB_RESOURCE_REFINEMENTS: Record<string, AuditResourceType> = {
   reminders: AuditResourceType.REMINDER,
   'role-invitations': AuditResourceType.ROLE_INVITATION,
   sessions: AuditResourceType.SESSION,
+  'editorial-board': AuditResourceType.EDITORIAL_BOARD,
 };
 
 const SPECIFIC_ACTION_BY_SEGMENT: Record<string, AuditActionType> = {

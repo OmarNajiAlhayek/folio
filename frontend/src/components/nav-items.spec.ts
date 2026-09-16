@@ -59,8 +59,25 @@ describe('visibleNavItems', () => {
     ]);
   });
 
+  it('shows journal details to an editor-in-chief without the other admin links', () => {
+    expect(
+      labels([
+        PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+        PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
+      ]),
+    ).toEqual([
+      'publications',
+      'journals',
+      'dashboard',
+      'editor',
+      'journalSettings',
+      'searchCuration',
+    ]);
+  });
+
   it('keeps admin routes last so they collapse into the overflow menu first', () => {
     const adminKeys: NavLabelKey[] = [
+      'journalSettings',
       'users',
       'emailSettings',
       'auditLog',

@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CollapsibleSection } from '@/components/ui/collapsible-section';
-import { SectionEditorJournalEditor } from '@/components/section-editor-journal-editor';
+import { StaffJournalScopeEditor } from '@/components/staff-journal-scope-editor';
 import { SimpleSelect } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -867,13 +867,29 @@ export default function JournalManagerUsersPage() {
                     </div>
                   </div>
 
-                  {/* Section editor discipline scope */}
+                  {/* Editor-in-chief journal scope */}
+                  {editorHas && (
+                    <div className="border-t border-ink/8 px-5 pb-5 pt-4">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">
+                        {t('editorJournals')}
+                      </p>
+                      <p className="mb-2.5 mt-1 text-xs text-ink/55">
+                        {t('editorJournalsHint')}
+                      </p>
+                      <StaffJournalScopeEditor userId={row.id} scope="editor" />
+                    </div>
+                  )}
+
+                  {/* Section editor journal scope */}
                   {seHas && (
                     <div className="border-t border-ink/8 px-5 pb-5 pt-4">
                       <p className="mb-2.5 text-[10px] font-bold uppercase tracking-wider text-ink/40">
                         {t('sectionEditorDisciplines')}
                       </p>
-                      <SectionEditorJournalEditor userId={row.id} />
+                      <StaffJournalScopeEditor
+                        userId={row.id}
+                        scope="section-editor"
+                      />
                     </div>
                   )}
                 </li>

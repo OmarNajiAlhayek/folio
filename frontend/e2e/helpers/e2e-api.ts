@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { request, type APIRequestContext } from '@playwright/test';
+import { orcidForSeed } from './e2e-orcid';
 import { latestVerificationOtp } from './e2e-outbox';
 
 export interface E2EUserCredentials {
@@ -112,6 +113,8 @@ export async function ensureUserExists(
       email: creds.email,
       password: creds.password,
       displayName: creds.displayName,
+      // Required at registration; derived from the email so a re-run sends the same iD.
+      orcid: orcidForSeed(creds.email),
       willingToReview: false,
     },
   });

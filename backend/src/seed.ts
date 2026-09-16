@@ -1308,6 +1308,9 @@ async function run() {
 
   await submissionsService.backfillSlugs();
 
+  // Every account needs an ORCID iD, or the app holds it at /complete-profile.
+  // These are deliberately synthetic — below any range ORCID issues — but
+  // carry valid check digits.
   const author = await ensureUser(usersService, rbacService, {
     email: 'author@folio.dev',
     password: 'Author123!',
@@ -1315,6 +1318,7 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.AUTHOR],
     profile: {
       affiliation: 'Faculty of Information Studies, Arab Open University',
+      orcid: '0000-0000-0000-001X',
       reviewKeywords: 'methods, reproducibility',
       willingToReview: false,
     },
@@ -1326,6 +1330,7 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.JOURNAL_MANAGER],
     profile: {
       affiliation: 'Damascus University Journal — Editorial office',
+      orcid: '0000-0000-0000-0028',
     },
   });
   const editor = await ensureUser(usersService, rbacService, {
@@ -1335,6 +1340,7 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.EDITOR],
     profile: {
       affiliation: 'Damascus University Journal — Editorial office',
+      orcid: '0000-0000-0000-0036',
       reviewKeywords: null,
       willingToReview: false,
     },
@@ -1346,6 +1352,7 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.REVIEWER],
     profile: {
       affiliation: 'Institute for Sample Research',
+      orcid: '0000-0000-0000-0044',
       reviewKeywords:
         'open access, digital publishing, economics, arabic journals, peer review',
       willingToReview: true,
@@ -1358,6 +1365,7 @@ async function run() {
     roleSlugs: [ROLE_SLUGS.COPYEDITOR],
     profile: {
       affiliation: 'Damascus University Journal — Editorial office',
+      orcid: '0000-0000-0000-0052',
     },
   });
 

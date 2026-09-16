@@ -26,6 +26,28 @@ Rows are reference data: the `MultiJournalIssues` migration inserts them from
 `backend/src/journals/journal-catalog.ts` so the foreign key is satisfiable on
 any database, and `seed.ts` looks them up by slug rather than re-creating them.
 
+The catalog supplies only **initial** titles and ISSNs. After that, titles,
+ISSNs and descriptions are maintained by staff in the app
+(`PATCH /journals/:slug`, see
+[`authorization.md`](./authorization.md#journal-metadata)) and nothing
+re-applies the catalog, so the database is the source of truth.
+
+### EditorialBoardMember
+
+One person on a journal's published editorial board
+(`/journals/<slug>/editorial-board`). Not a user: most board members never log
+in, and `journal_memberships` is what scopes staff accounts.
+
+- `journal_id` (cascade) and `role`: `editor_in_chief` |
+  `deputy_editor_in_chief` | `managing_editor` | `member` | `advisory_member`
+  (CHECK).
+- `name_ar` / `name_en` — at least one (CHECK); optional `affiliation_ar` /
+  `affiliation_en`.
+- `orcid` — nullable in the schema, but required and check-digit validated by
+  `EditorialBoardService`, and unique within one board.
+- `sort_order` — board order. The public page groups by role and keeps this
+  order inside each group.
+
 ### JournalIssue (العدد)
 
 One issue of one journal, cited as **العدد N، السنة YYYY**.

@@ -83,6 +83,21 @@ export class UsersController {
     return this.usersService.setSectionEditorJournals(id, dto.journals);
   }
 
+  @Get(':id/editor-journals')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  getEditorJournals(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getEditorJournals(id);
+  }
+
+  @Put(':id/editor-journals')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  setEditorJournals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetSectionEditorJournalsDto,
+  ) {
+    return this.usersService.setEditorJournals(id, dto.journals);
+  }
+
   @Post(':id/role-invitations')
   @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
   createRoleInvitation(

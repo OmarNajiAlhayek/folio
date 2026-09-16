@@ -23,6 +23,7 @@ Central map of the Folio (Damascus University Journal) documentation. New here? 
 | [`OBSERVABILITY.md`](./OBSERVABILITY.md) | Structured logs, trace/request correlation, OTLP export |
 | [`slo.md`](./slo.md) | Production SLO tiers (distinct from local perf baselines) |
 | [`EXTERNAL-ACTIONS.md`](./EXTERNAL-ACTIONS.md) | Registrations, fees and institutional decisions that cannot be done from the repository |
+| [`PRESS-PROFILE.md`](./PRESS-PROFILE.md) | What Damascus University supplied: identity, domain, ISSNs, approved policies, roles, backup commitments |
 
 ## Product and API
 

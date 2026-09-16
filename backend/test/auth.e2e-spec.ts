@@ -12,6 +12,7 @@ import {
   FOLIO_REFRESH_COOKIE,
 } from '../src/auth/auth-cookie.util';
 import { encodeOAuthState } from '../src/auth/oauth-state.util';
+import { orcidCheckCharacter } from '../src/auth/orcid-id.util';
 import { OutboundEvent } from '../src/entities/outbound-event.entity';
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 
@@ -38,6 +39,15 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
     string,
     unknown
   >;
+}
+
+/** A fresh ORCID iD with a valid check digit: registration requires one, unique per account. */
+function testOrcid(): string {
+  const digits = Array.from({ length: 15 }, () =>
+    Math.floor(Math.random() * 10),
+  ).join('');
+  const full = `${digits}${orcidCheckCharacter(digits)}`;
+  return (full.match(/.{4}/g) ?? []).join('-');
 }
 
 async function latestOutboxOtp(
@@ -107,6 +117,7 @@ describe('Auth sessions (e2e)', () => {
         email,
         password: 'TestPass123!',
         displayName: 'RBAC Claims E2E',
+        orcid: testOrcid(),
       })
       .expect(201);
 
@@ -133,6 +144,7 @@ describe('Auth sessions (e2e)', () => {
         email,
         password: 'TestPass123!',
         displayName: 'Logout E2E',
+        orcid: testOrcid(),
       })
       .expect(201);
 
@@ -170,7 +182,12 @@ describe('Auth sessions (e2e)', () => {
 
     const first = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
-      .send({ email, password, displayName: 'Multi Session' })
+      .send({
+        email,
+        password,
+        displayName: 'Multi Session',
+        orcid: testOrcid(),
+      })
       .expect(201);
     const tokenA = (first.body as { accessToken: string; refreshToken: string })
       .accessToken;
@@ -209,6 +226,7 @@ describe('Auth sessions (e2e)', () => {
         email,
         password: 'TestPass123!',
         displayName: 'Refresh E2E',
+        orcid: testOrcid(),
       })
       .expect(201);
 
@@ -249,6 +267,7 @@ describe('Auth sessions (e2e)', () => {
         email,
         password: 'TestPass123!',
         displayName: 'Verify E2E',
+        orcid: testOrcid(),
       })
       .expect(201);
 
@@ -288,7 +307,7 @@ describe('Auth sessions (e2e)', () => {
 
     const registerRes = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
-      .send({ email, password, displayName: 'Reset E2E' })
+      .send({ email, password, displayName: 'Reset E2E', orcid: testOrcid() })
       .expect(201);
     const refreshToken = (registerRes.body as { refreshToken: string })
       .refreshToken;
@@ -330,6 +349,7 @@ describe('Auth sessions (e2e)', () => {
         email,
         password: 'TestPass123!',
         displayName: 'Reuse E2E',
+        orcid: testOrcid(),
       })
       .expect(201);
 
@@ -361,7 +381,7 @@ describe('Auth sessions (e2e)', () => {
 
     const first = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
-      .send({ email, password, displayName: 'Device A' })
+      .send({ email, password, displayName: 'Device A', orcid: testOrcid() })
       .expect(201);
     const tokenA = (first.body as { accessToken: string; refreshToken: string })
       .accessToken;
@@ -456,6 +476,7 @@ describe('ORCID OAuth (e2e, mock)', () => {
         email,
         password: 'TestPass123!',
         displayName: 'Conflict Seed',
+        orcid: testOrcid(),
       })
       .expect(201);
 

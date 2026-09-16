@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { workerCredentials } from './helpers/e2e-api';
+import { orcidForSeed } from './helpers/e2e-orcid';
 import { latestVerificationOtp } from './helpers/e2e-outbox';
 
 test.describe('auth email flows', () => {
@@ -11,6 +12,7 @@ test.describe('auth email flows', () => {
     await page.getByLabel('Display name').fill('Verify OTP UI');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password (min 8)').fill('WorkerPass123!');
+    await page.getByLabel('ORCID iD').fill(orcidForSeed(email));
     await page.getByRole('button', { name: 'Create account' }).click();
     await expect(page).toHaveURL(/\/en\/verify-email/, { timeout: 30_000 });
     await expect(
@@ -31,6 +33,7 @@ test.describe('auth email flows', () => {
     await page.getByLabel('Display name').fill('Verify UI');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password (min 8)').fill('WorkerPass123!');
+    await page.getByLabel('ORCID iD').fill(orcidForSeed(email));
     await page.getByRole('button', { name: 'Create account' }).click();
     await expect(page).toHaveURL(/\/en\/verify-email/, { timeout: 30_000 });
     await expect(

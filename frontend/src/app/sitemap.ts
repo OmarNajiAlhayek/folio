@@ -118,6 +118,14 @@ async function journalEntries(): Promise<MetadataRoute.Sitemap> {
     );
     if (e) out.push(e);
 
+    const board = entry(
+      `/journals/${j.slug}/editorial-board`,
+      null,
+      'monthly',
+      0.5,
+    );
+    if (board) out.push(board);
+
     const detail = await safe<JournalDetail>(`/public/journals/${j.slug}`);
     for (const issue of detail?.issues ?? []) {
       const ie = entry(

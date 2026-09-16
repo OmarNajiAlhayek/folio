@@ -4,11 +4,11 @@ import {
   IsEmail,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOrcidId } from './is-orcid-id.validator';
 
 function emptyToUndefined({ value }: { value: unknown }) {
   if (value === '' || value === null) return undefined;
@@ -39,20 +39,21 @@ export class RegisterDto {
   @MaxLength(500)
   affiliation?: string;
 
-  @ApiPropertyOptional({
-    description: 'ORCID, format 0000-0000-0000-000X',
+  /**
+   * Required: ORCID is the primary identifier of every account (Damascus
+   * University, 2026-09-14). Sign-up through ORCID gets it from ORCID itself.
+   */
+  @ApiProperty({
+    description:
+      'ORCID iD, format 0000-0000-0000-000X with a valid check digit',
     example: '0000-0002-1825-0097',
   })
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === '' || value === null || value === undefined) return undefined;
-    const s = String(value).trim();
-    return s === '' ? undefined : s.toUpperCase();
-  })
-  @Matches(/^(\d{4}-){3}\d{3}[\dX]$/, {
-    message: 'orcid must match 0000-0000-0000-000X',
-  })
-  orcid?: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
+  @IsString()
+  @IsOrcidId()
+  orcid: string;
 
   @ApiPropertyOptional({ maxLength: 2000 })
   @IsOptional()

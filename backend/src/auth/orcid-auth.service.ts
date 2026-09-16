@@ -202,11 +202,13 @@ export class OrcidAuthService {
         code: 'VALIDATION_ERROR',
       });
     }
+    // The sign-in link goes; the iD stays on the profile. ORCID is every
+    // account's primary identifier, so unlinking must not leave the account
+    // without one. A wrong iD is corrected from the profile once unlinked.
     await this.oauthRepo.delete({
       userId,
       provider: OAUTH_PROVIDER_ORCID,
     });
-    await this.usersService.patchResearcherProfile(userId, { orcid: null });
   }
 
   private async resolveLoginUser(

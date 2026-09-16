@@ -2,18 +2,23 @@
 
 import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@/i18n/navigation';
 import { useForm } from 'react-hook-form';
 import { apiJson } from '@/lib/api';
+import { isValidOrcidId } from '@/lib/orcid';
 import { useMe } from '@/lib/queries/auth';
+import { queryKeys } from '@/lib/query-keys';
 import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PAGE_SHELL } from '@/lib/page-shell';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
+import { OrcidButton, OrcidDivider } from '@/components/auth/orcid-button';
 
 type CompleteProfileForm = {
   displayName: string;
+  orcid: string;
   affiliation: string;
   reviewKeywords: string;
   willingToReview: boolean;
@@ -25,9 +30,15 @@ function fieldCls(err: boolean) {
   }`;
 }
 
+/**
+ * Where `AuthGate` holds an account whose profile is incomplete: an ORCID
+ * sign-up still carrying its placeholder name, or any account without an ORCID
+ * iD, which every participant must have.
+ */
 export default function CompleteProfilePage() {
   const t = useTranslations('CompleteProfile');
   const router = useRouter();
+  const queryClient = useQueryClient();
   const meQuery = useMe();
   const me = meQuery.data;
   const showApiError = useToastApiError();
@@ -39,16 +50,20 @@ export default function CompleteProfilePage() {
   } = useForm<CompleteProfileForm>({
     defaultValues: {
       displayName: '',
+      orcid: '',
       affiliation: '',
       reviewKeywords: '',
       willingToReview: false,
     },
   });
 
+  const needsOrcid = !me?.orcid;
+
   useEffect(() => {
     if (!me) return;
     reset({
       displayName: me.displayName.startsWith('ORCID ') ? '' : me.displayName,
+      orcid: me.orcid ?? '',
       affiliation: me.affiliation ?? '',
       reviewKeywords: me.reviewKeywords ?? '',
       willingToReview: me.willingToReview,
@@ -72,11 +87,15 @@ export default function CompleteProfilePage() {
         method: 'PATCH',
         body: JSON.stringify({
           displayName: data.displayName.trim(),
+          ...(needsOrcid ? { orcid: data.orcid.trim().toUpperCase() } : {}),
           affiliation: data.affiliation.trim() || null,
           reviewKeywords: data.reviewKeywords.trim() || null,
           willingToReview: data.willingToReview,
         }),
       });
+      // AuthGate reads `profileComplete` from this query; a stale copy would
+      // send the user straight back here.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.me });
       router.push('/dashboard');
       router.refresh();
     } catch (err) {
@@ -108,6 +127,33 @@ export default function CompleteProfilePage() {
               autoComplete="name"
             />
           </FormField>
+
+          {needsOrcid ? (
+            <div className="space-y-3 rounded-xl border border-[#A6CE39]/35 bg-[#A6CE39]/8 p-4">
+              <p className="text-sm text-ink/80">{t('orcidRequiredNotice')}</p>
+              <OrcidButton mode="link" className="w-full" />
+              <OrcidDivider />
+              <FormField
+                label={t('orcid')}
+                error={errors.orcid}
+                hint={t('orcidHint')}
+                required
+              >
+                <input
+                  {...register('orcid', {
+                    validate: (value) => {
+                      const id = value.trim().toUpperCase();
+                      if (id === '') return t('orcidRequired');
+                      return isValidOrcidId(id) || t('orcidInvalid');
+                    },
+                  })}
+                  dir="ltr"
+                  placeholder="0000-0000-0000-0000"
+                  className={`${fieldCls(!!errors.orcid)} font-mono`}
+                />
+              </FormField>
+            </div>
+          ) : null}
 
           <FormField label={t('affiliation')} hint={t('affiliationHint')}>
             <input

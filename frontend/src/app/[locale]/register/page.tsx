@@ -111,8 +111,8 @@ function RegisterForm() {
         displayName: data.displayName,
         willingToReview: data.willingToReview ?? false,
       };
+      body.orcid = data.orcid;
       if (data.affiliation) body.affiliation = data.affiliation;
-      if (data.orcid) body.orcid = data.orcid;
       if (data.reviewKeywords) body.reviewKeywords = data.reviewKeywords;
 
       await apiJson('/auth/register', {
@@ -306,6 +306,7 @@ function RegisterForm() {
                   label={t('orcid')}
                   error={errors.orcid}
                   hint={t('orcidHint')}
+                  required
                   icon={
                     <div className="flex size-4 items-center justify-center rounded-full bg-[#A6C307] text-[8px] font-bold tracking-tighter text-white">
                       iD

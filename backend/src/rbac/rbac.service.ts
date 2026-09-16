@@ -99,6 +99,14 @@ export class RbacService implements OnModuleInit {
         slug: PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
         description: 'Assign a section editor to a submission',
       },
+      {
+        slug: PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
+        description: "Edit a journal's ISSNs and aims and scope",
+      },
+      {
+        slug: PERMISSION_SLUGS.JOURNAL_EDIT_TITLES,
+        description: "Edit a journal's registered titles",
+      },
     ];
 
     const permBySlug = await this.batchUpsertPermissions(permissionDefs);
@@ -126,6 +134,9 @@ export class RbacService implements OnModuleInit {
       // (leave, lockout). The service still requires every assignment
       // ready_for_review — this is an actor override, not a quality skip.
       PERMISSION_SLUGS.COPYEDIT_PUBLISH,
+      // ISSNs and aims and scope of the editor's own journals only — the
+      // service checks the membership. Titles stay with the journal manager.
+      PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
     ];
     const sectionEditorPerms = [
       PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,

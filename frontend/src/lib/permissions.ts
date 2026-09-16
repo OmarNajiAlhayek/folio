@@ -17,6 +17,10 @@ export const PERMISSION_SLUGS = {
   EMAIL_MANAGE_REMINDERS: 'email.manage_reminders',
   EMAIL_MANAGE_ASSIGNMENT_REMINDERS: 'email.manage_assignment_reminders',
   AUDIT_LOG_VIEW: 'audit_log.view',
+  /** ISSNs and aims and scope — journal manager, or the journal's editor-in-chief. */
+  JOURNAL_EDIT_METADATA: 'journal.edit_metadata',
+  /** Registered titles — journal manager only. */
+  JOURNAL_EDIT_TITLES: 'journal.edit_titles',
 } as const;
 
 export const ROLE_SLUGS = {

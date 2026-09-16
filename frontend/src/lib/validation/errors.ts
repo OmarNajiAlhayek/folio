@@ -52,6 +52,9 @@ export function issueToMessage(
         return t("reviewCommentsRequired") + suffix;
       }
       if (issue.message === "orcidFormat") return t("orcidFormat") + suffix;
+      if (issue.message === "orcidChecksum") {
+        return t("orcidChecksum") + suffix;
+      }
       if (issue.message === "abstractMaxWordsEn") {
         return t("abstractMaxWordsEn", { max: 300 }) + suffix;
       }

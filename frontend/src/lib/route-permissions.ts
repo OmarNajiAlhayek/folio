@@ -39,6 +39,11 @@ export const ROUTE_ACCESS_RULES: Array<{
     permissions: PERMISSION_SLUGS.USERS_MANAGE_ROLES,
   },
   {
+    // Editors-in-chief reach this too; the API narrows it to their journals.
+    pattern: /^\/journal-manager\/journals(\/|$)/,
+    permissions: PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
+  },
+  {
     pattern: /^\/journal-manager\/audit-log(\/|$)/,
     permissions: PERMISSION_SLUGS.AUDIT_LOG_VIEW,
   },

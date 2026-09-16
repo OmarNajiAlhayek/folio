@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ORCID_PATTERN, isValidOrcidId } from '../orcid';
 import {
   MAX_UPLOAD_BYTES,
   SUBMISSION_ARTICLE_TYPES,
@@ -51,17 +52,14 @@ export const registerSchema = z.object({
       const t = s.trim();
       return t === '' ? undefined : t;
     }),
+  /** Required: ORCID is the primary identifier of every account. */
   orcid: z
     .string()
-    .optional()
-    .transform((s) => {
-      if (s === undefined) return undefined;
-      const t = s.trim();
-      if (t === '') return undefined;
-      return t.toUpperCase();
-    })
-    .refine((v) => v === undefined || /^(\d{4}-){3}\d{3}[\dX]$/.test(v), {
-      message: 'orcidFormat',
+    .transform((s) => s.trim().toUpperCase())
+    .refine((v) => ORCID_PATTERN.test(v), { message: 'orcidFormat' })
+    // Only once the shape is right, so a typo gets one message, not two.
+    .refine((v) => !ORCID_PATTERN.test(v) || isValidOrcidId(v), {
+      message: 'orcidChecksum',
     }),
   reviewKeywords: z
     .string()

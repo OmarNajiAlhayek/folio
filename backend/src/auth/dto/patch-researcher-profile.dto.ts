@@ -7,6 +7,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { IsOrcidId } from './is-orcid-id.validator';
 
 function emptyToUndefined({ value }: { value: unknown }) {
   if (value === '' || value === null) return undefined;
@@ -27,6 +28,24 @@ export class PatchResearcherProfileDto {
   @IsString()
   @MaxLength(500)
   affiliation?: string | null;
+
+  /**
+   * Sets or corrects the iD. It cannot be cleared: every account must keep
+   * one, so an empty value is treated as "no change".
+   */
+  @ApiPropertyOptional({
+    description: 'ORCID iD with a valid check digit',
+    example: '0000-0002-1825-0097',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return emptyToUndefined({ value });
+    const s = value.trim().toUpperCase();
+    return s === '' ? undefined : s;
+  })
+  @IsString()
+  @IsOrcidId()
+  orcid?: string;
 
   @ApiPropertyOptional({ maxLength: 2000, nullable: true })
   @IsOptional()

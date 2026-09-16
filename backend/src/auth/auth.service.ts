@@ -97,12 +97,10 @@ export class AuthService {
       await bcrypt.hash(password, SALT_ROUNDS);
       throw new BadRequestException(REGISTRATION_FAILED);
     }
-    if (orcid) {
-      const orcidTaken = await this.usersService.findByOrcid(orcid);
-      if (orcidTaken) {
-        await bcrypt.hash(password, SALT_ROUNDS);
-        throw new BadRequestException(REGISTRATION_FAILED);
-      }
+    const orcidTaken = await this.usersService.findByOrcid(orcid);
+    if (orcidTaken) {
+      await bcrypt.hash(password, SALT_ROUNDS);
+      throw new BadRequestException(REGISTRATION_FAILED);
     }
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const user = await this.usersService.create({
@@ -110,7 +108,7 @@ export class AuthService {
       passwordHash,
       displayName,
       affiliation: affiliation ?? null,
-      orcid: orcid ?? null,
+      orcid,
       reviewKeywords: reviewKeywords ?? null,
       willingToReview,
     });

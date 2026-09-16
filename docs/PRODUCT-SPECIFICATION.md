@@ -195,7 +195,7 @@ flowchart TB
 - **Login/register**: `GET /auth/orcid` → ORCID OAuth → callback sets session cookies.
 - **Link existing account**: `GET /auth/orcid?mode=link` (requires signed-in user).
 - **Unlink**: `POST /auth/orcid/unlink`.
-- New ORCID users without complete profile redirect to **complete-profile** page.
+- Accounts with an incomplete profile are held at the **complete-profile** page: an ORCID sign-up still carrying its placeholder name, or any account without an ORCID iD, which every account must have (Damascus University, 2026-09-14).
 
 ### 4.5 Session management
 

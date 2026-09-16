@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
-import { BookOpen, ChevronRight, Library } from 'lucide-react';
+import { BookOpen, ChevronRight, Library, Users } from 'lucide-react';
 import { formatMediumDate } from '@/lib/format-date';
 import type { JournalWithIssues } from '@/lib/journal-types';
 import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
@@ -86,6 +86,13 @@ export default async function JournalPage({ params }: Props) {
           </span>
           {journal.issn && <span dir="ltr">ISSN {journal.issn}</span>}
           {journal.eissn && <span dir="ltr">e-ISSN {journal.eissn}</span>}
+          <Link
+            href={`/journals/${journal.slug}/editorial-board`}
+            className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
+          >
+            <Users className="h-3.5 w-3.5" aria-hidden />
+            {t('editorialBoard')}
+          </Link>
         </div>
       </header>
 

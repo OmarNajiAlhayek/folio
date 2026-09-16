@@ -30,6 +30,23 @@ describe('journal catalog', () => {
     expect(JOURNAL_FALLBACK_SLUG).toBe('basj');
   });
 
+  it('carries the ISSNs Damascus University supplied, and no others', () => {
+    const numbers = Object.fromEntries(
+      JOURNAL_CATALOG.map((j) => [j.slug, [j.issn ?? null, j.eissn ?? null]]),
+    );
+    expect(numbers).toEqual({
+      artsj: ['1818-5010', '2789-6552'],
+      hisj: [null, null],
+      basj: ['1726-5487', '2789-6366'],
+      econj: [null, '2789-8202'],
+      eduj: [null, null],
+      agrj: [null, null],
+      medj: ['2072-2265', '2789-6889'],
+      lawj: [null, '2789-7621'],
+      engj: ['1999-7302', '2789-6854'],
+    });
+  });
+
   it('maps a classifier label to exactly one journal', () => {
     const entry = journalEntryForDisciplineLabel('العلوم الهندسية');
     expect(entry?.slug).toBe('engj');
