@@ -40,6 +40,11 @@ export class JournalDirectoryService {
     return rows.map((j) => this.toOption(j));
   }
 
+  /** Any journal by id, active or not — generated manuscripts print its name. */
+  findJournal(journalId: string): Promise<Journal | null> {
+    return this.journalsRepo.findOne({ where: { id: journalId } });
+  }
+
   /**
    * The journal an author chose must exist and still accept manuscripts.
    * Checked before insert so a stale picker option is a 400 rather than a

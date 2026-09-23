@@ -1,6 +1,13 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import JSZip from 'jszip';
-import { checkDocxFormat } from './docx-format-checker';
+import {
+  checkDocxFormat,
+  isBlockingDocxViolation,
+  type DocxFormatViolation,
+} from './docx-format-checker';
 import type { ManuscriptStyleProfile } from '../manuscript-styles/manuscript-style.types';
+import { damascusUniversityJournalV1 } from '../manuscript-styles/profiles/damascus-university-journal-v1.profile';
 
 // ── Minimal profile mirroring Damascus University journal v1 ─────────────────
 const PROFILE: ManuscriptStyleProfile = {
@@ -13,9 +20,10 @@ const PROFILE: ManuscriptStyleProfile = {
     bodyLatin: 22, // 11 pt
     bodyArabic: 24, // 12 pt
     caption: 20,
-    heading1: 32,
+    title: 32, // 16 pt
+    heading1: 28, // 14 pt
     heading2: 28,
-    heading3: 24,
+    heading3: 28,
   },
   pageMarginsMm: {
     top: 30, // 1701 twips
@@ -28,9 +36,9 @@ const PROFILE: ManuscriptStyleProfile = {
   documentLineSpacingTwips: 240,
   documentParagraphSpacing: { before: 0, after: 0 },
   headingParagraphSpacing: {
-    heading1: { before: 240, after: 120 },
-    heading2: { before: 200, after: 100 },
-    heading3: { before: 160, after: 80 },
+    heading1: { before: 0, after: 0 },
+    heading2: { before: 0, after: 0 },
+    heading3: { before: 0, after: 0 },
   },
   numbering: { bulletReference: 'b', decimalReference: 'd' },
   paragraphStyles: [],
@@ -61,6 +69,29 @@ const PROFILE: ManuscriptStyleProfile = {
 // ── Twip helpers ─────────────────────────────────────────────────────────────
 const MM = (mm: number) => Math.round(mm * 56.693);
 
+const W_NS =
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+
+// ── Body builders ────────────────────────────────────────────────────────────
+
+const AR_TEXT = 'تتناول هذه المقالة موضوع البحث وأهدافه بالتفصيل';
+const EN_TEXT = 'This article introduces the topic and its objectives';
+
+function para(text: string, opts: { pPr?: string; rPr?: string } = {}) {
+  const pPr = opts.pPr ? `<w:pPr>${opts.pPr}</w:pPr>` : '';
+  const rPr = opts.rPr ? `<w:rPr>${opts.rPr}</w:rPr>` : '';
+  return `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+}
+
+const TITLE = para('عنوان المقالة', {
+  rPr: '<w:b/><w:bCs/><w:sz w:val="32"/><w:szCs w:val="32"/>',
+});
+
+/** A compliant Arabic article body: a 16 pt bold title then running text. */
+const DEFAULT_BODY = [TITLE, para(AR_TEXT), para(AR_TEXT), para(EN_TEXT)].join(
+  '',
+);
+
 // ── Docx builder ─────────────────────────────────────────────────────────────
 
 interface MarginOptions {
@@ -72,6 +103,14 @@ interface MarginOptions {
   footer?: number;
 }
 
+interface SectOptions {
+  margins?: MarginOptions | null; // null = omit w:pgMar entirely
+  cols?: number | null; // null = omit w:cols; default 1
+  titlePg?: boolean; // default true
+  lineNumbers?: boolean; // default true
+  bidi?: boolean; // default false (Arabic article → numbers on the left)
+}
+
 interface StyleOptions {
   latinFont?: string;
   arabicFont?: string;
@@ -81,9 +120,9 @@ interface StyleOptions {
   inNormalStyle?: boolean;
 }
 
-interface DocxOptions {
-  margins?: MarginOptions | null; // null = omit w:pgMar entirely
-  cols?: number; // default 1
+interface DocxOptions extends SectOptions {
+  /** Paragraph XML placed before the final sectPr. */
+  body?: string;
   style?: StyleOptions | null; // null = omit font/size info
   /** Spacing added to Normal style's <w:pPr><w:spacing .../> */
   spacing?: {
@@ -92,168 +131,132 @@ interface DocxOptions {
     beforeTwips?: number;
     afterTwips?: number;
   } | null;
-  /** If set, adds a Heading1/Heading2 style with the given half-point size */
-  headingSizes?: { h1?: number; h2?: number };
-  /** If set, adds a FootnoteText style with the given half-point size */
+  /** Adds a Heading1 style (outline level 0) with the given half-point size */
+  heading1SizeHp?: number;
+  /** Adds a FootnoteText style with the given half-point size */
   footnoteSizeHp?: number;
+  /** Raw w:style elements appended to styles.xml */
+  extraStyles?: string;
+  footnotesXml?: string;
+  themeXml?: string;
   omitDocumentXml?: boolean;
   omitStylesXml?: boolean;
 }
 
-function buildMarginAttr(m: Required<MarginOptions>): string {
-  return (
-    `w:top="${m.top}" w:right="${m.right}" w:bottom="${m.bottom}" ` +
-    `w:left="${m.left}" w:header="${m.header}" w:footer="${m.footer}" w:gutter="0"`
-  );
+function sectPr(o: SectOptions = {}): string {
+  const m = o.margins;
+  const marginLine =
+    m === null
+      ? ''
+      : `<w:pgMar w:top="${m?.top ?? MM(30)}" w:right="${m?.right ?? MM(20)}" ` +
+        `w:bottom="${m?.bottom ?? MM(20)}" w:left="${m?.left ?? MM(20)}" ` +
+        `w:header="${m?.header ?? MM(18)}" w:footer="${m?.footer ?? MM(6)}" w:gutter="0"/>`;
+  const cols = o.cols === undefined ? 1 : o.cols;
+  const colsLine =
+    cols === null
+      ? ''
+      : cols === 1
+        ? '<w:cols w:space="708"/>'
+        : `<w:cols w:num="${cols}" w:space="708"/>`;
+  return [
+    '<w:sectPr>',
+    '<w:pgSz w:w="11906" w:h="16838"/>',
+    marginLine,
+    o.lineNumbers === false
+      ? ''
+      : '<w:lnNumType w:countBy="1" w:distance="255" w:restart="continuous"/>',
+    colsLine,
+    o.titlePg === false ? '' : '<w:titlePg/>',
+    o.bidi ? '<w:bidi/>' : '',
+    '</w:sectPr>',
+  ].join('');
 }
 
 function buildDocumentXml(opts: DocxOptions): string {
-  const marginLine =
-    opts.margins === null
-      ? ''
-      : (() => {
-          const m: Required<MarginOptions> = {
-            top: opts.margins?.top ?? MM(30),
-            bottom: opts.margins?.bottom ?? MM(20),
-            left: opts.margins?.left ?? MM(20),
-            right: opts.margins?.right ?? MM(20),
-            header: opts.margins?.header ?? MM(18),
-            footer: opts.margins?.footer ?? MM(6),
-          };
-          return `<w:pgMar ${buildMarginAttr(m)}/>`;
-        })();
-
-  const colsNum = opts.cols ?? 1;
-  const colsLine =
-    colsNum === 1
-      ? '<w:cols w:space="708"/>'
-      : `<w:cols w:num="${colsNum}" w:space="708"/>`;
-
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:document ${W_NS}>
   <w:body>
-    <w:p><w:r><w:t>Hello</w:t></w:r></w:p>
-    <w:sectPr>
-      <w:pgSz w:w="11906" w:h="16838"/>
-      ${marginLine}
-      ${colsLine}
-    </w:sectPr>
+    ${opts.body ?? DEFAULT_BODY}
+    ${sectPr(opts)}
   </w:body>
 </w:document>`;
 }
 
 function buildFontBlock(s: StyleOptions): string {
-  const parts: string[] = [];
-  if (s.latinFont !== undefined || s.arabicFont !== undefined) {
-    const ascii =
-      s.latinFont !== undefined
-        ? ` w:ascii="${s.latinFont}" w:hAnsi="${s.latinFont}"`
-        : '';
-    const cs = s.arabicFont !== undefined ? ` w:cs="${s.arabicFont}"` : '';
-    parts.push(`<w:rFonts${ascii}${cs}/>`);
-  }
-  if (s.latinSizeHp !== undefined) {
-    parts.push(`<w:sz w:val="${s.latinSizeHp}"/>`);
-  }
-  if (s.arabicSizeHp !== undefined) {
-    parts.push(`<w:szCs w:val="${s.arabicSizeHp}"/>`);
-  }
-  return parts.join('\n        ');
+  return [
+    `<w:rFonts w:ascii="${s.latinFont}" w:hAnsi="${s.latinFont}" w:cs="${s.arabicFont}"/>`,
+    `<w:sz w:val="${s.latinSizeHp}"/>`,
+    `<w:szCs w:val="${s.arabicSizeHp}"/>`,
+  ].join('');
 }
 
 function buildStylesXml(opts: DocxOptions): string {
-  if (opts.style === null) {
-    // Valid styles.xml but no font/size info at all
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
-    <w:name w:val="Normal"/>
-  </w:style>
-</w:styles>`;
-  }
-
-  const s: StyleOptions = opts.style ?? {
-    latinFont: 'Times New Roman',
-    arabicFont: 'Simplified Arabic',
-    latinSizeHp: 22,
-    arabicSizeHp: 24,
-  };
-  const fontBlock = buildFontBlock({
-    latinFont: s.latinFont ?? 'Times New Roman',
-    arabicFont: s.arabicFont ?? 'Simplified Arabic',
-    latinSizeHp: s.latinSizeHp ?? 22,
-    arabicSizeHp: s.arabicSizeHp ?? 24,
-  });
-
-  if (s.inNormalStyle) {
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults/>
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
-    <w:name w:val="Normal"/>
-    <w:rPr>
-      ${fontBlock}
-    </w:rPr>
-  </w:style>
-</w:styles>`;
-  }
-
-  // Spacing element for Normal style pPr (if requested)
-  const spacingAttr = opts.spacing
-    ? [
-        opts.spacing.lineTwips !== undefined
-          ? `w:line="${opts.spacing.lineTwips}"`
-          : '',
-        opts.spacing.lineRule !== undefined
-          ? `w:lineRule="${opts.spacing.lineRule}"`
-          : '',
-        opts.spacing.beforeTwips !== undefined
-          ? `w:before="${opts.spacing.beforeTwips}"`
-          : '',
-        opts.spacing.afterTwips !== undefined
-          ? `w:after="${opts.spacing.afterTwips}"`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : null;
-  const spacingLine = spacingAttr
-    ? `<w:pPr><w:spacing ${spacingAttr}/></w:pPr>`
-    : '';
-
-  // Extra styles (headings, footnote)
-  const extraStyles: string[] = [];
-  if (opts.headingSizes?.h1 !== undefined) {
+  const extraStyles: string[] = [opts.extraStyles ?? ''];
+  if (opts.heading1SizeHp !== undefined) {
+    const hp = opts.heading1SizeHp;
     extraStyles.push(
-      `<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:sz w:val="${opts.headingSizes.h1}"/></w:rPr></w:style>`,
-    );
-  }
-  if (opts.headingSizes?.h2 !== undefined) {
-    extraStyles.push(
-      `<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:rPr><w:sz w:val="${opts.headingSizes.h2}"/></w:rPr></w:style>`,
+      `<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/>` +
+        `<w:pPr><w:outlineLvl w:val="0"/></w:pPr>` +
+        `<w:rPr><w:b/><w:bCs/><w:sz w:val="${hp}"/><w:szCs w:val="${hp}"/></w:rPr></w:style>`,
     );
   }
   if (opts.footnoteSizeHp !== undefined) {
     extraStyles.push(
-      `<w:style w:type="paragraph" w:styleId="FootnoteText"><w:name w:val="footnote text"/><w:rPr><w:sz w:val="${opts.footnoteSizeHp}"/></w:rPr></w:style>`,
+      `<w:style w:type="paragraph" w:styleId="FootnoteText"><w:name w:val="footnote text"/><w:basedOn w:val="Normal"/>` +
+        `<w:rPr><w:sz w:val="${opts.footnoteSizeHp}"/><w:szCs w:val="${opts.footnoteSizeHp}"/></w:rPr></w:style>`,
     );
   }
 
-  // Default: fonts in docDefaults
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults>
-    <w:rPrDefault>
-      <w:rPr>
-        ${fontBlock}
-      </w:rPr>
-    </w:rPrDefault>
-  </w:docDefaults>
+  if (opts.style === null) {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles ${W_NS}>
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
     <w:name w:val="Normal"/>
-    ${spacingLine}
   </w:style>
-  ${extraStyles.join('\n  ')}
+  ${extraStyles.join('')}
+</w:styles>`;
+  }
+
+  const fontBlock = buildFontBlock({
+    latinFont: opts.style?.latinFont ?? 'Times New Roman',
+    arabicFont: opts.style?.arabicFont ?? 'Simplified Arabic',
+    latinSizeHp: opts.style?.latinSizeHp ?? 22,
+    arabicSizeHp: opts.style?.arabicSizeHp ?? 24,
+  });
+
+  const s = opts.spacing;
+  const spacingAttr = s
+    ? [
+        s.lineTwips !== undefined ? `w:line="${s.lineTwips}"` : '',
+        s.lineRule !== undefined ? `w:lineRule="${s.lineRule}"` : '',
+        s.beforeTwips !== undefined ? `w:before="${s.beforeTwips}"` : '',
+        s.afterTwips !== undefined ? `w:after="${s.afterTwips}"` : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : '';
+  const normalPpr = spacingAttr
+    ? `<w:pPr><w:spacing ${spacingAttr}/></w:pPr>`
+    : '';
+
+  if (opts.style?.inNormalStyle) {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles ${W_NS}>
+  <w:docDefaults/>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>${normalPpr}<w:rPr>${fontBlock}</w:rPr>
+  </w:style>
+  ${extraStyles.join('')}
+</w:styles>`;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles ${W_NS}>
+  <w:docDefaults><w:rPrDefault><w:rPr>${fontBlock}</w:rPr></w:rPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>${normalPpr}
+  </w:style>
+  ${extraStyles.join('')}
 </w:styles>`;
 }
 
@@ -263,17 +266,8 @@ async function makeDocx(opts: DocxOptions = {}): Promise<Buffer> {
     '[Content_Types].xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>`,
-  );
-  zip.file(
-    '_rels/.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`,
   );
   if (!opts.omitDocumentXml) {
     zip.file('word/document.xml', buildDocumentXml(opts));
@@ -281,14 +275,14 @@ async function makeDocx(opts: DocxOptions = {}): Promise<Buffer> {
   if (!opts.omitStylesXml) {
     zip.file('word/styles.xml', buildStylesXml(opts));
   }
-  zip.file(
-    'word/_rels/document.xml.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`,
-  );
-  const data = await zip.generateAsync({ type: 'nodebuffer' });
-  return Buffer.from(data);
+  if (opts.footnotesXml) zip.file('word/footnotes.xml', opts.footnotesXml);
+  if (opts.themeXml) zip.file('word/theme/theme1.xml', opts.themeXml);
+  return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
 }
+
+const codes = (v: DocxFormatViolation[]) => v.map((x) => x.code);
+const blocking = (v: DocxFormatViolation[]) =>
+  v.filter(isBlockingDocxViolation);
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -301,6 +295,7 @@ describe('checkDocxFormat', () => {
       const v = await checkDocxFormat(buf, PROFILE);
       expect(v).toHaveLength(1);
       expect(v[0].code).toBe('DOCX_UNREADABLE');
+      expect(v[0].severity).toBe('error');
       expect(v[0].messageAr).toMatch(/تعذّر/);
     });
 
@@ -328,15 +323,13 @@ describe('checkDocxFormat', () => {
 
   describe('correct format — no violations', () => {
     it('passes a perfectly formatted document', async () => {
-      const buf = await makeDocx();
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v).toHaveLength(0);
+      const v = await checkDocxFormat(await makeDocx(), PROFILE);
+      expect(v).toEqual([]);
     });
 
     it('passes when fonts are in the Normal style block (not docDefaults)', async () => {
       const buf = await makeDocx({ style: { inNormalStyle: true } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v).toHaveLength(0);
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
     });
 
     it('passes when font names match case-insensitively', async () => {
@@ -344,74 +337,227 @@ describe('checkDocxFormat', () => {
         style: {
           latinFont: 'TIMES NEW ROMAN',
           arabicFont: 'simplified arabic',
-          latinSizeHp: 22,
-          arabicSizeHp: 24,
         },
       });
       const v = await checkDocxFormat(buf, PROFILE);
-      const fontViolations = v.filter((x) => x.code.startsWith('FONT'));
-      expect(fontViolations).toHaveLength(0);
+      expect(v.filter((x) => x.code.startsWith('FONT'))).toHaveLength(0);
     });
 
     it('passes margins within the ±3 mm tolerance', async () => {
-      // 30mm ±2mm for top → still within 3mm tolerance
       const buf = await makeDocx({
-        margins: {
-          top: MM(28), // 2 mm under → within tolerance
-          bottom: MM(22), // 2 mm over  → within tolerance
-          left: MM(20),
-          right: MM(20),
-          header: MM(18),
-          footer: MM(6),
-        },
+        margins: { top: MM(28), bottom: MM(22) },
       });
       const v = await checkDocxFormat(buf, PROFILE);
-      const marginViolations = v.filter((x) => x.code.startsWith('MARGIN'));
-      expect(marginViolations).toHaveLength(0);
+      expect(v.filter((x) => x.code.startsWith('MARGIN'))).toHaveLength(0);
     });
 
     it('skips margin check when w:pgMar is absent', async () => {
       const buf = await makeDocx({ margins: null });
       const v = await checkDocxFormat(buf, PROFILE);
-      const marginViolations = v.filter((x) => x.code.startsWith('MARGIN'));
-      expect(marginViolations).toHaveLength(0);
+      expect(v.filter((x) => x.code.startsWith('MARGIN'))).toHaveLength(0);
     });
 
-    it('skips font checks when Normal style has no font info', async () => {
-      const buf = await makeDocx({ style: null });
+    it('skips font checks when no font or size is set anywhere', async () => {
+      const buf = await makeDocx({
+        style: null,
+        body: [para('عنوان'), para(AR_TEXT), para(EN_TEXT)].join(''),
+      });
       const v = await checkDocxFormat(buf, PROFILE);
-      const fontViolations = v.filter((x) => x.code.startsWith('FONT'));
-      expect(fontViolations).toHaveLength(0);
+      expect(v.filter((x) => x.code.startsWith('FONT'))).toHaveLength(0);
     });
 
     it('defaults to 1 column when w:cols element is absent', async () => {
-      // We need a custom document.xml that omits <w:cols> entirely
-      const zip = new JSZip();
-      zip.file(
-        'word/document.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p><w:r><w:t>Hello</w:t></w:r></w:p>
-    <w:sectPr>
-      <w:pgMar w:top="${MM(30)}" w:right="${MM(20)}" w:bottom="${MM(20)}" w:left="${MM(20)}" w:header="${MM(18)}" w:footer="${MM(6)}" w:gutter="0"/>
-    </w:sectPr>
-  </w:body>
-</w:document>`,
-      );
-      zip.file(
-        'word/styles.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr>
-    <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Simplified Arabic"/>
-    <w:sz w:val="22"/><w:szCs w:val="24"/>
-  </w:rPr></w:rPrDefault></w:docDefaults>
-</w:styles>`,
-      );
-      const buf = Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
+      const buf = await makeDocx({ cols: null });
       const v = await checkDocxFormat(buf, PROFILE, 1);
-      expect(v.find((x) => x.code === 'COLUMN_COUNT')).toBeUndefined();
+      expect(codes(v)).not.toContain('COLUMN_COUNT');
+    });
+
+    it('accepts the exact twip values Word uses for Damascus University margins', async () => {
+      // Word rounds 30mm → 1701, 20mm → 1134, 18mm → 1021, 6mm → 340
+      const buf = await makeDocx({
+        margins: {
+          top: 1701,
+          right: 1134,
+          bottom: 1134,
+          left: 1134,
+          header: 1021,
+          footer: 340,
+        },
+      });
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
+    });
+  });
+
+  // ── The journal's own template ──────────────────────────────────────────────
+
+  describe('official Damascus University author template', () => {
+    const template = readFileSync(
+      join(__dirname, '__fixtures__', 'damascus-author-template.docx'),
+    );
+
+    it('is not blocked by its own formatting rules', async () => {
+      // Its Normal style is Palatino "at least 13 pt" and docDefaults are Calibri —
+      // the real formatting is applied directly to the text.
+      const v = await checkDocxFormat(template, damascusUniversityJournalV1);
+      expect(blocking(v)).toEqual([]);
+    });
+
+    it('measures its running text as Simplified Arabic 12 / single spacing', async () => {
+      const v = await checkDocxFormat(template, damascusUniversityJournalV1);
+      expect(codes(v)).not.toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/^(FONT|LINE_SPACING|PARA_SPACING|MARGIN)/),
+        ]),
+      );
+      expect(codes(v)).not.toContain('LINE_NUMBERS_MISSING');
+      expect(codes(v)).not.toContain('DIFFERENT_FIRST_PAGE');
+    });
+  });
+
+  // ── Measuring the formatting Word applies ───────────────────────────────────
+
+  describe('measures applied formatting, not just style defaults', () => {
+    it('lets direct run and paragraph formatting override the Normal style', async () => {
+      const direct =
+        '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Simplified Arabic"/>' +
+        '<w:sz w:val="22"/><w:szCs w:val="24"/>';
+      const single =
+        '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>';
+      const buf = await makeDocx({
+        style: {
+          latinFont: 'Palatino Linotype',
+          arabicFont: 'Times New Roman',
+          latinSizeHp: 18,
+          arabicSizeHp: 22,
+        },
+        spacing: { lineTwips: 260, lineRule: 'atLeast', afterTwips: 200 },
+        body: [
+          TITLE,
+          para(AR_TEXT, { pPr: single, rPr: direct }),
+          para(AR_TEXT, { pPr: single, rPr: direct }),
+          para(EN_TEXT, { pPr: single, rPr: direct }),
+        ].join(''),
+      });
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
+    });
+
+    it('ignores text inside tables and text boxes', async () => {
+      const arial =
+        '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="16"/><w:szCs w:val="16"/>';
+      const boxed = Array.from({ length: 10 }, () =>
+        para(`${AR_TEXT} ${EN_TEXT}`, { rPr: arial }),
+      ).join('');
+      const buf = await makeDocx({
+        body:
+          DEFAULT_BODY +
+          `<w:tbl><w:tr><w:tc>${boxed}</w:tc></w:tr></w:tbl>` +
+          `<w:p><w:r><w:drawing><w:txbxContent>${boxed}</w:txbxContent></w:drawing></w:r></w:p>`,
+      });
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
+    });
+
+    it('treats Latin letters in an rtl run as complex-script text', async () => {
+      const buf = await makeDocx({
+        body: [
+          TITLE,
+          para(AR_TEXT),
+          para(EN_TEXT, {
+            rPr: '<w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:rtl/>',
+          }),
+        ].join(''),
+      });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).not.toContain(
+        'FONT_LATIN',
+      );
+    });
+
+    it('resolves theme fonts from theme1.xml', async () => {
+      const theme = (arab: string) =>
+        `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:fontScheme name="t">` +
+        `<a:majorFont><a:latin typeface="Calibri Light"/><a:cs typeface=""/></a:majorFont>` +
+        `<a:minorFont><a:latin typeface="Times New Roman"/><a:cs typeface=""/><a:font script="Arab" typeface="${arab}"/></a:minorFont>` +
+        `</a:fontScheme></a:themeElements></a:theme>`;
+      const themed =
+        '<w:rFonts w:asciiTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi" w:cstheme="minorBidi"/>';
+      const body = [
+        TITLE,
+        para(AR_TEXT, { rPr: themed }),
+        para(AR_TEXT, { rPr: themed }),
+        para(EN_TEXT, { rPr: themed }),
+      ].join('');
+
+      const ok = await makeDocx({ body, themeXml: theme('Simplified Arabic') });
+      expect(await checkDocxFormat(ok, PROFILE)).toEqual([]);
+
+      const wrong = await makeDocx({ body, themeXml: theme('Arial') });
+      const fv = (await checkDocxFormat(wrong, PROFILE)).find(
+        (x) => x.code === 'FONT_ARABIC',
+      );
+      expect(fv?.found).toBe('Arial');
+    });
+
+    it('ignores superseded formatting recorded in tracked changes', async () => {
+      const buf = await makeDocx({
+        body: [
+          TITLE,
+          para(AR_TEXT),
+          para(AR_TEXT),
+          para(EN_TEXT, {
+            rPr: '<w:sz w:val="22"/><w:rPrChange w:id="1" w:author="x"><w:rPr><w:sz w:val="40"/></w:rPr></w:rPrChange>',
+          }),
+        ].join(''),
+      });
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
+    });
+
+    it('judges the section holding most of the text (1-column title block, 2-column body)', async () => {
+      const titleSection = `<w:p><w:pPr><w:sectPr><w:pgMar w:top="${MM(30)}" w:right="${MM(20)}" w:bottom="${MM(20)}" w:left="${MM(20)}" w:header="${MM(18)}" w:footer="${MM(6)}"/><w:cols w:space="708"/><w:titlePg/><w:type w:val="continuous"/></w:sectPr></w:pPr></w:p>`;
+      const buf = await makeDocx({
+        cols: 2,
+        body:
+          TITLE +
+          titleSection +
+          DEFAULT_BODY.replace(TITLE, '') +
+          para(AR_TEXT),
+      });
+      const v = await checkDocxFormat(buf, PROFILE, { expectedColumns: 2 });
+      expect(codes(v)).not.toContain('COLUMN_COUNT');
+      expect(v).toEqual([]);
+    });
+  });
+
+  // ── Severity ────────────────────────────────────────────────────────────────
+
+  describe('severity', () => {
+    it('blocks on page margins but only warns on header/footer distance', async () => {
+      const buf = await makeDocx({
+        margins: { top: MM(20), header: MM(30), footer: MM(30) },
+      });
+      const v = await checkDocxFormat(buf, PROFILE);
+      expect(v.find((x) => x.code === 'MARGIN_TOP')?.severity).toBe('error');
+      expect(v.find((x) => x.code === 'MARGIN_HEADER')?.severity).toBe(
+        'warning',
+      );
+      expect(v.find((x) => x.code === 'MARGIN_FOOTER')?.severity).toBe(
+        'warning',
+      );
+    });
+
+    it('isBlockingDocxViolation treats legacy rows without severity as blocking', () => {
+      const base = {
+        code: 'X',
+        message: 'm',
+        messageAr: 'm',
+        expected: 'e',
+        found: 'f',
+      };
+      expect(isBlockingDocxViolation(base)).toBe(true);
+      expect(isBlockingDocxViolation({ ...base, severity: 'error' })).toBe(
+        true,
+      );
+      expect(isBlockingDocxViolation({ ...base, severity: 'warning' })).toBe(
+        false,
+      );
     });
   });
 
@@ -419,9 +565,10 @@ describe('checkDocxFormat', () => {
 
   describe('margin violations', () => {
     it('reports MARGIN_TOP when top margin is too large', async () => {
-      const buf = await makeDocx({ margins: { top: MM(44) } }); // 44mm, required 30mm
-      const v = await checkDocxFormat(buf, PROFILE);
-      const mv = v.find((x) => x.code === 'MARGIN_TOP');
+      const buf = await makeDocx({ margins: { top: MM(44) } });
+      const mv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'MARGIN_TOP',
+      );
       expect(mv).toBeDefined();
       expect(mv!.expected).toBe('30 mm');
       expect(mv!.message).toMatch(/top margin/);
@@ -429,35 +576,21 @@ describe('checkDocxFormat', () => {
     });
 
     it('reports MARGIN_BOTTOM when bottom margin is too small', async () => {
-      const buf = await makeDocx({ margins: { bottom: MM(10) } }); // 10mm, required 20mm
-      const v = await checkDocxFormat(buf, PROFILE);
-      const mv = v.find((x) => x.code === 'MARGIN_BOTTOM');
-      expect(mv).toBeDefined();
-      expect(mv!.expected).toBe('20 mm');
+      const buf = await makeDocx({ margins: { bottom: MM(10) } });
+      const mv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'MARGIN_BOTTOM',
+      );
+      expect(mv?.expected).toBe('20 mm');
     });
 
-    it('reports MARGIN_LEFT when left margin is wrong', async () => {
-      const buf = await makeDocx({ margins: { left: MM(25) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'MARGIN_LEFT')).toBeDefined();
-    });
-
-    it('reports MARGIN_RIGHT when right margin is wrong', async () => {
-      const buf = await makeDocx({ margins: { right: MM(35) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'MARGIN_RIGHT')).toBeDefined();
-    });
-
-    it('reports MARGIN_HEADER when header distance is wrong', async () => {
-      const buf = await makeDocx({ margins: { header: MM(25) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'MARGIN_HEADER')).toBeDefined();
-    });
-
-    it('reports MARGIN_FOOTER when footer distance is wrong', async () => {
-      const buf = await makeDocx({ margins: { footer: MM(15) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'MARGIN_FOOTER')).toBeDefined();
+    it.each([
+      ['MARGIN_LEFT', { left: MM(25) }],
+      ['MARGIN_RIGHT', { right: MM(35) }],
+      ['MARGIN_HEADER', { header: MM(25) }],
+      ['MARGIN_FOOTER', { footer: MM(15) }],
+    ])('reports %s', async (code, margins) => {
+      const buf = await makeDocx({ margins });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toContain(code);
     });
 
     it('reports all six margin violations when all margins are wrong', async () => {
@@ -471,238 +604,42 @@ describe('checkDocxFormat', () => {
           footer: MM(25),
         },
       });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const codes = v.map((x) => x.code);
-      expect(codes).toContain('MARGIN_TOP');
-      expect(codes).toContain('MARGIN_BOTTOM');
-      expect(codes).toContain('MARGIN_LEFT');
-      expect(codes).toContain('MARGIN_RIGHT');
-      expect(codes).toContain('MARGIN_HEADER');
-      expect(codes).toContain('MARGIN_FOOTER');
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toEqual(
+        expect.arrayContaining([
+          'MARGIN_TOP',
+          'MARGIN_BOTTOM',
+          'MARGIN_LEFT',
+          'MARGIN_RIGHT',
+          'MARGIN_HEADER',
+          'MARGIN_FOOTER',
+        ]),
+      );
     });
 
     it('does not flag a margin that is exactly 3 mm off (at tolerance boundary)', async () => {
-      // top required 30mm; 27mm is exactly 3mm under = within tolerance
       const buf = await makeDocx({ margins: { top: MM(27) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'MARGIN_TOP')).toBeUndefined();
+      expect(codes(await checkDocxFormat(buf, PROFILE))).not.toContain(
+        'MARGIN_TOP',
+      );
     });
 
     it('flags a margin that is 4 mm off (just outside tolerance)', async () => {
-      // top required 30mm; 26mm is 4mm under = outside tolerance
       const buf = await makeDocx({ margins: { top: MM(26) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'MARGIN_TOP')).toBeDefined();
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toContain(
+        'MARGIN_TOP',
+      );
     });
 
     it('violation message includes actual and expected mm values', async () => {
       const buf = await makeDocx({ margins: { top: MM(25) } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const mv = v.find((x) => x.code === 'MARGIN_TOP')!;
+      const mv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'MARGIN_TOP',
+      )!;
       expect(mv.message).toMatch(/25/);
       expect(mv.message).toMatch(/30/);
     });
-  });
-
-  // ── Column count ────────────────────────────────────────────────────────────
-
-  describe('column count violations', () => {
-    it('reports COLUMN_COUNT when document has 2 columns but 1 expected', async () => {
-      const buf = await makeDocx({ cols: 2 });
-      const v = await checkDocxFormat(buf, PROFILE, 1);
-      const cv = v.find((x) => x.code === 'COLUMN_COUNT');
-      expect(cv).toBeDefined();
-      expect(cv!.expected).toBe('1 column(s)');
-      expect(cv!.found).toBe('2 column(s)');
-      expect(cv!.messageAr).toMatch(/الأعمدة/);
-    });
-
-    it('reports COLUMN_COUNT when document has 1 column but 2 expected', async () => {
-      const buf = await makeDocx({ cols: 1 });
-      const v = await checkDocxFormat(buf, PROFILE, 2);
-      expect(v.find((x) => x.code === 'COLUMN_COUNT')).toBeDefined();
-    });
-
-    it('passes when 2-column document is checked against expectedColumns=2', async () => {
-      const buf = await makeDocx({ cols: 2 });
-      const v = await checkDocxFormat(buf, PROFILE, 2);
-      expect(v.find((x) => x.code === 'COLUMN_COUNT')).toBeUndefined();
-    });
-
-    it('passes when 1-column document is checked against default expectedColumns', async () => {
-      const buf = await makeDocx({ cols: 1 });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'COLUMN_COUNT')).toBeUndefined();
-    });
-  });
-
-  // ── Font violations ─────────────────────────────────────────────────────────
-
-  describe('font violations', () => {
-    it('reports FONT_LATIN when Latin font is wrong', async () => {
-      const buf = await makeDocx({
-        style: {
-          latinFont: 'Arial',
-          arabicFont: 'Simplified Arabic',
-          latinSizeHp: 22,
-          arabicSizeHp: 24,
-        },
-      });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const fv = v.find((x) => x.code === 'FONT_LATIN');
-      expect(fv).toBeDefined();
-      expect(fv!.expected).toBe('Times New Roman');
-      expect(fv!.found).toBe('Arial');
-      expect(fv!.messageAr).toMatch(/اللاتيني/);
-    });
-
-    it('reports FONT_ARABIC when Arabic font is wrong', async () => {
-      const buf = await makeDocx({
-        style: {
-          latinFont: 'Times New Roman',
-          arabicFont: 'Arial',
-          latinSizeHp: 22,
-          arabicSizeHp: 24,
-        },
-      });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const fv = v.find((x) => x.code === 'FONT_ARABIC');
-      expect(fv).toBeDefined();
-      expect(fv!.expected).toBe('Simplified Arabic');
-      expect(fv!.found).toBe('Arial');
-      expect(fv!.messageAr).toMatch(/العربي/);
-    });
-
-    it('reports FONT_SIZE_LATIN when Latin size is wrong (12pt instead of 11pt)', async () => {
-      const buf = await makeDocx({
-        style: { latinSizeHp: 24, arabicSizeHp: 24 },
-      }); // 12pt Latin
-      const v = await checkDocxFormat(buf, PROFILE);
-      const fv = v.find((x) => x.code === 'FONT_SIZE_LATIN');
-      expect(fv).toBeDefined();
-      expect(fv!.expected).toBe('11 pt');
-      expect(fv!.found).toBe('12 pt');
-    });
-
-    it('reports FONT_SIZE_ARABIC when Arabic size is wrong (11pt instead of 12pt)', async () => {
-      const buf = await makeDocx({
-        style: { latinSizeHp: 22, arabicSizeHp: 22 },
-      }); // 11pt Arabic
-      const v = await checkDocxFormat(buf, PROFILE);
-      const fv = v.find((x) => x.code === 'FONT_SIZE_ARABIC');
-      expect(fv).toBeDefined();
-      expect(fv!.expected).toBe('12 pt');
-      expect(fv!.found).toBe('11 pt');
-    });
-
-    it('reports all four font violations simultaneously', async () => {
-      const buf = await makeDocx({
-        style: {
-          latinFont: 'Calibri',
-          arabicFont: 'Tahoma',
-          latinSizeHp: 24, // 12pt
-          arabicSizeHp: 20, // 10pt
-        },
-      });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const codes = v.map((x) => x.code);
-      expect(codes).toContain('FONT_LATIN');
-      expect(codes).toContain('FONT_ARABIC');
-      expect(codes).toContain('FONT_SIZE_LATIN');
-      expect(codes).toContain('FONT_SIZE_ARABIC');
-    });
-
-    it('detects fonts in Normal style block (inNormalStyle=true)', async () => {
-      const buf = await makeDocx({
-        style: {
-          latinFont: 'Calibri',
-          arabicFont: 'Simplified Arabic',
-          latinSizeHp: 22,
-          arabicSizeHp: 24,
-          inNormalStyle: true,
-        },
-      });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'FONT_LATIN')).toBeDefined();
-      expect(v.find((x) => x.code === 'FONT_ARABIC')).toBeUndefined();
-    });
-  });
-
-  // ── Combined violations ──────────────────────────────────────────────────────
-
-  describe('combined violations', () => {
-    it('reports margin + column + font violations together', async () => {
-      const buf = await makeDocx({
-        margins: { top: MM(25) },
-        cols: 2,
-        style: {
-          latinFont: 'Calibri',
-          arabicFont: 'Simplified Arabic',
-          latinSizeHp: 22,
-          arabicSizeHp: 24,
-        },
-      });
-      const v = await checkDocxFormat(buf, PROFILE, 1);
-      const codes = v.map((x) => x.code);
-      expect(codes).toContain('MARGIN_TOP');
-      expect(codes).toContain('COLUMN_COUNT');
-      expect(codes).toContain('FONT_LATIN');
-    });
-
-    it('each violation has all required fields', async () => {
-      const buf = await makeDocx({
-        margins: { top: MM(25) },
-        style: {
-          latinFont: 'Calibri',
-          arabicFont: 'Simplified Arabic',
-          latinSizeHp: 22,
-          arabicSizeHp: 24,
-        },
-      });
-      const v = await checkDocxFormat(buf, PROFILE);
-      for (const violation of v) {
-        expect(violation.code).toBeTruthy();
-        expect(violation.message).toBeTruthy();
-        expect(violation.messageAr).toBeTruthy();
-        expect(violation.expected).toBeTruthy();
-        expect(violation.found).toBeTruthy();
-      }
-    });
-  });
-
-  // ── Real-world margin values (Word default rounding) ─────────────────────────
-
-  describe('real-world Word margin values', () => {
-    it('accepts the exact twip values Word uses for Damascus University margins', async () => {
-      // Word rounds 30mm → 1701, 20mm → 1134, 18mm → 1021, 6mm → 340
-      const zip = new JSZip();
-      zip.file(
-        'word/document.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body><w:p/><w:sectPr>
-    <w:pgMar w:top="1701" w:right="1134" w:bottom="1134" w:left="1134" w:header="1021" w:footer="340" w:gutter="0"/>
-    <w:cols w:space="708"/>
-  </w:sectPr></w:body>
-</w:document>`,
-      );
-      zip.file(
-        'word/styles.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr>
-    <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Simplified Arabic"/>
-    <w:sz w:val="22"/><w:szCs w:val="24"/>
-  </w:rPr></w:rPrDefault></w:docDefaults>
-</w:styles>`,
-      );
-      const buf = Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v).toHaveLength(0);
-    });
 
     it('flags typical Microsoft Word default margins (2.54cm = 1440 twips)', async () => {
-      // Word's default 1-inch (2.54cm) margins — wrong for Damascus University
       const buf = await makeDocx({
         margins: {
           top: 1440,
@@ -713,79 +650,154 @@ describe('checkDocxFormat', () => {
           footer: 720,
         },
       });
-      const v = await checkDocxFormat(buf, PROFILE);
-      // All margins wrong — should have violations
-      const marginCodes = v
-        .filter((x) => x.code.startsWith('MARGIN'))
-        .map((x) => x.code);
-      expect(marginCodes).toContain('MARGIN_TOP'); // 1440 twips = 25.4mm, required 30mm → Δ4.6mm > 3mm
-      expect(marginCodes).toContain('MARGIN_HEADER'); // 720 twips = 12.7mm, required 18mm → Δ5.3mm
-      expect(marginCodes).toContain('MARGIN_FOOTER'); // 720 twips = 12.7mm, required 6mm → Δ6.7mm
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toEqual(
+        expect.arrayContaining([
+          'MARGIN_TOP',
+          'MARGIN_HEADER',
+          'MARGIN_FOOTER',
+        ]),
+      );
     });
   });
 
-  // ── Engineering: 2-column requirement ───────────────────────────────────────
+  // ── Column count ────────────────────────────────────────────────────────────
 
-  describe('engineering discipline — two-column layout', () => {
-    it('passes an engineering doc with 2 columns when expectedColumns=2', async () => {
+  describe('column count violations', () => {
+    it('reports COLUMN_COUNT when document has 2 columns but 1 expected', async () => {
       const buf = await makeDocx({ cols: 2 });
-      const v = await checkDocxFormat(buf, PROFILE, { expectedColumns: 2 });
-      expect(v.find((x) => x.code === 'COLUMN_COUNT')).toBeUndefined();
-    });
-
-    it('flags an engineering doc with 1 column when expectedColumns=2', async () => {
-      const buf = await makeDocx({ cols: 1 });
-      const v = await checkDocxFormat(buf, PROFILE, { expectedColumns: 2 });
-      const cv = v.find((x) => x.code === 'COLUMN_COUNT');
+      const cv = (await checkDocxFormat(buf, PROFILE, 1)).find(
+        (x) => x.code === 'COLUMN_COUNT',
+      );
       expect(cv).toBeDefined();
-      expect(cv!.expected).toBe('2 column(s)');
-      expect(cv!.found).toBe('1 column(s)');
+      expect(cv!.severity).toBe('error');
+      expect(cv!.expected).toBe('1 column(s)');
+      expect(cv!.found).toBe('2 column(s)');
+      expect(cv!.messageAr).toMatch(/الأعمدة/);
     });
 
-    it('passes a non-engineering doc with 1 column (default)', async () => {
+    it('reports COLUMN_COUNT when document has 1 column but 2 expected', async () => {
       const buf = await makeDocx({ cols: 1 });
-      const v = await checkDocxFormat(buf, PROFILE, { expectedColumns: 1 });
-      expect(v.find((x) => x.code === 'COLUMN_COUNT')).toBeUndefined();
+      const cv = (
+        await checkDocxFormat(buf, PROFILE, { expectedColumns: 2 })
+      ).find((x) => x.code === 'COLUMN_COUNT');
+      expect(cv?.expected).toBe('2 column(s)');
+      expect(cv?.found).toBe('1 column(s)');
+    });
+
+    it('passes when 2-column document is checked against expectedColumns=2', async () => {
+      const buf = await makeDocx({ cols: 2 });
+      expect(await checkDocxFormat(buf, PROFILE, 2)).toEqual([]);
     });
   });
 
-  // ── Citation style: APA vs Vancouver ────────────────────────────────────────
+  // ── Font violations ─────────────────────────────────────────────────────────
 
-  function makeDocxWithCitations(citationTexts: string[]): string {
-    const body = citationTexts
-      .map((c) => `<w:p><w:r><w:t>${c}</w:t></w:r></w:p>`)
-      .join('\n');
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${body}
-    <w:sectPr>
-      <w:pgMar w:top="${MM(30)}" w:right="${MM(20)}" w:bottom="${MM(20)}" w:left="${MM(20)}" w:header="${MM(18)}" w:footer="${MM(6)}" w:gutter="0"/>
-      <w:cols w:space="708"/>
-    </w:sectPr>
-  </w:body>
-</w:document>`;
-  }
+  describe('font violations', () => {
+    it('reports FONT_LATIN when Latin font is wrong', async () => {
+      const buf = await makeDocx({ style: { latinFont: 'Arial' } });
+      const fv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'FONT_LATIN',
+      );
+      expect(fv).toBeDefined();
+      expect(fv!.severity).toBe('error');
+      expect(fv!.expected).toBe('Times New Roman');
+      expect(fv!.found).toBe('Arial');
+      expect(fv!.messageAr).toMatch(/اللاتيني/);
+    });
 
-  async function makeDocxBufWithCitations(
-    citationTexts: string[],
-  ): Promise<Buffer> {
-    const zip = new JSZip();
-    zip.file('word/document.xml', makeDocxWithCitations(citationTexts));
-    zip.file(
-      'word/styles.xml',
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr>
-    <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Simplified Arabic"/>
-    <w:sz w:val="22"/><w:szCs w:val="24"/>
-  </w:rPr></w:rPrDefault></w:docDefaults>
-</w:styles>`,
-    );
-    return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
-  }
+    it('reports FONT_ARABIC when Arabic font is wrong', async () => {
+      const buf = await makeDocx({ style: { arabicFont: 'Arial' } });
+      const fv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'FONT_ARABIC',
+      );
+      expect(fv).toBeDefined();
+      expect(fv!.expected).toBe('Simplified Arabic');
+      expect(fv!.found).toBe('Arial');
+      expect(fv!.messageAr).toMatch(/العربي/);
+    });
 
-  describe('citation style validation', () => {
+    it('reports FONT_SIZE_LATIN when Latin size is wrong (12pt instead of 11pt)', async () => {
+      const buf = await makeDocx({ style: { latinSizeHp: 24 } });
+      const fv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'FONT_SIZE_LATIN',
+      );
+      expect(fv!.expected).toBe('11 pt');
+      expect(fv!.found).toBe('12 pt');
+    });
+
+    it('reports FONT_SIZE_ARABIC when Arabic size is wrong (11pt instead of 12pt)', async () => {
+      const buf = await makeDocx({ style: { arabicSizeHp: 22 } });
+      const fv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'FONT_SIZE_ARABIC',
+      );
+      expect(fv!.expected).toBe('12 pt');
+      expect(fv!.found).toBe('11 pt');
+    });
+
+    it('reports all four font violations simultaneously', async () => {
+      const buf = await makeDocx({
+        style: {
+          latinFont: 'Calibri',
+          arabicFont: 'Tahoma',
+          latinSizeHp: 24,
+          arabicSizeHp: 20,
+        },
+      });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toEqual(
+        expect.arrayContaining([
+          'FONT_LATIN',
+          'FONT_ARABIC',
+          'FONT_SIZE_LATIN',
+          'FONT_SIZE_ARABIC',
+        ]),
+      );
+    });
+
+    it('detects fonts in Normal style block (inNormalStyle=true)', async () => {
+      const buf = await makeDocx({
+        style: { latinFont: 'Calibri', inNormalStyle: true },
+      });
+      const v = codes(await checkDocxFormat(buf, PROFILE));
+      expect(v).toContain('FONT_LATIN');
+      expect(v).not.toContain('FONT_ARABIC');
+    });
+
+    it('does not judge a script that barely appears in the article', async () => {
+      const buf = await makeDocx({
+        style: { latinFont: 'Arial' },
+        body: [TITLE, para(AR_TEXT), para(AR_TEXT), para('SPSS')].join(''),
+      });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).not.toContain(
+        'FONT_LATIN',
+      );
+    });
+  });
+
+  describe('combined violations', () => {
+    it('reports margin + column + font violations together, each fully described', async () => {
+      const buf = await makeDocx({
+        margins: { top: MM(25) },
+        cols: 2,
+        style: { latinFont: 'Calibri' },
+      });
+      const v = await checkDocxFormat(buf, PROFILE, 1);
+      expect(codes(v)).toEqual(
+        expect.arrayContaining(['MARGIN_TOP', 'COLUMN_COUNT', 'FONT_LATIN']),
+      );
+      for (const violation of v) {
+        expect(violation.code).toBeTruthy();
+        expect(violation.message).toBeTruthy();
+        expect(violation.messageAr).toBeTruthy();
+        expect(violation.expected).toBeTruthy();
+        expect(violation.found).toBeTruthy();
+        expect(['error', 'warning']).toContain(violation.severity);
+      }
+    });
+  });
+
+  // ── Citation style: APA vs Vancouver (advisory) ─────────────────────────────
+
+  describe('citation style', () => {
     const VANCOUVER_CITES = ['[1]', '[2]', '[3,4]', '[5]'];
     const APA_CITES = [
       '(Smith, 2020)',
@@ -793,142 +805,86 @@ describe('checkDocxFormat', () => {
       '(Ali et al., 2021)',
       '(Chen, 2022)',
     ];
+    const withCites = (cites: string[]) =>
+      makeDocx({ body: DEFAULT_BODY + cites.map((c) => para(c)).join('') });
 
-    it('skips citation check when discipline is not provided', async () => {
-      const buf = await makeDocxBufWithCitations(APA_CITES);
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'CITATION_STYLE')).toBeUndefined();
+    it('skips citation check when no citation style is provided', async () => {
+      const v = await checkDocxFormat(await withCites(APA_CITES), PROFILE);
+      expect(codes(v)).not.toContain('CITATION_STYLE');
     });
 
     it('skips citation check when fewer than 3 citations found', async () => {
-      const buf = await makeDocxBufWithCitations(['[1]', '[2]']);
-      const v = await checkDocxFormat(buf, PROFILE, { discipline: 'medical' });
-      expect(v.find((x) => x.code === 'CITATION_STYLE')).toBeUndefined();
+      const v = await checkDocxFormat(
+        await withCites(['[1]', '[2]']),
+        PROFILE,
+        {
+          citationStyle: 'vancouver',
+        },
+      );
+      expect(codes(v)).not.toContain('CITATION_STYLE');
     });
 
-    // Medical (العلوم الطبية) → requires Vancouver
-    it('passes medical discipline with Vancouver citations', async () => {
-      const buf = await makeDocxBufWithCitations(VANCOUVER_CITES);
-      const v = await checkDocxFormat(buf, PROFILE, { discipline: 'medical' });
-      expect(v.find((x) => x.code === 'CITATION_STYLE')).toBeUndefined();
+    it('passes a Vancouver journal with numbered citations', async () => {
+      const v = await checkDocxFormat(
+        await withCites(VANCOUVER_CITES),
+        PROFILE,
+        {
+          expectedColumns: 1,
+          citationStyle: 'vancouver',
+        },
+      );
+      expect(v).toEqual([]);
     });
 
-    it('flags medical discipline using APA citations (requires Vancouver)', async () => {
-      const buf = await makeDocxBufWithCitations(APA_CITES);
-      const v = await checkDocxFormat(buf, PROFILE, { discipline: 'medical' });
+    it('warns (does not block) when a Vancouver journal uses APA citations', async () => {
+      const v = await checkDocxFormat(await withCites(APA_CITES), PROFILE, {
+        citationStyle: 'vancouver',
+      });
       const cv = v.find((x) => x.code === 'CITATION_STYLE');
       expect(cv).toBeDefined();
+      expect(cv!.severity).toBe('warning');
       expect(cv!.expected).toBe('Vancouver [1]');
       expect(cv!.found).toBe('APA (Author, Year)');
-      expect(cv!.message).toMatch(/Vancouver/);
       expect(cv!.messageAr).toMatch(/Vancouver/);
-      expect(cv!.messageAr).toMatch(/الطبية/);
     });
 
-    // Engineering (العلوم الهندسية) → requires APA
-    it('passes engineering discipline with APA citations', async () => {
-      const buf = await makeDocxBufWithCitations(APA_CITES);
-      const v = await checkDocxFormat(buf, PROFILE, {
-        discipline: 'engineering',
-      });
-      expect(v.find((x) => x.code === 'CITATION_STYLE')).toBeUndefined();
-    });
-
-    it('flags engineering discipline using Vancouver citations (requires APA)', async () => {
-      const buf = await makeDocxBufWithCitations(VANCOUVER_CITES);
-      const v = await checkDocxFormat(buf, PROFILE, {
-        discipline: 'engineering',
-      });
-      const cv = v.find((x) => x.code === 'CITATION_STYLE');
-      expect(cv).toBeDefined();
-      expect(cv!.expected).toBe('APA (Author, Year)');
-      expect(cv!.found).toBe('Vancouver [1]');
-      expect(cv!.messageAr).toMatch(/الهندسية/);
-    });
-
-    // Other disciplines → require APA
-    it('flags other discipline using Vancouver citations (requires APA)', async () => {
-      const buf = await makeDocxBufWithCitations(VANCOUVER_CITES);
-      const v = await checkDocxFormat(buf, PROFILE, { discipline: 'other' });
-      expect(v.find((x) => x.code === 'CITATION_STYLE')).toBeDefined();
-    });
-
-    it('passes other discipline with APA citations', async () => {
-      const buf = await makeDocxBufWithCitations(APA_CITES);
-      const v = await checkDocxFormat(buf, PROFILE, { discipline: 'other' });
-      expect(v.find((x) => x.code === 'CITATION_STYLE')).toBeUndefined();
-    });
-
-    it('engineering doc: 2-column + APA is fully valid', async () => {
-      const zip = new JSZip();
-      const apaCites = APA_CITES.map(
-        (c) => `<w:p><w:r><w:t>${c}</w:t></w:r></w:p>`,
-      ).join('\n');
-      zip.file(
-        'word/document.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${apaCites}
-    <w:sectPr>
-      <w:pgMar w:top="${MM(30)}" w:right="${MM(20)}" w:bottom="${MM(20)}" w:left="${MM(20)}" w:header="${MM(18)}" w:footer="${MM(6)}" w:gutter="0"/>
-      <w:cols w:num="2" w:space="708"/>
-    </w:sectPr>
-  </w:body>
-</w:document>`,
+    it('detects Arabic author–year citations for a Vancouver journal', async () => {
+      const v = await checkDocxFormat(
+        await withCites([
+          '(المقدسي، 2020)',
+          '(الحسن وآخرون، 2019)',
+          '(سليمان، 2021)',
+        ]),
+        PROFILE,
+        { citationStyle: 'vancouver' },
       );
-      zip.file(
-        'word/styles.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr>
-    <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Simplified Arabic"/>
-    <w:sz w:val="22"/><w:szCs w:val="24"/>
-  </w:rPr></w:rPrDefault></w:docDefaults>
-</w:styles>`,
-      );
-      const buf = Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
+      expect(codes(v)).toContain('CITATION_STYLE');
+    });
+
+    it('passes an APA journal with author–year citations in two columns', async () => {
+      const buf = await makeDocx({
+        cols: 2,
+        body: DEFAULT_BODY + APA_CITES.map((c) => para(c)).join(''),
+      });
       const v = await checkDocxFormat(buf, PROFILE, {
         expectedColumns: 2,
-        discipline: 'engineering',
+        citationStyle: 'apa',
       });
-      expect(v).toHaveLength(0);
+      expect(v).toEqual([]);
     });
 
-    it('medical doc: 1-column + Vancouver is fully valid', async () => {
-      const zip = new JSZip();
-      const vcCites = VANCOUVER_CITES.map(
-        (c) => `<w:p><w:r><w:t>${c}</w:t></w:r></w:p>`,
-      ).join('\n');
-      zip.file(
-        'word/document.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${vcCites}
-    <w:sectPr>
-      <w:pgMar w:top="${MM(30)}" w:right="${MM(20)}" w:bottom="${MM(20)}" w:left="${MM(20)}" w:header="${MM(18)}" w:footer="${MM(6)}" w:gutter="0"/>
-      <w:cols w:space="708"/>
-    </w:sectPr>
-  </w:body>
-</w:document>`,
+    it('warns when an APA journal uses numbered citations', async () => {
+      const v = await checkDocxFormat(
+        await withCites(VANCOUVER_CITES),
+        PROFILE,
+        {
+          citationStyle: 'apa',
+        },
       );
-      zip.file(
-        'word/styles.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr>
-    <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Simplified Arabic"/>
-    <w:sz w:val="22"/><w:szCs w:val="24"/>
-  </w:rPr></w:rPrDefault></w:docDefaults>
-</w:styles>`,
-      );
-      const buf = Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
-      const v = await checkDocxFormat(buf, PROFILE, {
-        expectedColumns: 1,
-        discipline: 'medical',
-      });
-      expect(v).toHaveLength(0);
+      const cv = v.find((x) => x.code === 'CITATION_STYLE');
+      expect(cv?.severity).toBe('warning');
+      expect(cv?.expected).toBe('APA (Author, Year)');
+      expect(cv?.messageAr).toMatch(/APA/);
     });
   });
 
@@ -936,8 +892,7 @@ describe('checkDocxFormat', () => {
 
   describe('line spacing', () => {
     it('passes when spacing element is absent (defaults to single)', async () => {
-      const buf = await makeDocx(); // no spacing option → no <w:spacing> in Normal
-      const v = await checkDocxFormat(buf, PROFILE);
+      const v = await checkDocxFormat(await makeDocx(), PROFILE);
       expect(v.find((x) => x.code.startsWith('LINE_SPACING'))).toBeUndefined();
     });
 
@@ -953,40 +908,35 @@ describe('checkDocxFormat', () => {
       const buf = await makeDocx({
         spacing: { lineTwips: 480, lineRule: 'auto' },
       });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const lv = v.find((x) => x.code === 'LINE_SPACING');
+      const lv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'LINE_SPACING',
+      );
       expect(lv).toBeDefined();
+      expect(lv!.severity).toBe('error');
       expect(lv!.expected).toContain('240');
       expect(lv!.found).toContain('480');
       expect(lv!.messageAr).toMatch(/تباعد/);
     });
 
-    it('flags lineRule="exact" (not auto)', async () => {
-      const buf = await makeDocx({
-        spacing: { lineTwips: 240, lineRule: 'exact' },
-      });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'LINE_SPACING_RULE')).toBeDefined();
+    it.each(['exact', 'atLeast'])('flags lineRule="%s"', async (lineRule) => {
+      const buf = await makeDocx({ spacing: { lineTwips: 240, lineRule } });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toContain(
+        'LINE_SPACING_RULE',
+      );
     });
 
-    it('flags lineRule="atLeast"', async () => {
+    it('uses the spacing most of the text has, not the odd paragraph', async () => {
+      const wide = '<w:spacing w:line="480" w:lineRule="auto"/>';
       const buf = await makeDocx({
-        spacing: { lineTwips: 240, lineRule: 'atLeast' },
+        body: DEFAULT_BODY + para('ملاحظة', { pPr: wide }),
       });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'LINE_SPACING_RULE')).toBeDefined();
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
     });
   });
 
   // ── Paragraph spacing before/after ───────────────────────────────────────
 
   describe('paragraph spacing before/after', () => {
-    it('passes when spacing element is absent', async () => {
-      const buf = await makeDocx();
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code.startsWith('PARA_SPACING'))).toBeUndefined();
-    });
-
     it('passes when before=0 and after=0', async () => {
       const buf = await makeDocx({
         spacing: { beforeTwips: 0, afterTwips: 0 },
@@ -997,8 +947,9 @@ describe('checkDocxFormat', () => {
 
     it('flags spacing after=160 (Word default 8pt)', async () => {
       const buf = await makeDocx({ spacing: { afterTwips: 160 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const pv = v.find((x) => x.code === 'PARA_SPACING_AFTER');
+      const pv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'PARA_SPACING_AFTER',
+      );
       expect(pv).toBeDefined();
       expect(pv!.expected).toBe('0 twips');
       expect(pv!.found).toBe('160 twips');
@@ -1007,9 +958,9 @@ describe('checkDocxFormat', () => {
 
     it('flags spacing before=200', async () => {
       const buf = await makeDocx({ spacing: { beforeTwips: 200 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const pv = v.find((x) => x.code === 'PARA_SPACING_BEFORE');
-      expect(pv).toBeDefined();
+      const pv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'PARA_SPACING_BEFORE',
+      );
       expect(pv!.found).toBe('200 twips');
       expect(pv!.messageAr).toMatch(/قبل الفقرة/);
     });
@@ -1018,84 +969,153 @@ describe('checkDocxFormat', () => {
       const buf = await makeDocx({
         spacing: { beforeTwips: 100, afterTwips: 200 },
       });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'PARA_SPACING_BEFORE')).toBeDefined();
-      expect(v.find((x) => x.code === 'PARA_SPACING_AFTER')).toBeDefined();
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toEqual(
+        expect.arrayContaining(['PARA_SPACING_BEFORE', 'PARA_SPACING_AFTER']),
+      );
     });
   });
 
-  // ── Heading sizes ─────────────────────────────────────────────────────────
+  // ── Title and subheadings ─────────────────────────────────────────────────
 
-  describe('heading sizes', () => {
-    it('skips heading check when style is absent from styles.xml', async () => {
-      const buf = await makeDocx(); // no headingSizes option
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code.startsWith('HEADING'))).toBeUndefined();
+  describe('title and subheadings', () => {
+    const heading = (text: string) =>
+      para(text, { pPr: '<w:pStyle w:val="Heading1"/>' });
+
+    it('passes a 16 pt bold title and 14 pt subheadings', async () => {
+      const buf = await makeDocx({
+        heading1SizeHp: 28,
+        body: DEFAULT_BODY + heading('المقدمة') + para(AR_TEXT),
+      });
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
     });
 
-    it('passes when H1=32hp (16pt) matches profile', async () => {
-      const buf = await makeDocx({ headingSizes: { h1: 32 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'HEADING1_SIZE')).toBeUndefined();
+    it('warns when the main title is not 16 pt', async () => {
+      const buf = await makeDocx({
+        body: DEFAULT_BODY.replace(
+          TITLE,
+          para('عنوان المقالة', { rPr: '<w:b/><w:bCs/><w:szCs w:val="24"/>' }),
+        ),
+      });
+      const tv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'TITLE_SIZE',
+      );
+      expect(tv?.severity).toBe('warning');
+      expect(tv?.expected).toBe('16 pt');
+      expect(tv?.found).toBe('12 pt');
+      expect(tv?.messageAr).toMatch(/العنوان الرئيسي/);
     });
 
-    it('flags H1 with wrong size (24hp=12pt, required 32hp=16pt)', async () => {
-      const buf = await makeDocx({ headingSizes: { h1: 24 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const hv = v.find((x) => x.code === 'HEADING1_SIZE');
-      expect(hv).toBeDefined();
-      expect(hv!.expected).toBe('16 pt');
-      expect(hv!.found).toBe('12 pt');
-      expect(hv!.messageAr).toMatch(/العنوان الرئيسي/);
+    it('warns when the main title is not bold', async () => {
+      const buf = await makeDocx({
+        body: DEFAULT_BODY.replace(
+          TITLE,
+          para('عنوان المقالة', { rPr: '<w:szCs w:val="32"/>' }),
+        ),
+      });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).toContain(
+        'TITLE_NOT_BOLD',
+      );
     });
 
-    it('passes when H2=28hp (14pt) matches profile', async () => {
-      const buf = await makeDocx({ headingSizes: { h2: 28 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'HEADING2_SIZE')).toBeUndefined();
-    });
-
-    it('flags H2 with wrong size (22hp=11pt, required 28hp=14pt)', async () => {
-      const buf = await makeDocx({ headingSizes: { h2: 22 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      const hv = v.find((x) => x.code === 'HEADING2_SIZE');
-      expect(hv).toBeDefined();
-      expect(hv!.expected).toBe('14 pt');
-      expect(hv!.found).toBe('11 pt');
-      expect(hv!.messageAr).toMatch(/العنوان الفرعي/);
-    });
-
-    it('flags both H1 and H2 together', async () => {
-      const buf = await makeDocx({ headingSizes: { h1: 20, h2: 20 } });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'HEADING1_SIZE')).toBeDefined();
-      expect(v.find((x) => x.code === 'HEADING2_SIZE')).toBeDefined();
+    it('warns when subheadings are not 14 pt', async () => {
+      const buf = await makeDocx({
+        heading1SizeHp: 24,
+        body: DEFAULT_BODY + heading('المقدمة') + para(AR_TEXT),
+      });
+      const hv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'HEADING_SIZE',
+      );
+      expect(hv?.severity).toBe('warning');
+      expect(hv?.expected).toBe('14 pt');
+      expect(hv?.found).toBe('12 pt');
+      expect(hv?.messageAr).toMatch(/العناوين الفرعية/);
     });
   });
 
   // ── Footnote size ─────────────────────────────────────────────────────────
 
   describe('footnote size', () => {
-    it('skips footnote check when FootnoteText style is absent', async () => {
-      const buf = await makeDocx(); // no footnoteSizeHp option
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'FOOTNOTE_SIZE')).toBeUndefined();
-    });
+    const footnotes = `<w:footnotes ${W_NS}>
+      <w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>
+      <w:footnote w:id="1"><w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr>
+        <w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r>
+        <w:r><w:t xml:space="preserve"> ${EN_TEXT}</w:t></w:r></w:p></w:footnote>
+    </w:footnotes>`;
 
-    it('passes when footnote size=20hp (10pt) matches profile', async () => {
-      const buf = await makeDocx({ footnoteSizeHp: 20 });
-      const v = await checkDocxFormat(buf, PROFILE);
-      expect(v.find((x) => x.code === 'FOOTNOTE_SIZE')).toBeUndefined();
-    });
-
-    it('flags footnote size=22hp (11pt, required 20hp=10pt)', async () => {
+    it('skips footnote check when the document has no footnotes', async () => {
       const buf = await makeDocx({ footnoteSizeHp: 22 });
+      expect(codes(await checkDocxFormat(buf, PROFILE))).not.toContain(
+        'FOOTNOTE_SIZE',
+      );
+    });
+
+    it('passes 10 pt footnote text', async () => {
+      const buf = await makeDocx({
+        footnoteSizeHp: 20,
+        footnotesXml: footnotes,
+      });
+      expect(await checkDocxFormat(buf, PROFILE)).toEqual([]);
+    });
+
+    it('warns on 11 pt footnote text', async () => {
+      const buf = await makeDocx({
+        footnoteSizeHp: 22,
+        footnotesXml: footnotes,
+      });
+      const fv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'FOOTNOTE_SIZE',
+      );
+      expect(fv?.severity).toBe('warning');
+      expect(fv?.expected).toBe('10 pt');
+      expect(fv?.found).toBe('11 pt');
+      expect(fv?.messageAr).toMatch(/الحاشية/);
+    });
+  });
+
+  // ── Header/footer and line numbering ──────────────────────────────────────
+
+  describe('first page and line numbering', () => {
+    it('warns when "Different First Page" is off', async () => {
+      const buf = await makeDocx({ titlePg: false });
       const v = await checkDocxFormat(buf, PROFILE);
-      const fv = v.find((x) => x.code === 'FOOTNOTE_SIZE');
-      expect(fv).toBeDefined();
-      expect(fv!.expected).toBe('10 pt');
-      expect(fv!.found).toBe('11 pt');
-      expect(fv!.messageAr).toMatch(/الحاشية/);
+      expect(v.find((x) => x.code === 'DIFFERENT_FIRST_PAGE')?.severity).toBe(
+        'warning',
+      );
+    });
+
+    it('warns when lines are not numbered', async () => {
+      const buf = await makeDocx({ lineNumbers: false });
+      const lv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'LINE_NUMBERS_MISSING',
+      );
+      expect(lv?.severity).toBe('warning');
+      expect(lv?.expected).toBe('line numbers (left)');
+    });
+
+    it('warns when an Arabic article numbers lines on the right (RTL section)', async () => {
+      const buf = await makeDocx({ bidi: true });
+      const lv = (await checkDocxFormat(buf, PROFILE)).find(
+        (x) => x.code === 'LINE_NUMBERS_SIDE',
+      );
+      expect(lv?.expected).toBe('left');
+      expect(lv?.found).toBe('right');
+    });
+
+    it('expects line numbers on the right for an English article', async () => {
+      const english = [
+        para('Article Title', { rPr: '<w:b/><w:sz w:val="32"/>' }),
+        para(EN_TEXT),
+        para(EN_TEXT),
+      ].join('');
+      const ltr = await makeDocx({ body: english });
+      expect(
+        (await checkDocxFormat(ltr, PROFILE)).find(
+          (x) => x.code === 'LINE_NUMBERS_SIDE',
+        )?.expected,
+      ).toBe('right');
+
+      const rtl = await makeDocx({ body: english, bidi: true });
+      expect(await checkDocxFormat(rtl, PROFILE)).toEqual([]);
     });
   });
 });

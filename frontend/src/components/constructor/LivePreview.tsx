@@ -5,6 +5,11 @@ import { Eye, FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { resolveSectionDir } from '@/lib/constructor-direction';
 import {
+  detectArticleDir,
+  layoutPreviewSections,
+  previewCaption,
+} from '@/lib/constructor-preview-layout';
+import {
   referenceEntrySortKey,
   resolveReferenceEntryHtml,
 } from '@/lib/constructor-rich-text';
@@ -24,7 +29,10 @@ import {
   isTableCellCovered,
   normalizeTableRows,
 } from '@/lib/constructor-table-utils';
-import type { ManuscriptPreviewTheme } from '@/lib/manuscript-styles-catalog';
+import type {
+  CitationStyle,
+  ManuscriptPreviewTheme,
+} from '@/lib/manuscript-styles-catalog';
 import type {
   AbstractSection,
   AuthorsSection,
@@ -45,6 +53,8 @@ interface LivePreviewProps {
   content: ConstructorContent;
   /** Theme from `GET /public/manuscript-styles` for the effective profile id. */
   previewTheme: ManuscriptPreviewTheme;
+  /** Journal's style; `vancouver` keeps the author's reference order. Unknown → APA. */
+  citationStyle?: CitationStyle | null;
   /** Required to render image previews via the protected files endpoint. */
   slug?: string;
   debounceMs?: number;
@@ -57,6 +67,7 @@ interface LivePreviewProps {
 export function LivePreview({
   content,
   previewTheme,
+  citationStyle = null,
   slug,
   debounceMs = 300,
 }: LivePreviewProps) {
@@ -89,8 +100,17 @@ export function LivePreview({
   }, [debouncedContent.sections]);
 
   const defaultDir = content.defaultDir;
+  const articleDir = useMemo(() => detectArticleDir(content), [content]);
+  const layout = useMemo(
+    () =>
+      layoutPreviewSections(
+        content,
+        previewTheme.bilingualFrontMatter ?? false,
+      ),
+    [content, previewTheme.bilingualFrontMatter],
+  );
   const rootFont =
-    defaultDir === 'rtl'
+    articleDir === 'rtl'
       ? previewTheme.fontFamilyArabicStack
       : previewTheme.fontFamilyLatinStack;
 
@@ -131,22 +151,31 @@ export function LivePreview({
             style={{
               fontFamily: rootFont,
             }}
-            dir={defaultDir}
+            dir={articleDir}
           >
             <div className="prose prose-sm max-w-none dark:prose-invert">
-              {content.sections.map((section) => (
+              {layout.map((item) => (
                 <div
-                  key={section.id}
-                  data-testid={`constructor-preview-section-${section.id}`}
+                  key={item.key}
+                  data-testid={`constructor-preview-section-${item.key}`}
                   className="transition-all duration-300 animate-fade-in mb-4 last:mb-0"
                 >
+                  {item.pageBreakBefore ? (
+                    <hr
+                      aria-hidden
+                      className="my-6 border-0 border-t border-dashed border-ink/20"
+                    />
+                  ) : null}
                   <PreviewSection
-                    section={section}
+                    section={item.section}
                     defaultDir={defaultDir}
+                    articleDir={articleDir}
+                    frontMatterLang={item.lang}
                     slug={slug}
                     footnotes={debouncedContent.footnotes}
-                    figureOrTableNumber={numbering.get(section.id)}
+                    figureOrTableNumber={numbering.get(item.section.id)}
                     previewTheme={previewTheme}
+                    citationStyle={citationStyle}
                   />
                 </div>
               ))}
@@ -167,19 +196,30 @@ export function LivePreview({
 function PreviewSection({
   section,
   defaultDir,
+  articleDir,
+  frontMatterLang,
   slug,
   footnotes,
   figureOrTableNumber,
   previewTheme,
+  citationStyle,
 }: {
   section: ConstructorSection;
   defaultDir: ConstructorDir;
+  articleDir: ConstructorDir;
+  /** Language page of a front-matter block; its direction follows the page. */
+  frontMatterLang?: 'ar' | 'en';
   slug?: string;
   footnotes?: ConstructorContent['footnotes'];
   figureOrTableNumber?: number;
   previewTheme: ManuscriptPreviewTheme;
+  citationStyle: CitationStyle | null;
 }) {
-  const dir = resolveSectionDir(section, defaultDir);
+  const dir: ConstructorDir = frontMatterLang
+    ? frontMatterLang === 'ar'
+      ? 'rtl'
+      : 'ltr'
+    : resolveSectionDir(section, defaultDir);
   const fontFamily =
     dir === 'rtl'
       ? previewTheme.fontFamilyArabicStack
@@ -252,7 +292,12 @@ function PreviewSection({
       );
     case 'references':
       return (
-        <PreviewReferences section={section} previewTheme={previewTheme} />
+        <PreviewReferences
+          section={section}
+          articleDir={articleDir}
+          previewTheme={previewTheme}
+          citationStyle={citationStyle}
+        />
       );
   }
 }
@@ -273,7 +318,7 @@ function PreviewTitle({
         ...style,
         fontSize: '16pt',
         fontWeight: 700,
-        textAlign: 'center',
+        textAlign: 'start',
         margin: '0 0 0.75rem',
       }}
     >
@@ -291,23 +336,34 @@ function PreviewAuthors({
   dir: ConstructorDir;
   style: React.CSSProperties;
 }) {
-  if (section.authors.length === 0) {
+  const people = section.authors.filter((a) => a.fullName.trim());
+  if (people.length === 0) {
     return null;
   }
+  const separator = dir === 'rtl' ? '، ' : ', ';
+  const fontSize = dir === 'rtl' ? '12pt' : '11pt';
+  // Template: "د. الاسم الكنية¹*، أ.د. …", then one affiliation line per author.
   return (
-    <div
-      dir={dir}
-      style={{ ...style, textAlign: 'center', marginBottom: '1rem' }}
-    >
-      {section.authors.map((a, i) => (
-        <p key={i} style={{ margin: '0.25rem 0', fontSize: '11pt' }}>
-          <strong>
-            {a.fullName}
-            {a.isCorresponding ? '*' : ''}
-          </strong>
-          {a.title ? `, ${a.title}` : ''}
-          {a.affiliation ? ` — ${a.affiliation}` : ''}
-          {a.email ? ` (${a.email})` : ''}
+    <div dir={dir} style={{ ...style, marginBottom: '1rem', fontSize }}>
+      <p style={{ margin: '0 0 0.25rem' }}>
+        {people.map((a, i) => (
+          <span key={i}>
+            {[a.title?.trim(), a.fullName.trim()].filter(Boolean).join(' ')}
+            <sup>
+              {i + 1}
+              {a.isCorresponding ? '*' : ''}
+            </sup>
+            {i < people.length - 1 ? separator : ''}
+          </span>
+        ))}
+      </p>
+      {people.map((a, i) => (
+        <p key={i} style={{ margin: 0 }}>
+          <sup>{i + 1}</sup>{' '}
+          {[a.affiliation, a.specialization, a.email]
+            .map((part) => part?.trim())
+            .filter(Boolean)
+            .join(separator)}
         </p>
       ))}
     </div>
@@ -330,7 +386,7 @@ function PreviewAbstract({
   return (
     <section dir={dir} style={{ fontFamily, marginBottom: '1rem' }}>
       <h2 style={{ fontSize: '14pt', fontWeight: 700, margin: '0 0 0.25rem' }}>
-        {section.lang === 'ar' ? 'الملخص' : 'Abstract'}
+        {section.lang === 'ar' ? 'الملخص:' : 'Abstract:'}
       </h2>
       <p
         style={{
@@ -371,7 +427,7 @@ function PreviewHeading({
   dir: ConstructorDir;
   style: React.CSSProperties;
 }) {
-  const sizeMap = { heading1: '14pt', heading2: '13pt', heading3: '12pt' };
+  // Every subheading is 14 pt bold in the template; the level only sets the outline.
   const Tag =
     section.kind === 'heading1'
       ? 'h2'
@@ -383,7 +439,7 @@ function PreviewHeading({
       dir={dir}
       style={{
         ...style,
-        fontSize: sizeMap[section.kind],
+        fontSize: '14pt',
         fontWeight: 700,
         margin: '0.75rem 0 0.5rem',
       }}
@@ -438,7 +494,6 @@ function PreviewImage({
   number: number;
   previewTheme: ManuscriptPreviewTheme;
 }) {
-  const captionLabel = `${previewTheme.figureWord} ${number}`;
   const captionBlock = (
     <figcaption
       style={{
@@ -448,8 +503,13 @@ function PreviewImage({
         marginBottom: previewTheme.figureCaptionBelowImage ? 0 : '0.25rem',
       }}
     >
-      {captionLabel}
-      {section.caption ? `: ${section.caption}` : ''}
+      {previewCaption(
+        { rtl: previewTheme.figureWord, ltr: previewTheme.figureWordLtr },
+        previewTheme.captionNumberFormat,
+        number,
+        section.caption,
+        dir,
+      )}
     </figcaption>
   );
 
@@ -539,7 +599,6 @@ function PreviewTable({
   number: number;
   previewTheme: ManuscriptPreviewTheme;
 }) {
-  const captionLabel = `${previewTheme.tableWord} ${number}`;
   const captionEl = (
     <p
       style={{
@@ -551,23 +610,40 @@ function PreviewTable({
           : '0.25rem 0 0',
       }}
     >
-      {captionLabel}
-      {section.caption ? `: ${section.caption}` : ''}
+      {previewCaption(
+        { rtl: previewTheme.tableWord, ltr: previewTheme.tableWordLtr },
+        previewTheme.captionNumberFormat,
+        number,
+        section.caption,
+        dir,
+      )}
     </p>
   );
 
+  // Template tables: heavy rules above and below, thin rules between rows, no verticals.
+  const ruled = previewTheme.tableBorders === 'horizontalRules';
   const normalizedRows = normalizeTableRows(section.rows);
   const tableEl = (
     <table
       style={{
         borderCollapse: 'collapse',
         width: '100%',
-        fontSize: dir === 'rtl' ? '12pt' : '11pt',
+        fontSize: '10pt',
+        ...(ruled
+          ? { borderTop: '1.5px solid #000', borderBottom: '1.5px solid #000' }
+          : {}),
       }}
     >
       <tbody>
         {normalizedRows.map((row, r) => (
-          <tr key={r}>
+          <tr
+            key={r}
+            style={
+              ruled && r < normalizedRows.length - 1
+                ? { borderBottom: '1px solid #000' }
+                : undefined
+            }
+          >
             {row.map((cell, c) => {
               if (isTableCellCovered(cell)) return null;
               const isHeader = section.hasHeaderRow && r === 0;
@@ -580,7 +656,7 @@ function PreviewTable({
                   rowSpan={rowSpan > 1 ? rowSpan : undefined}
                   colSpan={colSpan > 1 ? colSpan : undefined}
                   style={{
-                    border: '1px solid #999',
+                    border: ruled ? 'none' : '1px solid #999',
                     padding: '4px 8px',
                     fontWeight: isHeader ? 700 : 400,
                     textAlign: 'start',
@@ -718,12 +794,19 @@ function PreviewEquation({
 
 function PreviewReferences({
   section,
+  articleDir,
   previewTheme,
+  citationStyle,
 }: {
   section: ReferencesSection;
+  articleDir: ConstructorDir;
   previewTheme: ManuscriptPreviewTheme;
+  citationStyle: CitationStyle | null;
 }) {
+  const vancouver = citationStyle === 'vancouver';
   const sorted = useMemo(() => {
+    // Vancouver: [n] in the text point at list positions — keep the author's order.
+    if (vancouver) return section.items;
     const ar = section.items
       .filter((i) => i.lang === 'ar')
       .slice()
@@ -737,10 +820,16 @@ function PreviewReferences({
         referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'en'),
       );
     return previewTheme.referencesArabicFirst ? [...ar, ...en] : [...en, ...ar];
-  }, [section.items, previewTheme.referencesArabicFirst]);
+  }, [section.items, previewTheme.referencesArabicFirst, vancouver]);
+
+  const heading =
+    articleDir === 'ltr'
+      ? (previewTheme.referencesHeadingLtr ?? previewTheme.referencesHeading)
+      : previewTheme.referencesHeading;
+  const numbered = vancouver || (previewTheme.referencesNumbered ?? true);
 
   return (
-    <section style={{ margin: '1rem 0 0' }}>
+    <section dir={articleDir} style={{ margin: '1rem 0 0' }}>
       <h2
         style={{
           fontSize: '14pt',
@@ -748,9 +837,15 @@ function PreviewReferences({
           margin: '0 0 0.5rem',
         }}
       >
-        {previewTheme.referencesHeading}
+        {heading}
       </h2>
-      <ol style={{ paddingInlineStart: '1.25rem', margin: 0 }}>
+      <ol
+        style={{
+          paddingInlineStart: numbered ? '1.25rem' : 0,
+          listStyle: numbered ? undefined : 'none',
+          margin: 0,
+        }}
+      >
         {sorted.map((item, i) => {
           const dir: ConstructorDir = item.lang === 'ar' ? 'rtl' : 'ltr';
           const fontFamily =

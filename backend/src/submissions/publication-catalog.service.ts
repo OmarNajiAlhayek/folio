@@ -119,9 +119,15 @@ export class PublicationCatalogService {
       return { items, total };
     }
 
+    // Two builders rather than one. The count only needs the predicates, so
+    // building it separately keeps the display joins out of the COUNT query —
+    // and since no predicate touches `users` any more, it joins nothing at all.
+    const countQb = this.submissionsRepo.createQueryBuilder('s');
+    applyPublicationCatalogQuery(countQb, filters);
+
     const qb = this.submissionsRepo.createQueryBuilder('s');
     applyPublicationCatalogQuery(qb, filters);
-    if (!publicationCatalogNeedsAuthorJoin(filters)) {
+    if (!publicationCatalogNeedsAuthorJoin()) {
       qb.leftJoinAndSelect('s.author', 'author');
     }
     // A journal filter already joined-and-selected the relation under the same
@@ -129,8 +135,14 @@ export class PublicationCatalogService {
     if (!filters.journal) {
       qb.leftJoinAndSelect('s.journal', 'journal');
     }
-    const total = await qb.getCount();
-    const items = await qb.skip(offset).take(limit).getMany();
+
+    // Concurrent: they are independent reads, so the request waits for the
+    // slower of the two rather than their sum. Both were already outside a
+    // transaction, so this changes no consistency guarantee.
+    const [total, items] = await Promise.all([
+      countQb.getCount(),
+      qb.skip(offset).take(limit).getMany(),
+    ]);
     return { items, total };
   }
 
@@ -212,7 +224,7 @@ export class PublicationCatalogService {
       skipQuickSearch: true,
     });
     qb.andWhere('s.id IN (:...semanticIds)', { semanticIds: ids });
-    if (!publicationCatalogNeedsAuthorJoin(filtersWithoutQ)) {
+    if (!publicationCatalogNeedsAuthorJoin()) {
       qb.leftJoinAndSelect('s.author', 'author');
     }
     const rows = await qb.getMany();

@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  BookMarked,
-  FileText,
-  Landmark,
-  Search,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { BookMarked, FileText, Landmark, UserRound } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -25,6 +18,9 @@ import type {
 import { SUBMISSION_ARTICLE_TYPES } from '@/lib/validation/constants';
 import { cn } from '@/lib/utils';
 import { PublicationAuthorTypeahead } from '@/components/publication-author-typeahead';
+import { FilterChips, type FilterChip } from '@/components/ui/filter-chips';
+import { ResultCount } from '@/components/ui/result-count';
+import { SearchInput } from '@/components/ui/search-input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SimpleSelect } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -44,11 +40,6 @@ type Props = {
   isUpdating?: boolean;
 };
 
-type ActiveFilterChip = {
-  key: keyof PublicationCatalogFilters;
-  label: string;
-};
-
 export function PublicationsCatalogSearch({
   filters,
   onQuickQueryChange,
@@ -63,6 +54,7 @@ export function PublicationsCatalogSearch({
 }: Props) {
   const t = useTranslations('Publications');
   const tWf = useTranslations('SubmissionWorkflow');
+  const tList = useTranslations('List');
   const locale = useLocale();
   // The public portal endpoint: this catalog is readable signed out, so the
   // authenticated picker options are not available here.
@@ -190,8 +182,10 @@ export function PublicationsCatalogSearch({
     ],
   );
 
-  const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
-    const chips: ActiveFilterChip[] = [];
+  const activeFilterChips = useMemo<
+    FilterChip<keyof PublicationCatalogFilters>[]
+  >(() => {
+    const chips: FilterChip<keyof PublicationCatalogFilters>[] = [];
 
     if (filters.q?.trim()) {
       chips.push({
@@ -309,43 +303,19 @@ export function PublicationsCatalogSearch({
             );
           })}
         </div>
-        <div className="relative flex-1 flex items-center">
-          <label className="sr-only" htmlFor="pub-catalog-q">
-            {t('searchPlaceholder')}
-          </label>
-          <div
-            className="absolute start-3 pointer-events-none text-ink/35 z-10"
-            aria-hidden
-          >
-            <Search className="size-4" strokeWidth={2.5} aria-hidden />
-          </div>
-          <input
-            id="pub-catalog-q"
-            type="search"
-            value={quickQ}
-            onChange={(e) => setQuickQ(e.target.value)}
-            placeholder={
-              searchMode === 'semantic'
-                ? t('searchPlaceholderSemantic')
-                : t('searchPlaceholder')
-            }
-            className={cn(
-              'w-full rounded-xl border border-ink/15 dark:border-white/15 bg-surface/90 ps-9 py-2.5 text-sm text-ink outline-hidden transition focus:border-accent focus:ring-2 focus:ring-accent/15',
-              quickQ.trim() ? 'pe-9' : 'pe-4',
-            )}
-            autoComplete="off"
-          />
-          {quickQ.trim() ? (
-            <button
-              type="button"
-              onClick={handleClearSearch}
-              className="absolute end-2.5 z-10 rounded-md p-1 text-ink/40 transition hover:bg-ink/5 hover:text-ink"
-              aria-label={t('clearSearch')}
-            >
-              <X className="size-4" strokeWidth={2.5} aria-hidden />
-            </button>
-          ) : null}
-        </div>
+        <SearchInput
+          id="pub-catalog-q"
+          value={quickQ}
+          onChange={setQuickQ}
+          onClear={handleClearSearch}
+          placeholder={
+            searchMode === 'semantic'
+              ? t('searchPlaceholderSemantic')
+              : t('searchPlaceholder')
+          }
+          label={tList('searchLabel')}
+          clearLabel={t('clearSearch')}
+        />
 
         <button
           type="button"
@@ -375,32 +345,12 @@ export function PublicationsCatalogSearch({
         </button>
       </div>
 
-      {activeFilterChips.length > 0 ? (
-        <ul
-          className="flex flex-wrap items-center gap-2"
-          aria-label={t('activeFiltersLabel')}
-        >
-          {activeFilterChips.map((chip) => (
-            <li key={chip.key}>
-              <button
-                type="button"
-                onClick={() => onRemoveFilter(chip.key)}
-                className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/8 px-2.5 py-1 text-xs font-medium text-accent transition hover:border-accent/40 hover:bg-accent/12"
-                aria-label={t('removeFilter', { label: chip.label })}
-              >
-                <span className="truncate" dir="auto" title={chip.label}>
-                  {chip.label}
-                </span>
-                <X
-                  className="size-3 shrink-0 opacity-70"
-                  strokeWidth={2.5}
-                  aria-hidden
-                />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <FilterChips
+        chips={activeFilterChips}
+        onRemove={onRemoveFilter}
+        label={t('activeFiltersLabel')}
+        removeLabel={(label) => t('removeFilter', { label })}
+      />
 
       {/* Advanced Filters Panel */}
       <CollapsibleSection
@@ -569,27 +519,16 @@ export function PublicationsCatalogSearch({
         </div>
       </CollapsibleSection>
 
-      {/* Query count indicator */}
       {!loading && resultCount !== null ? (
-        <div
-          className={cn(
-            'flex flex-wrap items-center gap-2 transition-opacity duration-200',
-            isUpdating && 'opacity-70',
-          )}
-        >
-          <div className="flex items-center gap-2 text-xs font-semibold text-ink/55 bg-ink/[0.03] dark:bg-white/[0.03] border border-ink/[0.05] max-w-fit px-3.5 py-1 rounded-full">
-            <span className="relative flex size-1.5 shrink-0">
-              <span className="absolute inset-0 rounded-full bg-accent opacity-75 animate-ping" />
-              <span className="relative rounded-full size-1.5 bg-accent" />
-            </span>
-            {t('resultCount', { count: resultCount })}
-          </div>
-          {semanticResultsCap != null ? (
-            <p className="text-[11px] text-ink/50 max-w-md leading-snug">
-              {t('semanticResultsCap', { limit: semanticResultsCap })}
-            </p>
-          ) : null}
-        </div>
+        <ResultCount
+          label={t('resultCount', { count: resultCount })}
+          stale={isUpdating}
+          note={
+            semanticResultsCap != null
+              ? t('semanticResultsCap', { limit: semanticResultsCap })
+              : undefined
+          }
+        />
       ) : null}
     </div>
   );

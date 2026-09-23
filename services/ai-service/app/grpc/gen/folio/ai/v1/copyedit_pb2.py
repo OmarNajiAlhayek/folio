@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1a\x66olio/ai/v1/copyedit.proto\x12\x0b\x66olio.ai.v1\"j\n\x16\x43heckReferencesRequest\x12%\n\x0ereference_list\x18\x01 \x03(\tR\rreferenceList\x12)\n\x10inline_citations\x18\x02 \x03(\tR\x0finlineCitations\"1\n\x17\x43heckReferencesResponse\x12\x16\n\x06issues\x18\x01 \x03(\tR\x06issues\"*\n\x0e\x43opyeditStatus\x12\x18\n\x07\x65nabled\x18\x01 \x01(\x08R\x07\x65nabled\"\x1a\n\x18GetCopyeditStatusRequest2\xc8\x01\n\x0f\x43opyeditService\x12\\\n\x0f\x43heckReferences\x12#.folio.ai.v1.CheckReferencesRequest\x1a$.folio.ai.v1.CheckReferencesResponse\x12W\n\x11GetCopyeditStatus\x12%.folio.ai.v1.GetCopyeditStatusRequest\x1a\x1b.folio.ai.v1.CopyeditStatusBn\n\x0f\x63om.folio.ai.v1B\rCopyeditProtoP\x01\xa2\x02\x03\x46\x41X\xaa\x02\x0b\x46olio.Ai.V1\xca\x02\x0b\x46olio\\Ai\\V1\xe2\x02\x17\x46olio\\Ai\\V1\\GPBMetadata\xea\x02\rFolio::Ai::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1a\x66olio/ai/v1/copyedit.proto\x12\x0b\x66olio.ai.v1\"\x91\x01\n\x16\x43heckReferencesRequest\x12%\n\x0ereference_list\x18\x01 \x03(\tR\rreferenceList\x12)\n\x10inline_citations\x18\x02 \x03(\tR\x0finlineCitations\x12%\n\x0e\x63itation_style\x18\x03 \x01(\tR\rcitationStyle\"1\n\x17\x43heckReferencesResponse\x12\x16\n\x06issues\x18\x01 \x03(\tR\x06issues\"*\n\x0e\x43opyeditStatus\x12\x18\n\x07\x65nabled\x18\x01 \x01(\x08R\x07\x65nabled\"\x1a\n\x18GetCopyeditStatusRequest2\xc8\x01\n\x0f\x43opyeditService\x12\\\n\x0f\x43heckReferences\x12#.folio.ai.v1.CheckReferencesRequest\x1a$.folio.ai.v1.CheckReferencesResponse\x12W\n\x11GetCopyeditStatus\x12%.folio.ai.v1.GetCopyeditStatusRequest\x1a\x1b.folio.ai.v1.CopyeditStatusBn\n\x0f\x63om.folio.ai.v1B\rCopyeditProtoP\x01\xa2\x02\x03\x46\x41X\xaa\x02\x0b\x46olio.Ai.V1\xca\x02\x0b\x46olio\\Ai\\V1\xe2\x02\x17\x46olio\\Ai\\V1\\GPBMetadata\xea\x02\rFolio::Ai::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,14 +32,14 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'folio.ai.v1.copyedit_pb2', 
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\017com.folio.ai.v1B\rCopyeditProtoP\001\242\002\003FAX\252\002\013Folio.Ai.V1\312\002\013Folio\\Ai\\V1\342\002\027Folio\\Ai\\V1\\GPBMetadata\352\002\rFolio::Ai::V1'
-  _globals['_CHECKREFERENCESREQUEST']._serialized_start=43
-  _globals['_CHECKREFERENCESREQUEST']._serialized_end=149
-  _globals['_CHECKREFERENCESRESPONSE']._serialized_start=151
-  _globals['_CHECKREFERENCESRESPONSE']._serialized_end=200
-  _globals['_COPYEDITSTATUS']._serialized_start=202
-  _globals['_COPYEDITSTATUS']._serialized_end=244
-  _globals['_GETCOPYEDITSTATUSREQUEST']._serialized_start=246
-  _globals['_GETCOPYEDITSTATUSREQUEST']._serialized_end=272
-  _globals['_COPYEDITSERVICE']._serialized_start=275
-  _globals['_COPYEDITSERVICE']._serialized_end=475
+  _globals['_CHECKREFERENCESREQUEST']._serialized_start=44
+  _globals['_CHECKREFERENCESREQUEST']._serialized_end=189
+  _globals['_CHECKREFERENCESRESPONSE']._serialized_start=191
+  _globals['_CHECKREFERENCESRESPONSE']._serialized_end=240
+  _globals['_COPYEDITSTATUS']._serialized_start=242
+  _globals['_COPYEDITSTATUS']._serialized_end=284
+  _globals['_GETCOPYEDITSTATUSREQUEST']._serialized_start=286
+  _globals['_GETCOPYEDITSTATUSREQUEST']._serialized_end=312
+  _globals['_COPYEDITSERVICE']._serialized_start=315
+  _globals['_COPYEDITSERVICE']._serialized_end=515
 # @@protoc_insertion_point(module_scope)

@@ -238,5 +238,6 @@ uploads/                  Manuscript storage created at runtime (gitignored)
 | Type errors on `@folio/shared` after an edit | Stale compiled output | `npm run build:shared` |
 | "port is already allocated" | Two compose files running | `docker compose -f <other> down` |
 | Old database, migrations refuse to apply | Schema predates migration tracking | `npm run seed:fresh`, or baseline: `INSERT INTO migrations (timestamp, name) VALUES (1781093303431, 'Init1781093303431');` |
-| Publication search empty on an old database | Search schema added later | `cd backend && npm run db:publication-search` |
+| Publication search empty on an old database | Search schema predates the `SearchNormalization` migration | `cd backend && npm run migrate` (or, to repair without migrating, `npm run db:publication-search`) |
+| Arabic search misses obvious matches (`احمد` not finding `أحمد`) | `folio_normalize_search` or the normalized columns are absent | `cd backend && npm run migrate`; verify with `SELECT folio_normalize_search('أحمد');` |
 | Equation rendering fails locally | No browser for the renderer | `cd backend && npx playwright install chromium`, or set `EQUATION_RENDER_MATHJAX_ONLY=1` |

@@ -30,7 +30,12 @@ import {
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { SubmissionAccessService } from './submission-access.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
-import { checkDocxFormat } from './docx-format-checker';
+import { resolveCitationStyle } from '../manuscript-styles/citation-style';
+import { JournalDirectoryService } from '../journals/journal-directory.service';
+import {
+  checkDocxFormat,
+  type DocxFormatViolation,
+} from './docx-format-checker';
 import { LanguageToolService } from './language-tool.service';
 import mammoth from 'mammoth';
 
@@ -46,6 +51,7 @@ export class SubmissionFileService {
     private readonly access: SubmissionAccessService,
     private readonly manuscriptStyles: ManuscriptStyleRegistryService,
     private readonly languageTool: LanguageToolService,
+    private readonly journals: JournalDirectoryService,
   ) {}
 
   uploadRoot(): string {
@@ -280,35 +286,73 @@ export class SubmissionFileService {
     }
   }
 
+  private async checkManuscriptBuffer(
+    submission: Submission,
+    buffer: Buffer,
+  ): Promise<DocxFormatViolation[]> {
+    const styleId = this.manuscriptStyles.resolveEffectiveStyleId(
+      submission.constructorContent ?? null,
+    );
+    const profile = this.manuscriptStyles.getProfile(styleId);
+    const isEngineering = (submission.disciplines ?? []).includes(
+      'العلوم الهندسية',
+    );
+    // The journal, not the classifier's disciplines, decides the citation style.
+    const journal = submission.journalId
+      ? await this.journals.findJournal(submission.journalId)
+      : null;
+    return checkDocxFormat(buffer, profile, {
+      expectedColumns: isEngineering ? 2 : 1,
+      citationStyle: journal
+        ? resolveCitationStyle(profile, journal.disciplineLabel)
+        : undefined,
+    });
+  }
+
   private async runDocxFormatCheck(
     submission: Submission,
     filePath: string,
   ): Promise<void> {
     try {
       const buffer = await readFile(filePath);
-      const styleId = this.manuscriptStyles.resolveEffectiveStyleId(
-        submission.constructorContent ?? null,
+      submission.docxManuscriptViolations = await this.checkManuscriptBuffer(
+        submission,
+        buffer,
       );
-      const profile = this.manuscriptStyles.getProfile(styleId);
-      const disciplines = submission.disciplines ?? [];
-      const isEngineering = disciplines.includes('العلوم الهندسية');
-      const isMedical = disciplines.includes('العلوم الطبية');
-      const discipline = isMedical
-        ? 'medical'
-        : isEngineering
-          ? 'engineering'
-          : disciplines.length > 0
-            ? 'other'
-            : undefined;
-      const violations = await checkDocxFormat(buffer, profile, {
-        expectedColumns: isEngineering ? 2 : 1,
-        discipline,
-      });
-      submission.docxManuscriptViolations = violations;
       await this.submissionsRepo.save(submission);
     } catch {
       // Format check is non-fatal — don't block the upload
     }
+  }
+
+  /**
+   * Re-checks the uploaded Word manuscript before the submit gate reads the
+   * result. The stored result can be stale: the file may have been replaced by a
+   * non-Word upload, or the rules may have changed since it was uploaded.
+   */
+  async refreshManuscriptFormatViolations(
+    submission: Submission,
+  ): Promise<void> {
+    const manuscript = await this.filesRepo.findOne({
+      where: { submissionId: submission.id, kind: 'manuscript' },
+      order: { createdAt: 'DESC' },
+    });
+    let violations: DocxFormatViolation[] | null = null;
+    if (manuscript?.originalName.toLowerCase().endsWith('.docx')) {
+      try {
+        const buffer = await readFile(
+          join(this.uploadRoot(), manuscript.storageKey),
+        );
+        violations = await this.checkManuscriptBuffer(submission, buffer);
+      } catch {
+        // Unreadable on disk — keep the result recorded at upload time.
+        return;
+      }
+    }
+    submission.docxManuscriptViolations = violations;
+    await this.submissionsRepo.update(submission.id, {
+      docxManuscriptViolations: violations,
+    });
   }
 
   private async runDocxGrammarCheck(

@@ -142,6 +142,7 @@ describe('SubmissionsService.generateDocx (attach)', () => {
           provide: JournalDirectoryService,
           useValue: {
             listOptions: jest.fn().mockResolvedValue([]),
+            findJournal: jest.fn().mockResolvedValue(null),
             assertSubmittableJournal: jest.fn().mockResolvedValue({}),
           },
         },

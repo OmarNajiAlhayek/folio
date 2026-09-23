@@ -1,10 +1,7 @@
 'use client';
 
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-} from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { pageToOffset } from '@/lib/list-query';
 import { publicJson } from '@/lib/public-api';
 import type {
   PublicationDetail,
@@ -49,18 +46,34 @@ function catalogListPath(
   return qs ? `/public/submissions?${qs}` : '/public/submissions';
 }
 
-export function usePublicationsCatalog(filters: PublicationCatalogFilters) {
-  return useInfiniteQuery({
-    queryKey: queryKeys.publicationsCatalog(filters),
-    queryFn: ({ pageParam }) =>
+/**
+ * One page of the catalog.
+ *
+ * Page-based rather than infinite: `?page=3` is in the URL, so a result set can
+ * be shared, bookmarked and returned to with the back button — which matters for
+ * an archive people cite. The endpoint speaks `limit`/`offset`, so the page
+ * number is converted here and the API is unchanged.
+ *
+ * `keepPreviousData` holds the previous page on screen while the next one
+ * loads, instead of flashing a skeleton between pages.
+ */
+export function usePublicationsCatalog(
+  filters: PublicationCatalogFilters,
+  page = 1,
+) {
+  const semantic = publicationCatalogUsesSemanticSearch(filters);
+  // Semantic search returns a single capped result set with no paging.
+  const effectivePage = semantic ? 1 : page;
+
+  return useQuery({
+    queryKey: [...queryKeys.publicationsCatalog(filters), effectivePage],
+    queryFn: () =>
       publicJson<PublicationCatalogPage>(
-        catalogListPath(filters, pageParam as number),
+        catalogListPath(
+          filters,
+          pageToOffset(effectivePage, PUBLICATION_CATALOG_PAGE_SIZE),
+        ),
       ),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => {
-      const nextOffset = lastPage.offset + lastPage.items.length;
-      return nextOffset < lastPage.total ? nextOffset : undefined;
-    },
     placeholderData: keepPreviousData,
     retry: false,
   });

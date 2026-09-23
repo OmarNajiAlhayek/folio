@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { toast } from "@/lib/toast";
 import {
   DAMASCUS_PREVIEW_THEME_FALLBACK,
+  resolveCitationStyle,
+  type CitationStyle,
   type ManuscriptPreviewTheme,
 } from "@/lib/manuscript-styles-catalog";
 import { ensureMandatoryConstructorSections } from "@/lib/constructor-mandatory-sections";
@@ -36,6 +38,11 @@ interface ConstructorWorkspaceProps {
   actions?: React.ReactNode;
   hasUnsavedChanges?: boolean;
   articleType?: SubmissionArticleType | null;
+  /**
+   * `disciplineLabel` of the submission's journal — picks APA or Vancouver for
+   * the references hint and preview order. Absent → no journal chosen yet.
+   */
+  journalDisciplineLabel?: string | null;
 }
 
 export function ConstructorWorkspace({
@@ -48,6 +55,7 @@ export function ConstructorWorkspace({
   actions,
   hasUnsavedChanges,
   articleType = null,
+  journalDisciplineLabel = null,
 }: ConstructorWorkspaceProps) {
   const t = useTranslations("ConstructorWorkspace");
   const tValidation = useTranslations("ConstructorValidation");
@@ -68,6 +76,10 @@ export function ConstructorWorkspace({
     }
     return catalogEntry?.previewTheme ?? DAMASCUS_PREVIEW_THEME_FALLBACK;
   }, [catalog, catalogEntry]);
+
+  const citationStyle: CitationStyle | null = journalDisciplineLabel
+    ? resolveCitationStyle(previewTheme, journalDisciplineLabel)
+    : null;
 
   const styleSelectDisabled = !!readOnly || catalogFailed || !catalog;
 
@@ -188,6 +200,7 @@ export function ConstructorWorkspace({
             errorsAreBlocking={errorsAreBlocking}
             articleType={articleType}
             guidance={guidance}
+            citationStyle={citationStyle}
           />
         </div>
         <div className="min-w-0">
@@ -198,6 +211,7 @@ export function ConstructorWorkspace({
             content={content}
             slug={slug}
             previewTheme={previewTheme}
+            citationStyle={citationStyle}
           />
         </div>
       </div>

@@ -1,18 +1,18 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import type { DataSource } from 'typeorm';
+import { SEARCH_SCHEMA_SQL } from '../db/search-schema.sql';
 
-/** Idempotent FTS/trigram columns + trigger for public catalog search. */
+/**
+ * Idempotent search schema: normalization function, FTS/trigram columns,
+ * triggers and indexes.
+ *
+ * Runs the same statements as the `SearchNormalization` migration, from the
+ * same constant, so the seed path and a migrated database cannot diverge. It
+ * used to read `scripts/setup-publication-search.sql` off disk, which is why
+ * that file could drift from what migrations produced — and why `migrate:prod`
+ * alone left the catalog unsearchable.
+ */
 export async function ensurePublicationSearchSchema(
   dataSource: DataSource,
 ): Promise<void> {
-  const sqlPath = join(
-    __dirname,
-    '..',
-    '..',
-    'scripts',
-    'setup-publication-search.sql',
-  );
-  const sql = readFileSync(sqlPath, 'utf8');
-  await dataSource.query(sql);
+  await dataSource.query(SEARCH_SCHEMA_SQL);
 }

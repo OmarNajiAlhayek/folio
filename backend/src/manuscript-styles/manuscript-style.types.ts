@@ -5,6 +5,8 @@
  * (e.g. reference list ordering for Damascus). Editorial policy such as word
  * limits belongs on submission/journal validation — not here.
  */
+import type { CitationStyleRule } from './citation-style';
+
 export type ManuscriptAlignment = 'left' | 'center' | 'right';
 
 export interface ManuscriptParagraphStyleDef {
@@ -34,6 +36,72 @@ export interface ManuscriptPreviewTheme {
   figureWord: string;
   tableWord: string;
   referencesHeading: string;
+  /** Left-to-right counterparts of the words above; fall back to them when absent. */
+  figureWordLtr?: string;
+  tableWordLtr?: string;
+  referencesHeadingLtr?: string;
+  captionNumberFormat?: ManuscriptCaptionNumberFormat;
+  referencesNumbered?: boolean;
+  /** Same rule as `references.citationStyles`, so the preview orders entries like the .docx. */
+  citationStyles?: CitationStyleRule;
+  tableBorders?: ManuscriptTableBorders;
+  /** See {@link ManuscriptFrontMatterLayout.bilingualPages}. */
+  bilingualFrontMatter?: boolean;
+}
+
+/** `colon` → "Table 1: caption"; `parenthesized` → "الجدول (1) caption". */
+export type ManuscriptCaptionNumberFormat = 'colon' | 'parenthesized';
+
+/** `grid` → every cell ruled; `horizontalRules` → heavy top/bottom, thin rules between rows, no verticals. */
+export type ManuscriptTableBorders = 'grid' | 'horizontalRules';
+
+export interface ManuscriptSideBoxLabels {
+  received: string;
+  accepted: string;
+  copyrightLabel: string;
+  copyright: string;
+}
+
+export interface ManuscriptFrontMatterLayout {
+  /**
+   * Title, authors and abstract in the article's language on page 1, the same
+   * block in the other language on page 2, and the body from page 3.
+   */
+  bilingualPages: boolean;
+  /**
+   * Start-side indent (twips) keeping front matter clear of the side box. Word
+   * reads `w:ind/@w:left` as the start edge of a right-to-left paragraph.
+   */
+  sideColumnIndentTwips: number;
+  /**
+   * Submission/acceptance dates and licence, floated on the start side of each
+   * language block (right of the Arabic page, left of the English page).
+   */
+  sideBox: {
+    widthTwips: number;
+    /** Distance from the page edge on the start side. */
+    pageEdgeOffsetTwips: number;
+    ar: ManuscriptSideBoxLabels;
+    en: ManuscriptSideBoxLabels;
+  };
+}
+
+/** Running headers and footers copied from the journal's Word template. */
+export interface ManuscriptPageFurniture {
+  /** Running header and footer text size. */
+  sizeHalfPoints: number;
+  firstPageHeader: {
+    journalAr: string;
+    issueLineAr: string;
+    journalEn: string;
+    issueLineEn: string;
+    sizeHalfPoints: number;
+  };
+  issnLabel: string;
+  websiteUrl: string;
+  /** Joins "page N <word> total" — "من" / "of". */
+  pageOfAr: string;
+  pageOfEn: string;
 }
 
 export type ConstructorPresetId =
@@ -69,6 +137,9 @@ export interface ManuscriptStyleProfile {
     bodyLatin: number;
     bodyArabic: number;
     caption: number;
+    /** Main article title (both languages). */
+    title: number;
+    /** Subheadings; also the size the upload checker expects for heading paragraphs. */
     heading1: number;
     heading2: number;
     heading3: number;
@@ -97,18 +168,40 @@ export interface ManuscriptStyleProfile {
   captions: {
     figureWord: string;
     tableWord: string;
+    /** Used for left-to-right captions; defaults to `figureWord` / `tableWord`. */
+    figureWordLtr?: string;
+    tableWordLtr?: string;
+    /** Defaults to `colon`. */
+    numberFormat?: ManuscriptCaptionNumberFormat;
     figureCaptionAfterImage: boolean;
     tableCaptionBeforeTable: boolean;
   };
   references: {
     arabicFirst: boolean;
     headingText: string;
+    /** Heading for left-to-right documents; defaults to `headingText`. */
+    headingTextLtr?: string;
+    /** Number entries 1., 2., … across the whole list. */
+    numbered?: boolean;
     entrySpacing: { before: number; after: number };
+    /**
+     * Citation style per journal. `vancouver` keeps the author's entry order
+     * (order of first citation) instead of sorting.
+     * Absent → APA for every journal.
+     */
+    citationStyles?: CitationStyleRule;
   };
+  /** Defaults to `grid`. */
+  tableBorders?: ManuscriptTableBorders;
+  /** Insert an empty paragraph before each heading, as the template spaces sections. */
+  blankLineBeforeHeadings?: boolean;
+  frontMatter?: ManuscriptFrontMatterLayout;
+  pageFurniture?: ManuscriptPageFurniture;
   /** Safe projection for `GET /public/manuscript-styles` — see {@link ManuscriptPreviewTheme}. */
   previewTheme: ManuscriptPreviewTheme;
   /**
-   * When true the generated .docx section includes per-line numbering (§1).
+   * When true the generated .docx numbers every line continuously — on the left
+   * for right-to-left articles, on the right for left-to-right ones.
    * Defaults to false when absent.
    */
   lineNumbers?: boolean;
@@ -118,7 +211,7 @@ export interface ManuscriptStyleProfile {
    */
   footnoteSizeHalfPoints?: number;
   /** Word constructor editorial rules (optional per profile). */
-  constructor?: ManuscriptConstructorGuidance;
+  constructorGuidance?: ManuscriptConstructorGuidance;
   /**
    * Minimum number of references that must cite articles already published in
    * this journal. Checked at submit time against the constructor reference list.

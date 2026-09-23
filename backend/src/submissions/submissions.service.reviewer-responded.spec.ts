@@ -182,6 +182,7 @@ describe('SubmissionsService reviewer.responded outbox', () => {
           provide: JournalDirectoryService,
           useValue: {
             listOptions: jest.fn().mockResolvedValue([]),
+            findJournal: jest.fn().mockResolvedValue(null),
             assertSubmittableJournal: jest.fn().mockResolvedValue({}),
           },
         },

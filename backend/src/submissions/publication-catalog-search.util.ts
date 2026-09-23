@@ -39,12 +39,21 @@ export function publicationCatalogHasTextOrFilters(
   );
 }
 
-export function publicationCatalogNeedsAuthorJoin(
-  filters: PublicationCatalogFilters,
-): boolean {
-  const q = trimCatalogFilter(filters.q);
-  const author = trimCatalogFilter(filters.author);
-  return Boolean(q || author);
+/**
+ * Whether catalog search has to join `users` to evaluate its predicates.
+ *
+ * Always false now: the author's name is denormalized onto the submission as
+ * `publication_author_normalized`, so both quick search and the advanced author
+ * filter read it straight off `submissions`. The relation is still *selected*
+ * for display, but as a LEFT JOIN that constrains nothing, which leaves the
+ * count query free of the join entirely.
+ *
+ * Kept as a function rather than deleted because it names the question callers
+ * are actually asking, and the answer would change again if a filter ever needs
+ * a column that is not denormalized.
+ */
+export function publicationCatalogNeedsAuthorJoin(): boolean {
+  return false;
 }
 
 /**
@@ -62,32 +71,96 @@ export function normalizePublicationPublishedAt(
   return new Date(raw);
 }
 
+/**
+ * The tsquery branches take the raw query: the `english` and `arabic`
+ * dictionaries do their own normalization, and folding first would hide word
+ * boundaries from them.
+ *
+ * The trigram branches take the folded query, because
+ * `publication_search_document` is stored folded — `folio_normalize_search` on
+ * both sides is what makes `احمد` match `أحمد` and `هندسه` match `هندسة`.
+ */
 export const PUBLICATION_QUICK_SEARCH_MATCH_SQL = `(
   s.publication_search_vector @@ websearch_to_tsquery('english', :pubQ)
   OR s.publication_search_vector @@ plainto_tsquery('arabic', :pubQ)
   OR s.publication_search_vector @@ plainto_tsquery('english', :pubQ)
-  OR similarity(s.publication_search_document, :pubQ) > :pubDocSimMin
-  OR word_similarity(:pubQ, COALESCE(author.display_name, '')) > :pubAuthorSimMin
+  OR similarity(s.publication_search_document, folio_normalize_search(:pubQ)) > :pubDocSimMin
+  OR word_similarity(
+    folio_normalize_search(:pubQ),
+    COALESCE(s.publication_author_normalized, '')
+  ) > :pubAuthorSimMin
 )`;
 
 export const PUBLICATION_QUICK_SEARCH_RANK_SQL = `GREATEST(
   ts_rank_cd(s.publication_search_vector, websearch_to_tsquery('english', :pubQ), 32),
   ts_rank_cd(s.publication_search_vector, plainto_tsquery('arabic', :pubQ), 32),
   ts_rank_cd(s.publication_search_vector, plainto_tsquery('english', :pubQ), 32),
-  similarity(s.publication_search_document, :pubQ),
-  word_similarity(:pubQ, COALESCE(author.display_name, ''))
+  similarity(s.publication_search_document, folio_normalize_search(:pubQ)),
+  word_similarity(
+    folio_normalize_search(:pubQ),
+    COALESCE(s.publication_author_normalized, '')
+  )
 )`;
 
 /** TypeORM orderBy alias — avoids comma-splitting GREATEST(...) in orderBy(). */
 export const PUBLICATION_QUICK_SEARCH_RANK_ALIAS = 'pub_search_rank';
 
-/** Author filter / suggestions: pg_trgm + FTS on display_name (same family as catalog quick search). */
+/**
+ * Author suggestions: pg_trgm + FTS against the joined `users` row.
+ *
+ * This form needs the join because the endpoint *lists authors* — it groups by
+ * `author.display_name`. Catalog filtering uses
+ * {@link PUBLICATION_CATALOG_AUTHOR_MATCH_SQL} instead, which needs no join.
+ *
+ * Both sides are folded, so an author search for `احمد` finds `أحمد`. The raw
+ * ILIKE branch is kept as well, so anything the fold discards still matches the
+ * way it used to.
+ */
 export const PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL = `(
-  word_similarity(:pubAuthor, COALESCE(author.display_name, '')) > :pubAuthorSimMin
-  OR similarity(COALESCE(author.display_name, ''), :pubAuthor) > :pubAuthorSimMin
+  word_similarity(
+    folio_normalize_search(:pubAuthor),
+    folio_normalize_search(COALESCE(author.display_name, ''))
+  ) > :pubAuthorSimMin
+  OR similarity(
+    folio_normalize_search(COALESCE(author.display_name, '')),
+    folio_normalize_search(:pubAuthor)
+  ) > :pubAuthorSimMin
+  OR (
+    -- Guarded: a query that folds away to nothing would leave '%%', which
+    -- matches every author.
+    folio_normalize_search(:pubAuthor) <> ''
+    AND folio_normalize_search(COALESCE(author.display_name, ''))
+      ILIKE '%' || folio_normalize_search(:pubAuthor) || '%'
+  )
   OR COALESCE(author.display_name, '') ILIKE '%' || :pubAuthor || '%'
   OR to_tsvector('simple', COALESCE(author.display_name, ''))
     @@ plainto_tsquery('simple', :pubAuthor)
+)`;
+
+/**
+ * The same author match, read off the submission's denormalized column.
+ *
+ * Identical branches to the joined form above, against
+ * `publication_author_normalized` — which is already folded, so the query is
+ * folded to meet it and the column is used as-is. Backed by
+ * `idx_submissions_publication_author_trgm`.
+ */
+export const PUBLICATION_CATALOG_AUTHOR_MATCH_SQL = `(
+  word_similarity(
+    folio_normalize_search(:pubAuthor),
+    COALESCE(s.publication_author_normalized, '')
+  ) > :pubAuthorSimMin
+  OR similarity(
+    COALESCE(s.publication_author_normalized, ''),
+    folio_normalize_search(:pubAuthor)
+  ) > :pubAuthorSimMin
+  OR (
+    folio_normalize_search(:pubAuthor) <> ''
+    AND COALESCE(s.publication_author_normalized, '')
+      ILIKE '%' || folio_normalize_search(:pubAuthor) || '%'
+  )
+  OR to_tsvector('simple', COALESCE(s.publication_author_normalized, ''))
+    @@ plainto_tsquery('simple', folio_normalize_search(:pubAuthor))
 )`;
 
 /** Rank published-author suggestions (higher = closer match). */
@@ -147,12 +220,10 @@ export function applyPublicationCatalogQuery(
   const q = options?.skipQuickSearch ? undefined : trimCatalogFilter(filters.q);
   const author = trimCatalogFilter(filters.author);
 
-  const needsAuthor =
-    Boolean(author) ||
-    (!options?.skipQuickSearch && publicationCatalogNeedsAuthorJoin(filters));
-  if (needsAuthor) {
-    qb.innerJoinAndSelect('s.author', 'author');
-  }
+  // No author join: every predicate below reads the denormalized
+  // `publication_author_normalized` column off `submissions`. The caller adds a
+  // LEFT JOIN for display, which keeps this builder — and the COUNT built from
+  // it — join-free.
 
   if (q) {
     qb.andWhere(PUBLICATION_QUICK_SEARCH_MATCH_SQL, {
@@ -172,7 +243,7 @@ export function applyPublicationCatalogQuery(
   }
 
   if (author) {
-    qb.andWhere(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL, {
+    qb.andWhere(PUBLICATION_CATALOG_AUTHOR_MATCH_SQL, {
       pubAuthor: author,
       pubAuthorSimMin: PUBLICATION_SEARCH_AUTHOR_SIMILARITY_MIN,
     });

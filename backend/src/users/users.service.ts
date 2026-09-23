@@ -262,11 +262,33 @@ export class UsersService {
       .take(query.limit);
 
     if (query.q) {
+      // The folded branch is what makes `احمد` find `أحمد` and `هندسه` find
+      // `هندسة`. Postgres folds both sides with the same function — folding the
+      // query in TypeScript instead would be a second implementation that has to
+      // agree on every input. The gin_trgm_ops index on search_normalized serves
+      // the ILIKE.
+      //
+      // Two details this depends on:
+      //  - the wildcards are concatenated *after* folding, because the fold
+      //    strips non-alphanumerics and would eat a `%` wrapped around it;
+      //  - that same stripping removes `%` and `_` from the query, so no ILIKE
+      //    metacharacter can survive into the pattern;
+      //  - a query that folds away to nothing (`@`, `...`) is skipped, or the
+      //    pattern would collapse to '%%' and match every user.
+      //
+      // The raw branches are kept so this is strictly a superset of the old
+      // behaviour: substrings the fold discards, like part of an email address,
+      // still match the way they always did.
       const pattern = `%${this.escapeIlikePattern(query.q)}%`;
       qb.andWhere(
         new Brackets((sub) => {
           sub
-            .where('u.email ILIKE :pattern', { pattern })
+            .where(
+              `(folio_normalize_search(:q) <> ''
+                AND u.search_normalized ILIKE '%' || folio_normalize_search(:q) || '%')`,
+              { q: query.q },
+            )
+            .orWhere('u.email ILIKE :pattern', { pattern })
             .orWhere('u.display_name ILIKE :pattern', { pattern });
         }),
       );
@@ -317,8 +339,12 @@ export class UsersService {
       invitesByUser.set(inv.inviteeUserId, list);
     }
 
-    const roleResults = await Promise.all(
-      userIds.map((id) => this.rbacService.getEffectiveForUser(id)),
+    // One query for the whole page. This used to be a `Promise.all` of
+    // per-user lookups — twenty rows meant twenty queries, each joining three
+    // levels of relations.
+    const rolesByUser = await this.rbacService.getEffectiveForUsers(userIds);
+    const roleResults = userIds.map(
+      (id) => rolesByUser.get(id) ?? { roleSlugs: [], permissionSlugs: [] },
     );
 
     const items: AdminUserRow[] = users.map((u, i) => ({

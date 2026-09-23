@@ -17,6 +17,8 @@ const sharedSubpathAliases = {
     './packages/shared/constructor/canonical-json.ts',
   '@folio/shared/contracts/pre-submit-analysis':
     './packages/shared/contracts/pre-submit-analysis.ts',
+  '@folio/shared/text/search-normalize':
+    './packages/shared/text/search-normalize.ts',
 } as const;
 
 const nextConfig: NextConfig = {

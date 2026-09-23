@@ -61,6 +61,23 @@ export class User extends BaseEntity {
   @Column({ name: 'email_verified_at', type: 'timestamptz', nullable: true })
   emailVerifiedAt: Date | null;
 
+  /**
+   * `display_name` and `email` folded by `folio_normalize_search` — a Postgres
+   * generated column, queried via raw SQL in the role-admin search only.
+   *
+   * Declared here so TypeORM knows it exists: `DB_SYNCHRONIZE=true` in a dev
+   * environment would otherwise see an unknown column and drop it.
+   */
+  @Column({
+    name: 'search_normalized',
+    type: 'text',
+    nullable: true,
+    insert: false,
+    update: false,
+    select: false,
+  })
+  searchNormalized?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

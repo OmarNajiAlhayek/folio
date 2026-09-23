@@ -19,12 +19,12 @@ describe('UsersService', () => {
   let service: UsersService;
   let getManyAndCount: jest.Mock;
   let roleInvFind: jest.Mock;
-  let getEffectiveForUser: jest.Mock;
+  let getEffectiveForUsers: jest.Mock;
 
   beforeEach(async () => {
     getManyAndCount = jest.fn();
     roleInvFind = jest.fn().mockResolvedValue([]);
-    getEffectiveForUser = jest.fn();
+    getEffectiveForUsers = jest.fn();
 
     const qb = {
       select: jest.fn().mockReturnThis(),
@@ -67,7 +67,7 @@ describe('UsersService', () => {
         },
         {
           provide: RbacService,
-          useValue: { getEffectiveForUser },
+          useValue: { getEffectiveForUsers },
         },
         {
           provide: AuthService,
@@ -112,10 +112,17 @@ describe('UsersService', () => {
       willingToReview: true,
     };
     getManyAndCount.mockResolvedValue([[user], 1]);
-    getEffectiveForUser.mockResolvedValue({
-      roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.REVIEWER],
-      permissionSlugs: [],
-    });
+    getEffectiveForUsers.mockResolvedValue(
+      new Map([
+        [
+          'user-1',
+          {
+            roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.REVIEWER],
+            permissionSlugs: [],
+          },
+        ],
+      ]),
+    );
     roleInvFind.mockResolvedValue([
       {
         id: 'inv-1',
@@ -139,7 +146,9 @@ describe('UsersService', () => {
       roleSlugs: [ROLE_SLUGS.AUTHOR, ROLE_SLUGS.REVIEWER],
       pendingRoleInvitations: [{ id: 'inv-1', roleSlug: ROLE_SLUGS.EDITOR }],
     });
-    expect(getEffectiveForUser).toHaveBeenCalledWith('user-1');
+    // One batched call for the whole page, not one per row.
+    expect(getEffectiveForUsers).toHaveBeenCalledTimes(1);
+    expect(getEffectiveForUsers).toHaveBeenCalledWith(['user-1']);
     expect(roleInvFind).toHaveBeenCalledWith(
       expect.objectContaining({
         // jest matchers are typed as any for nested where clauses

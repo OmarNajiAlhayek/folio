@@ -107,6 +107,7 @@ describe('SubmissionsService.suggestKeywordsPreview', () => {
           provide: JournalDirectoryService,
           useValue: {
             listOptions: jest.fn().mockResolvedValue([]),
+            findJournal: jest.fn().mockResolvedValue(null),
             assertSubmittableJournal: jest.fn().mockResolvedValue({}),
           },
         },

@@ -1,3 +1,4 @@
+import type { CitationStyle } from '../manuscript-styles/citation-style';
 import type {
   ConstructorContent,
   ConstructorReferenceEntry,
@@ -26,7 +27,7 @@ export const MAX_GRAMMAR_TEXT_CHARS = 20_000;
 const CITATION_PATTERNS = [
   /\([^)]{1,120},\s*\d{4}[a-z]?(?:;\s*[^)]{1,120},\s*\d{4}[a-z]?)*\)/gu,
   /\([\u0600-\u06FF\s]{2,60}[،,]\s*\d{4}[;\u061B]?[^)]*\)/gu,
-  /\[\d+(?:[,،–-]\d+)*\]/gu,
+  /\[\d+(?:\s*[,،–-]\s*\d+)*\]/gu,
 ] as const;
 
 function extractInlineCitationsFromText(text: string): string[] {
@@ -626,15 +627,83 @@ export function damascusFormatIssues(check: DamascusStructureCheck): string[] {
   return issues;
 }
 
+// ── Citation style (APA for every journal, Vancouver for the medical journal) ─
+
+/** Numbers a numbered citation points at: `[1]` → 1, `[2,4]` → 2,4, `[5–7]` → 5,6,7. */
+function numberedCitationTargets(citation: string): number[] {
+  const out: number[] = [];
+  for (const part of citation.slice(1, -1).split(/[,،]/)) {
+    const [from, to] = part.split(/[–-]/).map((n) => Number(n.trim()));
+    if (!Number.isInteger(from)) continue;
+    const end =
+      Number.isInteger(to) && to >= from ? Math.min(to, from + 50) : from;
+    for (let n = from; n <= end; n += 1) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Format warnings for the citation style the manuscript's journal requires
+ * (see `resolveCitationStyle`). `null` style → journal unknown → no warnings.
+ *
+ * Vancouver also checks what makes the numbers meaningful: new numbers appear
+ * in order of first citation, and none points past the end of the list.
+ */
+export function damascusCitationStyleIssues(
+  citationStyle: CitationStyle | null,
+  content: ConstructorContent | null | undefined,
+): string[] {
+  if (!content || !citationStyle) return [];
+  const citations = extractInlineCitations(content);
+  const numbered = citations.filter((c) => /^\[\d/.test(c));
+  const authorYearCount = citations.filter((c) => /^\(/.test(c)).length;
+
+  if (citations.length >= 3) {
+    if (citationStyle === 'vancouver' && authorYearCount > numbered.length) {
+      return [
+        'Detected APA-style (author–year) citations, but this journal requires Vancouver: cite by number in square brackets [1] and list references in order of first citation.',
+      ];
+    }
+    if (citationStyle === 'apa' && numbered.length > authorYearCount) {
+      return [
+        'Detected Vancouver-style (numbered) citations, but this journal requires APA: cite as (Author, Year) and list references alphabetically, Arabic references first.',
+      ];
+    }
+  }
+  if (citationStyle !== 'vancouver' || numbered.length === 0) return [];
+
+  const issues: string[] = [];
+  const firstSeen: number[] = [];
+  for (const citation of numbered) {
+    for (const n of numberedCitationTargets(citation)) {
+      if (!firstSeen.includes(n)) firstSeen.push(n);
+    }
+  }
+  const outOfOrder = firstSeen.findIndex((n, i) => n !== i + 1);
+  if (outOfOrder >= 0) {
+    issues.push(
+      `Citations are not numbered in order of first appearance: [${firstSeen[outOfOrder]}] appears where [${outOfOrder + 1}] is expected — Vancouver numbers references in the order they are first cited in the text.`,
+    );
+  }
+  const referenceCount = extractReferenceList(content).length;
+  const highest = Math.max(...firstSeen);
+  if (referenceCount > 0 && highest > referenceCount) {
+    issues.push(
+      `Citation [${highest}] has no reference — the reference list has only ${referenceCount} entr${referenceCount === 1 ? 'y' : 'ies'}.`,
+    );
+  }
+  return issues;
+}
+
 // ── Discipline-aware checks ──────────────────────────────────────────────────
 
-const MEDICAL_DISCIPLINE = 'العلوم الطبية';
 const ENGINEERING_DISCIPLINE = 'العلوم الهندسية';
 
 /**
- * Returns format warnings based on the submission's AI-classified disciplines.
- * Checks APA vs. Vancouver citation-style alignment (§3) and two-column layout
- * requirement for engineering submissions (§3).
+ * Returns format warnings based on the submission's AI-classified disciplines:
+ * the two-column layout requirement for engineering submissions (§3).
+ * Citation style depends on the journal instead — see
+ * {@link damascusCitationStyleIssues}.
  */
 export function damascusDisciplineIssues(
   disciplines: string[],
@@ -643,28 +712,7 @@ export function damascusDisciplineIssues(
   if (!content || disciplines.length === 0) return [];
   const issues: string[] = [];
 
-  const isMedical = disciplines.includes(MEDICAL_DISCIPLINE);
   const isEngineering = disciplines.includes(ENGINEERING_DISCIPLINE);
-
-  // APA vs. Vancouver: count citation style from inline citations
-  const citations = extractInlineCitations(content);
-  if (citations.length >= 3) {
-    const numberedCount = citations.filter((c) => /^\[\d+/.test(c)).length;
-    const authorYearCount = citations.filter((c) => /^\(/.test(c)).length;
-    const dominantIsVancouver = numberedCount > authorYearCount;
-    const dominantIsApa = authorYearCount > numberedCount;
-
-    if (isMedical && dominantIsApa) {
-      issues.push(
-        "Detected APA-style (author–year) citations, but discipline 'العلوم الطبية' requires Vancouver (numbered) citation style per Damascus University §3.",
-      );
-    } else if (!isMedical && dominantIsVancouver) {
-      const label = isEngineering ? ENGINEERING_DISCIPLINE : disciplines[0];
-      issues.push(
-        `Detected Vancouver-style (numbered) citations, but discipline '${label}' requires APA (author–year) citation style per Damascus University §3.`,
-      );
-    }
-  }
 
   // Two-column layout warning for Engineering
   if (isEngineering) {

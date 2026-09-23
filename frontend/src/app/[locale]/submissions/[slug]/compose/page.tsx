@@ -24,6 +24,7 @@ import {
   useSubmission,
   type SubmissionSummary,
 } from '@/lib/queries/submissions';
+import { useJournalOptions } from '@/lib/queries/journals';
 import { takeConstructorSubmitErrors } from '@/lib/constructor-submit-errors';
 import { toast } from '@/lib/toast';
 import { useToastApiError } from '@/lib/use-toast-api-error';
@@ -66,6 +67,7 @@ export default function SubmissionConstructorPage() {
 
   const meQuery = useMe();
   const subQuery = useSubmission(slug);
+  const { data: journalOptions } = useJournalOptions();
   const patchSubmission = usePatchSubmission(slug);
   const invalidateDetail = useInvalidateSubmissionDetail();
   const invalidateSubmission = useInvalidateSubmission();
@@ -511,6 +513,10 @@ export default function SubmissionConstructorPage() {
             actions={headerActions}
             hasUnsavedChanges={hasUnsavedChanges}
             articleType={(sub.articleType as SubmissionArticleType) ?? null}
+            journalDisciplineLabel={
+              journalOptions?.find((j) => j.id === sub.journalId)
+                ?.disciplineLabel ?? null
+            }
           />
         </Suspense>
       </section>

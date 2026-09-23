@@ -6,12 +6,14 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Optional as _Op
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class CheckReferencesRequest(_message.Message):
-    __slots__ = ("reference_list", "inline_citations")
+    __slots__ = ("reference_list", "inline_citations", "citation_style")
     REFERENCE_LIST_FIELD_NUMBER: _ClassVar[int]
     INLINE_CITATIONS_FIELD_NUMBER: _ClassVar[int]
+    CITATION_STYLE_FIELD_NUMBER: _ClassVar[int]
     reference_list: _containers.RepeatedScalarFieldContainer[str]
     inline_citations: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, reference_list: _Optional[_Iterable[str]] = ..., inline_citations: _Optional[_Iterable[str]] = ...) -> None: ...
+    citation_style: str
+    def __init__(self, reference_list: _Optional[_Iterable[str]] = ..., inline_citations: _Optional[_Iterable[str]] = ..., citation_style: _Optional[str] = ...) -> None: ...
 
 class CheckReferencesResponse(_message.Message):
     __slots__ = ("issues",)

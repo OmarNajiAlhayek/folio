@@ -178,6 +178,7 @@ export function submissionsServiceTestProviders(
         listOptions: jest.fn().mockResolvedValue([]),
         // Default: the journal an author picked is accepted. Specs that care
         // about a retired journal override this to throw.
+        findJournal: jest.fn().mockResolvedValue(null),
         assertSubmittableJournal: jest.fn().mockResolvedValue({}),
       },
     },

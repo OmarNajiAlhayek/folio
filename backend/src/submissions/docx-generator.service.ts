@@ -1,25 +1,36 @@
 import { Injectable } from '@nestjs/common';
+import JSZip from 'jszip';
 import {
   AlignmentType,
+  BorderStyle,
   Document,
   EndnoteReferenceRun,
   ExternalHyperlink,
+  Footer,
   FootnoteReferenceRun,
+  Header,
   HeadingLevel,
   ImageRun,
   LevelFormat,
   LineNumberRestartFormat,
   Packer,
+  PageBreak,
+  PageNumber,
   PageOrientation,
   Paragraph,
   Table,
+  TableAnchorType,
   TableCell,
+  TableLayoutType,
   TableRow,
   TextRun,
+  VerticalAlignTable,
   WidthType,
   convertMillimetersToTwip,
+  type IBorderOptions,
   type IPropertiesOptions,
   type IRunOptions,
+  type ISectionOptions,
   type ParagraphChild,
 } from 'docx';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
@@ -30,14 +41,25 @@ import {
   sanitizeConstructorLinkHref,
 } from './constructor-rich-text';
 import { sanitizeConstructorTipTapHtml } from './sanitize-constructor-html';
-import type { ManuscriptAlignment } from '../manuscript-styles/manuscript-style.types';
-import type { ManuscriptStyleProfile } from '../manuscript-styles/manuscript-style.types';
+import type {
+  ManuscriptAlignment,
+  ManuscriptStyleProfile,
+} from '../manuscript-styles/manuscript-style.types';
+import {
+  resolveCitationStyle,
+  type CitationStyle,
+} from '../manuscript-styles/citation-style';
+import {
+  CC_BY_NC_SA_BADGE_PNG,
+  CC_BY_NC_SA_BADGE_SIZE_PX,
+} from '../manuscript-styles/assets/cc-by-nc-sa-badge';
 import type {
   AbstractSection,
   AuthorsSection,
   ConstructorContent,
   ConstructorDir,
   ConstructorFootnote,
+  ConstructorReferenceEntry,
   EquationSection,
   HeadingSection,
   ImageSection,
@@ -59,6 +81,8 @@ import { EquationOmmlService } from './equation-omml.service';
 type Node = DefaultTreeAdapterMap['node'];
 type Element = DefaultTreeAdapterMap['element'];
 type TextNode = DefaultTreeAdapterMap['textNode'];
+type Block = Paragraph | Table;
+type Lang = 'ar' | 'en';
 
 /**
  * Inline marks that can be combined on a single TextRun.
@@ -71,7 +95,7 @@ type InlineMarks = {
   superScript?: boolean;
   subScript?: boolean;
   runDir?: ConstructorDir;
-  /** Override the resolved body font size (in half-points). */
+  /** Override the body font size (half-points) for both scripts. */
   sizeOverride?: number;
 };
 
@@ -86,6 +110,165 @@ type DocxBuildContext = {
   footnotesById: Map<string, ConstructorFootnote>;
 };
 
+/** Journal the manuscript is submitted to; fills the first-page header and footer. */
+export interface DocxJournalContext {
+  titleAr?: string | null;
+  titleEn?: string | null;
+  /** Online ISSN, printed in the first-page footer when known. */
+  eissn?: string | null;
+  /** Picks the reference-list order via `profile.references.citationStyles`. */
+  disciplineLabel?: string | null;
+}
+
+export interface DocxGenerateOptions {
+  journal?: DocxJournalContext | null;
+}
+
+/** Title, authors and abstracts laid out as the template's first two pages. */
+interface FrontMatter {
+  titles: Partial<Record<Lang, TitleSection>>;
+  authors?: AuthorsSection;
+  abstracts: Partial<Record<Lang, AbstractSection>>;
+  sectionIds: Set<string>;
+}
+
+const REFERENCES_NUMBERING = 'constructor-references';
+const PAGE_WIDTH_TWIPS = 11906;
+
+/** APA list order: alphabetical within each language, one language block first. */
+function sortReferencesApa(
+  items: ConstructorReferenceEntry[],
+  arabicFirst: boolean,
+): ConstructorReferenceEntry[] {
+  const byLang = (lang: Lang) =>
+    items
+      .filter((i) => i.lang === lang)
+      .sort((a, b) =>
+        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), lang),
+      );
+  return arabicFirst
+    ? [...byLang('ar'), ...byLang('en')]
+    : [...byLang('en'), ...byLang('ar')];
+}
+
+const NO_BORDER: IBorderOptions = {
+  style: BorderStyle.NONE,
+  size: 0,
+  color: 'auto',
+};
+const NO_TABLE_BORDERS = {
+  top: NO_BORDER,
+  bottom: NO_BORDER,
+  left: NO_BORDER,
+  right: NO_BORDER,
+  insideHorizontal: NO_BORDER,
+  insideVertical: NO_BORDER,
+};
+const RULE_BORDER: IBorderOptions = {
+  style: BorderStyle.SINGLE,
+  size: 4,
+  color: '000000',
+};
+const HEAVY_RULE_BORDER: IBorderOptions = {
+  style: BorderStyle.SINGLE,
+  size: 12,
+  color: '000000',
+};
+
+const ARABIC_SCRIPT = /\p{Script=Arabic}/u;
+const LATIN_SCRIPT = /\p{Script=Latin}/u;
+
+export interface ScriptSegment {
+  text: string;
+  rtl: boolean;
+}
+
+/**
+ * Splits text so each script gets its own run: Word sizes a run marked `rtl`
+ * with the complex-script size for every character, so a Latin word left inside
+ * an Arabic run would print in Simplified Arabic 12 instead of Times New Roman
+ * 11. Neutral characters (spaces, digits, punctuation) stay with the script on
+ * both sides of them, or take the paragraph direction between two different
+ * scripts — the Unicode bidi rule for neutrals.
+ */
+export function splitTextByScript(
+  text: string,
+  paragraphRtl: boolean,
+): ScriptSegment[] {
+  const segments: ScriptSegment[] = [];
+  const append = (t: string, rtl: boolean) => {
+    if (!t) return;
+    const last = segments[segments.length - 1];
+    if (last && last.rtl === rtl) last.text += t;
+    else segments.push({ text: t, rtl });
+  };
+  let previous: boolean | null = null;
+  let neutral = '';
+  for (const ch of text) {
+    const strong = ARABIC_SCRIPT.test(ch)
+      ? true
+      : LATIN_SCRIPT.test(ch)
+        ? false
+        : null;
+    if (strong === null) {
+      neutral += ch;
+      continue;
+    }
+    const before = previous ?? paragraphRtl;
+    append(neutral, before === strong ? strong : paragraphRtl);
+    append(ch, strong);
+    neutral = '';
+    previous = strong;
+  }
+  // Trailing neutrals sit between the last script and the paragraph end.
+  append(neutral, paragraphRtl);
+  return segments;
+}
+
+const NAME_PARTICLES = new Set([
+  'عبد',
+  'أبو',
+  'ابو',
+  'أبي',
+  'ابن',
+  'بن',
+  'آل',
+  'al',
+  'el',
+  'abu',
+  'abd',
+  'bin',
+  'ibn',
+  'de',
+  'da',
+  'di',
+  'del',
+  'van',
+  'von',
+  'der',
+  'le',
+  'la',
+]);
+
+/**
+ * Surname ("الكنية") for the running header. The template asks for first name
+ * then surname, so everything after the first word is the surname once
+ * compound-surname particles (عبد، أبو، van…) are kept with it.
+ */
+export function authorSurname(fullName: string): string {
+  const words = fullName
+    .replace(/\*/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length <= 1) return words[0] ?? '';
+  let start = words.length - 1;
+  while (start > 1 && NAME_PARTICLES.has(words[start - 1].toLowerCase())) {
+    start -= 1;
+  }
+  return words.slice(start).join(' ');
+}
+
 function toAlignmentType(a: ManuscriptAlignment) {
   switch (a) {
     case 'center':
@@ -95,6 +278,61 @@ function toAlignmentType(a: ManuscriptAlignment) {
     default:
       return AlignmentType.LEFT;
   }
+}
+
+function hasLetters(text: string | undefined): boolean {
+  return Boolean(text && /\p{L}/u.test(text));
+}
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ');
+}
+
+/**
+ * The article's language decides the front-matter order, running header and
+ * line-number side. Judged on the body text so a draft left on the old
+ * left-to-right default still lays out as the Arabic article it is.
+ */
+function detectArticleDir(content: ConstructorContent): ConstructorDir {
+  let arabic = 0;
+  let latin = 0;
+  for (const s of content.sections) {
+    const text =
+      s.kind === 'heading1' || s.kind === 'heading2' || s.kind === 'heading3'
+        ? s.text
+        : 'html' in s
+          ? stripTags(s.html ?? '')
+          : '';
+    arabic += (text.match(/\p{Script=Arabic}/gu) ?? []).length;
+    latin += (text.match(/\p{Script=Latin}/gu) ?? []).length;
+  }
+  if (arabic === 0 && latin === 0) return content.defaultDir;
+  return arabic >= latin ? 'rtl' : 'ltr';
+}
+
+/**
+ * Word draws line numbers on the right only for right-to-left sections, so an
+ * English article gets `<w:bidi/>` on its section. The docx library exposes no
+ * section direction, hence the patch.
+ */
+async function markSectionsRightToLeft(buffer: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const file = zip.file('word/document.xml');
+  if (!file) return buffer;
+  const xml = await file.async('string');
+  const patched = xml.replace(
+    /<w:sectPr\b[^>]*>[\s\S]*?<\/w:sectPr>/g,
+    (sect) => {
+      if (/<w:bidi\b/.test(sect)) return sect;
+      // CT_SectPr order: … titlePg, textDirection, bidi, rtlGutter, docGrid …
+      if (/<w:docGrid\b/.test(sect)) {
+        return sect.replace(/<w:docGrid\b/, '<w:bidi/><w:docGrid');
+      }
+      return sect.replace('</w:sectPr>', '<w:bidi/></w:sectPr>');
+    },
+  );
+  zip.file('word/document.xml', patched);
+  return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 @Injectable()
@@ -112,16 +350,27 @@ export class DocxGeneratorService {
     content: ConstructorContent,
     imageResolver: ImageResolver,
     profile: ManuscriptStyleProfile,
+    options: DocxGenerateOptions = {},
   ): Promise<Buffer> {
     const defaultDir = content.defaultDir;
+    const articleDir = detectArticleDir(content);
     const ctx = this.buildDocxContext(content, imageResolver);
+    const frontMatter = profile.frontMatter?.bilingualPages
+      ? this.collectFrontMatter(content)
+      : null;
+
+    const children: Block[] = [];
+    if (frontMatter) {
+      children.push(...this.buildFrontMatter(frontMatter, articleDir, profile));
+    }
+
     let figureCounter = 0;
     let tableCounter = 0;
     let equationCounter = 0;
-
-    const children: Array<Paragraph | Table> = [];
+    const bodyStart = children.length;
 
     for (const section of content.sections) {
+      if (frontMatter?.sectionIds.has(section.id)) continue;
       const dir = resolveSectionDir(section, defaultDir);
       switch (section.kind) {
         case 'title':
@@ -136,6 +385,9 @@ export class DocxGeneratorService {
         case 'heading1':
         case 'heading2':
         case 'heading3':
+          if (profile.blankLineBeforeHeadings && children.length > bodyStart) {
+            children.push(this.blankParagraph(dir));
+          }
           children.push(this.buildHeading(section, dir, profile));
           break;
         case 'paragraph':
@@ -184,48 +436,69 @@ export class DocxGeneratorService {
           break;
         }
         case 'references':
-          children.push(...(await this.buildReferences(section, profile, ctx)));
+          if (profile.blankLineBeforeHeadings && children.length > bodyStart) {
+            children.push(this.blankParagraph(articleDir));
+          }
+          children.push(
+            ...(await this.buildReferences(
+              section,
+              articleDir,
+              profile,
+              ctx,
+              resolveCitationStyle(profile, options.journal?.disciplineLabel),
+            )),
+          );
           break;
       }
     }
 
     const mm = profile.pageMarginsMm;
-    const noteParts = this.buildDocxFootnoteParts(ctx, profile, defaultDir);
+    const noteParts = this.buildDocxFootnoteParts(ctx, profile, articleDir);
+    const section: ISectionOptions = {
+      properties: {
+        page: {
+          size: { orientation: PageOrientation.PORTRAIT },
+          margin: {
+            top: convertMillimetersToTwip(mm.top),
+            bottom: convertMillimetersToTwip(mm.bottom),
+            left: convertMillimetersToTwip(mm.left),
+            right: convertMillimetersToTwip(mm.right),
+            header: convertMillimetersToTwip(mm.header),
+            footer: convertMillimetersToTwip(mm.footer),
+          },
+        },
+        titlePage: true,
+        ...(profile.lineNumbers
+          ? {
+              lineNumbers: {
+                countBy: 1,
+                restart: LineNumberRestartFormat.CONTINUOUS,
+                distance: 255,
+              },
+            }
+          : {}),
+      },
+      ...this.buildPageFurniture(
+        content,
+        frontMatter,
+        articleDir,
+        profile,
+        options.journal ?? null,
+      ),
+      children,
+    };
+
     const doc = new Document({
       styles: this.buildStyles(profile),
       numbering: this.buildNumbering(profile),
       ...noteParts,
-      sections: [
-        {
-          properties: {
-            page: {
-              size: { orientation: PageOrientation.PORTRAIT },
-              margin: {
-                top: convertMillimetersToTwip(mm.top),
-                bottom: convertMillimetersToTwip(mm.bottom),
-                left: convertMillimetersToTwip(mm.left),
-                right: convertMillimetersToTwip(mm.right),
-                header: convertMillimetersToTwip(mm.header),
-                footer: convertMillimetersToTwip(mm.footer),
-              },
-            },
-            titlePage: true,
-            ...(profile.lineNumbers
-              ? {
-                  lineNumbers: {
-                    countBy: 1,
-                    restart: LineNumberRestartFormat.NEW_PAGE,
-                    distance: convertMillimetersToTwip(7),
-                  },
-                }
-              : {}),
-          },
-          children,
-        },
-      ],
+      sections: [section],
     });
 
-    return Packer.toBuffer(doc);
+    const buffer = await Packer.toBuffer(doc);
+    return profile.lineNumbers && articleDir === 'ltr'
+      ? markSectionsRightToLeft(buffer)
+      : buffer;
   }
 
   private buildStyles(profile: ManuscriptStyleProfile) {
@@ -233,12 +506,33 @@ export class DocxGeneratorService {
     const s = profile.sizesHalfPoints;
     const h = profile.headingParagraphSpacing;
     const docSpacing = profile.documentParagraphSpacing;
+    const heading = (
+      size: number,
+      spacing: { before: number; after: number },
+    ) => ({
+      run: {
+        bold: true,
+        size,
+        sizeComplexScript: size,
+        font: { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
+        color: '000000',
+      },
+      paragraph: {
+        spacing: {
+          before: spacing.before,
+          after: spacing.after,
+          line: profile.documentLineSpacingTwips,
+        },
+        keepNext: true,
+      },
+    });
     return {
       default: {
         document: {
           run: {
             font: { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
             size: s.bodyLatin,
+            sizeComplexScript: s.bodyArabic,
           },
           paragraph: {
             spacing: {
@@ -248,24 +542,10 @@ export class DocxGeneratorService {
             },
           },
         },
-        heading1: {
-          run: { bold: true, size: s.heading1 },
-          paragraph: {
-            spacing: { before: h.heading1.before, after: h.heading1.after },
-          },
-        },
-        heading2: {
-          run: { bold: true, size: s.heading2 },
-          paragraph: {
-            spacing: { before: h.heading2.before, after: h.heading2.after },
-          },
-        },
-        heading3: {
-          run: { bold: true, size: s.heading3 },
-          paragraph: {
-            spacing: { before: h.heading3.before, after: h.heading3.after },
-          },
-        },
+        title: heading(s.title, { before: 0, after: 0 }),
+        heading1: heading(s.heading1, h.heading1),
+        heading2: heading(s.heading2, h.heading2),
+        heading3: heading(s.heading3, h.heading3),
       },
       paragraphStyles: profile.paragraphStyles.map((ps) => ({
         id: ps.id,
@@ -275,6 +555,7 @@ export class DocxGeneratorService {
         run: {
           bold: ps.run.bold,
           size: ps.run.sizeHalfPoints,
+          sizeComplexScript: ps.run.sizeHalfPoints,
         },
         paragraph: {
           alignment: toAlignmentType(ps.paragraph.alignment),
@@ -288,17 +569,29 @@ export class DocxGeneratorService {
   }
 
   private buildNumbering(profile: ManuscriptStyleProfile) {
-    const bulletRef = profile.numbering.bulletReference;
-    const decimalRef = profile.numbering.decimalReference;
+    const decimal = (reference: string) => ({
+      reference,
+      levels: [
+        {
+          level: 0,
+          format: LevelFormat.DECIMAL,
+          text: '%1.',
+          alignment: AlignmentType.LEFT,
+          style: {
+            paragraph: { indent: { left: 720, hanging: 360 } },
+          },
+        },
+      ],
+    });
     return {
       config: [
         {
-          reference: bulletRef,
+          reference: profile.numbering.bulletReference,
           levels: [
             {
               level: 0,
               format: LevelFormat.BULLET,
-              text: '\u2022',
+              text: '•',
               alignment: AlignmentType.LEFT,
               style: {
                 paragraph: { indent: { left: 720, hanging: 360 } },
@@ -306,20 +599,9 @@ export class DocxGeneratorService {
             },
           ],
         },
-        {
-          reference: decimalRef,
-          levels: [
-            {
-              level: 0,
-              format: LevelFormat.DECIMAL,
-              text: '%1.',
-              alignment: AlignmentType.LEFT,
-              style: {
-                paragraph: { indent: { left: 720, hanging: 360 } },
-              },
-            },
-          ],
-        },
+        decimal(profile.numbering.decimalReference),
+        // Its own list so reference numbers never continue a body list.
+        decimal(REFERENCES_NUMBERING),
       ],
     };
   }
@@ -345,16 +627,493 @@ export class DocxGeneratorService {
     return t?.id ?? 'TableCaption';
   }
 
+  /** "الجدول (1) caption" or "Table 1: caption", in the caption's direction. */
+  private captionText(
+    kind: 'figure' | 'table',
+    num: number,
+    caption: string,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+  ): string {
+    const c = profile.captions;
+    const word =
+      kind === 'figure'
+        ? dir === 'ltr'
+          ? (c.figureWordLtr ?? c.figureWord)
+          : c.figureWord
+        : dir === 'ltr'
+          ? (c.tableWordLtr ?? c.tableWord)
+          : c.tableWord;
+    const text = caption.trim();
+    if (c.numberFormat === 'parenthesized') {
+      return text ? `${word} (${num}) ${text}` : `${word} (${num})`;
+    }
+    return `${word} ${num}: ${text}`;
+  }
+
+  private blankParagraph(dir: ConstructorDir): Paragraph {
+    return new Paragraph({
+      bidirectional: dir === 'rtl',
+      children: [],
+    });
+  }
+
+  // ── Front matter ────────────────────────────────────────────────────────────
+
+  private collectFrontMatter(content: ConstructorContent): FrontMatter {
+    const fm: FrontMatter = {
+      titles: {},
+      abstracts: {},
+      sectionIds: new Set(),
+    };
+    for (const s of content.sections) {
+      if (s.kind === 'title') {
+        const lang: Lang = s.lang === 'ar' ? 'ar' : 'en';
+        if (!fm.titles[lang]) {
+          fm.titles[lang] = s;
+          fm.sectionIds.add(s.id);
+        }
+      } else if (s.kind === 'authors' && !fm.authors) {
+        fm.authors = s;
+        fm.sectionIds.add(s.id);
+      } else if (s.kind === 'abstract' && !fm.abstracts[s.lang]) {
+        fm.abstracts[s.lang] = s;
+        fm.sectionIds.add(s.id);
+      }
+    }
+    return fm;
+  }
+
+  /**
+   * Page 1: article-language title, authors, affiliations, abstract, keywords
+   * and the dates/licence box. Page 2: the same in the other language. The
+   * body starts on page 3, as in the template.
+   */
+  private buildFrontMatter(
+    fm: FrontMatter,
+    articleDir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+  ): Block[] {
+    const primary: Lang = articleDir === 'rtl' ? 'ar' : 'en';
+    const secondary: Lang = primary === 'ar' ? 'en' : 'ar';
+    const out: Block[] = [];
+    for (const lang of [primary, secondary]) {
+      const title = fm.titles[lang];
+      const abstract = fm.abstracts[lang];
+      if (!hasLetters(title?.text) && !hasLetters(abstract?.text)) continue;
+      if (out.length > 0)
+        out.push(new Paragraph({ children: [new PageBreak()] }));
+      out.push(
+        ...this.buildLanguageBlock(lang, title, fm.authors, abstract, profile),
+      );
+    }
+    if (out.length > 0)
+      out.push(new Paragraph({ children: [new PageBreak()] }));
+    return out;
+  }
+
+  private buildLanguageBlock(
+    lang: Lang,
+    title: TitleSection | undefined,
+    authors: AuthorsSection | undefined,
+    abstract: AbstractSection | undefined,
+    profile: ManuscriptStyleProfile,
+  ): Block[] {
+    const fmLayout = profile.frontMatter!;
+    const dir: ConstructorDir = lang === 'ar' ? 'rtl' : 'ltr';
+    const rtl = dir === 'rtl';
+    const indent = { left: fmLayout.sideColumnIndentTwips };
+    const s = profile.sizesHalfPoints;
+    const out: Block[] = [];
+
+    if (title && hasLetters(title.text)) {
+      out.push(
+        new Paragraph({
+          heading: HeadingLevel.TITLE,
+          bidirectional: rtl,
+          alignment: AlignmentType.BOTH,
+          children: this.runs(title.text, dir, profile, {
+            bold: true,
+            sizeOverride: s.title,
+          }),
+        }),
+      );
+    }
+
+    const people = (authors?.authors ?? []).filter((a) =>
+      hasLetters(a.fullName),
+    );
+    if (people.length > 0) {
+      const separator = rtl ? '، ' : ', ';
+      const names: ParagraphChild[] = [];
+      people.forEach((a, i) => {
+        const label = [a.title?.trim(), a.fullName.trim()]
+          .filter(Boolean)
+          .join(' ');
+        names.push(...this.runs(label, dir, profile));
+        names.push(
+          this.run(`${i + 1}${a.isCorresponding ? '*' : ''}`, dir, profile, {
+            superScript: true,
+          }),
+        );
+        if (i < people.length - 1)
+          names.push(...this.runs(separator, dir, profile));
+      });
+      out.push(
+        new Paragraph({
+          bidirectional: rtl,
+          alignment: AlignmentType.BOTH,
+          indent,
+          children: names,
+        }),
+      );
+      people.forEach((a, i) => {
+        const line = [a.affiliation, a.specialization, a.email]
+          .map((part) => part?.trim())
+          .filter(Boolean)
+          .join(separator);
+        out.push(
+          new Paragraph({
+            bidirectional: rtl,
+            alignment: AlignmentType.BOTH,
+            indent,
+            children: [
+              this.run(`${i + 1}`, dir, profile, { superScript: true }),
+              ...this.runs(line ? ` ${line}` : '', dir, profile),
+            ],
+          }),
+        );
+      });
+    }
+
+    out.push(this.blankParagraph(dir));
+    out.push(this.buildSideBox(lang, profile));
+    out.push(
+      new Paragraph({
+        bidirectional: rtl,
+        alignment: AlignmentType.BOTH,
+        indent,
+        keepNext: true,
+        children: this.runs(rtl ? 'الملخص:' : 'Abstract:', dir, profile, {
+          bold: true,
+          sizeOverride: s.heading1,
+        }),
+      }),
+    );
+    out.push(
+      new Paragraph({
+        bidirectional: rtl,
+        alignment: AlignmentType.BOTH,
+        indent,
+        children: this.runs(abstract?.text ?? '', dir, profile),
+      }),
+    );
+    if (abstract?.keywords?.trim()) {
+      out.push(this.blankParagraph(dir));
+      out.push(
+        new Paragraph({
+          bidirectional: rtl,
+          alignment: AlignmentType.BOTH,
+          indent,
+          children: [
+            ...this.runs(
+              rtl ? 'الكلمات المفتاحية: ' : 'Keywords: ',
+              dir,
+              profile,
+              {
+                bold: true,
+              },
+            ),
+            ...this.runs(abstract.keywords.trim(), dir, profile),
+          ],
+        }),
+      );
+    }
+    return out;
+  }
+
+  /** Dates and CC BY-NC-SA licence, floated on the block's start side. */
+  private buildSideBox(lang: Lang, profile: ManuscriptStyleProfile): Table {
+    const box = profile.frontMatter!.sideBox;
+    const labels = box[lang];
+    const dir: ConstructorDir = lang === 'ar' ? 'rtl' : 'ltr';
+    const rtl = dir === 'rtl';
+    const para = (
+      children: ParagraphChild[],
+      alignment: (typeof AlignmentType)[keyof typeof AlignmentType] = AlignmentType.BOTH,
+    ) => new Paragraph({ bidirectional: rtl, alignment, children });
+    const x = rtl
+      ? PAGE_WIDTH_TWIPS - box.pageEdgeOffsetTwips - box.widthTwips
+      : box.pageEdgeOffsetTwips;
+    return new Table({
+      width: { size: box.widthTwips, type: WidthType.DXA },
+      columnWidths: [box.widthTwips],
+      layout: TableLayoutType.FIXED,
+      borders: NO_TABLE_BORDERS,
+      visuallyRightToLeft: rtl,
+      float: {
+        horizontalAnchor: TableAnchorType.PAGE,
+        absoluteHorizontalPosition: x,
+        verticalAnchor: TableAnchorType.TEXT,
+        absoluteVerticalPosition: 0,
+        leftFromText: 198,
+        rightFromText: 198,
+      },
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: box.widthTwips, type: WidthType.DXA },
+              borders: NO_TABLE_BORDERS,
+              children: [
+                para(this.runs(labels.received, dir, profile, { bold: true })),
+                para(this.runs(labels.accepted, dir, profile, { bold: true })),
+                para(
+                  [
+                    new ImageRun({
+                      type: 'png',
+                      data: CC_BY_NC_SA_BADGE_PNG,
+                      transformation: CC_BY_NC_SA_BADGE_SIZE_PX,
+                      altText: {
+                        title: 'CC BY-NC-SA',
+                        description: 'Creative Commons BY-NC-SA licence',
+                        name: 'cc-by-nc-sa',
+                      },
+                    }),
+                  ],
+                  AlignmentType.CENTER,
+                ),
+                para([
+                  ...this.runs(`${labels.copyrightLabel} `, dir, profile, {
+                    bold: true,
+                  }),
+                  ...this.runs(labels.copyright, dir, profile),
+                ]),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+  }
+
+  // ── Headers and footers ─────────────────────────────────────────────────────
+
+  private buildPageFurniture(
+    content: ConstructorContent,
+    frontMatter: FrontMatter | null,
+    articleDir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+    journal: DocxJournalContext | null,
+  ): Pick<ISectionOptions, 'headers' | 'footers'> {
+    const pf = profile.pageFurniture;
+    if (!pf) return {};
+    const rtl = articleDir === 'rtl';
+    const size = pf.sizeHalfPoints;
+    const fh = pf.firstPageHeader;
+    const fullWidth = { size: 100, type: WidthType.PERCENTAGE } as const;
+    const cell = (children: Paragraph[], widthPct: number) =>
+      new TableCell({
+        width: { size: widthPct, type: WidthType.PERCENTAGE },
+        borders: NO_TABLE_BORDERS,
+        verticalAlign: VerticalAlignTable.CENTER,
+        children,
+      });
+    const ruled = (edge: 'top' | 'bottom') =>
+      new Paragraph({
+        border: { [edge]: { ...RULE_BORDER, space: 1 } },
+        children: [],
+      });
+    const line = (
+      text: string,
+      dir: ConstructorDir,
+      marks: InlineMarks,
+      alignment: (typeof AlignmentType)[keyof typeof AlignmentType] = AlignmentType.BOTH,
+    ) =>
+      new Paragraph({
+        bidirectional: dir === 'rtl',
+        alignment,
+        children: this.runs(text, dir, profile, marks),
+      });
+
+    // Page 1 header: English journal name on the left, Arabic on the right.
+    const firstMarks = { bold: true, sizeOverride: fh.sizeHalfPoints };
+    const firstHeader = new Header({
+      children: [
+        new Table({
+          width: fullWidth,
+          borders: NO_TABLE_BORDERS,
+          rows: [
+            new TableRow({
+              children: [
+                cell(
+                  [
+                    line(
+                      journal?.titleEn?.trim() || fh.journalEn,
+                      'ltr',
+                      firstMarks,
+                    ),
+                    line(fh.issueLineEn, 'ltr', firstMarks),
+                  ],
+                  35,
+                ),
+                cell(
+                  [
+                    line(
+                      journal?.titleAr?.trim() || fh.journalAr,
+                      'rtl',
+                      firstMarks,
+                    ),
+                    line(fh.issueLineAr, 'rtl', firstMarks),
+                  ],
+                  65,
+                ),
+              ],
+            }),
+          ],
+        }),
+        ruled('bottom'),
+      ],
+    });
+
+    // Pages 2+: article-language title, then author surnames at the far side.
+    const lang: Lang = rtl ? 'ar' : 'en';
+    const titleSection =
+      frontMatter?.titles[lang] ??
+      content.sections.find((s): s is TitleSection => s.kind === 'title');
+    const authorsSection =
+      frontMatter?.authors ??
+      content.sections.find((s): s is AuthorsSection => s.kind === 'authors');
+    const surnames = (authorsSection?.authors ?? [])
+      .map((a) => authorSurname(a.fullName))
+      .filter(Boolean)
+      .join(rtl ? '، ' : ', ');
+    const runningHeader = new Header({
+      children: [
+        new Table({
+          width: fullWidth,
+          borders: NO_TABLE_BORDERS,
+          visuallyRightToLeft: rtl,
+          rows: [
+            new TableRow({
+              children: [
+                cell(
+                  [
+                    line(titleSection?.text ?? '', articleDir, {
+                      sizeOverride: size,
+                    }),
+                  ],
+                  60,
+                ),
+                // A left-to-right paragraph so "far side" is unambiguous in both directions.
+                cell(
+                  [
+                    new Paragraph({
+                      alignment: rtl ? AlignmentType.LEFT : AlignmentType.RIGHT,
+                      children: this.runs(surnames, articleDir, profile, {
+                        sizeOverride: size,
+                      }),
+                    }),
+                  ],
+                  40,
+                ),
+              ],
+            }),
+          ],
+        }),
+        ruled('bottom'),
+      ],
+    });
+
+    const pageOf = rtl ? pf.pageOfAr : pf.pageOfEn;
+    const pageNumber = () =>
+      new Paragraph({
+        bidirectional: rtl,
+        alignment: AlignmentType.BOTH,
+        children: [
+          new TextRun({
+            children: [PageNumber.CURRENT],
+            size,
+            sizeComplexScript: size,
+          }),
+          ...this.runs(` ${pageOf} `, articleDir, profile, {
+            sizeOverride: size,
+          }),
+          new TextRun({
+            children: [PageNumber.TOTAL_PAGES],
+            size,
+            sizeComplexScript: size,
+          }),
+        ],
+      });
+
+    // Page 1 footer: page count beside the ISSN and journal site.
+    const issn = journal?.eissn?.trim()
+      ? `ISSN: ${journal.eissn.trim()} (online)`
+      : pf.issnLabel;
+    const firstFooter = new Footer({
+      children: [
+        ruled('top'),
+        new Table({
+          width: fullWidth,
+          borders: NO_TABLE_BORDERS,
+          visuallyRightToLeft: rtl,
+          rows: [
+            new TableRow({
+              children: [
+                cell([pageNumber()], 20),
+                cell(
+                  [
+                    line(issn, 'ltr', { sizeOverride: size }),
+                    new Paragraph({
+                      children: [
+                        new ExternalHyperlink({
+                          link: pf.websiteUrl,
+                          children: [
+                            new TextRun({
+                              text: pf.websiteUrl,
+                              size,
+                              sizeComplexScript: size,
+                              style: 'Hyperlink',
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
+                  ],
+                  80,
+                ),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+
+    return {
+      headers: { first: firstHeader, default: runningHeader },
+      footers: {
+        first: firstFooter,
+        default: new Footer({ children: [pageNumber()] }),
+      },
+    };
+  }
+
+  // ── Sections outside the bilingual layout ──────────────────────────────────
+
   private buildTitle(
     section: TitleSection,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
   ): Paragraph {
     return new Paragraph({
-      heading: HeadingLevel.HEADING_1,
-      alignment: AlignmentType.CENTER,
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.BOTH,
       bidirectional: dir === 'rtl',
-      children: [this.run(section.text || '', dir, profile, { bold: true })],
+      children: this.runs(section.text || '', dir, profile, {
+        bold: true,
+        sizeOverride: profile.sizesHalfPoints.title,
+      }),
     });
   }
 
@@ -363,17 +1122,21 @@ export class DocxGeneratorService {
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
   ): Paragraph {
-    const level =
+    const [level, size] =
       section.kind === 'heading1'
-        ? HeadingLevel.HEADING_1
+        ? [HeadingLevel.HEADING_1, profile.sizesHalfPoints.heading1]
         : section.kind === 'heading2'
-          ? HeadingLevel.HEADING_2
-          : HeadingLevel.HEADING_3;
+          ? [HeadingLevel.HEADING_2, profile.sizesHalfPoints.heading2]
+          : [HeadingLevel.HEADING_3, profile.sizesHalfPoints.heading3];
     return new Paragraph({
       heading: level,
       bidirectional: dir === 'rtl',
-      alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-      children: [this.run(section.text || '', dir, profile, { bold: true })],
+      alignment: AlignmentType.BOTH,
+      keepNext: true,
+      children: this.runs(section.text || '', dir, profile, {
+        bold: true,
+        sizeOverride: size,
+      }),
     });
   }
 
@@ -386,19 +1149,21 @@ export class DocxGeneratorService {
     for (const a of section.authors) {
       const star = a.isCorresponding ? '*' : '';
       const headerText = `${a.fullName}${star} — ${a.title}`;
-      const bodyText = `${a.affiliation}${a.email ? ` — ${a.email}` : ''}`;
+      const bodyText = [a.affiliation, a.specialization, a.email]
+        .filter((p) => p?.trim())
+        .join(' — ');
       out.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           bidirectional: dir === 'rtl',
-          children: [this.run(headerText, dir, profile, { bold: true })],
+          children: this.runs(headerText, dir, profile, { bold: true }),
         }),
       );
       out.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           bidirectional: dir === 'rtl',
-          children: [this.run(bodyText, dir, profile)],
+          children: this.runs(bodyText, dir, profile),
         }),
       );
     }
@@ -410,30 +1175,38 @@ export class DocxGeneratorService {
     profile: ManuscriptStyleProfile,
   ): Paragraph[] {
     const dir: ConstructorDir = section.lang === 'ar' ? 'rtl' : 'ltr';
-    const headingText = section.lang === 'ar' ? 'الملخص' : 'Abstract';
-    const keywordsLabel =
-      section.lang === 'ar' ? 'الكلمات المفتاحية: ' : 'Keywords: ';
+    const rtl = dir === 'rtl';
     const out: Paragraph[] = [
       new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        bidirectional: dir === 'rtl',
-        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-        children: [this.run(headingText, dir, profile, { bold: true })],
+        bidirectional: rtl,
+        alignment: AlignmentType.BOTH,
+        keepNext: true,
+        children: this.runs(rtl ? 'الملخص:' : 'Abstract:', dir, profile, {
+          bold: true,
+          sizeOverride: profile.sizesHalfPoints.heading1,
+        }),
       }),
       new Paragraph({
-        bidirectional: dir === 'rtl',
-        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-        children: [this.run(section.text || '', dir, profile)],
+        bidirectional: rtl,
+        alignment: AlignmentType.BOTH,
+        children: this.runs(section.text || '', dir, profile),
       }),
     ];
     if (section.keywords?.trim()) {
       out.push(
         new Paragraph({
-          bidirectional: dir === 'rtl',
-          alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+          bidirectional: rtl,
+          alignment: AlignmentType.BOTH,
           children: [
-            this.run(keywordsLabel, dir, profile, { bold: true }),
-            this.run(section.keywords, dir, profile),
+            ...this.runs(
+              rtl ? 'الكلمات المفتاحية: ' : 'Keywords: ',
+              dir,
+              profile,
+              {
+                bold: true,
+              },
+            ),
+            ...this.runs(section.keywords, dir, profile),
           ],
         }),
       );
@@ -490,79 +1263,40 @@ export class DocxGeneratorService {
   private buildDocxFootnoteParts(
     ctx: DocxBuildContext,
     profile: ManuscriptStyleProfile,
-    defaultDir: ConstructorDir,
+    dir: ConstructorDir,
   ): Pick<IPropertiesOptions, 'footnotes' | 'endnotes'> {
     const footnoteSize =
       profile.footnoteSizeHalfPoints ?? profile.sizesHalfPoints.bodyLatin;
+    const noteBody = (fn: ConstructorFootnote) => ({
+      children: [
+        new Paragraph({
+          bidirectional: dir === 'rtl',
+          alignment: AlignmentType.BOTH,
+          children: this.runs(
+            fn.text.replace(/<[^>]+>/g, '').trim(),
+            dir,
+            profile,
+            {
+              sizeOverride: footnoteSize,
+            },
+          ),
+        }),
+      ],
+    });
     const footnotes: Record<number, { children: Paragraph[] }> = {};
     const endnotes: Record<number, { children: Paragraph[] }> = {};
     for (const [id, num] of ctx.footnoteNumById) {
       const fn = ctx.footnotesById.get(id);
-      if (!fn) continue;
-      footnotes[num] = {
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: fn.text.replace(/<[^>]+>/g, '').trim(),
-                size: footnoteSize,
-                rightToLeft: defaultDir === 'rtl',
-                font: {
-                  ascii: profile.fonts.latin,
-                  hAnsi: profile.fonts.latin,
-                  cs: profile.fonts.arabic,
-                },
-              }),
-            ],
-          }),
-        ],
-      };
+      if (fn) footnotes[num] = noteBody(fn);
     }
     for (const [id, num] of ctx.endnoteNumById) {
       const fn = ctx.footnotesById.get(id);
-      if (!fn) continue;
-      endnotes[num] = {
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: fn.text.replace(/<[^>]+>/g, '').trim(),
-                size: footnoteSize,
-                rightToLeft: defaultDir === 'rtl',
-                font: {
-                  ascii: profile.fonts.latin,
-                  hAnsi: profile.fonts.latin,
-                  cs: profile.fonts.arabic,
-                },
-              }),
-            ],
-          }),
-        ],
-      };
+      if (fn) endnotes[num] = noteBody(fn);
     }
     return {
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
       ...(Object.keys(endnotes).length ? { endnotes } : {}),
     };
-  }
-
-  private async buildFootnoteBody(
-    html: string,
-    defaultDir: ConstructorDir,
-    profile: ManuscriptStyleProfile,
-    ctx: DocxBuildContext,
-  ): Promise<Paragraph[]> {
-    const sanitized = sanitizeConstructorTipTapHtml(html ?? '');
-    const wrapped = `<root>${sanitized}</root>`;
-    const root = parse(wrapped, {
-      sourceCodeLocationInfo: false,
-    });
-    return this.htmlToParagraphs(
-      root as unknown as Node,
-      defaultDir,
-      profile,
-      ctx,
-    );
   }
 
   private async buildParagraph(
@@ -583,23 +1317,25 @@ export class DocxGeneratorService {
     section: ImageSection,
     dir: ConstructorDir,
     figureNumber: number,
-    imageResolver: (
-      fileId: string,
-    ) => Promise<{ data: Buffer; mime: string } | null>,
+    imageResolver: ImageResolver,
     profile: ManuscriptStyleProfile,
   ): Promise<Paragraph[]> {
-    const captionStyle = this.figureCaptionStyleId(profile);
     const captionPara = new Paragraph({
-      style: captionStyle,
+      style: this.figureCaptionStyleId(profile),
+      alignment: AlignmentType.CENTER,
       bidirectional: dir === 'rtl',
-      children: [
-        this.run(
-          `${profile.captions.figureWord} ${figureNumber}: ${section.caption || ''}`,
+      children: this.runs(
+        this.captionText(
+          'figure',
+          figureNumber,
+          section.caption || '',
           dir,
           profile,
-          { bold: true },
         ),
-      ],
+        dir,
+        profile,
+        { bold: true, sizeOverride: profile.sizesHalfPoints.caption },
+      ),
     });
 
     let imagePara: Paragraph;
@@ -654,21 +1390,29 @@ export class DocxGeneratorService {
     dir: ConstructorDir,
     tableNumber: number,
     profile: ManuscriptStyleProfile,
-  ): Array<Paragraph | Table> {
-    const captionStyle = this.tableCaptionStyleId(profile);
+  ): Block[] {
+    const rtl = dir === 'rtl';
+    const captionSize = profile.sizesHalfPoints.caption;
     const captionPara = new Paragraph({
-      style: captionStyle,
-      bidirectional: dir === 'rtl',
-      children: [
-        this.run(
-          `${profile.captions.tableWord} ${tableNumber}: ${section.caption || ''}`,
+      style: this.tableCaptionStyleId(profile),
+      alignment: AlignmentType.CENTER,
+      bidirectional: rtl,
+      keepNext: profile.captions.tableCaptionBeforeTable,
+      children: this.runs(
+        this.captionText(
+          'table',
+          tableNumber,
+          section.caption || '',
           dir,
           profile,
-          { bold: true },
         ),
-      ],
+        dir,
+        profile,
+        { bold: true, sizeOverride: captionSize },
+      ),
     });
 
+    const ruled = profile.tableBorders === 'horizontalRules';
     const normalizedRows = normalizeTableRows(section.rows);
     const rows = normalizedRows.map((row, rowIdx) => {
       const isHeader = section.hasHeaderRow && rowIdx === 0;
@@ -682,20 +1426,18 @@ export class DocxGeneratorService {
             return new TableCell({
               rowSpan: rowSpan > 1 ? rowSpan : undefined,
               columnSpan: colSpan > 1 ? colSpan : undefined,
-              shading: isHeader
-                ? { type: 'clear', color: 'auto', fill: 'EEEEEE' }
-                : undefined,
+              shading:
+                isHeader && !ruled
+                  ? { type: 'clear', color: 'auto', fill: 'EEEEEE' }
+                  : undefined,
               children: [
                 new Paragraph({
-                  bidirectional: dir === 'rtl',
-                  alignment:
-                    dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-                  children: [
-                    this.run(getTableCellText(cell), dir, profile, {
-                      bold: isHeader || undefined,
-                      sizeOverride: profile.sizesHalfPoints.caption,
-                    }),
-                  ],
+                  bidirectional: rtl,
+                  alignment: AlignmentType.BOTH,
+                  children: this.runs(getTableCellText(cell), dir, profile, {
+                    bold: isHeader || undefined,
+                    sizeOverride: captionSize,
+                  }),
                 }),
               ],
             });
@@ -706,12 +1448,24 @@ export class DocxGeneratorService {
       rows.length > 0
         ? new Table({
             rows,
-            visuallyRightToLeft: dir === 'rtl',
+            visuallyRightToLeft: rtl,
             width: { size: 100, type: WidthType.PERCENTAGE },
+            ...(ruled
+              ? {
+                  borders: {
+                    top: HEAVY_RULE_BORDER,
+                    bottom: HEAVY_RULE_BORDER,
+                    insideHorizontal: RULE_BORDER,
+                    left: NO_BORDER,
+                    right: NO_BORDER,
+                    insideVertical: NO_BORDER,
+                  },
+                }
+              : {}),
           })
         : null;
 
-    const out: Array<Paragraph | Table> = [];
+    const out: Block[] = [];
     if (profile.captions.tableCaptionBeforeTable) {
       out.push(captionPara);
       if (tableBlock) out.push(tableBlock);
@@ -721,13 +1475,14 @@ export class DocxGeneratorService {
     }
     const notes = section.notes?.trim();
     if (notes) {
-      const noteStyle = this.tableNoteStyleId(profile);
       out.push(
         new Paragraph({
-          style: noteStyle,
-          bidirectional: dir === 'rtl',
-          alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-          children: [this.run(notes, dir, profile)],
+          style: this.tableNoteStyleId(profile),
+          bidirectional: rtl,
+          alignment: AlignmentType.BOTH,
+          children: this.runs(notes, dir, profile, {
+            sizeOverride: captionSize,
+          }),
         }),
       );
     }
@@ -810,41 +1565,38 @@ export class DocxGeneratorService {
 
   private async buildReferences(
     section: ReferencesSection,
+    articleDir: ConstructorDir,
     profile: ManuscriptStyleProfile,
     ctx: DocxBuildContext,
+    citationStyle: CitationStyle,
   ): Promise<Paragraph[]> {
+    const refs = profile.references;
     const items = [...section.items].filter((i) => referenceEntryHasContent(i));
-    const arabic = items
-      .filter((i) => i.lang === 'ar')
-      .sort((a, b) =>
-        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'ar'),
-      );
-    const english = items
-      .filter((i) => i.lang === 'en')
-      .sort((a, b) =>
-        referenceEntrySortKey(a).localeCompare(referenceEntrySortKey(b), 'en'),
-      );
-    const ordered = profile.references.arabicFirst
-      ? [...arabic, ...english]
-      : [...english, ...arabic];
+    // Vancouver: the in-text [n] point at list positions, so the author's order
+    // (order of first citation) is kept and numbered — sorting would repoint them.
+    const vancouver = citationStyle === 'vancouver';
+    const ordered = vancouver
+      ? items
+      : sortReferencesApa(items, refs.arabicFirst);
+    const headingText =
+      articleDir === 'ltr'
+        ? (refs.headingTextLtr ?? refs.headingText)
+        : refs.headingText;
     const out: Paragraph[] = [
       new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [
-          this.run(
-            profile.references.headingText,
-            profile.references.arabicFirst ? 'rtl' : 'ltr',
-            profile,
-            { bold: true },
-          ),
-        ],
+        bidirectional: articleDir === 'rtl',
+        alignment: AlignmentType.BOTH,
+        keepNext: true,
+        children: this.runs(headingText, articleDir, profile, {
+          bold: true,
+          sizeOverride: profile.sizesHalfPoints.heading1,
+        }),
       }),
     ];
-    const sp = profile.references.entrySpacing;
-    const renderEntry = async (
-      entry: ReferencesSection['items'][number],
-      dir: ConstructorDir,
-    ) => {
+    const sp = refs.entrySpacing;
+    for (const entry of ordered) {
+      const dir: ConstructorDir = entry.lang === 'ar' ? 'rtl' : 'ltr';
       const html = resolveReferenceEntryHtml(entry);
       const children = await this.collectInlineFromSanitizedHtml(
         html,
@@ -852,20 +1604,21 @@ export class DocxGeneratorService {
         profile,
         ctx,
       );
-      if (entry.doi?.trim()) {
-        children.push(
-          this.run(` https://doi.org/${entry.doi.trim()}`, 'ltr', profile),
-        );
+      const doi = entry.doi?.trim();
+      if (doi && !html.includes(doi)) {
+        children.push(this.run(` https://doi.org/${doi}`, 'ltr', profile));
       }
-      return new Paragraph({
-        bidirectional: dir === 'rtl',
-        alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-        spacing: { before: sp.before, after: sp.after },
-        children,
-      });
-    };
-    for (const item of ordered) {
-      out.push(await renderEntry(item, item.lang === 'ar' ? 'rtl' : 'ltr'));
+      out.push(
+        new Paragraph({
+          bidirectional: dir === 'rtl',
+          alignment: AlignmentType.BOTH,
+          spacing: { before: sp.before, after: sp.after },
+          ...(refs.numbered || vancouver
+            ? { numbering: { reference: REFERENCES_NUMBERING, level: 0 } }
+            : {}),
+          children,
+        }),
+      );
     }
     return out;
   }
@@ -943,8 +1696,8 @@ export class DocxGeneratorService {
         );
         out.push(
           new Paragraph({
-            bidirectional: true,
-            alignment: dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+            bidirectional: dir === 'rtl',
+            alignment: AlignmentType.BOTH,
             children: inline,
           }),
         );
@@ -968,8 +1721,7 @@ export class DocxGeneratorService {
             out.push(
               new Paragraph({
                 bidirectional: dir === 'rtl',
-                alignment:
-                  dir === 'rtl' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+                alignment: AlignmentType.BOTH,
                 numbering: { reference: ref, level: 0 },
                 children: inline,
               }),
@@ -978,10 +1730,14 @@ export class DocxGeneratorService {
         }
       } else if (tag === 'root' || tag === 'html' || tag === 'body') {
         await this.walkBlocks(child, dir, profile, out, activeMarks, ctx);
+      } else if (tag === 'head') {
+        // parse5 wraps fragments in <html><head/><body>; <head> is not content.
+        continue;
       } else {
         out.push(
           new Paragraph({
             bidirectional: dir === 'rtl',
+            alignment: AlignmentType.BOTH,
             children: await this.collectInline(
               child,
               dir,
@@ -1022,7 +1778,7 @@ export class DocxGeneratorService {
     for (const child of node.childNodes) {
       if (this.isTextNode(child)) {
         const text = child.value;
-        if (text) out.push(this.run(text, dir, profile, marks));
+        if (text) out.push(...this.runs(text, dir, profile, marks));
         continue;
       }
       if (!('tagName' in child)) continue;
@@ -1032,7 +1788,7 @@ export class DocxGeneratorService {
           new TextRun({
             text: '',
             break: 1,
-            ...this.runOpts(dir, profile, marks),
+            ...this.runOpts((marks.runDir ?? dir) === 'rtl', profile, marks),
           }),
         );
         continue;
@@ -1119,34 +1875,55 @@ export class DocxGeneratorService {
     return el.attrs?.find((a) => a.name === name)?.value;
   }
 
+  /** One run with the direction of its context — labels, markers, placeholders. */
   private run(
     text: string,
     dir: ConstructorDir,
     profile: ManuscriptStyleProfile,
     marks: InlineMarks = {},
   ) {
-    return new TextRun({ text, ...this.runOpts(dir, profile, marks) });
+    return new TextRun({
+      text,
+      ...this.runOpts((marks.runDir ?? dir) === 'rtl', profile, marks),
+    });
+  }
+
+  /** Text split into per-script runs (see {@link splitTextByScript}). */
+  private runs(
+    text: string,
+    dir: ConstructorDir,
+    profile: ManuscriptStyleProfile,
+    marks: InlineMarks = {},
+  ): TextRun[] {
+    return splitTextByScript(text, (marks.runDir ?? dir) === 'rtl').map(
+      (segment) =>
+        new TextRun({
+          text: segment.text,
+          ...this.runOpts(segment.rtl, profile, marks),
+        }),
+    );
   }
 
   private runOpts(
-    dir: ConstructorDir,
+    rtl: boolean,
     profile: ManuscriptStyleProfile,
     marks: InlineMarks,
   ): IRunOptions {
-    const isRtl = (marks.runDir ?? dir) === 'rtl';
     const f = profile.fonts;
     const s = profile.sizesHalfPoints;
     return {
       bold: marks.bold,
+      boldComplexScript: marks.bold,
       italics: marks.italics,
+      italicsComplexScript: marks.italics,
       underline: marks.underline ? {} : undefined,
       superScript: marks.superScript,
       subScript: marks.subScript,
-      rightToLeft: isRtl,
-      font: isRtl
-        ? { ascii: f.latin, hAnsi: f.latin, cs: f.arabic }
-        : { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
-      size: marks.sizeOverride ?? (isRtl ? s.bodyArabic : s.bodyLatin),
+      rightToLeft: rtl || undefined,
+      font: { ascii: f.latin, hAnsi: f.latin, cs: f.arabic },
+      // Word picks `sz` for Latin characters and `szCs` for Arabic ones.
+      size: marks.sizeOverride ?? s.bodyLatin,
+      sizeComplexScript: marks.sizeOverride ?? s.bodyArabic,
     };
   }
 

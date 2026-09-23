@@ -64,7 +64,12 @@
     "./compose/canonical-json": {
       "types": "./dist/constructor/canonical-json.d.ts",
       "default": "./dist/constructor/canonical-json.js"
-    }
+    },
+    "./text/search-normalize": {
+      "types": "./dist/text/search-normalize.d.ts",
+      "default": "./dist/text/search-normalize.js"
+    },
+    "./text/search-normalize.fixture.json": "./text/search-normalize.fixture.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -93,6 +98,6 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "rootDir": ".",
-    "testRegex": "(observability|ids|constructor)/.*\\.spec\\.ts$"
+    "testRegex": "(observability|ids|constructor|text)/.*\\.spec\\.ts$"
   }
 }

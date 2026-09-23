@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { SubmissionFileService } from './submission-file.service';
 import { SubmissionAccessService } from './submission-access.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
+import { JournalDirectoryService } from '../journals/journal-directory.service';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -97,6 +98,7 @@ describe('SubmissionFileService reviewer review file release', () => {
         { provide: getRepositoryToken(SectionEditorAssignment), useValue: {} },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: ManuscriptStyleRegistryService, useValue: {} },
+        { provide: JournalDirectoryService, useValue: {} },
         languageToolServiceMock,
         { provide: ConfigService, useValue: { get: jest.fn() } },
       ],

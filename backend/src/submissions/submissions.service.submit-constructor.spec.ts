@@ -41,6 +41,10 @@ import { EventPublisherService } from '../messaging/event-publisher.service';
 import { notificationsServiceMock } from '../notifications/notifications.service.mock';
 import type { RequestUser } from '../common/types/request-user';
 import type { ConstructorContent } from './constructor-content.types';
+import type {
+  DocxFormatSeverity,
+  DocxFormatViolation,
+} from './docx-format-checker';
 import { hashConstructorContent } from './constructor-content-hash.util';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
 import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
@@ -216,6 +220,7 @@ describe('SubmissionsService.submit (constructor files)', () => {
           provide: JournalDirectoryService,
           useValue: {
             listOptions: jest.fn().mockResolvedValue([]),
+            findJournal: jest.fn().mockResolvedValue(null),
             assertSubmittableJournal: jest.fn().mockResolvedValue({}),
           },
         },
@@ -315,5 +320,72 @@ describe('SubmissionsService.submit (constructor files)', () => {
       service.submit('constructor-paper', authorUser),
     ).rejects.toThrow(BadRequestException);
     expect(generateDocx).not.toHaveBeenCalled();
+  });
+
+  describe('uploaded manuscript format gate', () => {
+    const violation = (severity?: DocxFormatSeverity): DocxFormatViolation => ({
+      code: severity === 'warning' ? 'LINE_NUMBERS_MISSING' : 'MARGIN_TOP',
+      message: `${severity ?? 'legacy'} issue`,
+      messageAr: 'مشكلة',
+      expected: 'e',
+      found: 'f',
+      ...(severity ? { severity } : {}),
+    });
+
+    function uploadDraft(stored: DocxFormatViolation[] | null = null) {
+      submissionsRepo.findOne.mockResolvedValueOnce({
+        ...draftConstructorRow(),
+        constructorContent: null,
+        docxManuscriptViolations: stored,
+      } as Submission);
+      filesRepo.find.mockResolvedValue([
+        { kind: 'cover_letter' },
+        { kind: 'title_page' },
+        { kind: 'manuscript' },
+      ] as SubmissionFile[]);
+    }
+
+    function recheckFinds(violations: DocxFormatViolation[] | null) {
+      return jest
+        .spyOn(
+          SubmissionFileService.prototype,
+          'refreshManuscriptFormatViolations',
+        )
+        .mockImplementation(async (s: Submission) => {
+          s.docxManuscriptViolations = violations;
+        });
+    }
+
+    it('submits when the re-checked manuscript only has warnings', async () => {
+      uploadDraft();
+      const recheck = recheckFinds([violation('warning')]);
+      await expect(
+        service.submit('constructor-paper', authorUser),
+      ).resolves.toBeDefined();
+      expect(recheck).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks on formatting errors and reports only the blocking ones', async () => {
+      uploadDraft();
+      recheckFinds([violation('warning'), violation('error')]);
+      const err: unknown = await service
+        .submit('constructor-paper', authorUser)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(BadRequestException);
+      const body = (err as BadRequestException).getResponse() as {
+        code: string;
+        violations: DocxFormatViolation[];
+      };
+      expect(body.code).toBe('DOCX_FORMAT_VIOLATIONS');
+      expect(body.violations.map((v) => v.code)).toEqual(['MARGIN_TOP']);
+    });
+
+    it('does not block on a stale stored result the re-check no longer finds', async () => {
+      uploadDraft([violation()]);
+      recheckFinds(null);
+      await expect(
+        service.submit('constructor-paper', authorUser),
+      ).resolves.toBeDefined();
+    });
   });
 });

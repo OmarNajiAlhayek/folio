@@ -1,3 +1,5 @@
+import type { CitationStyle } from '../manuscript-styles/citation-style';
+
 export type ClassifyArticleResponse = {
   top_label: string;
   top_confidence: number;
@@ -144,6 +146,8 @@ export type SuggestReviewersOutcome =
 export type CheckReferencesInput = {
   referenceList: string[];
   inlineCitations: string[];
+  /** Style the journal requires; omitted → the AI service assumes APA. */
+  citationStyle?: CitationStyle;
 };
 
 export type CheckReferencesOutcome =

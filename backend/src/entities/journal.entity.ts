@@ -55,6 +55,23 @@ export class Journal extends BaseEntity {
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number;
 
+  /**
+   * Titles, descriptions and discipline label folded by `folio_normalize_search`
+   * — a Postgres generated column, queried via raw SQL in directory search only.
+   *
+   * Declared here so TypeORM knows it exists: `DB_SYNCHRONIZE=true` in a dev
+   * environment would otherwise see an unknown column and drop it.
+   */
+  @Column({
+    name: 'search_normalized',
+    type: 'text',
+    nullable: true,
+    insert: false,
+    update: false,
+    select: false,
+  })
+  searchNormalized?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

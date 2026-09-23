@@ -3,17 +3,31 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Submission } from '../entities/submission.entity';
 import { AiClientService } from '../ai/ai-client.service';
+import { JournalDirectoryService } from '../journals/journal-directory.service';
+import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
+import {
+  resolveCitationStyle,
+  type CitationStyle,
+} from '../manuscript-styles/citation-style';
 import { LanguageToolService } from './language-tool.service';
 import type { ManuscriptAnalysisResult } from './pre-submit-analysis.types';
 import type { ConstructorContent } from './constructor-content.types';
 import {
   buildBodyPlainText,
   checkDamascusStructure,
+  damascusCitationStyleIssues,
   damascusDisciplineIssues,
   damascusFormatIssues,
   extractInlineCitations,
   extractReferenceList,
 } from './submission-copyedit-text.util';
+
+/** What the analysis needs to know about the submission besides its content. */
+export type ManuscriptAnalysisContext = {
+  disciplines: string[];
+  /** The manuscript's journal decides the citation style (APA / Vancouver). */
+  journalId: string | null;
+};
 
 @Injectable()
 export class ManuscriptAnalysisService {
@@ -22,6 +36,8 @@ export class ManuscriptAnalysisService {
     private readonly submissionsRepo: Repository<Submission>,
     private readonly languageTool: LanguageToolService,
     private readonly aiClient: AiClientService,
+    private readonly journals: JournalDirectoryService,
+    private readonly manuscriptStyles: ManuscriptStyleRegistryService,
   ) {}
 
   async analyzeSubmission(
@@ -29,7 +45,7 @@ export class ManuscriptAnalysisService {
   ): Promise<ManuscriptAnalysisResult> {
     const submission = await this.submissionsRepo.findOne({
       where: { id: submissionId },
-      select: ['id', 'constructorContent', 'disciplines'],
+      select: ['id', 'constructorContent', 'disciplines', 'journalId'],
     });
     if (!submission) {
       return {
@@ -39,20 +55,25 @@ export class ManuscriptAnalysisService {
         aiUnavailable: false,
       };
     }
-    return this.analyzeContent(
-      submission.constructorContent,
-      submission.disciplines ?? [],
-    );
+    return this.analyzeContent(submission.constructorContent, {
+      disciplines: submission.disciplines ?? [],
+      journalId: submission.journalId ?? null,
+    });
   }
 
   async analyzeContent(
     content: ConstructorContent | null,
-    disciplines: string[],
+    context: ManuscriptAnalysisContext,
   ): Promise<ManuscriptAnalysisResult> {
+    const citationStyle = await this.citationStyleFor(
+      content,
+      context.journalId,
+    );
     const structureCheck = checkDamascusStructure(content);
     const formatIssues = [
       ...damascusFormatIssues(structureCheck),
-      ...damascusDisciplineIssues(disciplines, content),
+      ...damascusDisciplineIssues(context.disciplines, content),
+      ...damascusCitationStyleIssues(citationStyle, content),
     ];
 
     const bodyText = buildBodyPlainText(content);
@@ -66,6 +87,7 @@ export class ManuscriptAnalysisService {
     const refOutcome = await this.aiClient.checkReferences({
       referenceList,
       inlineCitations,
+      citationStyle: citationStyle ?? undefined,
     });
     if (refOutcome.status === 'ok') {
       referenceIssues = refOutcome.issues;
@@ -74,5 +96,20 @@ export class ManuscriptAnalysisService {
     }
 
     return { formatIssues, grammarNotes, referenceIssues, aiUnavailable };
+  }
+
+  /** `null` when the journal is unknown — style-specific checks are skipped. */
+  private async citationStyleFor(
+    content: ConstructorContent | null,
+    journalId: string | null,
+  ): Promise<CitationStyle | null> {
+    const journal = journalId
+      ? await this.journals.findJournal(journalId)
+      : null;
+    if (!journal) return null;
+    const profile = this.manuscriptStyles.getProfile(
+      this.manuscriptStyles.resolveEffectiveStyleId(content),
+    );
+    return resolveCitationStyle(profile, journal.disciplineLabel);
   }
 }

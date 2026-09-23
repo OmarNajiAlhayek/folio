@@ -9,6 +9,7 @@ import {
   PUBLICATION_CATALOG_MAX_LIMIT,
   PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
   PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
+  PUBLICATION_CATALOG_AUTHOR_MATCH_SQL,
   PUBLICATION_QUICK_SEARCH_MATCH_SQL,
   PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
   PUBLICATION_QUICK_SEARCH_RANK_SQL,
@@ -44,10 +45,30 @@ describe('publication-catalog-search.util', () => {
     ).toBe('2024-06-01T23:59:59.999Z');
   });
 
-  it('publicationCatalogNeedsAuthorJoin when q or author set', () => {
-    expect(publicationCatalogNeedsAuthorJoin({})).toBe(false);
-    expect(publicationCatalogNeedsAuthorJoin({ q: 'policy' })).toBe(true);
-    expect(publicationCatalogNeedsAuthorJoin({ author: 'Smith' })).toBe(true);
+  it('publicationCatalogNeedsAuthorJoin is never true now the name is denormalized', () => {
+    // Every catalog predicate reads `publication_author_normalized` off the
+    // submission, so no filter combination can force a join to `users`.
+    expect(publicationCatalogNeedsAuthorJoin()).toBe(false);
+  });
+
+  it('catalog author matching reads the submission, not a joined users row', () => {
+    expect(PUBLICATION_CATALOG_AUTHOR_MATCH_SQL).toContain(
+      's.publication_author_normalized',
+    );
+    expect(PUBLICATION_CATALOG_AUTHOR_MATCH_SQL).not.toContain('author.');
+    // Quick search reads it too, so `q` alone never needs the join either.
+    expect(PUBLICATION_QUICK_SEARCH_MATCH_SQL).toContain(
+      's.publication_author_normalized',
+    );
+    expect(PUBLICATION_QUICK_SEARCH_MATCH_SQL).not.toContain('author.');
+    expect(PUBLICATION_QUICK_SEARCH_RANK_SQL).not.toContain('author.');
+  });
+
+  it('author suggestions still use the joined form, because they list authors', () => {
+    // That endpoint groups by author.display_name, so the join is the point.
+    expect(PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL).toContain(
+      'author.display_name',
+    );
   });
 
   it('SQL fragments use named parameters only (no string interpolation of user input)', () => {
@@ -55,6 +76,7 @@ describe('publication-catalog-search.util', () => {
       PUBLICATION_QUICK_SEARCH_MATCH_SQL,
       PUBLICATION_QUICK_SEARCH_RANK_SQL,
       PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
+      PUBLICATION_CATALOG_AUTHOR_MATCH_SQL,
       PUBLICATION_AUTHOR_SUGGESTION_RANK_SQL,
     ];
     for (const sql of frags) {
@@ -127,7 +149,9 @@ describe('publication-catalog-search.util', () => {
     expect(where).toHaveBeenCalledWith('s.status = :pubStatus', {
       pubStatus: SubmissionStatus.PUBLISHED,
     });
-    expect(innerJoinAndSelect).toHaveBeenCalledWith('s.author', 'author');
+    // The author relation is no longer joined to satisfy a predicate; the
+    // caller adds a LEFT JOIN purely to select it for display.
+    expect(innerJoinAndSelect).not.toHaveBeenCalledWith('s.author', 'author');
     expect(andWhere).toHaveBeenCalledWith(
       PUBLICATION_QUICK_SEARCH_MATCH_SQL,
       expect.objectContaining({ pubQ: 'metadata' }),

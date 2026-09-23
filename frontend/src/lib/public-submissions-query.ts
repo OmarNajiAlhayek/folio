@@ -1,3 +1,5 @@
+import { createListQuery, type ListFilters } from '@/lib/list-query';
+
 export type PublicationSearchMode = 'keyword' | 'semantic';
 
 export type PublicationCatalogFilters = {
@@ -12,7 +14,11 @@ export type PublicationCatalogFilters = {
   publishedTo?: string;
 };
 
-const FILTER_KEYS: (keyof PublicationCatalogFilters)[] = [
+export type PublicationCatalogFilterKey = keyof PublicationCatalogFilters;
+
+type FilterKey = PublicationCatalogFilterKey;
+
+const FILTER_KEYS = [
   'q',
   'searchMode',
   'author',
@@ -21,36 +27,36 @@ const FILTER_KEYS: (keyof PublicationCatalogFilters)[] = [
   'articleType',
   'publishedFrom',
   'publishedTo',
-];
+] as const satisfies readonly FilterKey[];
+
+/**
+ * `keyword` is the implicit mode: it is omitted from the URL and does not count
+ * as an active filter, so a plain text search produces `?q=…` and nothing else.
+ */
+export const publicationCatalogQuery = createListQuery<FilterKey>({
+  keys: FILTER_KEYS,
+  enums: { searchMode: ['keyword', 'semantic'] },
+  defaults: { searchMode: 'keyword' },
+});
+
+const catalogQuery = publicationCatalogQuery;
 
 export function parsePublicationCatalogFilters(
   params: URLSearchParams,
 ): PublicationCatalogFilters {
-  const filters: PublicationCatalogFilters = {};
-  for (const key of FILTER_KEYS) {
-    const value = params.get(key)?.trim();
-    if (!value) continue;
-    if (key === 'searchMode') {
-      if (value === 'keyword' || value === 'semantic') {
-        filters.searchMode = value;
-      }
-    } else {
-      filters[key] = value;
-    }
-  }
-  return filters;
+  return catalogQuery.parse(params) as PublicationCatalogFilters;
 }
 
 export function publicationCatalogFiltersActive(
   filters: PublicationCatalogFilters,
 ): boolean {
-  return FILTER_KEYS.some((k) => {
-    const value = filters[k];
-    if (k === 'searchMode') {
-      return value === 'semantic';
-    }
-    return Boolean(typeof value === 'string' && value.trim());
-  });
+  return catalogQuery.isActive(filters as ListFilters<FilterKey>);
+}
+
+export function publicationCatalogActiveKeys(
+  filters: PublicationCatalogFilters,
+): FilterKey[] {
+  return catalogQuery.activeKeys(filters as ListFilters<FilterKey>);
 }
 
 export function publicationCatalogUsesSemanticSearch(
@@ -62,26 +68,11 @@ export function publicationCatalogUsesSemanticSearch(
 export function buildPublicSubmissionsQuery(
   filters: PublicationCatalogFilters,
 ): string {
-  const sp = new URLSearchParams();
-  for (const key of FILTER_KEYS) {
-    const value = filters[key]?.trim();
-    if (value) {
-      sp.set(key, value);
-    }
-  }
-  const qs = sp.toString();
-  return qs ? `?${qs}` : '';
+  return catalogQuery.buildQuery(filters as ListFilters<FilterKey>);
 }
 
 export function publicationCatalogFiltersToSearchParams(
   filters: PublicationCatalogFilters,
 ): URLSearchParams {
-  const sp = new URLSearchParams();
-  for (const key of FILTER_KEYS) {
-    const value = filters[key]?.trim();
-    if (value) {
-      sp.set(key, value);
-    }
-  }
-  return sp;
+  return catalogQuery.toSearchParams(filters as ListFilters<FilterKey>);
 }

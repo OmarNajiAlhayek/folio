@@ -308,6 +308,23 @@ export class Submission extends BaseEntity {
   })
   publicationSearchDocument?: string | null;
 
+  /**
+   * The author's display name, folded — denormalized so catalog search can
+   * match an author without joining `users`.
+   *
+   * Maintained by `trg_submissions_publication_search`, and refreshed by
+   * `trg_users_refresh_publication_search` when the author is renamed.
+   */
+  @Column({
+    name: 'publication_author_normalized',
+    type: 'text',
+    nullable: true,
+    insert: false,
+    update: false,
+    select: false,
+  })
+  publicationAuthorNormalized?: string | null;
+
   /** Maintained by DB trigger; queried via raw SQL in catalog search only. */
   @Column({
     name: 'publication_search_vector',

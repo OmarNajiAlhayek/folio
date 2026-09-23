@@ -4,7 +4,7 @@ Human-readable specs for each curated profile live in this folder. The **executa
 
 | Profile ID | Document |
 |------------|----------|
-| `damascus-university-journal-v1` | [damascus-university-journal-v1.md](./damascus-university-journal-v1.md) |
+| `damascus-university-journal-v1` | [damascus-university-journal-v1.md](./damascus-university-journal-v1.md) — source guideline pages in [`damascus-university-journal-v1/`](./damascus-university-journal-v1/) |
 
 The former repo-root `style.md` described only Damascus; it was moved here so the root is not mistaken for a global default across all journals.
 

@@ -125,9 +125,13 @@ export interface ReferencesSection extends BaseConstructorSection {
 }
 
 export interface ConstructorAuthorEntry {
+  /** First name and surname ("اسم الباحث الأول وكنيته"). */
   fullName: string;
+  /** Abbreviated academic title printed before the name (م.، د.، أ.د.). */
   title: string;
   affiliation: string;
+  /** Precise specialisation (التخصص الدقيق) on the affiliation line. */
+  specialization?: string;
   email: string;
   isCorresponding: boolean;
 }

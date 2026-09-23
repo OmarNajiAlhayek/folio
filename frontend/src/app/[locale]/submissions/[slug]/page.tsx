@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useId } from 'react';
 import {
   FileText,
   Image as ImageIcon,
+  Info,
   Paperclip,
   Table,
   TriangleAlert,
@@ -755,6 +756,8 @@ export default function SubmissionDetailPage() {
         const violationCount = Array.isArray(err.details?.violations)
           ? (err.details.violations as unknown[]).length
           : 1;
+        // The server re-checked the attached file; show what it found.
+        invalidateDetail(slug);
         const manuscriptFieldErrors = new Set([fileFieldKey('manuscript')]);
         setSubmitFieldErrors(manuscriptFieldErrors);
         scrollToFirstFieldError(manuscriptFieldErrors);
@@ -1209,6 +1212,14 @@ export default function SubmissionDetailPage() {
     (f) => f.kind === 'review_response',
   );
   const authorFiles = files.filter((f) => f.kind !== 'review_response');
+  // Rows stored before severities existed have none; the API treats them as blocking.
+  const docxViolations = sub.docxManuscriptViolations ?? [];
+  const docxBlockingViolations = docxViolations.filter(
+    (v) => v.severity !== 'warning',
+  );
+  const docxAdvisoryViolations = docxViolations.filter(
+    (v) => v.severity === 'warning',
+  );
   /** Editors see who wrote each review file; the author sees `displayName`. */
   const reviewerLabelForFile = (f: SubmissionFileRow): string => {
     const row = editorAssignmentRows.find((a) => a.id === f.reviewAssignmentId);
@@ -1623,8 +1634,7 @@ export default function SubmissionDetailPage() {
                       </div>
                     </FileDropZone>
                     {kind === 'manuscript' &&
-                    sub.docxManuscriptViolations &&
-                    sub.docxManuscriptViolations.length > 0 ? (
+                    docxBlockingViolations.length > 0 ? (
                       <div className="mt-3 rounded-xl border border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20 dark:border-amber-500/30 px-4 py-3">
                         <div className="flex items-start gap-2">
                           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -1636,12 +1646,39 @@ export default function SubmissionDetailPage() {
                               {t('docxViolationsBody')}
                             </p>
                             <ul className="mt-2 space-y-1">
-                              {sub.docxManuscriptViolations.map((v) => (
+                              {docxBlockingViolations.map((v) => (
                                 <li
                                   key={v.code}
                                   className="text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5"
                                 >
                                   <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" />
+                                  {locale === 'ar' ? v.messageAr : v.message}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    {kind === 'manuscript' &&
+                    docxAdvisoryViolations.length > 0 ? (
+                      <div className="mt-3 rounded-xl border border-ink/10 dark:border-white/10 bg-ink/[0.02] dark:bg-white/[0.03] px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <Info className="mt-0.5 size-4 shrink-0 text-ink/50 dark:text-white/50" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-ink/80 dark:text-white/80">
+                              {t('docxWarningsHeading')}
+                            </p>
+                            <p className="mt-0.5 text-xs text-ink/60 dark:text-white/60">
+                              {t('docxWarningsBody')}
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                              {docxAdvisoryViolations.map((v) => (
+                                <li
+                                  key={v.code}
+                                  className="text-xs text-ink/75 dark:text-white/75 flex items-start gap-1.5"
+                                >
+                                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-ink/30 dark:bg-white/30" />
                                   {locale === 'ar' ? v.messageAr : v.message}
                                 </li>
                               ))}

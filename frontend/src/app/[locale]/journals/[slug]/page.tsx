@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
-import { BookOpen, ChevronRight, Library, Users } from 'lucide-react';
-import { formatMediumDate } from '@/lib/format-date';
+import { BookOpen, ChevronRight, Users } from 'lucide-react';
 import type { JournalWithIssues } from '@/lib/journal-types';
-import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
+import { JournalIssuesList } from '@/components/journal-issues-list';
+import { PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
 import { serverPublicJson } from '@/lib/server-api';
 import { absoluteLocaleUrl, localeAlternates } from '@/lib/site-url';
 
@@ -102,44 +102,7 @@ export default async function JournalPage({ params }: Props) {
         {t('issuesHeading')}
       </h2>
 
-      {issues.length === 0 ? (
-        <div className={EMPTY_STATE_CLS}>
-          <Library className="h-6 w-6 text-ink/40" aria-hidden />
-          <p className="text-sm text-ink/60">{t('noIssues')}</p>
-        </div>
-      ) : (
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-          {issues.map((i) => (
-            <li key={`${i.year}-${i.number}`}>
-              <Link
-                href={`/journals/${journal.slug}/issues/${i.year}/${i.number}`}
-                className="group flex items-center justify-between gap-3 rounded-xl border border-ink/10 bg-surface px-5 py-4 shadow-sm transition hover:border-accent/40 hover:shadow-md dark:border-white/10"
-              >
-                <span>
-                  <span className="block font-serif text-base font-semibold text-ink group-hover:text-accent">
-                    {isAr ? i.citationAr : i.citationEn}
-                  </span>
-                  {(isAr ? i.titleAr : i.titleEn) && (
-                    <span className="mt-0.5 block text-sm text-ink/65">
-                      {isAr ? i.titleAr : i.titleEn}
-                    </span>
-                  )}
-                  <span className="mt-1 block text-xs text-ink/55">
-                    {t('articleCount', { count: i.articleCount })}
-                    {i.publishedAt
-                      ? ` · ${formatMediumDate(i.publishedAt, locale)}`
-                      : ''}
-                  </span>
-                </span>
-                <ChevronRight
-                  className="h-4 w-4 shrink-0 text-ink/35 rtl:rotate-180"
-                  aria-hidden
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <JournalIssuesList journalSlug={journal.slug} issues={issues} />
     </main>
   );
 }

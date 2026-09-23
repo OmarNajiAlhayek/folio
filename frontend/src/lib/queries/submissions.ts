@@ -31,6 +31,8 @@ export type SubmissionSummary = {
   constructorContent?: unknown | null;
   title?: string;
   articleType?: SubmissionArticleType | null;
+  /** The journal decides the citation style (APA / Vancouver) in the constructor. */
+  journalId?: string | null;
   files?: Array<{ id: string; kind: string; originalName: string }>;
 };
 
@@ -141,6 +143,8 @@ export type SubmissionRecord = {
     messageAr: string;
     found: string;
     expected: string;
+    /** `error` blocks submission; absent on rows stored before severities existed. */
+    severity?: 'error' | 'warning';
   }> | null;
   docxGrammarNotes?: Array<{
     excerpt: string;

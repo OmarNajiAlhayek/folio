@@ -33,6 +33,7 @@
     "seed:fresh": "cross-env FOLIO_ALLOW_DESTRUCTIVE_SEED=1 SEED_RESET_ALL=1 ts-node --transpile-only -r tsconfig-paths/register src/seed.ts",
     "seed:perf": "cross-env SEED_PERF_FIXTURES=1 ts-node --transpile-only -r tsconfig-paths/register src/seed.ts",
     "db:publication-search": "node scripts/run-publication-search.mjs",
+    "db:search-sql": "ts-node --transpile-only scripts/generate-search-schema-sql.ts",
     "smoke:auth": "node scripts/smoke-auth.mjs",
     "migrate": "ts-node --transpile-only ./node_modules/typeorm/cli.js migration:run -d src/db/data-source.ts",
     "migrate:prod": "node ./node_modules/typeorm/cli.js migration:run -d dist/db/data-source.js",

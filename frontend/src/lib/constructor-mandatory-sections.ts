@@ -194,8 +194,10 @@ export function ensureMandatoryConstructorSections(
 export function createEmptyConstructorContent(
   guidance?: ConstructorGuidance | null,
 ): ConstructorContent {
+  // Seed the profile's direction here: `ensureMandatoryConstructorSections` only
+  // falls back to it when `defaultDir` is missing.
   return ensureMandatoryConstructorSections(
-    { defaultDir: 'ltr', sections: [] },
+    { defaultDir: guidance?.defaultDocumentDir ?? 'ltr', sections: [] },
     guidance,
   );
 }

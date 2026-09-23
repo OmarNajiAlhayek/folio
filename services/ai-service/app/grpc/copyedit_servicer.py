@@ -20,6 +20,7 @@ class CopyeditGrpcServicer(copyedit_pb2_grpc.CopyeditServiceServicer):
             issues = await self._copyedit.check_references(
                 reference_list=list(request.reference_list),
                 inline_citations=list(request.inline_citations),
+                citation_style=request.citation_style,
             )
             return copyedit_pb2.CheckReferencesResponse(issues=issues)
         except Exception as exc:

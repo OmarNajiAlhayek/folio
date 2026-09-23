@@ -24,6 +24,7 @@ import { SimpleTooltip } from '@/components/ui/tooltip';
 import { ConstructorRichTextToolbar } from '@/components/constructor/ConstructorRichTextToolbar';
 import { createConstructorTipTapExtensions } from '@/lib/constructor-tiptap-extensions';
 import { resolveReferenceEntryHtml } from '@/lib/constructor-rich-text';
+import type { CitationStyle } from '@/lib/manuscript-styles-catalog';
 import {
   sanitizeConstructorTipTapHtml,
   sanitizeKatexPreviewHtml,
@@ -64,6 +65,8 @@ interface CommonProps<T extends ConstructorSection> {
   onFootnotesChange?: (next: ConstructorFootnote[]) => void;
   /** 1-based index among equation sections when `section.kind === 'equation'`. */
   equationNumber?: number;
+  /** Journal's citation style for the references hint; `null` → no journal chosen. */
+  citationStyle?: CitationStyle | null;
 }
 
 /**
@@ -341,6 +344,16 @@ function AuthorsEditor({
                 onChange={(e) => update(idx, { affiliation: e.target.value })}
                 className="rounded border border-ink/20 bg-paper px-2 py-1 text-sm sm:col-span-2"
                 placeholder={t('authorAffiliation')}
+              />
+              <input
+                dir={dir}
+                disabled={readOnly}
+                value={a.specialization ?? ''}
+                onChange={(e) =>
+                  update(idx, { specialization: e.target.value })
+                }
+                className="rounded border border-ink/20 bg-paper px-2 py-1 text-sm sm:col-span-2"
+                placeholder={t('authorSpecialization')}
               />
               <input
                 disabled={readOnly}
@@ -1212,8 +1225,15 @@ function ReferencesEditor({
   section,
   onChange,
   readOnly,
+  citationStyle = null,
 }: CommonProps<ReferencesSection>) {
   const t = useTranslations('ConstructorEditor');
+  const hint =
+    citationStyle === 'vancouver'
+      ? t('referencesHintVancouver')
+      : citationStyle === 'apa'
+        ? t('referencesHint')
+        : t('referencesHintNoJournal');
 
   function updateItem(idx: number, patch: Partial<ConstructorReferenceEntry>) {
     onChange({
@@ -1237,7 +1257,7 @@ function ReferencesEditor({
   }
 
   return (
-    <SectionFrame label={t('referencesLabel')} hint={t('referencesHint')}>
+    <SectionFrame label={t('referencesLabel')} hint={hint}>
       <ul className="space-y-2">
         {section.items.map((item, idx) => {
           const dir: ConstructorDir = item.lang === 'ar' ? 'rtl' : 'ltr';

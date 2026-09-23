@@ -38,6 +38,7 @@ import {
   validateConstructorContentForSubmit,
 } from './constructor-content-utils';
 import { DocxGeneratorService } from './docx-generator.service';
+import { isBlockingDocxViolation } from './docx-format-checker';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { sanitizeConstructorContent } from './sanitize-constructor-html';
@@ -283,19 +284,20 @@ export class SubmissionLifecycleService {
       }
     }
 
-    if (
-      presentation.presentUploaded &&
-      s.docxManuscriptViolations &&
-      s.docxManuscriptViolations.length > 0
-    ) {
-      const messages = s.docxManuscriptViolations
-        .map((v) => v.message)
-        .join('; ');
-      throw new BadRequestException({
-        message: `Uploaded manuscript does not meet formatting requirements: ${messages}`,
-        code: 'DOCX_FORMAT_VIOLATIONS',
-        violations: s.docxManuscriptViolations,
-      });
+    if (presentation.presentUploaded) {
+      await this.files.refreshManuscriptFormatViolations(s);
+      // Warnings are shown on the manuscript card but never block submission.
+      const blocking = (s.docxManuscriptViolations ?? []).filter(
+        isBlockingDocxViolation,
+      );
+      if (blocking.length > 0) {
+        const messages = blocking.map((v) => v.message).join('; ');
+        throw new BadRequestException({
+          message: `Uploaded manuscript does not meet formatting requirements: ${messages}`,
+          code: 'DOCX_FORMAT_VIOLATIONS',
+          violations: blocking,
+        });
+      }
     }
   }
 
@@ -325,7 +327,7 @@ export class SubmissionLifecycleService {
   ): ConstructorValidationError[] {
     const styleId = this.manuscriptStyles.resolveEffectiveStyleId(content);
     const profile = this.manuscriptStyles.getProfile(styleId);
-    return validateConstructorContentForSubmit(content, profile.constructor);
+    return validateConstructorContentForSubmit(content, profile.constructorGuidance);
   }
 
   private async assertSubmissionSlugAvailable(
@@ -573,7 +575,7 @@ export class SubmissionLifecycleService {
       const profile = this.manuscriptStyles.getProfile(styleId);
       const errors = validateConstructorContentForSubmit(
         contentForDoc,
-        profile.constructor,
+        profile.constructorGuidance,
       );
       if (errors.length > 0) {
         throw new BadRequestException({
@@ -681,6 +683,10 @@ export class SubmissionLifecycleService {
     }
     const styleId = this.manuscriptStyles.resolveEffectiveStyleId(content);
     const profile = this.manuscriptStyles.getProfile(styleId);
+    // The first-page header and footer name the journal and its online ISSN.
+    const journal = s.journalId
+      ? await this.journals.findJournal(s.journalId)
+      : null;
     const buffer = await this.docxGeneratorService.generate(
       content,
       async (fileId) => {
@@ -697,6 +703,7 @@ export class SubmissionLifecycleService {
         }
       },
       profile,
+      { journal },
     );
     if (!options.attach) {
       return { kind: 'buffer', data: buffer };

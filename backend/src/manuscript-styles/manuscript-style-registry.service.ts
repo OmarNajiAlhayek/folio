@@ -84,12 +84,12 @@ export class ManuscriptStyleRegistryService {
         descriptionKey: p.descriptionKey,
         previewTheme: p.previewTheme,
       };
-      if (p.constructor) {
+      if (p.constructorGuidance) {
         entry.constructorGuidance = {
-          extraMandatorySlots: p.constructor.extraMandatorySlots,
-          recommendedPresets: p.constructor.recommendedPresets,
-          requiredRichTextKinds: p.constructor.requiredRichTextKinds,
-          defaultDocumentDir: p.constructor.defaultDocumentDir,
+          extraMandatorySlots: p.constructorGuidance.extraMandatorySlots,
+          recommendedPresets: p.constructorGuidance.recommendedPresets,
+          requiredRichTextKinds: p.constructorGuidance.requiredRichTextKinds,
+          defaultDocumentDir: p.constructorGuidance.defaultDocumentDir,
         };
       }
       return entry;

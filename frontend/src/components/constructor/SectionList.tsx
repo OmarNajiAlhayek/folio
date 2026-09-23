@@ -39,6 +39,8 @@ import {
 
 import type { ConstructorGuidance } from '@/lib/constructor-content.types';
 
+import type { CitationStyle } from '@/lib/manuscript-styles-catalog';
+
 import type {
   ConstructorContent,
   ConstructorDir,
@@ -64,6 +66,9 @@ interface SectionListProps {
   articleType?: SubmissionArticleType | null;
 
   guidance?: ConstructorGuidance | null;
+
+  /** Journal's citation style (drives the references hint); `null` → no journal. */
+  citationStyle?: CitationStyle | null;
 
   onInsertPreset?: (presetId: ConstructorPresetId) => void;
 }
@@ -123,6 +128,8 @@ export function SectionList({
   articleType = null,
 
   guidance,
+
+  citationStyle = null,
 
   onInsertPreset,
 }: SectionListProps) {
@@ -496,6 +503,7 @@ export function SectionList({
                 onChange={(next) => updateSection(idx, next)}
                 slug={slug}
                 readOnly={readOnly}
+                citationStyle={citationStyle}
                 footnotes={content.footnotes}
                 onFootnotesChange={(footnotes) =>
                   onChange({ ...content, footnotes })

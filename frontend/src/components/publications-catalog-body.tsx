@@ -10,26 +10,29 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from '@/i18n/navigation';
 import { Link } from '@/i18n/navigation';
 import { CollapsibleSection } from '@/components/ui/collapsible-section';
 import { ApiErrorState } from '@/components/api-error-state';
 import type React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonBusyRegion } from '@/components/ui/skeleton-loading-status';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Highlight } from '@/components/ui/highlight';
+import { Pagination } from '@/components/ui/pagination';
 import { PublicationsCatalogSearch } from '@/components/publications-catalog-search';
 import { formatMediumDate } from '@/lib/format-date';
 import { getApiErrorKind } from '@/lib/api-error-message';
+import { pageCount as toPageCount } from '@/lib/list-query';
+import { useListQueryState } from '@/lib/use-list-query-state';
 import {
-  parsePublicationCatalogFilters,
-  publicationCatalogFiltersActive,
-  publicationCatalogFiltersToSearchParams,
+  publicationCatalogQuery,
   publicationCatalogUsesSemanticSearch,
+  type PublicationCatalogFilterKey,
   type PublicationCatalogFilters,
   type PublicationSearchMode,
 } from '@/lib/public-submissions-query';
 import {
+  PUBLICATION_CATALOG_PAGE_SIZE,
   PUBLICATION_SEMANTIC_DEFAULT_LIMIT,
   usePublicationsCatalog,
   type PublicationListItem,
@@ -66,12 +69,15 @@ function CatalogSkeleton() {
 function CatalogArticle({
   item,
   locale,
+  query,
   semanticActive,
   isAbstractOpen,
   onToggleAbstract,
 }: {
   item: PublicationListItem;
   locale: string;
+  /** Active text query, marked in the parts of the card it matches. */
+  query: string;
   semanticActive: boolean;
   isAbstractOpen: boolean;
   onToggleAbstract: () => void;
@@ -80,6 +86,10 @@ function CatalogArticle({
   const tWf = useTranslations('SubmissionWorkflow');
   const dateStr = formatMediumDate(item.publishedAt, locale);
   const pubSlug = item.slug ?? item.id;
+
+  // Semantic hits are ranked by meaning rather than by the words typed, so
+  // marking the literal query in them would be misleading.
+  const markQuery = semanticActive ? '' : query;
 
   return (
     <article className="group relative rounded-2xl border border-ink/10 dark:border-white/10 bg-surface/90 p-5 shadow-[0_2px_12px_rgba(15,23,42,0.03)] backdrop-blur-md transition-all duration-300 hover:border-accent-2/20 hover:shadow-[0_16px_36px_-16px_rgba(15,23,42,0.12)] sm:p-6">
@@ -108,7 +118,7 @@ function CatalogArticle({
             href={`/publications/${encodeURIComponent(pubSlug)}`}
             className="text-ink transition-colors duration-200 hover:text-accent group-hover:text-accent"
           >
-            {item.title}
+            <Highlight text={item.title} query={markQuery} />
           </Link>
         </h2>
         {item.titleAr?.trim() ? (
@@ -120,7 +130,7 @@ function CatalogArticle({
               href={`/publications/${encodeURIComponent(pubSlug)}`}
               className="text-ink/90 transition-colors duration-200 hover:text-accent group-hover:text-accent"
             >
-              {item.titleAr}
+              <Highlight text={item.titleAr} query={markQuery} />
             </Link>
           </p>
         ) : null}
@@ -143,7 +153,9 @@ function CatalogArticle({
               strokeWidth={2.5}
               aria-hidden
             />
-            <span>{item.author.displayName}</span>
+            <span>
+              <Highlight text={item.author.displayName} query={markQuery} />
+            </span>
           </div>
         ) : null}
         {dateStr ? (
@@ -184,7 +196,7 @@ function CatalogArticle({
                 {tWf('abstractLabelEn')}
               </p>
               <p dir="ltr" className="mt-1 text-xs leading-relaxed text-ink/75">
-                {item.abstract}
+                <Highlight text={item.abstract} query={markQuery} />
               </p>
             </div>
             {item.abstractAr?.trim() ? (
@@ -196,7 +208,7 @@ function CatalogArticle({
                   dir="rtl"
                   className="mt-1 text-xs leading-relaxed text-ink/75 font-serif"
                 >
-                  {item.abstractAr}
+                  <Highlight text={item.abstractAr} query={markQuery} />
                 </p>
               </div>
             ) : null}
@@ -222,105 +234,69 @@ function CatalogArticle({
 
 export function PublicationsCatalogBody() {
   const t = useTranslations('Publications');
+  const tList = useTranslations('List');
   const tApi = useTranslations('ApiErrors');
   const locale = useLocale();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { resolve: resolveApiError } = useApiErrorMessages();
 
-  const filters = useMemo(
-    () => parsePublicationCatalogFilters(searchParams),
-    [searchParams],
+  const {
+    filters: rawFilters,
+    page,
+    setFilters,
+    setFilter,
+    removeFilter,
+    clear,
+    setPage,
+    isActive: filtersActive,
+  } = useListQueryState<PublicationCatalogFilterKey>(
+    publicationCatalogQuery,
+    '/publications',
   );
-  const filtersActive = publicationCatalogFiltersActive(filters);
+  const filters = rawFilters as PublicationCatalogFilters;
   const semanticActive = publicationCatalogUsesSemanticSearch(filters);
 
-  const {
-    data,
-    error,
-    isPending,
-    isFetching,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-    refetch,
-  } = usePublicationsCatalog(filters);
+  const { data, error, isPending, isFetching, isPlaceholderData, refetch } =
+    usePublicationsCatalog(filters, page);
 
-  const items = useMemo(
-    () => data?.pages.flatMap((page) => page.items) ?? [],
-    [data],
-  );
-  const total = data?.pages[0]?.total ?? null;
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const total = data?.total ?? null;
+  const pageCount = semanticActive
+    ? 1
+    : toPageCount(total ?? 0, PUBLICATION_CATALOG_PAGE_SIZE);
 
   const [openAbstracts, setOpenAbstracts] = useState<Record<string, boolean>>(
     {},
   );
 
-  const replaceFilters = useCallback(
-    (next: PublicationCatalogFilters) => {
-      const sp = publicationCatalogFiltersToSearchParams(next);
-      const qs = sp.toString();
-      router.replace(qs ? `/publications?${qs}` : '/publications', {
-        scroll: false,
-      });
-    },
-    [router],
-  );
-
   const onQuickQueryChange = useCallback(
-    (q: string) => {
-      const current = parsePublicationCatalogFilters(searchParams);
-      replaceFilters({
-        ...current,
-        q: q.trim() || undefined,
-      });
-    },
-    [searchParams, replaceFilters],
+    (q: string) => setFilter('q', q),
+    [setFilter],
   );
 
   const onApplyAdvanced = useCallback(
-    (draft: PublicationCatalogFilters) => {
-      replaceFilters(draft);
-    },
-    [replaceFilters],
+    (draft: PublicationCatalogFilters) => setFilters(draft),
+    [setFilters],
   );
-
-  const onClear = useCallback(() => {
-    replaceFilters({});
-  }, [replaceFilters]);
 
   const onSearchModeChange = useCallback(
     (searchMode: PublicationSearchMode) => {
-      replaceFilters({
-        ...filters,
-        searchMode: searchMode === 'keyword' ? undefined : searchMode,
-      });
+      // `keyword` is the default and is omitted from the URL.
+      setFilter('searchMode', searchMode === 'keyword' ? undefined : searchMode);
     },
-    [filters, replaceFilters],
-  );
-
-  const onRemoveFilter = useCallback(
-    (key: keyof PublicationCatalogFilters) => {
-      const next = { ...filters };
-      delete next[key];
-      replaceFilters(next);
-    },
-    [filters, replaceFilters],
+    [setFilter],
   );
 
   const toggleAbstract = (id: string) => {
-    setOpenAbstracts((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+    setOpenAbstracts((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const loadError = error ? resolveApiError(error, t('loadFailed')) : null;
   const initialLoading = isPending && !data;
-  const isRefetching = isFetching && !isPending && !isFetchingNextPage;
-  const showLoadMore =
-    !semanticActive && hasNextPage && !loadError && items.length > 0;
+  // `isPlaceholderData` is the previous page still on screen while the next
+  // one loads — the cue for the stale overlay, not a reason to show a skeleton.
+  const isRefetching = (isFetching && !isPending) || isPlaceholderData;
   const showEmptyState = !initialLoading && !loadError && items.length === 0;
+  const activeQuery = filters.q ?? '';
 
   return (
     <>
@@ -329,8 +305,8 @@ export function PublicationsCatalogBody() {
         onQuickQueryChange={onQuickQueryChange}
         onSearchModeChange={onSearchModeChange}
         onApplyAdvanced={onApplyAdvanced}
-        onClear={onClear}
-        onRemoveFilter={onRemoveFilter}
+        onClear={clear}
+        onRemoveFilter={removeFilter}
         resultCount={initialLoading ? null : (total ?? items.length)}
         semanticResultsCap={
           semanticActive && !initialLoading
@@ -363,29 +339,14 @@ export function PublicationsCatalogBody() {
           <CatalogSkeleton />
         </SkeletonBusyRegion>
       ) : showEmptyState ? (
-        <div className="mt-8 flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-ink/15 dark:border-white/15 bg-linear-to-b from-surface/50 to-surface-muted/20">
-          <div className="relative flex items-center justify-center size-16 rounded-full bg-accent/8 border border-accent/15 text-accent mb-5">
-            <span className="absolute inset-0 rounded-full bg-accent/8 animate-pulse" />
-            <TriangleAlert className="size-8" strokeWidth={2} aria-hidden />
-          </div>
-
-          <h2 className="font-serif text-lg font-bold text-ink">
-            {filtersActive ? t('noResults') : t('empty')}
-          </h2>
-          <p className="mt-2 text-xs leading-relaxed text-ink/60 max-w-xs">
-            {filtersActive ? t('noResultsHint') : t('emptyHint')}
-          </p>
-
-          {filtersActive ? (
-            <button
-              type="button"
-              onClick={onClear}
-              className="mt-5 rounded-lg border border-accent px-4 py-2 text-xs font-semibold text-accent hover:bg-accent/5 active:scale-[0.98] transition-all duration-200"
-            >
-              {t('clear')}
-            </button>
-          ) : null}
-        </div>
+        <EmptyState
+          icon={TriangleAlert}
+          title={filtersActive ? t('noResults') : t('empty')}
+          hint={filtersActive ? t('noResultsHint') : t('emptyHint')}
+          action={
+            filtersActive ? { label: t('clear'), onClick: clear } : undefined
+          }
+        />
       ) : !loadError && items.length > 0 ? (
         <div className="relative mt-6">
           {isRefetching ? (
@@ -426,26 +387,34 @@ export function PublicationsCatalogBody() {
                 <CatalogArticle
                   item={p}
                   locale={locale}
+                  query={activeQuery}
                   semanticActive={semanticActive}
                   isAbstractOpen={openAbstracts[p.id] ?? false}
                   onToggleAbstract={() => toggleAbstract(p.id)}
                 />
               </motion.div>
             ))}
-
-            {showLoadMore ? (
-              <div className="flex justify-center pt-2">
-                <button
-                  type="button"
-                  disabled={isFetchingNextPage}
-                  onClick={() => void fetchNextPage()}
-                  className="rounded-lg border border-ink/15 bg-surface px-5 py-2.5 text-xs font-semibold text-ink shadow-sm transition hover:border-accent/30 hover:text-accent disabled:opacity-60"
-                >
-                  {isFetchingNextPage ? t('loadingMore') : t('loadMore')}
-                </button>
-              </div>
-            ) : null}
           </motion.div>
+
+          <Pagination
+            className="mt-8"
+            page={page}
+            pageCount={pageCount}
+            onPageChange={(next) => {
+              setPage(next);
+              // A new page starts at the top; without this the reader lands
+              // mid-list because the previous page's scroll position is kept.
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            disabled={isRefetching}
+            labels={{
+              nav: tList('paginationLabel'),
+              previous: tList('prevPage'),
+              next: tList('nextPage'),
+              pageOf: (p, total) => tList('pageOf', { page: p, totalPages: total }),
+              goToPage: (p) => tList('goToPage', { page: p }),
+            }}
+          />
         </div>
       ) : null}
     </>

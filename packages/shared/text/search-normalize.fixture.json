@@ -1,0 +1,390 @@
+[
+  {
+    "name": "hamza-above",
+    "input": "أحمد",
+    "normalized": "احمد",
+    "tokens": [
+      {
+        "text": "احمد",
+        "start": 0,
+        "end": 4
+      }
+    ]
+  },
+  {
+    "name": "bare-alef",
+    "input": "احمد",
+    "normalized": "احمد",
+    "tokens": [
+      {
+        "text": "احمد",
+        "start": 0,
+        "end": 4
+      }
+    ]
+  },
+  {
+    "name": "hamza-below",
+    "input": "إدارة",
+    "normalized": "اداره",
+    "tokens": [
+      {
+        "text": "اداره",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "madda",
+    "input": "آداب",
+    "normalized": "اداب",
+    "tokens": [
+      {
+        "text": "اداب",
+        "start": 0,
+        "end": 4
+      }
+    ]
+  },
+  {
+    "name": "wasla",
+    "input": "ٱلعلم",
+    "normalized": "العلم",
+    "tokens": [
+      {
+        "text": "العلم",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "ta-marbuta",
+    "input": "مدرسة",
+    "normalized": "مدرسه",
+    "tokens": [
+      {
+        "text": "مدرسه",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "ta-marbuta-as-ha",
+    "input": "مدرسه",
+    "normalized": "مدرسه",
+    "tokens": [
+      {
+        "text": "مدرسه",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "alef-maqsura",
+    "input": "مصطفى",
+    "normalized": "مصطفي",
+    "tokens": [
+      {
+        "text": "مصطفي",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "ya",
+    "input": "مصطفي",
+    "normalized": "مصطفي",
+    "tokens": [
+      {
+        "text": "مصطفي",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "harakat",
+    "input": "الْهَنْدَسَة",
+    "normalized": "الهندسه",
+    "tokens": [
+      {
+        "text": "الهندسه",
+        "start": 0,
+        "end": 12
+      }
+    ]
+  },
+  {
+    "name": "tatweel",
+    "input": "هنـــدسة",
+    "normalized": "هندسه",
+    "tokens": [
+      {
+        "text": "هندسه",
+        "start": 0,
+        "end": 8
+      }
+    ]
+  },
+  {
+    "name": "farsi-ya-keheh",
+    "input": "کتابی",
+    "normalized": "كتابي",
+    "tokens": [
+      {
+        "text": "كتابي",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "waw-hamza",
+    "input": "مؤتمر",
+    "normalized": "موتمر",
+    "tokens": [
+      {
+        "text": "موتمر",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "ya-hamza",
+    "input": "مسائل",
+    "normalized": "مسايل",
+    "tokens": [
+      {
+        "text": "مسايل",
+        "start": 0,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "bare-hamza",
+    "input": "شيء",
+    "normalized": "شي",
+    "tokens": [
+      {
+        "text": "شي",
+        "start": 0,
+        "end": 3
+      }
+    ]
+  },
+  {
+    "name": "arabic-indic-digits",
+    "input": "٢٠٢٤",
+    "normalized": "2024",
+    "tokens": [
+      {
+        "text": "2024",
+        "start": 0,
+        "end": 4
+      }
+    ]
+  },
+  {
+    "name": "ext-arabic-digits",
+    "input": "۲۰۲۴",
+    "normalized": "2024",
+    "tokens": [
+      {
+        "text": "2024",
+        "start": 0,
+        "end": 4
+      }
+    ]
+  },
+  {
+    "name": "ascii-digits",
+    "input": "2024",
+    "normalized": "2024",
+    "tokens": [
+      {
+        "text": "2024",
+        "start": 0,
+        "end": 4
+      }
+    ]
+  },
+  {
+    "name": "mixed-ar-en",
+    "input": "Journal مجلة 2024",
+    "normalized": "journal مجله 2024",
+    "tokens": [
+      {
+        "text": "journal",
+        "start": 0,
+        "end": 7
+      },
+      {
+        "text": "مجله",
+        "start": 8,
+        "end": 12
+      },
+      {
+        "text": "2024",
+        "start": 13,
+        "end": 17
+      }
+    ]
+  },
+  {
+    "name": "english-case",
+    "input": "Engineering JOURNAL",
+    "normalized": "engineering journal",
+    "tokens": [
+      {
+        "text": "engineering",
+        "start": 0,
+        "end": 11
+      },
+      {
+        "text": "journal",
+        "start": 12,
+        "end": 19
+      }
+    ]
+  },
+  {
+    "name": "eszett",
+    "input": "Straße",
+    "normalized": "strasse",
+    "tokens": [
+      {
+        "text": "strasse",
+        "start": 0,
+        "end": 6
+      }
+    ]
+  },
+  {
+    "name": "final-sigma",
+    "input": "ΟΔΣ οδός",
+    "normalized": "οδσ οδόσ",
+    "tokens": [
+      {
+        "text": "οδσ",
+        "start": 0,
+        "end": 3
+      },
+      {
+        "text": "οδόσ",
+        "start": 4,
+        "end": 8
+      }
+    ]
+  },
+  {
+    "name": "punctuation-only",
+    "input": "!!! ??? ---",
+    "normalized": "",
+    "tokens": []
+  },
+  {
+    "name": "empty",
+    "input": "",
+    "normalized": "",
+    "tokens": []
+  },
+  {
+    "name": "underscore",
+    "input": "snake_case_name",
+    "normalized": "snakecasename",
+    "tokens": [
+      {
+        "text": "snakecasename",
+        "start": 0,
+        "end": 15
+      }
+    ]
+  },
+  {
+    "name": "zwj-invisible",
+    "input": "م‍جلة",
+    "normalized": "م جله",
+    "tokens": [
+      {
+        "text": "م",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "text": "جله",
+        "start": 2,
+        "end": 5
+      }
+    ]
+  },
+  {
+    "name": "nfkc-ligature",
+    "input": "ﬁle",
+    "normalized": "file",
+    "tokens": [
+      {
+        "text": "file",
+        "start": 0,
+        "end": 3
+      }
+    ]
+  },
+  {
+    "name": "multi-space",
+    "input": "  البحث   العلمي  ",
+    "normalized": "البحث العلمي",
+    "tokens": [
+      {
+        "text": "البحث",
+        "start": 2,
+        "end": 7
+      },
+      {
+        "text": "العلمي",
+        "start": 10,
+        "end": 16
+      }
+    ]
+  },
+  {
+    "name": "title-with-punct",
+    "input": "الهندسة: دراسة (2024)",
+    "normalized": "الهندسه دراسه 2024",
+    "tokens": [
+      {
+        "text": "الهندسه",
+        "start": 0,
+        "end": 7
+      },
+      {
+        "text": "دراسه",
+        "start": 9,
+        "end": 14
+      },
+      {
+        "text": "2024",
+        "start": 16,
+        "end": 20
+      }
+    ]
+  },
+  {
+    "name": "quranic-marks",
+    "input": "الۖعلم",
+    "normalized": "العلم",
+    "tokens": [
+      {
+        "text": "العلم",
+        "start": 0,
+        "end": 6
+      }
+    ]
+  }
+]

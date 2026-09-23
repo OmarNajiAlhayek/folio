@@ -1,6 +1,7 @@
 import {
   buildBodyPlainText,
   checkDamascusStructure,
+  damascusCitationStyleIssues,
   damascusDisciplineIssues,
   damascusFormatIssues,
   extractInlineCitations,
@@ -1008,52 +1009,12 @@ describe('damascusDisciplineIssues', () => {
     ],
   };
 
-  const withNumberedCitations: ConstructorContent = {
-    defaultDir: 'ltr',
-    sections: [
-      {
-        id: 'p1',
-        kind: 'paragraph',
-        html: '<p>[1] and [2] and [3] are cited here.</p>',
-      },
-      { id: 'refs', kind: 'references', items: [] },
-    ],
-  };
-
-  it('warns Medical discipline using APA (must use Vancouver) — §3', () => {
+  it('does not report citation style — the journal decides that', () => {
     const issues = damascusDisciplineIssues(
       ['العلوم الطبية'],
       withAuthorYearCitations,
     );
-    expect(issues.some((i) => i.includes('Vancouver'))).toBe(true);
-  });
-
-  it('does not warn Medical discipline using Vancouver', () => {
-    const issues = damascusDisciplineIssues(
-      ['العلوم الطبية'],
-      withNumberedCitations,
-    );
-    expect(
-      issues.some((i) => i.includes('Vancouver') || i.includes('APA')),
-    ).toBe(false);
-  });
-
-  it('warns non-Medical discipline using Vancouver (must use APA) — §3', () => {
-    const issues = damascusDisciplineIssues(
-      ['العلوم الإنسانية'],
-      withNumberedCitations,
-    );
-    expect(issues.some((i) => i.includes('APA'))).toBe(true);
-  });
-
-  it('does not warn non-Medical discipline using APA', () => {
-    const issues = damascusDisciplineIssues(
-      ['العلوم الإنسانية'],
-      withAuthorYearCitations,
-    );
-    expect(
-      issues.some((i) => i.includes('APA') || i.includes('Vancouver')),
-    ).toBe(false);
+    expect(issues).toEqual([]);
   });
 
   it('warns Engineering discipline about two-column layout — §3', () => {
@@ -1071,22 +1032,84 @@ describe('damascusDisciplineIssues', () => {
   it('returns no issues for null content', () => {
     expect(damascusDisciplineIssues(['العلوم الطبية'], null)).toHaveLength(0);
   });
+});
 
-  it('does not trigger citation warning with fewer than 3 citations (ambiguous sample)', () => {
-    const twoOnly: ConstructorContent = {
-      defaultDir: 'ltr',
-      sections: [
-        {
-          id: 'p1',
-          kind: 'paragraph',
-          html: '<p>(Smith, 2020) and (Jones, 2019).</p>',
-        },
-      ],
-    };
-    const issues = damascusDisciplineIssues(['العلوم الطبية'], twoOnly);
+describe('damascusCitationStyleIssues', () => {
+  const content = (body: string, refCount = 0): ConstructorContent => ({
+    defaultDir: 'ltr',
+    sections: [
+      { id: 'p1', kind: 'paragraph', html: `<p>${body}</p>` },
+      {
+        id: 'refs',
+        kind: 'references',
+        items: Array.from({ length: refCount }, (_, i) => ({
+          lang: 'en' as const,
+          html: `<p>Ref ${i + 1}.</p>`,
+        })),
+      },
+    ],
+  });
+  const authorYear = content(
+    '(Smith, 2020) and (Jones, 2019) and (المقدسي، 2018) are cited.',
+  );
+  const numbered = content('[1] and [2] and [3, 4] are cited here.', 4);
+
+  it('warns a Vancouver (medical) journal using author–year citations', () => {
+    const issues = damascusCitationStyleIssues('vancouver', authorYear);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('Vancouver');
+  });
+
+  it('accepts a Vancouver journal numbered in order of first citation', () => {
+    expect(damascusCitationStyleIssues('vancouver', numbered)).toEqual([]);
+  });
+
+  it('warns an APA journal using numbered citations', () => {
+    const issues = damascusCitationStyleIssues('apa', numbered);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('APA');
+  });
+
+  it('accepts an APA journal using author–year citations', () => {
+    expect(damascusCitationStyleIssues('apa', authorYear)).toEqual([]);
+  });
+
+  it('skips when the journal (and so the style) is unknown', () => {
+    expect(damascusCitationStyleIssues(null, numbered)).toEqual([]);
+  });
+
+  it('does not judge the style from fewer than 3 citations', () => {
+    const twoOnly = content('(Smith, 2020) and (Jones, 2019).');
+    expect(damascusCitationStyleIssues('vancouver', twoOnly)).toEqual([]);
+  });
+
+  it('flags Vancouver numbers that are not in order of first citation', () => {
+    const issues = damascusCitationStyleIssues(
+      'vancouver',
+      content('First [2], then [1], then [3].', 3),
+    );
+    expect(issues).toEqual([
+      expect.stringContaining('[2] appears where [1] is expected'),
+    ]);
+  });
+
+  it('expands ranges when checking Vancouver order', () => {
     expect(
-      issues.some((i) => i.includes('Vancouver') || i.includes('APA')),
-    ).toBe(false);
+      damascusCitationStyleIssues(
+        'vancouver',
+        content('See [1–3], then [4] and [2].', 4),
+      ),
+    ).toEqual([]);
+  });
+
+  it('flags a Vancouver number past the end of the reference list', () => {
+    const issues = damascusCitationStyleIssues(
+      'vancouver',
+      content('[1] and [2] and [3].', 2),
+    );
+    expect(issues).toEqual([
+      expect.stringContaining('Citation [3] has no reference'),
+    ]);
   });
 });
 

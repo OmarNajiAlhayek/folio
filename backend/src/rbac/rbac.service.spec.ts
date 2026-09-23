@@ -12,6 +12,7 @@ import { PERMISSION_SLUGS, ROLE_SLUGS } from './permission-slugs';
 describe('RbacService', () => {
   let service: RbacService;
   let listUserIdsWithPermission: jest.Mock;
+  let userRoleFind: jest.Mock;
   let roleRepoFind: jest.Mock;
   let permRepo: {
     find: jest.Mock;
@@ -26,6 +27,7 @@ describe('RbacService', () => {
 
   beforeEach(async () => {
     listUserIdsWithPermission = jest.fn();
+    userRoleFind = jest.fn().mockResolvedValue([]);
     roleRepoFind = jest.fn().mockResolvedValue([]);
     permRepo = {
       find: jest.fn().mockResolvedValue([]),
@@ -43,7 +45,10 @@ describe('RbacService', () => {
         { provide: getRepositoryToken(Permission), useValue: permRepo },
         { provide: getRepositoryToken(Role), useValue: { find: roleRepoFind } },
         { provide: getRepositoryToken(RolePermission), useValue: rpRepo },
-        { provide: getRepositoryToken(UserRole), useValue: {} },
+        {
+          provide: getRepositoryToken(UserRole),
+          useValue: { find: userRoleFind },
+        },
       ],
     }).compile();
 
@@ -161,6 +166,99 @@ describe('RbacService', () => {
     expect(rpRepo.delete).toHaveBeenCalledWith({
       roleId: role.id,
       permissionId: In(['perm-stale']),
+    });
+  });
+
+  describe('getEffectiveForUsers', () => {
+    const row = (userId: string, slug: string, permissions: string[]) => ({
+      userId,
+      role: {
+        slug,
+        rolePermissions: permissions.map((p) => ({ permission: { slug: p } })),
+      },
+    });
+
+    it('resolves a whole page in one query', async () => {
+      userRoleFind.mockResolvedValue([
+        row('user-1', ROLE_SLUGS.AUTHOR, ['a.read']),
+        row('user-2', ROLE_SLUGS.REVIEWER, ['b.read']),
+      ]);
+
+      const byUser = await service.getEffectiveForUsers(['user-1', 'user-2']);
+
+      // The point of the batch: one round-trip regardless of page size.
+      expect(userRoleFind).toHaveBeenCalledTimes(1);
+      expect(byUser.get('user-1')).toEqual({
+        roleSlugs: [ROLE_SLUGS.AUTHOR],
+        permissionSlugs: ['a.read'],
+      });
+      expect(byUser.get('user-2')).toEqual({
+        roleSlugs: [ROLE_SLUGS.REVIEWER],
+        permissionSlugs: ['b.read'],
+      });
+    });
+
+    it('unions the roles and permissions a user holds', async () => {
+      userRoleFind.mockResolvedValue([
+        row('user-1', ROLE_SLUGS.AUTHOR, ['shared', 'a.read']),
+        row('user-1', ROLE_SLUGS.REVIEWER, ['shared', 'b.read']),
+      ]);
+
+      const access = await service.getEffectiveForUsers(['user-1']);
+
+      expect(access.get('user-1')?.roleSlugs).toEqual([
+        ROLE_SLUGS.AUTHOR,
+        ROLE_SLUGS.REVIEWER,
+      ]);
+      // `shared` appears under both roles but must not be duplicated.
+      expect(access.get('user-1')?.permissionSlugs).toEqual([
+        'shared',
+        'a.read',
+        'b.read',
+      ]);
+    });
+
+    it('omits users that hold no roles', async () => {
+      userRoleFind.mockResolvedValue([row('user-1', ROLE_SLUGS.AUTHOR, [])]);
+
+      const byUser = await service.getEffectiveForUsers(['user-1', 'user-2']);
+
+      expect(byUser.has('user-1')).toBe(true);
+      expect(byUser.has('user-2')).toBe(false);
+    });
+
+    it('does not query at all for an empty or blank id list', async () => {
+      expect(await service.getEffectiveForUsers([])).toEqual(new Map());
+      expect(await service.getEffectiveForUsers([''])).toEqual(new Map());
+      expect(userRoleFind).not.toHaveBeenCalled();
+    });
+
+    it('de-duplicates repeated ids before querying', async () => {
+      userRoleFind.mockResolvedValue([]);
+      await service.getEffectiveForUsers(['user-1', 'user-1']);
+      expect(userRoleFind).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: In(['user-1']) },
+        }),
+      );
+    });
+
+    it('getEffectiveForUser still answers for one user', async () => {
+      userRoleFind.mockResolvedValue([
+        row('user-1', ROLE_SLUGS.AUTHOR, ['a.read']),
+      ]);
+      expect(await service.getEffectiveForUser('user-1')).toEqual({
+        roleSlugs: [ROLE_SLUGS.AUTHOR],
+        permissionSlugs: ['a.read'],
+      });
+    });
+
+    it('getEffectiveForUser returns empty access for an unknown user', async () => {
+      userRoleFind.mockResolvedValue([]);
+      expect(await service.getEffectiveForUser('nobody')).toEqual({
+        roleSlugs: [],
+        permissionSlugs: [],
+      });
     });
   });
 

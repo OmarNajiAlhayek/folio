@@ -600,6 +600,7 @@ export class AiClientService implements OnModuleDestroy {
         {
           referenceList: input.referenceList,
           inlineCitations: input.inlineCitations,
+          citationStyle: input.citationStyle ?? '',
         },
         this.metadata(),
         { deadline },

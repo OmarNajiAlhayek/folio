@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
-import { ChevronRight, FileText, UserRound } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { formatMediumDate } from '@/lib/format-date';
 import type { IssueWithArticles } from '@/lib/journal-types';
-import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
+import { IssueArticlesList } from '@/components/issue-articles-list';
+import { PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
 import { serverPublicJson } from '@/lib/server-api';
 import { absoluteLocaleUrl, localeAlternates } from '@/lib/site-url';
 
@@ -118,38 +119,10 @@ export default async function JournalIssuePage({ params }: Props) {
         {t('contentsHeading')}
       </h2>
 
-      {articles.length === 0 ? (
-        <div className={EMPTY_STATE_CLS}>
-          <FileText className="h-6 w-6 text-ink/40" aria-hidden />
-          <p className="text-sm text-ink/60">{t('noArticles')}</p>
-        </div>
-      ) : (
-        <ol className="mt-4 space-y-3">
-          {articles.map((a) => (
-            <li key={a.id}>
-              <Link
-                href={`/publications/${a.slug ?? ''}`}
-                className="group block rounded-xl border border-ink/10 bg-surface p-5 shadow-sm transition hover:border-accent/40 hover:shadow-md dark:border-white/10"
-              >
-                <h3 className="font-serif text-base font-semibold leading-snug text-ink group-hover:text-accent">
-                  {isAr && a.titleAr ? a.titleAr : a.title}
-                </h3>
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink/60">
-                  {a.author?.displayName && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <UserRound className="h-3.5 w-3.5" aria-hidden />
-                      {a.author.displayName}
-                    </span>
-                  )}
-                  {a.publishedAt && (
-                    <span>{formatMediumDate(a.publishedAt, locale)}</span>
-                  )}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ol>
-      )}
+      <IssueArticlesList
+        basePath={`/journals/${slug}/issues/${issue.year}/${issue.number}`}
+        articles={articles}
+      />
     </main>
   );
 }

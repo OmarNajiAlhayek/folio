@@ -186,6 +186,7 @@ describe('SubmissionsService under_review author email', () => {
           provide: JournalDirectoryService,
           useValue: {
             listOptions: jest.fn().mockResolvedValue([]),
+            findJournal: jest.fn().mockResolvedValue(null),
             assertSubmittableJournal: jest.fn().mockResolvedValue({}),
           },
         },

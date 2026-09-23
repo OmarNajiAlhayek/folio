@@ -8,6 +8,12 @@ import { RolePermission } from '../entities/role-permission.entity';
 import { UserRole } from '../entities/user-role.entity';
 import { PERMISSION_SLUGS, ROLE_SLUGS } from './permission-slugs';
 
+/** What a user can do, flattened across every role they hold. */
+export type EffectiveAccess = {
+  roleSlugs: string[];
+  permissionSlugs: string[];
+};
+
 @Injectable()
 export class RbacService implements OnModuleInit {
   constructor(
@@ -310,28 +316,58 @@ export class RbacService implements OnModuleInit {
     }
   }
 
-  async getEffectiveForUser(userId: string): Promise<{
-    roleSlugs: string[];
-    permissionSlugs: string[];
-  }> {
+  async getEffectiveForUser(userId: string): Promise<EffectiveAccess> {
+    const byUser = await this.getEffectiveForUsers([userId]);
+    return byUser.get(userId) ?? { roleSlugs: [], permissionSlugs: [] };
+  }
+
+  /**
+   * Effective roles and permissions for several users in one query.
+   *
+   * The single-user form is a wrapper around this. Resolving a page of users by
+   * calling it per row was an N+1: twenty users meant twenty queries, each
+   * joining three levels of relations.
+   *
+   * Users with no roles are absent from the map rather than present and empty —
+   * callers that need a row per user should fall back explicitly.
+   */
+  async getEffectiveForUsers(
+    userIds: readonly string[],
+  ): Promise<Map<string, EffectiveAccess>> {
+    const unique = [...new Set(userIds.filter(Boolean))];
+    const byUser = new Map<string, EffectiveAccess>();
+    if (unique.length === 0) return byUser;
+
     const rows = await this.userRoleRepo.find({
-      where: { userId },
+      where: { userId: In(unique) },
       relations: [
         'role',
         'role.rolePermissions',
         'role.rolePermissions.permission',
       ],
     });
-    const roleSlugs = [...new Set(rows.map((ur) => ur.role.slug))];
-    const permissionSlugs = new Set<string>();
+
+    const roleSlugsByUser = new Map<string, Set<string>>();
+    const permissionSlugsByUser = new Map<string, Set<string>>();
     for (const ur of rows) {
+      const roles = roleSlugsByUser.get(ur.userId) ?? new Set<string>();
+      roles.add(ur.role.slug);
+      roleSlugsByUser.set(ur.userId, roles);
+
+      const perms = permissionSlugsByUser.get(ur.userId) ?? new Set<string>();
       for (const rp of ur.role.rolePermissions ?? []) {
-        if (rp.permission?.slug) {
-          permissionSlugs.add(rp.permission.slug);
-        }
+        if (rp.permission?.slug) perms.add(rp.permission.slug);
       }
+      permissionSlugsByUser.set(ur.userId, perms);
     }
-    return { roleSlugs, permissionSlugs: [...permissionSlugs] };
+
+    for (const [userId, roles] of roleSlugsByUser) {
+      byUser.set(userId, {
+        roleSlugs: [...roles],
+        permissionSlugs: [...(permissionSlugsByUser.get(userId) ?? [])],
+      });
+    }
+    return byUser;
   }
 
   async assignRoles(

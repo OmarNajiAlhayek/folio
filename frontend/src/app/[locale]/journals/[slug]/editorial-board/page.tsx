@@ -1,17 +1,12 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { ChevronRight, Users } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import {
-  BOARD_GROUP_KEY,
-  EDITORIAL_BOARD_ROLES,
-  boardMemberAffiliation,
-  boardMemberName,
-  type PublicEditorialBoardMember,
-} from '@/lib/editorial-board';
+import type { PublicEditorialBoardMember } from '@/lib/editorial-board';
 import type { JournalWithIssues } from '@/lib/journal-types';
-import { EMPTY_STATE_CLS, PAGE_LIST_GAP, PAGE_SHELL } from '@/lib/page-shell';
+import { EditorialBoardList } from '@/components/editorial-board-list';
+import { PAGE_SHELL } from '@/lib/page-shell';
 import { serverPublicJson } from '@/lib/server-api';
 import { absoluteLocaleUrl, localeAlternates } from '@/lib/site-url';
 
@@ -68,11 +63,6 @@ export default async function EditorialBoardPage({ params }: Props) {
   const isAr = locale.startsWith('ar');
   const { journal } = data;
   const journalTitle = isAr ? journal.titleAr : journal.titleEn;
-  const groups = EDITORIAL_BOARD_ROLES.map((role) => ({
-    role,
-    members: board.filter((m) => m.role === role),
-  })).filter((g) => g.members.length > 0);
-
   return (
     <main className={PAGE_SHELL}>
       <nav className="mb-4 text-xs text-ink/55">
@@ -105,66 +95,10 @@ export default async function EditorialBoardPage({ params }: Props) {
         </p>
       </header>
 
-      {groups.length === 0 ? (
-        <div className={`${EMPTY_STATE_CLS} ${PAGE_LIST_GAP}`}>
-          <Users className="h-6 w-6 text-ink/40" aria-hidden />
-          <p className="text-sm text-ink/60">{t('editorialBoardEmpty')}</p>
-        </div>
-      ) : (
-        groups.map((group) => (
-          <section
-            key={group.role}
-            className={PAGE_LIST_GAP}
-            aria-labelledby={`board-${group.role}`}
-          >
-            <h2
-              id={`board-${group.role}`}
-              className="font-serif text-xl font-semibold text-ink"
-            >
-              {t(BOARD_GROUP_KEY[group.role])}
-            </h2>
-            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-              {group.members.map((m, index) => {
-                const name = boardMemberName(m, isAr);
-                const affiliation = boardMemberAffiliation(m, isAr);
-                return (
-                  <li
-                    key={m.orcid ?? `${name}-${index}`}
-                    className="rounded-xl border border-ink/10 bg-surface px-5 py-4 shadow-sm dark:border-white/10"
-                  >
-                    <p className="font-serif text-base font-semibold text-ink">
-                      {name}
-                    </p>
-                    {affiliation ? (
-                      <p className="mt-0.5 text-sm text-ink/65">
-                        {affiliation}
-                      </p>
-                    ) : null}
-                    {m.orcid ? (
-                      <a
-                        href={`https://orcid.org/${m.orcid}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        dir="ltr"
-                        aria-label={t('orcidProfile', { name })}
-                        className="mt-2 inline-flex items-center gap-1.5 font-mono text-xs text-ink/60 transition hover:text-accent"
-                      >
-                        <span
-                          aria-hidden
-                          className="inline-flex size-4 items-center justify-center rounded-full bg-[#A6CE39] font-sans text-[8px] font-bold text-white"
-                        >
-                          iD
-                        </span>
-                        {m.orcid}
-                      </a>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))
-      )}
+      <EditorialBoardList
+        basePath={`/journals/${journal.slug}/editorial-board`}
+        board={board}
+      />
     </main>
   );
 }
