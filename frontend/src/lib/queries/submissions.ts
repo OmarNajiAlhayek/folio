@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiJson } from '@/lib/api';
-import { ApiError } from '@/lib/api-response';
 import { queryKeys } from '@/lib/query-keys';
 import {
   canManageAssignmentReminders,
@@ -206,12 +205,6 @@ export type SubmissionDetailPayload = {
   sub: SubmissionRecord;
   isEditorView: boolean;
   isOwner: boolean;
-  reviewerCandidates: Array<{
-    id: string;
-    displayName: string;
-    email: string;
-  }>;
-  reviewersLoadError: string | null;
   editorReviews: ReviewForEditor[];
   authorReviews: ReviewForAuthor[];
   reviewsLoadFailed: boolean;
@@ -240,9 +233,6 @@ export async function fetchSubmissionDetail(
   const canListAssignments =
     isEditorView &&
     permissions.includes(PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS);
-  const canAssignReviewer =
-    isEditorView &&
-    permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER);
 
   // Round 2: assignments + reviews in parallel (neither depends on the other)
   const [assignmentRows, reviewsResult] = await Promise.all([
@@ -274,12 +264,9 @@ export async function fetchSubmissionDetail(
     }
   }
 
-  // Round 3: reviewer-candidates (needs assignment rows for busy-filter) + all reminders in parallel
-  const busyReviewerIds = new Set(
-    assignmentRows
-      .filter((a) => a.status === 'invited' || a.status === 'accepted')
-      .map((a) => a.reviewerId),
-  );
+  // Round 3: section-editor candidates + all reminders in parallel. The
+  // reviewer pool is not loaded here: the reviewer browser fetches its own
+  // directory, which already marks who is on this manuscript.
   const assignmentsWithSlug = assignmentRows.filter((a) => a.slug);
 
   const canAssignSectionEditor = permissions.includes(
@@ -288,47 +275,23 @@ export async function fetchSubmissionDetail(
   const canLoadReminders =
     canManageAssignmentReminders(permissions) && assignmentsWithSlug.length > 0;
 
-  const [candidatesResult, seCandidatesResult, remindersResult] =
-    await Promise.all([
-      canAssignReviewer
-        ? apiJson<SubmissionDetailPayload['reviewerCandidates']>(
-            '/users/reviewer-candidates',
-          )
-            .then((data) => ({ ok: true as const, data }))
-            .catch((err: unknown) => ({ ok: false as const, err }))
-        : Promise.resolve(null),
-      canAssignSectionEditor
-        ? apiJson<SectionEditorCandidate[]>('/users/section-editor-candidates')
-            .then((data) => ({ ok: true as const, data }))
-            .catch(() => ({
-              ok: false as const,
-              data: [] as SectionEditorCandidate[],
-            }))
-        : Promise.resolve(null),
-      canLoadReminders
-        ? apiJson<Record<string, ReminderRow[]>>(
-            `/submissions/${enc}/assignment-reminders`,
-          )
-            .then((data) => ({ ok: true as const, data }))
-            .catch(() => ({ ok: false as const }))
-        : Promise.resolve(null),
-    ]);
-
-  let candidates: SubmissionDetailPayload['reviewerCandidates'] = [];
-  let reviewErr: string | null = null;
-
-  if (candidatesResult !== null) {
-    if (!candidatesResult.ok) {
-      reviewErr =
-        candidatesResult.err instanceof ApiError
-          ? candidatesResult.err.message
-          : 'reviewers_load_failed';
-    } else {
-      candidates = candidatesResult.data.filter(
-        (c) => !busyReviewerIds.has(c.id),
-      );
-    }
-  }
+  const [seCandidatesResult, remindersResult] = await Promise.all([
+    canAssignSectionEditor
+      ? apiJson<SectionEditorCandidate[]>('/users/section-editor-candidates')
+          .then((data) => ({ ok: true as const, data }))
+          .catch(() => ({
+            ok: false as const,
+            data: [] as SectionEditorCandidate[],
+          }))
+      : Promise.resolve(null),
+    canLoadReminders
+      ? apiJson<Record<string, ReminderRow[]>>(
+          `/submissions/${enc}/assignment-reminders`,
+        )
+          .then((data) => ({ ok: true as const, data }))
+          .catch(() => ({ ok: false as const }))
+      : Promise.resolve(null),
+  ]);
 
   const reminderMap: Record<string, ReminderRow[]> =
     remindersResult?.ok === true ? remindersResult.data : {};
@@ -346,8 +309,6 @@ export async function fetchSubmissionDetail(
     sub: s,
     isEditorView,
     isOwner,
-    reviewerCandidates: candidates,
-    reviewersLoadError: reviewErr,
     editorReviews,
     authorReviews,
     reviewsLoadFailed,

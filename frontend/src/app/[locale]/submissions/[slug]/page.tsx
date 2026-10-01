@@ -83,6 +83,7 @@ import { ReviewManuscriptPresentationPicker } from '@/components/constructor/Rev
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CircularProgress } from '@/components/ui/circular-progress';
 import { constructorDraftHasMeaningfulContent } from '@/lib/constructor-import-merge';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 import { resolveConstructorDocxFileName } from '@/lib/constructor-docx-filename';
 import {
   type ReviewManuscriptPresentation,
@@ -101,6 +102,12 @@ import { SubmissionDisciplinePanel } from '@/components/submission-discipline-pa
 import { DisciplineBadges } from '@/components/discipline-badges';
 import { CorpusSimilarityPanel } from '@/components/corpus-similarity-panel';
 import { ReviewerSuggestionsPanel } from '@/components/reviewer-suggestions-panel';
+import {
+  ReviewerPickerField,
+  useSelectedReviewer,
+} from '@/components/reviewer-browser/reviewer-picker-field';
+import { ReviewerStatsDialog } from '@/components/reviewer-browser/reviewer-stats-dialog';
+import { useInvalidateReviewerDirectory } from '@/lib/queries/reviewers';
 import { SectionEditorSuggestionsPanel } from '@/components/section-editor-suggestions-panel';
 import type { SectionEditorCandidate } from '@/lib/queries/submissions';
 import type {
@@ -134,8 +141,6 @@ type FileRow = SubmissionRecord['files'] extends Array<infer R> | undefined
   : never;
 
 type SubmissionDetail = SubmissionRecord;
-
-type ReviewerCandidate = SubmissionDetailPayload['reviewerCandidates'][number];
 
 type AssignmentRow = SubmissionDetailPayload['editorAssignmentRows'][number];
 
@@ -391,6 +396,7 @@ export default function SubmissionDetailPage() {
   const tCommon = useTranslations('Common');
   const tUi = useTranslations('UI');
   const tAssign = useTranslations('Assignments');
+  const tReviewerBrowser = useTranslations('ReviewerBrowser');
   const tv = useTranslations('Validation');
   const locale = useLocale();
   const params = useParams();
@@ -408,14 +414,8 @@ export default function SubmissionDetailPage() {
   const detail = detailQuery.data;
   const me = detail?.me ?? null;
   const sub = detail?.sub ?? null;
-  const reviewerCandidates = detail?.reviewerCandidates ?? [];
   const sectionEditorCandidates: SectionEditorCandidate[] =
     detail?.sectionEditorCandidates ?? [];
-  const reviewersLoadError = detail
-    ? detail.reviewersLoadError === 'reviewers_load_failed'
-      ? t('reviewersLoadFailed')
-      : detail.reviewersLoadError
-    : null;
   const editorReviews = detail?.editorReviews ?? [];
   const authorReviews = detail?.authorReviews ?? [];
   const reviewsError = detail?.reviewsLoadFailed
@@ -445,6 +445,9 @@ export default function SubmissionDetailPage() {
     });
   }, []);
   const [reviewerPick, setReviewerPick] = useState('');
+  const selectedReviewer = useSelectedReviewer(slug, reviewerPick);
+  const invalidateReviewerDirectory = useInvalidateReviewerDirectory();
+  const [statsReviewerId, setStatsReviewerId] = useState<string | null>(null);
   const [assignResponseDue, setAssignResponseDue] = useState('');
   const [assignReviewDue, setAssignReviewDue] = useState('');
   const [assignEditorInstructions, setAssignEditorInstructions] = useState('');
@@ -477,17 +480,6 @@ export default function SubmissionDetailPage() {
   useEffect(() => {
     if (serverStatus) setStatusPick(String(serverStatus));
   }, [serverStatus]);
-
-  const toastedReviewersRef = useRef(false);
-  useEffect(() => {
-    if (!reviewersLoadError) {
-      toastedReviewersRef.current = false;
-      return;
-    }
-    if (toastedReviewersRef.current) return;
-    toastedReviewersRef.current = true;
-    toast.error(reviewersLoadError, { id: 'submission-reviewers-load' });
-  }, [reviewersLoadError]);
 
   const toastedReviewsRef = useRef(false);
   useEffect(() => {
@@ -828,7 +820,11 @@ export default function SubmissionDetailPage() {
       setAssignReviewDue('');
       setAssignEditorInstructions('');
       invalidateDetail(slug);
+      void invalidateReviewerDirectory(slug);
     } catch (err) {
+      // A refused invitation (unavailable, at capacity) means the directory
+      // the editor chose from was stale; refresh it so the card says why.
+      void invalidateReviewerDirectory(slug);
       showApiError(err, t('assignFailed'), { id: 'submission-assign' });
     } finally {
       setBusy(false);
@@ -1548,14 +1544,14 @@ export default function SubmissionDetailPage() {
                 <p className="mt-1 text-xs text-ink/75">
                   {t('uploadSubtitle')}
                 </p>
-                {canEditConstructor ? (
+                {CONSTRUCTOR_ENTRY_POINTS_ENABLED && canEditConstructor ? (
                   <p className="mt-2 text-xs text-ink/60">
                     {tManuscript('dualPathHint')}
                   </p>
                 ) : null}
               </div>
 
-              {canEditConstructor && (
+              {CONSTRUCTOR_ENTRY_POINTS_ENABLED && canEditConstructor && (
                 <div className="flex flex-wrap items-center gap-3">
                   <Link
                     href={composeHref}
@@ -2583,36 +2579,17 @@ export default function SubmissionDetailPage() {
                         {t('reviewerAssignAdditionalHint')}
                       </p>
                     )}
-                    {reviewersLoadError && (
-                      <p className="text-[10px] text-red-600">
-                        {reviewersLoadError}
-                      </p>
-                    )}
                     <ReviewerSuggestionsPanel
                       slug={sub.slug}
-                      disabled={busy || !!reviewersLoadError}
+                      disabled={busy}
                       onPick={setReviewerPick}
                     />
-                    <div className="flex flex-col gap-1 text-sm font-medium text-ink">
-                      <span id="reviewer-select-label" className="sr-only">
-                        {t('reviewerLabel')}
-                      </span>
-                      <SearchableSelect
-                        options={reviewerCandidates.map((c) => ({
-                          value: c.id,
-                          label: `${c.displayName} (${c.email})`,
-                          keywords: [c.displayName, c.email],
-                        }))}
-                        value={reviewerPick}
-                        onValueChange={setReviewerPick}
-                        placeholder={t('reviewerPlaceholder')}
-                        searchPlaceholder={tUi('searchPlaceholder')}
-                        emptyText={tUi('noResults')}
-                        disabled={busy || !!reviewersLoadError}
-                        className="w-full animate-fade-in"
-                        aria-labelledby="reviewer-select-label"
-                      />
-                    </div>
+                    <ReviewerPickerField
+                      slug={sub.slug}
+                      selectedId={reviewerPick}
+                      onSelect={setReviewerPick}
+                      disabled={busy}
+                    />
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
@@ -2657,18 +2634,15 @@ export default function SubmissionDetailPage() {
                     </div>
                     <Button
                       disabled={
-                        busy || !reviewerPick.trim() || !!reviewersLoadError
+                        busy ||
+                        !reviewerPick.trim() ||
+                        selectedReviewer?.blockReason != null
                       }
                       onClick={() => void assignReviewer()}
                       className="w-full text-xs font-bold"
                     >
                       {t('assignReviewer')}
                     </Button>
-                    {!reviewersLoadError && reviewerCandidates.length === 0 && (
-                      <p className="text-[10px] text-ink/50 text-center">
-                        {t('noReviewersAvailable')}
-                      </p>
-                    )}
                   </>
                 ) : (
                   <p className="text-[10px] text-ink/50">
@@ -2676,6 +2650,14 @@ export default function SubmissionDetailPage() {
                   </p>
                 )}
               </div>
+
+              <ReviewerStatsDialog
+                slug={sub.slug}
+                reviewerId={statsReviewerId}
+                onOpenChange={(o) => {
+                  if (!o) setStatsReviewerId(null);
+                }}
+              />
 
               {/* Active assignments and email reminders */}
               {editorAssignmentRows.length > 0 && (
@@ -2705,12 +2687,15 @@ export default function SubmissionDetailPage() {
                           className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/60 p-4 space-y-3"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span
-                              className="font-medium text-xs text-ink truncate max-w-[120px]"
-                              title={name}
+                            <button
+                              type="button"
+                              onClick={() => setStatsReviewerId(a.reviewerId)}
+                              className="font-medium text-xs text-ink truncate max-w-[120px] text-start hover:text-accent hover:underline"
+                              title={tReviewerBrowser('viewProfile')}
+                              dir="auto"
                             >
                               {name}
-                            </span>
+                            </button>
                             <div className="flex items-center gap-1.5">
                               {reviewForAssignment && (
                                 <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">

@@ -83,6 +83,15 @@ Users may hold **multiple roles** (e.g. editor + reviewer). Permissions are enfo
 
 Users appear in the editor’s assign-reviewer list only when they have the **reviewer** role **and** `willingToReview = true` on their profile. Reviewers do not self-select manuscripts from a public pool.
 
+Editors choose from a **reviewer browser**: search (Arabic-aware), filter (can be invited / available / unavailable), sort by workload, completed reviews, turnaround or acceptance rate, and open any reviewer's **profile** — active load, acceptance rate, time to respond and complete, on-time rate, recommendations given, recent assignments.
+
+Each reviewer controls two limits on `/assignments`:
+
+- **Availability** — available, or unavailable with an optional return date (they become available again on that date automatically) and a note editors see.
+- **Maximum concurrent reviews** — pending invitations plus reviews in progress. Unset means no limit.
+
+An unavailable or at-capacity reviewer cannot be invited: the browser shows why, and the server refuses the invitation. Invitations already sent are unaffected.
+
 ### 2.4 Permission model
 
 | Permission slug | Typical holder | Capability |

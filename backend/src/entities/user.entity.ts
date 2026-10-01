@@ -48,6 +48,34 @@ export class User extends BaseEntity {
   @Column({ name: 'willing_to_review', default: false })
   willingToReview: boolean;
 
+  /**
+   * The reviewer's own "taking new invitations" switch. Read it through
+   * `isReviewerAvailable` — a past `reviewerUnavailableUntil` overrides false.
+   */
+  @Column({ name: 'reviewer_available', default: true })
+  reviewerAvailable: boolean;
+
+  /** First day available again (`YYYY-MM-DD`); null with the switch off is open-ended. */
+  @Column({ name: 'reviewer_unavailable_until', type: 'date', nullable: true })
+  reviewerUnavailableUntil: string | null;
+
+  /** Shown to editors while unavailable. */
+  @Column({
+    name: 'reviewer_unavailable_note',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  reviewerUnavailableNote: string | null;
+
+  /** Invited + accepted review assignments allowed at once; null is no limit. */
+  @Column({
+    name: 'reviewer_max_active_reviews',
+    type: 'smallint',
+    nullable: true,
+  })
+  reviewerMaxActiveReviews: number | null;
+
   /** Preferred locale for transactional email (`en` | `ar`). */
   @Column({
     name: 'preferred_locale',

@@ -40,6 +40,7 @@ import { ConstructorCollabGateway } from './constructor-collab.gateway';
 import { LanguageToolService } from './language-tool.service';
 import { RemindersService } from './reminders.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { ReviewerDirectoryService } from './reviewer-directory.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { JournalsModule } from '../journals/journals.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -106,6 +107,7 @@ import { AuthModule } from '../auth/auth.module';
     ConstructorCollabGateway,
     LanguageToolService,
     SectionEditorWorkflowService,
+    ReviewerDirectoryService,
     PermissionsGuard,
   ],
   exports: [

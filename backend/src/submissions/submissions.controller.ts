@@ -41,6 +41,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
 import { AssignSectionEditorDto } from './dto/assign-section-editor.dto';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { ReviewerDirectoryService } from './reviewer-directory.service';
 import { AssignCopyeditorDto } from './dto/assign-copyeditor.dto';
 import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
 import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage.dto';
@@ -72,6 +73,7 @@ export class SubmissionsController {
     private readonly submissionsService: SubmissionsService,
     private readonly docxImportService: DocxImportService,
     private readonly sectionEditorWorkflowService: SectionEditorWorkflowService,
+    private readonly reviewerDirectoryService: ReviewerDirectoryService,
   ) {}
 
   @Post()
@@ -205,6 +207,29 @@ export class SubmissionsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.submissionsService.getSuggestedReviewers(slug, user);
+  }
+
+  @Get(':slug/reviewer-directory')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER)
+  getReviewerDirectory(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.reviewerDirectoryService.listForSubmission(slug, user);
+  }
+
+  @Get(':slug/reviewer-directory/:reviewerId')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER)
+  getReviewerDetail(
+    @Param('slug') slug: string,
+    @Param('reviewerId', ParseUUIDPipe) reviewerId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.reviewerDirectoryService.getReviewerDetail(
+      slug,
+      reviewerId,
+      user,
+    );
   }
 
   @Get(':slug/suggested-section-editors')

@@ -79,7 +79,8 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | GET | `/auth/reset-password/validate?token=` | Public | Returns `{ valid: true }` or 400 when token invalid/expired. |
 | POST | `/auth/reset-password` | Public | Body `{ token, password }` — updates password and revokes all refresh sessions. |
 | POST | `/auth/logout` | Authenticated | Clears cookies and revokes the current JWT session id (`jti`) server-side; other devices/sessions stay signed in until their tokens expire. Requires CSRF when using cookie session (not when using `Authorization: Bearer`). |
-| GET | `/auth/me` | Authenticated | Current user + roles + `emailVerified`. |
+| GET | `/auth/me` | Authenticated | Current user + roles + `emailVerified` + `reviewerAvailability` (`available`, `unavailableUntil`, `note`, `maxActiveReviews`). |
+| PATCH | `/auth/me/researcher-profile` | Authenticated | Profile fields, plus reviewer availability: `reviewerAvailable`, `reviewerUnavailableUntil` (`YYYY-MM-DD`, after today UTC; null = open-ended), `reviewerUnavailableNote` (≤ 500), `reviewerMaxActiveReviews` (1–50; null = no limit). `reviewerAvailable: true` clears the date and note. |
 
 **ORCID OAuth** (enabled with `ORCID_ENABLED=true` in `backend/.env`):
 
@@ -128,7 +129,9 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | POST | `/submissions/suggest-keywords-preview` | Author | Body: optional `title`, `abstract`, `titleAr`, `abstractAr` — same keyword RPC before a slug exists. |
 | PATCH | `/submissions/:slug/discipline` | Author / Editor | Body: `{ "disciplines": ["<label>", ...] }` (1–3 labels) — confirm or override; sets `discipline_source` to `author` or `editor`. |
 | GET | `/submissions/:slug/corpus-similarity` | Editor / assigned reviewer (accepted or completed) | Corpus overlap report via `PlagiarismService`. **Not** available to authors or copyeditors-only. Requires `AI_SIMILARITY_ENABLED`. Returns `{ status: "unavailable" \| "no_text" \| "ok", ... }` when disabled or insufficient text. |
-| GET | `/submissions/:slug/suggested-reviewers` | Editor | Ranked reviewer candidates via `ReviewerMatchingService`. Requires `AI_REVIEWER_MATCHING_ENABLED`. |
+| GET | `/submissions/:slug/suggested-reviewers` | Editor | Ranked reviewer candidates via `ReviewerMatchingService`. Requires `AI_REVIEWER_MATCHING_ENABLED`. Unavailable and at-capacity reviewers are excluded. |
+| GET | `/submissions/:slug/reviewer-directory` | Editor / assigned section editor (`submission.assign_reviewer`) | The reviewer pool for this manuscript: availability, `capacity { active, max }`, lifetime stats (invitations, acceptance rate, avg days to respond/complete, on-time rate), `thisSubmissionStatus`, `conflictOfInterest`, and `blockReason` (`conflict_of_interest` \| `already_assigned` \| `unavailable` \| `at_capacity` \| null). UI: reviewer browser dialog. |
+| GET | `/submissions/:slug/reviewer-directory/:reviewerId` | Same | One reviewer's directory row plus `recommendations` (count per recommendation) and the 10 most recent assignments. Manuscript titles only for journals the caller edits (and this manuscript); otherwise `submission: null`. |
 | GET | `/submissions/:slug/publishable-issues` | Copyeditor / Editor | Issues of **this submission's journal** that can receive it (`open` or `published`). Read through the submission so an unplaced manuscript leaks no other journal's issues. |
 | POST | `/submissions/:slug/publish` | Copyeditor / Editor | Body: `{ "issueId": "<uuid>" }`. Files the article into an issue and flips to `published` in one transaction. |
 

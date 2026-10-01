@@ -74,6 +74,7 @@ truth for journal-scoped queues.
 
 - Identity: email (unique), password hash, display name.
 - Researcher profile (editorial-manager style): optional **affiliation** (text), optional **ORCID** (unique when set), optional **review keywords / interests** (text), **willing to review** (boolean). New accounts default to **author**; reviewer candidates for assignment are users with the reviewer role **and** `willing_to_review = true`.
+- Reviewer availability (set by the reviewer on `/assignments`): **`reviewer_available`** (boolean, default true), **`reviewer_unavailable_until`** (`date`, first day available again; null with the switch off is open-ended), **`reviewer_unavailable_note`** (shown to editors), **`reviewer_max_active_reviews`** (`smallint` 1–50, null = no limit). A past `unavailable_until` reads as available — nothing runs on that day to flip the switch. Invited + accepted `review_assignments` count toward the limit (partial index `ix_review_assignments_reviewer_active`).
 - Roles: `user_roles` join to `role` (and role → permission). MVP allows multiple roles per user. Manuscript create/edit/submit is gated by permission **`submission.manage_own`** (author role only). Staff roles: **`editor`** (handling editor — workflow decisions), **`journal_manager`** (users, email platform, queue oversight), **`reviewer`**, **`copyeditor`**. Editor and journal manager require invitation; reviewer/copyeditor can be assigned by a journal manager via `PATCH /users/:id/roles`.
 
 ### Submission

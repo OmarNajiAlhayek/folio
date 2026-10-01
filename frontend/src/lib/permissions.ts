@@ -64,6 +64,14 @@ export type MeProfile = {
   orcid: string | null;
   reviewKeywords: string | null;
   willingToReview: boolean;
+  /** Align with backend `PublicUserProfile.reviewerAvailability`. */
+  reviewerAvailability?: {
+    available: boolean;
+    unavailableUntil: string | null;
+    note: string | null;
+    /** Null is no limit. */
+    maxActiveReviews: number | null;
+  };
   preferredLocale: string | null;
   emailVerified: boolean;
   hasPassword: boolean;

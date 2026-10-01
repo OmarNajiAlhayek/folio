@@ -2,9 +2,14 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
+  Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { IsOrcidId } from './is-orcid-id.validator';
@@ -57,4 +62,37 @@ export class PatchResearcherProfileDto {
   @IsOptional()
   @IsBoolean()
   willingToReview?: boolean;
+
+  /** True clears `reviewerUnavailableUntil` and `reviewerUnavailableNote`. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  reviewerAvailable?: boolean;
+
+  /**
+   * First day available again. Must be after today (UTC) — checked in the
+   * service, which knows the date. Null makes the absence open-ended.
+   */
+  @ApiPropertyOptional({ example: '2026-12-01', nullable: true })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === '' ? null : value))
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'reviewerUnavailableUntil must be a YYYY-MM-DD date',
+  })
+  @IsISO8601({ strict: true })
+  reviewerUnavailableUntil?: string | null;
+
+  @ApiPropertyOptional({ maxLength: 500, nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reviewerUnavailableNote?: string | null;
+
+  /** Invited + accepted reviews at once. Null removes the limit. */
+  @ApiPropertyOptional({ minimum: 1, maximum: 50, nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  reviewerMaxActiveReviews?: number | null;
 }

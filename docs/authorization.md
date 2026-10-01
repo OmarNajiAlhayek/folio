@@ -120,6 +120,13 @@ Methods below declare why caller checks are kept or omitted.
 1. Guard: `SUBMISSION_ASSIGN_REVIEWER`.
 2. Service: same slug via `assertCallerPermission` (seed calls this directly).
 3. Service: `userHasPermission(reviewerId, REVIEW_SUBMIT)` — target must be a reviewer.
+4. Service, inside the invitation transaction: re-read the reviewer `FOR UPDATE`, then refuse `REVIEWER_UNAVAILABLE` or `REVIEWER_AT_CAPACITY` (invited + accepted ≥ `reviewer_max_active_reviews`). The row lock is what stops two editors inviting at once from both seeing "2 of 3". Rules live in `reviewer-availability.ts`, shared with the reviewer directory.
+
+**Reviewer directory (`GET /submissions/:slug/reviewer-directory[/:reviewerId]`)**
+
+1. Guard: `SUBMISSION_ASSIGN_REVIEWER`.
+2. Service: `assertCanRead` — required for the same reason as the assignment list: `section_editor` holds the slug, and the directory carries every reviewer's email and workload.
+3. The detail's recent-assignment titles are limited to journals the caller holds `editor` / `section_editor` membership in, plus the manuscript in hand. Unpublished titles from other journals are not the caller's to read.
 
 **List reviewer assignments (`GET /submissions/:slug/assignments`)**
 

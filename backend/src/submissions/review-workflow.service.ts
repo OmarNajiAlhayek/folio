@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -47,6 +47,13 @@ import { reviewAssignmentToEditorJson } from './assignment-response.mapper';
 import { SubmissionAccessService } from './submission-access.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { SubmissionFileService } from './submission-file.service';
+import {
+  ACTIVE_REVIEW_STATUSES,
+  isAtReviewCapacity,
+  isReviewerAvailable,
+  reviewerConflictOfInterest,
+  utcToday,
+} from './reviewer-availability';
 
 @Injectable()
 export class ReviewWorkflowService {
@@ -142,39 +149,66 @@ export class ReviewWorkflowService {
   }
 
   /**
-   * Blocks the conflicts of interest the system can actually see: the
-   * submitting author, and anyone listed as a contributor on the manuscript.
-   *
    * Previously the only checks were "holds review.submit" and "not already
    * assigned", both of which the author passes — a faculty member who is also
    * a reviewer could be invited to review their own paper.
-   *
-   * This is deliberately not a full COI policy (shared affiliation, recent
-   * co-authorship, supervisor relationships are editorial judgement); it closes
-   * the cases where the data is unambiguous.
    */
   private assertNoReviewerConflictOfInterest(
     submission: Submission,
     reviewer: User,
   ): void {
-    if (submission.authorId === reviewer.id) {
+    const conflict = reviewerConflictOfInterest(submission, reviewer);
+    if (conflict === 'author') {
       throw new BadRequestException({
         message: 'The submitting author cannot review their own manuscript',
         code: 'REVIEWER_CONFLICT_OF_INTEREST',
       });
     }
-
-    const reviewerEmail = reviewer.email?.trim().toLowerCase();
-    if (!reviewerEmail) return;
-
-    const isContributor = (submission.contributors ?? []).some(
-      (c) => c.email?.trim().toLowerCase() === reviewerEmail,
-    );
-    if (isContributor) {
+    if (conflict === 'contributor') {
       throw new BadRequestException({
         message:
           'This user is listed as a contributor on the manuscript and cannot review it',
         code: 'REVIEWER_CONFLICT_OF_INTEREST',
+      });
+    }
+  }
+
+  /**
+   * Runs inside the invitation's transaction, after locking the reviewer's
+   * user row. Two editors inviting the same reviewer at once would otherwise
+   * both count "2 of 3" and both succeed; the lock makes the second wait for
+   * the first to commit and then count 3.
+   */
+  private async assertReviewerCanTakeInvitation(
+    em: EntityManager,
+    reviewerId: string,
+  ): Promise<void> {
+    const locked = await em
+      .getRepository(User)
+      .createQueryBuilder('u')
+      .setLock('pessimistic_write')
+      .where('u.id = :id', { id: reviewerId })
+      .getOne();
+    if (!locked) {
+      throw new BadRequestException({
+        message: 'User is not a reviewer',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (!isReviewerAvailable(locked, utcToday())) {
+      throw new BadRequestException({
+        message: 'This reviewer is currently unavailable for new reviews',
+        code: 'REVIEWER_UNAVAILABLE',
+      });
+    }
+    if (locked.reviewerMaxActiveReviews == null) return;
+    const activeLoad = await em.getRepository(ReviewAssignment).count({
+      where: { reviewerId, status: In([...ACTIVE_REVIEW_STATUSES]) },
+    });
+    if (isAtReviewCapacity(activeLoad, locked.reviewerMaxActiveReviews)) {
+      throw new BadRequestException({
+        message: `This reviewer has reached their limit of ${locked.reviewerMaxActiveReviews} concurrent reviews`,
+        code: 'REVIEWER_AT_CAPACITY',
       });
     }
   }
@@ -244,6 +278,7 @@ export class ReviewWorkflowService {
     const pending: Notification[] = [];
     return this.assignmentsRepo.manager
       .transaction(async (em) => {
+        await this.assertReviewerCanTakeInvitation(em, reviewerId);
         const assignmentRepo = em.getRepository(ReviewAssignment);
         const row = assignmentRepo.create({
           submissionId,

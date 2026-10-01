@@ -25,6 +25,7 @@ import {
   readConstructorDraftEnvelope,
 } from '@/lib/use-constructor-draft';
 import { PAGE_SHELL_NARROW } from '@/lib/page-shell';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 import { fileExceedsUploadLimit, MAX_UPLOAD_MB } from '@/lib/validation';
 import {
   emptySubmissionMetadataInitial,
@@ -622,43 +623,47 @@ export default function NewSubmissionPage() {
             </div>
 
             {/* Custom high-end selection grid */}
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div
+              className={`grid gap-6 ${CONSTRUCTOR_ENTRY_POINTS_ENABLED ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}
+            >
               {/* Constructor choice */}
-              <Link
-                href="/submissions/compose/create"
-                className={`relative group rounded-xl border p-5 text-start transition-all duration-300 bg-paper/40 ${
-                  showConstructorManuscript
-                    ? 'border-accent ring-2 ring-accent/15'
-                    : 'border-ink/10 hover:border-accent hover:bg-paper/70'
-                }`}
-              >
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif text-lg font-semibold text-ink group-hover:text-accent transition-colors">
-                      {tConstructorMode('constructorTitle')}
-                    </span>
-                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
-                      {tConstructorMode('constructorBadge')}
-                    </span>
-                  </div>
-                  <p className="text-sm leading-relaxed text-ink/75">
-                    {tConstructorMode('constructorDescription')}
-                  </p>
-
-                  {/* Status Indicator */}
-                  {showConstructorManuscript && constructorManuscriptName ? (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-accent bg-accent/5 px-2.5 py-1.5 rounded-lg border border-accent/10 animate-pulse">
-                      <span className="size-1.5 rounded-full bg-accent" />
-                      {t('constructorManuscriptBadge')}:{' '}
-                      {constructorManuscriptName}
+              {CONSTRUCTOR_ENTRY_POINTS_ENABLED && (
+                <Link
+                  href="/submissions/compose/create"
+                  className={`relative group rounded-xl border p-5 text-start transition-all duration-300 bg-paper/40 ${
+                    showConstructorManuscript
+                      ? 'border-accent ring-2 ring-accent/15'
+                      : 'border-ink/10 hover:border-accent hover:bg-paper/70'
+                  }`}
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-serif text-lg font-semibold text-ink group-hover:text-accent transition-colors">
+                        {tConstructorMode('constructorTitle')}
+                      </span>
+                      <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
+                        {tConstructorMode('constructorBadge')}
+                      </span>
                     </div>
-                  ) : (
-                    <span className="text-xs font-medium text-accent mt-2 inline-flex items-center gap-1 group-hover:underline">
-                      {tManuscript('openConstructor')} →
-                    </span>
-                  )}
-                </div>
-              </Link>
+                    <p className="text-sm leading-relaxed text-ink/75">
+                      {tConstructorMode('constructorDescription')}
+                    </p>
+
+                    {/* Status Indicator */}
+                    {showConstructorManuscript && constructorManuscriptName ? (
+                      <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-accent bg-accent/5 px-2.5 py-1.5 rounded-lg border border-accent/10 animate-pulse">
+                        <span className="size-1.5 rounded-full bg-accent" />
+                        {t('constructorManuscriptBadge')}:{' '}
+                        {constructorManuscriptName}
+                      </div>
+                    ) : (
+                      <span className="text-xs font-medium text-accent mt-2 inline-flex items-center gap-1 group-hover:underline">
+                        {tManuscript('openConstructor')} →
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              )}
 
               {/* Upload choice */}
               <button
@@ -796,9 +801,11 @@ export default function NewSubmissionPage() {
                 {tDetail('attachedFiles')}
               </h2>
               <p className="text-sm text-ink/65">{tDetail('uploadSubtitle')}</p>
-              <p className="text-xs text-ink/50">
-                {tManuscript('dualPathHint')}
-              </p>
+              {CONSTRUCTOR_ENTRY_POINTS_ENABLED && (
+                <p className="text-xs text-ink/50">
+                  {tManuscript('dualPathHint')}
+                </p>
+              )}
             </div>
 
             <div className="space-y-5">

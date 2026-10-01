@@ -57,6 +57,36 @@ describe('SubmissionsController permissions guard', () => {
     ).toBe(true);
   });
 
+  describe.each([
+    [
+      'getReviewerDirectory',
+      SubmissionsController.prototype.getReviewerDirectory,
+    ],
+    ['getReviewerDetail', SubmissionsController.prototype.getReviewerDetail],
+  ])('%s', (_name, handler) => {
+    it('denies without the assign-reviewer slug', () => {
+      const reviewer: RequestUser = {
+        sub: 'rev-1',
+        email: 'rev@test.dev',
+        roleSlugs: ['reviewer'],
+        permissionSlugs: [PERMISSION_SLUGS.REVIEW_SUBMIT],
+      };
+      expect(() => guard.canActivate(mockContext(reviewer, handler))).toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('allows with the assign-reviewer slug', () => {
+      const editor: RequestUser = {
+        sub: 'editor-1',
+        email: 'ed@test.dev',
+        roleSlugs: ['editor'],
+        permissionSlugs: [PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER],
+      };
+      expect(guard.canActivate(mockContext(editor, handler))).toBe(true);
+    });
+  });
+
   it('findAll denies stranger without list slugs', () => {
     expect(() =>
       guard.canActivate(

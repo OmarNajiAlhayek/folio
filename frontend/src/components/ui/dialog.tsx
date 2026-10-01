@@ -44,7 +44,9 @@ export const DialogContent = forwardRef<
         'rounded-2xl border border-ink/15 bg-surface p-6 shadow-[0_20px_50px_-24px_rgba(15,23,42,0.22)]',
         'data-[state=open]:animate-[dialog-content-in_200ms_ease]',
         'focus:outline-none',
-        showClose && 'relative',
+        // No `relative` for the close button: `fixed` already anchors its
+        // absolute children, and tailwind-merge would let `relative` replace
+        // `fixed`, dropping the dialog into the page flow.
         className,
       )}
       {...props}

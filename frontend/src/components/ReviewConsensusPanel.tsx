@@ -14,7 +14,7 @@ export type ConsensusReview = {
   recommendation: string;
 };
 
-function recommendationLabel(
+export function recommendationLabel(
   r: string,
   tCommon: (key: string) => string,
 ): string {

@@ -16,6 +16,8 @@ import {
   submissionQueueShellCls,
 } from '@/lib/submission-list-ui';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { ReviewerAvailabilityCard } from '@/components/reviewer-availability-card';
+import { useMe } from '@/lib/queries/auth';
 
 type Row = {
   id: string;
@@ -40,6 +42,7 @@ export default function AssignmentsPage() {
   const { resolve: resolveApiError } = useApiErrorMessages();
   const [listRef] = useAutoAnimate<HTMLDivElement>();
   const tApi = useTranslations('ApiErrors');
+  const me = useMe().data;
 
   const loadList = useCallback(() => {
     setLoadError(null);
@@ -115,6 +118,13 @@ export default function AssignmentsPage() {
           </p>
         </div>
       </header>
+
+      {me?.willingToReview && !loading && (
+        <ReviewerAvailabilityCard
+          me={me}
+          activeLoad={invited.length + active.length}
+        />
+      )}
 
       {/* Summary chart — only when data loaded and non-empty */}
       {!loading &&

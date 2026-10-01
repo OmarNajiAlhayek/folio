@@ -52,6 +52,12 @@ import {
   type SuggestedReviewersReport,
 } from './suggested-reviewers-report.util';
 import { SubmissionAccessService } from './submission-access.service';
+import {
+  ACTIVE_REVIEW_STATUSES,
+  isAtReviewCapacity,
+  isReviewerAvailable,
+  utcToday,
+} from './reviewer-availability';
 
 @Injectable()
 export class SubmissionAiService {
@@ -476,7 +482,12 @@ export class SubmissionAiService {
       },
       select: ['reviewerId'],
     });
-    const excludeReviewerIds = busyAssignments.map((a) => a.reviewerId);
+    // "Use" on a suggestion should never pick someone the assign path will
+    // refuse, so reviewers who are away or at their limit are left out too.
+    const excludeReviewerIds = [
+      ...busyAssignments.map((a) => a.reviewerId),
+      ...(await this.listReviewerIdsNotTakingInvitations(profiles)),
+    ];
     const candidateIds = profiles.map((p) => p.id);
     const indexHistory = await this.loadReviewHistoryForMatching(
       candidateIds,
@@ -516,13 +527,19 @@ export class SubmissionAiService {
   }
 
   private async listReviewerProfilesForMatching(): Promise<
-    Array<{
-      id: string;
-      displayName: string;
-      email: string;
-      affiliation: string | null;
-      reviewKeywords: string | null;
-    }>
+    Array<
+      Pick<
+        User,
+        | 'id'
+        | 'displayName'
+        | 'email'
+        | 'affiliation'
+        | 'reviewKeywords'
+        | 'reviewerAvailable'
+        | 'reviewerUnavailableUntil'
+        | 'reviewerMaxActiveReviews'
+      >
+    >
   > {
     const ids = await this.rbacService.listUserIdsWithPermission(
       PERMISSION_SLUGS.REVIEW_SUBMIT,
@@ -532,9 +549,58 @@ export class SubmissionAiService {
     }
     return this.usersRepo.find({
       where: { id: In(ids), willingToReview: true },
-      select: ['id', 'displayName', 'email', 'affiliation', 'reviewKeywords'],
+      select: [
+        'id',
+        'displayName',
+        'email',
+        'affiliation',
+        'reviewKeywords',
+        'reviewerAvailable',
+        'reviewerUnavailableUntil',
+        'reviewerMaxActiveReviews',
+      ],
       order: { displayName: 'ASC', email: 'ASC' },
     });
+  }
+
+  private async listReviewerIdsNotTakingInvitations(
+    profiles: Array<
+      Pick<
+        User,
+        | 'id'
+        | 'reviewerAvailable'
+        | 'reviewerUnavailableUntil'
+        | 'reviewerMaxActiveReviews'
+      >
+    >,
+  ): Promise<string[]> {
+    const today = utcToday();
+    const unavailable = profiles
+      .filter((p) => !isReviewerAvailable(p, today))
+      .map((p) => p.id);
+    const limited = profiles.filter(
+      (p) =>
+        p.reviewerMaxActiveReviews != null && isReviewerAvailable(p, today),
+    );
+    if (limited.length === 0) return unavailable;
+    const loads: Array<{ reviewerId: string; n: number }> =
+      await this.assignmentsRepo
+        .createQueryBuilder('a')
+        .select('a.reviewerId', 'reviewerId')
+        .addSelect('COUNT(*)::int', 'n')
+        .where('a.reviewerId IN (:...ids)', { ids: limited.map((p) => p.id) })
+        .andWhere('a.status IN (:...statuses)', {
+          statuses: [...ACTIVE_REVIEW_STATUSES],
+        })
+        .groupBy('a.reviewerId')
+        .getRawMany();
+    const loadById = new Map(loads.map((l) => [l.reviewerId, l.n]));
+    const atCapacity = limited
+      .filter((p) =>
+        isAtReviewCapacity(loadById.get(p.id) ?? 0, p.reviewerMaxActiveReviews),
+      )
+      .map((p) => p.id);
+    return [...unavailable, ...atCapacity];
   }
 
   private async loadReviewHistoryForMatching(

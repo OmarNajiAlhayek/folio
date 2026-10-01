@@ -11,6 +11,11 @@ export const queryKeys = {
     status ? (['submissions', status] as const) : (['submissions'] as const),
   submission: (slug: string) => ['submission', slug] as const,
   submissionDetail: (slug: string) => ['submissionDetail', slug] as const,
+  /** Under one prefix so an assignment can invalidate the list and every detail. */
+  reviewerDirectory: (slug: string) =>
+    ['reviewerDirectory', slug, 'list'] as const,
+  reviewerDetail: (slug: string, reviewerId: string) =>
+    ['reviewerDirectory', slug, 'detail', reviewerId] as const,
   publicationsCatalog: (filters: PublicationCatalogFilters) =>
     ['publications', 'catalog', filters] as const,
   publicationDetail: (slug: string) => ['publication', slug] as const,

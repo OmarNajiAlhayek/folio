@@ -31,6 +31,11 @@ import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import type { RoleInvitationCreatedEvent } from '@folio/shared/contracts/email-events';
 import { roleInvitationEmailKey } from '@folio/shared/messaging/idempotency';
 import { resolveEmailLocale } from '../common/email-locale';
+import {
+  reviewerAvailabilityView,
+  utcToday,
+  type ReviewerAvailabilityView,
+} from '../submissions/reviewer-availability';
 
 export type ReviewerCandidate = {
   id: string;
@@ -52,6 +57,13 @@ export type PublicUserProfile = {
   orcid: string | null;
   reviewKeywords: string | null;
   willingToReview: boolean;
+  /**
+   * Effective status (an "until" date in the past reads as available) plus
+   * the reviewer's concurrent limit; `maxActiveReviews` null is no limit.
+   */
+  reviewerAvailability: ReviewerAvailabilityView & {
+    maxActiveReviews: number | null;
+  };
   /** `en` | `ar` when set — controls outbound email language resolution. */
   preferredLocale: string | null;
   emailVerified: boolean;
@@ -415,6 +427,10 @@ export class UsersService {
       orcid: user.orcid,
       reviewKeywords: user.reviewKeywords,
       willingToReview: user.willingToReview,
+      reviewerAvailability: {
+        ...reviewerAvailabilityView(user, utcToday()),
+        maxActiveReviews: user.reviewerMaxActiveReviews,
+      },
       preferredLocale: user.preferredLocale,
       emailVerified: user.emailVerifiedAt != null,
       hasPassword: user.passwordHash != null,
@@ -433,6 +449,10 @@ export class UsersService {
       orcid?: string | null;
       reviewKeywords?: string | null;
       willingToReview?: boolean;
+      reviewerAvailable?: boolean;
+      reviewerUnavailableUntil?: string | null;
+      reviewerUnavailableNote?: string | null;
+      reviewerMaxActiveReviews?: number | null;
     },
   ): Promise<PublicUserProfile> {
     const user = await this.findById(userId);
@@ -479,6 +499,7 @@ export class UsersService {
       patch.reviewKeywords = data.reviewKeywords;
     if (data.willingToReview !== undefined)
       patch.willingToReview = data.willingToReview;
+    Object.assign(patch, this.reviewerAvailabilityPatch(data));
     if (Object.keys(patch).length > 0) {
       await this.usersRepo.update({ id: userId }, patch);
     }
@@ -490,6 +511,46 @@ export class UsersService {
       });
     }
     return profile;
+  }
+
+  /**
+   * Going available clears the absence details, so a stale "until" date or
+   * note never resurfaces the next time the reviewer steps away.
+   */
+  private reviewerAvailabilityPatch(data: {
+    reviewerAvailable?: boolean;
+    reviewerUnavailableUntil?: string | null;
+    reviewerUnavailableNote?: string | null;
+    reviewerMaxActiveReviews?: number | null;
+  }): Partial<User> {
+    const patch: Partial<User> = {};
+    if (data.reviewerMaxActiveReviews !== undefined) {
+      patch.reviewerMaxActiveReviews = data.reviewerMaxActiveReviews;
+    }
+    if (data.reviewerAvailable === true) {
+      patch.reviewerAvailable = true;
+      patch.reviewerUnavailableUntil = null;
+      patch.reviewerUnavailableNote = null;
+      return patch;
+    }
+    if (data.reviewerAvailable === false) {
+      patch.reviewerAvailable = false;
+    }
+    if (data.reviewerUnavailableUntil !== undefined) {
+      const until = data.reviewerUnavailableUntil;
+      if (until !== null && until <= utcToday()) {
+        throw new BadRequestException({
+          message: 'The return date must be after today',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+      patch.reviewerUnavailableUntil = until;
+    }
+    if (data.reviewerUnavailableNote !== undefined) {
+      patch.reviewerUnavailableNote =
+        data.reviewerUnavailableNote?.trim() || null;
+    }
+    return patch;
   }
 
   async markEmailVerified(userId: string): Promise<void> {

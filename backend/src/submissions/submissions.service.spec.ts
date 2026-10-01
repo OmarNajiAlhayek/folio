@@ -63,6 +63,62 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     slug: 'paper-one--a1b2c3d4',
   } as ReviewAssignment;
 
+  /**
+   * The transaction's EntityManager. `lockedReviewer` is what the
+   * `FOR UPDATE` re-read of the reviewer returns; `activeLoad` is their
+   * invited + accepted count; `editorRow` feeds the invitation's "invited by".
+   */
+  function makeTxEm(
+    opts: {
+      lockedReviewer?: Partial<User> | null;
+      activeLoad?: number;
+      editorRow?: Partial<User> | null;
+    } = {},
+  ): EntityManager {
+    const assignmentRepo = {
+      create: jest.fn((row: Partial<ReviewAssignment>) => ({
+        ...row,
+        id: savedAssignment.id,
+      })),
+      save: jest.fn().mockResolvedValue(savedAssignment),
+      count: jest.fn().mockResolvedValue(opts.activeLoad ?? 0),
+    };
+    const lockQuery = {
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getOne: jest
+        .fn()
+        .mockResolvedValue(
+          opts.lockedReviewer === undefined
+            ? { ...reviewer, reviewerAvailable: true }
+            : opts.lockedReviewer,
+        ),
+    };
+    const userRepoTx = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue(
+          opts.editorRow === undefined
+            ? { id: editorUser.sub, displayName: 'Editor Name' }
+            : opts.editorRow,
+        ),
+      createQueryBuilder: jest.fn(() => lockQuery),
+    };
+    return {
+      getRepository: jest.fn((entity: unknown) => {
+        if (entity === ReviewAssignment) return assignmentRepo;
+        if (entity === User) return userRepoTx;
+        throw new Error('unexpected entity in mock');
+      }),
+    } as unknown as EntityManager;
+  }
+
+  function nextTransactionUses(em: EntityManager) {
+    assignmentsRepo.manager.transaction.mockImplementationOnce(
+      async (fn: (em: EntityManager) => unknown) => fn(em),
+    );
+  }
+
   beforeEach(async () => {
     eventPublisher = { enqueue: jest.fn().mockResolvedValue(undefined) };
 
@@ -79,29 +135,9 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
       findOne: jest.fn().mockResolvedValue(null),
       exist: jest.fn().mockResolvedValue(false),
       manager: {
-        transaction: jest.fn(async (fn: (em: EntityManager) => unknown) => {
-          const assignmentRepo = {
-            create: jest.fn((row: Partial<ReviewAssignment>) => ({
-              ...row,
-              id: savedAssignment.id,
-            })),
-            save: jest.fn().mockResolvedValue(savedAssignment),
-          };
-          const userRepoTx = {
-            findOne: jest.fn().mockResolvedValue({
-              id: editorUser.sub,
-              displayName: 'Editor Name',
-            }),
-          };
-          const mockEm = {
-            getRepository: jest.fn((entity: unknown) => {
-              if (entity === ReviewAssignment) return assignmentRepo;
-              if (entity === User) return userRepoTx;
-              throw new Error('unexpected entity in mock');
-            }),
-          } as unknown as EntityManager;
-          return fn(mockEm);
-        }),
+        transaction: jest.fn(async (fn: (em: EntityManager) => unknown) =>
+          fn(makeTxEm()),
+        ),
       },
     };
 
@@ -175,32 +211,111 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
   });
 
   it('throws InternalServerErrorException when editor row is missing inside TX', async () => {
-    assignmentsRepo.manager.transaction.mockImplementationOnce(
-      async (fn: (em: EntityManager) => unknown) => {
-        const assignmentRepo = {
-          create: jest.fn((row: Partial<ReviewAssignment>) => ({
-            ...row,
-            id: savedAssignment.id,
-          })),
-          save: jest.fn().mockResolvedValue(savedAssignment),
-        };
-        const userRepoTx = {
-          findOne: jest.fn().mockResolvedValue(null),
-        };
-        const mockEm = {
-          getRepository: jest.fn((entity: unknown) => {
-            if (entity === ReviewAssignment) return assignmentRepo;
-            if (entity === User) return userRepoTx;
-            throw new Error('unexpected entity');
-          }),
-        } as unknown as EntityManager;
-        return fn(mockEm);
-      },
-    );
+    nextTransactionUses(makeTxEm({ editorRow: null }));
 
     await expect(
       service.assignReviewer('paper-one', reviewer.id, editorUser, undefined),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
+  });
+
+  describe('availability and capacity', () => {
+    const tomorrow = new Date(Date.now() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    async function expectRejectedWith(code: string) {
+      await expect(
+        service.assignReviewer('paper-one', reviewer.id, editorUser),
+      ).rejects.toMatchObject({ response: { code } });
+      expect(eventPublisher.enqueue).not.toHaveBeenCalled();
+    }
+
+    it('rejects a reviewer who marked themselves unavailable', async () => {
+      nextTransactionUses(
+        makeTxEm({
+          lockedReviewer: {
+            ...reviewer,
+            reviewerAvailable: false,
+            reviewerUnavailableUntil: null,
+          },
+        }),
+      );
+      await expectRejectedWith('REVIEWER_UNAVAILABLE');
+    });
+
+    it('rejects a reviewer whose return date is still ahead', async () => {
+      nextTransactionUses(
+        makeTxEm({
+          lockedReviewer: {
+            ...reviewer,
+            reviewerAvailable: false,
+            reviewerUnavailableUntil: tomorrow,
+          },
+        }),
+      );
+      await expectRejectedWith('REVIEWER_UNAVAILABLE');
+    });
+
+    it('invites a reviewer whose return date has passed', async () => {
+      nextTransactionUses(
+        makeTxEm({
+          lockedReviewer: {
+            ...reviewer,
+            reviewerAvailable: false,
+            reviewerUnavailableUntil: yesterday,
+          },
+        }),
+      );
+      await service.assignReviewer('paper-one', reviewer.id, editorUser);
+      expect(eventPublisher.enqueue).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a reviewer at their concurrent limit', async () => {
+      nextTransactionUses(
+        makeTxEm({
+          lockedReviewer: {
+            ...reviewer,
+            reviewerAvailable: true,
+            reviewerMaxActiveReviews: 3,
+          },
+          activeLoad: 3,
+        }),
+      );
+      await expectRejectedWith('REVIEWER_AT_CAPACITY');
+    });
+
+    it('invites a reviewer below their limit', async () => {
+      nextTransactionUses(
+        makeTxEm({
+          lockedReviewer: {
+            ...reviewer,
+            reviewerAvailable: true,
+            reviewerMaxActiveReviews: 3,
+          },
+          activeLoad: 2,
+        }),
+      );
+      await service.assignReviewer('paper-one', reviewer.id, editorUser);
+      expect(eventPublisher.enqueue).toHaveBeenCalledTimes(1);
+    });
+
+    it('invites a reviewer with no limit however busy they are', async () => {
+      nextTransactionUses(
+        makeTxEm({
+          lockedReviewer: {
+            ...reviewer,
+            reviewerAvailable: true,
+            reviewerMaxActiveReviews: null,
+          },
+          activeLoad: 40,
+        }),
+      );
+      await service.assignReviewer('paper-one', reviewer.id, editorUser);
+      expect(eventPublisher.enqueue).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('rejects when user is not a reviewer', async () => {
