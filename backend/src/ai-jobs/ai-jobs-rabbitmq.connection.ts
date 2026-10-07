@@ -11,6 +11,17 @@ import {
 
 const RECONNECT_DELAY_MS = 5_000;
 
+function redactAmqpUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.username) parsed.username = '***';
+    if (parsed.password) parsed.password = '***';
+    return parsed.toString();
+  } catch {
+    return 'amqp://***';
+  }
+}
+
 /**
  * Dedicated AMQP connection for AI job consumers. Separate from the
  * publisher connection in MessagingModule so publish and consume do not
@@ -82,7 +93,7 @@ export class AiJobsRabbitMqConnection implements OnModuleDestroy {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `AI jobs AMQP connect failed (${this.url}): ${message}; retrying in ${RECONNECT_DELAY_MS}ms`,
+        `AI jobs AMQP connect failed (${redactAmqpUrl(this.url)}): ${message}; retrying in ${RECONNECT_DELAY_MS}ms`,
       );
       if (!this.destroyed) {
         setTimeout(() => void this.connect(), RECONNECT_DELAY_MS);

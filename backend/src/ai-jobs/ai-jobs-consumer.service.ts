@@ -14,6 +14,7 @@ import {
   AI_ROUTING_KEY,
   type AiJobEvent,
 } from '../messaging/contracts/ai-events';
+import { isAiJobsConsumerEnabled } from './ai-jobs-consumer.enabled';
 
 @Injectable()
 export class AiJobsConsumerService implements OnModuleInit {
@@ -26,15 +27,15 @@ export class AiJobsConsumerService implements OnModuleInit {
     private readonly processor: AiJobsProcessor,
     private readonly jobsService: AiJobsService,
   ) {
-    this.enabled =
-      config.get<string>('AI_JOBS_CONSUMER_ENABLED', 'true').trim() !== 'false';
+    this.enabled = isAiJobsConsumerEnabled({
+      consumerFlag: config.get<string>('AI_JOBS_CONSUMER_ENABLED'),
+      aiServiceEnabled: config.get<string>('AI_SERVICE_ENABLED'),
+    });
   }
 
   async onModuleInit(): Promise<void> {
     if (!this.enabled) {
-      this.logger.log(
-        'AI jobs consumer disabled (AI_JOBS_CONSUMER_ENABLED=false)',
-      );
+      this.logger.log('AI jobs consumer disabled');
       return;
     }
 

@@ -4,13 +4,12 @@ import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
 import { diskStorage } from 'multer';
 import { isExtensionAllowedForUpload } from './submission-file-upload.policy';
+import { resolveUploadRoot } from '../common/upload-root';
 
 export const SUBMISSION_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 function uploadTmpDir(): string {
-  const rel = process.env.UPLOAD_DIR ?? join('..', 'uploads');
-  const root = join(process.cwd(), rel);
-  const tmp = join(root, '_tmp');
+  const tmp = join(resolveUploadRoot(), '_tmp');
   if (!existsSync(tmp)) {
     mkdirSync(tmp, { recursive: true });
   }

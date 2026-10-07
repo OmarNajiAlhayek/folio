@@ -57,6 +57,7 @@ import {
   seedPressFixtures,
   type SeededPress,
 } from './journals/seed-journals';
+import { resolveUploadRoot } from './common/upload-root';
 
 config({ path: join(__dirname, '..', '.env') });
 
@@ -76,8 +77,7 @@ const SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG =
 const SAMPLE_INVITE_PENDING_LEGACY_TITLE = `${SAMPLE_TITLE_PREFIX} Open-Access Policies in Arabic Peer-Reviewed Journals (Pending Review)`;
 
 function uploadRoot(): string {
-  const rel = process.env.UPLOAD_DIR ?? join('..', 'uploads');
-  return join(process.cwd(), rel);
+  return resolveUploadRoot();
 }
 
 /** Same `_tmp` layout as submission-file-multer diskStorage. */

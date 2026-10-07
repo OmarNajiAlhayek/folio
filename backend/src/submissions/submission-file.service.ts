@@ -38,6 +38,7 @@ import {
 } from './docx-format-checker';
 import { LanguageToolService } from './language-tool.service';
 import mammoth from 'mammoth';
+import { resolveUploadRoot } from '../common/upload-root';
 
 @Injectable()
 export class SubmissionFileService {
@@ -55,8 +56,7 @@ export class SubmissionFileService {
   ) {}
 
   uploadRoot(): string {
-    const rel = process.env.UPLOAD_DIR ?? join('..', 'uploads');
-    return join(process.cwd(), rel);
+    return resolveUploadRoot();
   }
 
   private ensureUploadDir(): string {
