@@ -1,15 +1,16 @@
-import type { ConstructorContent } from "@/lib/constructor-content.types";
-import { constructorDraftHasMeaningfulContent } from "@/lib/constructor-import-merge";
+import type { ConstructorContent } from '@/lib/constructor-content.types';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
+import { constructorDraftHasMeaningfulContent } from '@/lib/constructor-import-merge';
 
 export type ReviewManuscriptPresentation = {
   presentUploaded: boolean;
   presentConstructor: boolean;
 };
 
-const STORAGE_PREFIX = "folio.review-manuscript-presentation.v1";
+const STORAGE_PREFIX = 'folio.review-manuscript-presentation.v1';
 
 /** Session key for choices made on `/submissions/new` before a slug exists. */
-export const PRE_SLUG_PRESENTATION_KEY = "__pre-slug__";
+export const PRE_SLUG_PRESENTATION_KEY = '__pre-slug__';
 
 export function detectManuscriptSources(options: {
   files?: Array<{ kind?: string }>;
@@ -19,11 +20,14 @@ export function detectManuscriptSources(options: {
   hasConstructorDraft: boolean;
 } {
   const files = options.files ?? [];
-  const hasUploadedManuscript = files.some((f) => f.kind === "manuscript");
+  const hasUploadedManuscript = files.some((f) => f.kind === 'manuscript');
   const hasConstructorFile = files.some(
-    (f) => f.kind === "manuscript_constructor",
+    (f) => f.kind === 'manuscript_constructor',
   );
-  const cc = options.constructorContent as ConstructorContent | null | undefined;
+  const cc = options.constructorContent as
+    | ConstructorContent
+    | null
+    | undefined;
   const hasConstructorJson =
     cc != null &&
     Array.isArray(cc.sections) &&
@@ -41,7 +45,7 @@ export function reviewManuscriptPresentationStorageKey(slug: string): string {
 export function readReviewManuscriptPresentation(
   slug: string,
 ): ReviewManuscriptPresentation | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null;
   try {
     const raw = sessionStorage.getItem(
       reviewManuscriptPresentationStorageKey(slug),
@@ -49,8 +53,8 @@ export function readReviewManuscriptPresentation(
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ReviewManuscriptPresentation;
     if (
-      typeof parsed.presentUploaded === "boolean" &&
-      typeof parsed.presentConstructor === "boolean"
+      typeof parsed.presentUploaded === 'boolean' &&
+      typeof parsed.presentConstructor === 'boolean'
     ) {
       return parsed;
     }
@@ -64,7 +68,7 @@ export function writeReviewManuscriptPresentation(
   slug: string,
   value: ReviewManuscriptPresentation,
 ): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
   try {
     sessionStorage.setItem(
       reviewManuscriptPresentationStorageKey(slug),
@@ -90,6 +94,18 @@ export function resolveDefaultReviewManuscriptPresentation(options: {
     presentUploaded: hasUploadedManuscript,
     presentConstructor: hasConstructorDraft,
   };
+}
+
+/**
+ * While the Word builder is hidden, reviewers only receive the uploaded
+ * manuscript. The version chooser is not shown, so a stored constructor
+ * choice must not leak into the review package.
+ */
+export function presentationWithoutHiddenConstructor(
+  value: ReviewManuscriptPresentation,
+): ReviewManuscriptPresentation {
+  if (CONSTRUCTOR_ENTRY_POINTS_ENABLED) return value;
+  return { presentUploaded: true, presentConstructor: false };
 }
 
 export function presentationIsValid(

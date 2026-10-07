@@ -10,7 +10,9 @@
 #   docker build -f frontend/Dockerfile -t folio-frontend .
 #
 # NEXT_PUBLIC_* values are inlined at build time, so they are build args here,
-# not runtime env. Everything server-side (API_PROXY_TARGET, SENTRY_DSN) stays
+# not runtime env. `rewrites()` in next.config.ts is also captured at build
+# time, so API_PROXY_TARGET must be set in this stage or the image proxies
+# /api/v1 to 127.0.0.1:5243 inside the frontend container. SENTRY_DSN stays
 # runtime env.
 # ------------------------------------------------------------------------------
 
@@ -38,8 +40,11 @@ RUN --mount=type=cache,target=/root/.npm \
 
 ARG NEXT_PUBLIC_API_URL=
 ARG NEXT_PUBLIC_SENTRY_DSN=
+# Compose service name. Override only when the API is not the `backend` service.
+ARG API_PROXY_TARGET=http://backend:5243
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
+    API_PROXY_TARGET=${API_PROXY_TARGET} \
     NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
 

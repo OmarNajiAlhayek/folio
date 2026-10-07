@@ -91,6 +91,7 @@ import {
   readReviewManuscriptPresentation,
   resolveDefaultReviewManuscriptPresentation,
   presentationIsValid,
+  presentationWithoutHiddenConstructor,
   writeReviewManuscriptPresentation,
 } from '@/lib/review-manuscript-presentation';
 import {
@@ -503,12 +504,13 @@ export default function SubmissionDetailPage() {
       | ReviewManuscriptPresentation
       | null
       | undefined;
-    const next =
+    const next = presentationWithoutHiddenConstructor(
       (fromServer && presentationIsValid(fromServer, sources)
         ? fromServer
         : null) ??
-      stored ??
-      resolveDefaultReviewManuscriptPresentation(sources);
+        stored ??
+        resolveDefaultReviewManuscriptPresentation(sources),
+    );
     setReviewPresentation(next);
   }, [
     sub?.slug,
@@ -662,7 +664,9 @@ export default function SubmissionDetailPage() {
         files: fresh.files,
         constructorContent: cc,
       });
-      if (!presentationIsValid(reviewPresentation, sources)) {
+      const presentation =
+        presentationWithoutHiddenConstructor(reviewPresentation);
+      if (!presentationIsValid(presentation, sources)) {
         const presentationErrors = new Set<string>(['presentation']);
         setSubmitFieldErrors(presentationErrors);
         toast.error(tManuscript('presentationAtLeastOne'), {
@@ -689,7 +693,7 @@ export default function SubmissionDetailPage() {
           aiUsageStatement: fresh.aiUsageStatement,
         },
         files: fresh.files ?? [],
-        presentation: reviewPresentation,
+        presentation,
         manuscriptSources: sources,
         codeMessages,
       });
@@ -717,10 +721,10 @@ export default function SubmissionDetailPage() {
       }
 
       await submitSubmissionForReview(sub.slug, {
-        presentUploadedManuscript: reviewPresentation.presentUploaded,
-        presentConstructorManuscript: reviewPresentation.presentConstructor,
+        presentUploadedManuscript: presentation.presentUploaded,
+        presentConstructorManuscript: presentation.presentConstructor,
         constructorContent:
-          reviewPresentation.presentConstructor && sources.hasConstructorDraft
+          presentation.presentConstructor && sources.hasConstructorDraft
             ? cc
             : null,
         authorResponseToReviewers:
@@ -771,7 +775,8 @@ export default function SubmissionDetailPage() {
           (sub.files ?? []).map((f) => f.kind).filter(Boolean) as string[],
         );
         const apiErrors = apiCodeToFieldErrors(err.code, {
-          presentation: reviewPresentation,
+          presentation:
+            presentationWithoutHiddenConstructor(reviewPresentation),
           fileKinds,
           contributors:
             (sub.contributors as SubmitReadinessContributor[]) ?? [],
@@ -1734,7 +1739,9 @@ export default function SubmissionDetailPage() {
                         </div>
                       </div>
                     ) : null}
-                    {kind === 'manuscript' && canEditConstructor ? (
+                    {kind === 'manuscript' &&
+                    canEditConstructor &&
+                    CONSTRUCTOR_ENTRY_POINTS_ENABLED ? (
                       <div
                         className={`mt-4 pt-4 border-t border-ink/[0.05] dark:border-white/[0.05] ${
                           hasFieldError(submitFieldErrors, 'presentation')

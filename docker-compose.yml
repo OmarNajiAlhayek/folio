@@ -316,6 +316,9 @@ services:
         # Inlined into the client bundle at build time — rebuild to change.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        # next.config rewrites() is captured at build time. This must be the
+        # in-network API address, not the host loopback port.
+        API_PROXY_TARGET: http://backend:5243
     environment:
       NODE_ENV: production
       PORT: "5240"

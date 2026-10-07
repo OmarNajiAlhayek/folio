@@ -42,6 +42,7 @@ import {
   PRE_SLUG_PRESENTATION_KEY,
   type ReviewManuscriptPresentation,
   readReviewManuscriptPresentation,
+  presentationWithoutHiddenConstructor,
   resolveDefaultReviewManuscriptPresentation,
   reviewManuscriptPresentationStorageKey,
   writeReviewManuscriptPresentation,
@@ -264,7 +265,10 @@ export default function NewSubmissionPage() {
           }
         }
       }
-      writeReviewManuscriptPresentation(slug, reviewPresentation);
+      writeReviewManuscriptPresentation(
+        slug,
+        presentationWithoutHiddenConstructor(reviewPresentation),
+      );
       try {
         sessionStorage.removeItem(
           reviewManuscriptPresentationStorageKey(PRE_SLUG_PRESENTATION_KEY),
@@ -333,7 +337,9 @@ export default function NewSubmissionPage() {
 
   useEffect(() => {
     setReviewPresentation((prev) => {
-      const next = resolveDefaultReviewManuscriptPresentation(stagedSources);
+      const next = presentationWithoutHiddenConstructor(
+        resolveDefaultReviewManuscriptPresentation(stagedSources),
+      );
       if (
         prev.presentUploaded === next.presentUploaded &&
         prev.presentConstructor === next.presentConstructor
@@ -617,9 +623,11 @@ export default function NewSubmissionPage() {
               <h2 className="font-serif text-xl font-semibold text-ink">
                 {t('pathTypeHeading')}
               </h2>
-              <p className="text-sm text-ink/65">
-                {tDetail('chooseManuscriptModeHint')}
-              </p>
+              {CONSTRUCTOR_ENTRY_POINTS_ENABLED ? (
+                <p className="text-sm text-ink/65">
+                  {tDetail('chooseManuscriptModeHint')}
+                </p>
+              ) : null}
             </div>
 
             {/* Custom high-end selection grid */}
@@ -910,7 +918,8 @@ export default function NewSubmissionPage() {
                     </FileDropZone>
 
                     {/* Review Manuscript presentation options */}
-                    {kind === 'manuscript' ? (
+                    {kind === 'manuscript' &&
+                    CONSTRUCTOR_ENTRY_POINTS_ENABLED ? (
                       <div className="mt-5 border-t border-ink/[0.06] pt-4">
                         <ReviewManuscriptPresentationPicker
                           value={reviewPresentation}
