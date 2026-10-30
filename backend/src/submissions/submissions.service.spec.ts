@@ -45,6 +45,7 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     id: 'sub-1',
     slug: 'paper-one',
     title: 'Paper Title',
+    journalId: 'journal-medj',
     status: SubmissionStatus.SUBMITTED,
   } as Submission;
 
@@ -151,6 +152,9 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
             rbacUserHasPermission(...args),
         },
         eventPublisher,
+        journalMembershipService: {
+          listJournalIdsForUser: jest.fn().mockResolvedValue(['journal-medj']),
+        },
       }),
     }).compile();
 

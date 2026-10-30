@@ -24,6 +24,7 @@ import {
   type SubmissionFileKind,
 } from './submission-file-kinds';
 import {
+  bufferHasPdfTrailer,
   isExtensionAllowedForKind,
   sniffUploadMime,
 } from './submission-file-upload.policy';
@@ -127,6 +128,25 @@ export class SubmissionFileService {
     }
   }
 
+  private async readPdfTail(
+    source: { type: 'path'; path: string } | { type: 'buffer'; buffer: Buffer },
+    sizeBytes: number,
+  ): Promise<Buffer> {
+    const take = Math.min(8192, Math.max(0, sizeBytes));
+    if (take === 0) return Buffer.alloc(0);
+    if (source.type === 'buffer') {
+      return source.buffer.subarray(Math.max(0, source.buffer.length - take));
+    }
+    const handle = await open(source.path, 'r');
+    try {
+      const tail = Buffer.alloc(take);
+      await handle.read(tail, 0, take, Math.max(0, sizeBytes - take));
+      return tail;
+    } finally {
+      await handle.close();
+    }
+  }
+
   private async readFileSniffBuffer(
     source: { type: 'path'; path: string } | { type: 'buffer'; buffer: Buffer },
   ): Promise<Buffer> {
@@ -159,6 +179,15 @@ export class SubmissionFileService {
         message: sniff.reason,
         code: 'VALIDATION_ERROR',
       });
+    }
+    if (ext === '.pdf') {
+      const tail = await this.readPdfTail(params.source, params.sizeBytes);
+      if (!bufferHasPdfTrailer(tail)) {
+        throw new BadRequestException({
+          message: 'PDF is missing a trailer and cannot be opened',
+          code: 'VALIDATION_ERROR',
+        });
+      }
     }
 
     const dir = this.ensureUploadDir();
@@ -619,6 +648,7 @@ export class SubmissionFileService {
     released: boolean,
   ): Promise<SubmissionFile> {
     const s = await this.access.getBySlugOrThrow(submissionSlug);
+    await this.access.assertStaffSubmissionScope(s, user);
     const file = await this.filesRepo.findOne({
       where: { id: fileId, submissionId: s.id },
     });

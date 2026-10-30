@@ -5,5 +5,6 @@ export const languageToolServiceMock = {
   useValue: {
     isEnabled: jest.fn().mockReturnValue(false),
     check: jest.fn().mockResolvedValue([]),
+    inspect: jest.fn().mockResolvedValue({ notes: [], unavailable: true }),
   },
 };

@@ -83,7 +83,10 @@ import { ReviewManuscriptPresentationPicker } from '@/components/constructor/Rev
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CircularProgress } from '@/components/ui/circular-progress';
 import { constructorDraftHasMeaningfulContent } from '@/lib/constructor-import-merge';
-import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
+import {
+  CONSTRUCTOR_ENTRY_POINTS_ENABLED,
+  visibleFileKind,
+} from '@/lib/constructor-entry-points';
 import { resolveConstructorDocxFileName } from '@/lib/constructor-docx-filename';
 import {
   type ReviewManuscriptPresentation,
@@ -226,7 +229,7 @@ function SubmissionFileRow({
         <div className="min-w-0 flex-1 text-start">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded bg-ink/8 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-ink/70 font-semibold">
-              {tk(`fileKind_${f.kind || 'manuscript'}`)}
+              {tk(`fileKind_${visibleFileKind(f.kind)}`)}
             </span>
             {showWorkflowStageBadge ? (
               <span className="rounded bg-accent/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent font-semibold">
@@ -738,6 +741,7 @@ export default function SubmissionDetailPage() {
       invalidateDetail(slug);
     } catch (err) {
       if (
+        CONSTRUCTOR_ENTRY_POINTS_ENABLED &&
         err instanceof ApiError &&
         err.code === 'CONSTRUCTOR_VALIDATION_FAILED' &&
         Array.isArray(err.details?.errors)

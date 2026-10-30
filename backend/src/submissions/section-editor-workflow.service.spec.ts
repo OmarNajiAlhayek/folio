@@ -68,6 +68,7 @@ describe('SectionEditorWorkflowService', () => {
   let access: {
     getBySlugOrThrow: jest.Mock;
     assertEditorQueueSubmissionVisible: jest.Mock;
+    assertStaffSubmissionScope: jest.Mock;
   };
   let events: { enqueueSectionEditorAssignedEvent: jest.Mock };
 
@@ -100,6 +101,7 @@ describe('SectionEditorWorkflowService', () => {
     access = {
       getBySlugOrThrow: jest.fn().mockResolvedValue(SUBMISSION),
       assertEditorQueueSubmissionVisible: jest.fn(),
+      assertStaffSubmissionScope: jest.fn().mockResolvedValue(undefined),
     };
     events = {
       enqueueSectionEditorAssignedEvent: jest.fn().mockResolvedValue(undefined),

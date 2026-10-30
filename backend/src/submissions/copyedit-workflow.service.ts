@@ -142,6 +142,7 @@ export class CopyeditWorkflowService {
       'Editor role required',
     );
     const submission = await this.access.getBySlugOrThrow(submissionSlug);
+    await this.access.assertStaffSubmissionScope(submission, editor);
     if (
       submission.status !== SubmissionStatus.ACCEPTED &&
       submission.status !== SubmissionStatus.COPYEDITING
@@ -585,6 +586,11 @@ export class CopyeditWorkflowService {
         code: 'FORBIDDEN',
       });
     }
+    // The assigned copyeditor publishes the manuscript they were given.
+    // An editor override is a staff action and follows journal scope.
+    if (!mine) {
+      await this.access.assertStaffSubmissionScope(s, user);
+    }
     const blocking = assignments.find(
       (a) => a.status !== CopyeditAssignmentStatus.READY_FOR_REVIEW,
     );
@@ -662,6 +668,7 @@ export class CopyeditWorkflowService {
     );
     const s = await this.access.getBySlugOrThrow(slug);
     this.access.assertEditorQueueSubmissionVisible(s);
+    await this.access.assertStaffSubmissionScope(s, user);
     if (s.status !== SubmissionStatus.PUBLISHED) {
       throw new BadRequestException({
         message: 'Only a published article can be retracted',

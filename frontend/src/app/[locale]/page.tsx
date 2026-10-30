@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { BadgeCheck, CloudUpload, Globe } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { PAGE_SHELL } from '@/lib/page-shell';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
@@ -65,12 +66,28 @@ export default function HomePage() {
           statusColor: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
           statusIndicator: 'bg-amber-500',
           progress: 20,
-          milestone: t('simulator.author.milestone'),
-          details: t('simulator.author.details'),
-          stats: [
-            { label: t('simulator.author.statSections'), val: '7' },
-            { label: t('simulator.author.statWords'), val: '3,420' },
-          ],
+          milestone: t(
+            CONSTRUCTOR_ENTRY_POINTS_ENABLED
+              ? 'simulator.author.milestone'
+              : 'simulator.author.milestoneUpload',
+          ),
+          details: t(
+            CONSTRUCTOR_ENTRY_POINTS_ENABLED
+              ? 'simulator.author.details'
+              : 'simulator.author.detailsUpload',
+          ),
+          stats: CONSTRUCTOR_ENTRY_POINTS_ENABLED
+            ? [
+                { label: t('simulator.author.statSections'), val: '7' },
+                { label: t('simulator.author.statWords'), val: '3,420' },
+              ]
+            : [
+                { label: t('simulator.author.statFiles'), val: '3' },
+                {
+                  label: t('simulator.author.statReady'),
+                  val: t('simulator.author.statReadyValue'),
+                },
+              ],
         };
       case 'editor':
         return {
@@ -131,7 +148,11 @@ export default function HomePage() {
     {
       step: 1,
       title: t('timeline.step1Title'),
-      desc: t('timeline.step1Desc'),
+      desc: t(
+        CONSTRUCTOR_ENTRY_POINTS_ENABLED
+          ? 'timeline.step1Desc'
+          : 'timeline.step1DescUpload',
+      ),
     },
     {
       step: 2,

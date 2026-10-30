@@ -6,6 +6,7 @@ import { SubmissionFileService } from './submission-file.service';
 import { SubmissionAccessService } from './submission-access.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
 import { JournalDirectoryService } from '../journals/journal-directory.service';
+import { JournalMembershipService } from '../journals/journal-membership.service';
 import { languageToolServiceMock } from './language-tool.service.mock';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
@@ -15,7 +16,7 @@ import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { User } from '../entities/user.entity';
 import type { RequestUser } from '../common/types/request-user';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 
 /**
  * The author owns every other file on their submission, so `getFileForUser`
@@ -27,6 +28,7 @@ describe('SubmissionFileService reviewer review file release', () => {
     id: 'sub-1',
     slug: 'paper-one',
     authorId: 'author-1',
+    journalId: 'journal-medj',
     status: SubmissionStatus.UNDER_REVIEW,
   } as Submission;
 
@@ -37,11 +39,13 @@ describe('SubmissionFileService reviewer review file release', () => {
 
   const editor: RequestUser = {
     sub: 'editor-1',
+    email: 'editor@folio.dev',
+    roleSlugs: [ROLE_SLUGS.EDITOR],
     permissionSlugs: [
       PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
       PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
     ],
-  } as unknown as RequestUser;
+  };
 
   function reviewFile(overrides: Partial<SubmissionFile> = {}) {
     return {
@@ -95,7 +99,18 @@ describe('SubmissionFileService reviewer review file release', () => {
           useValue: assignmentsRepo,
         },
         { provide: getRepositoryToken(CopyeditAssignment), useValue: {} },
-        { provide: getRepositoryToken(SectionEditorAssignment), useValue: {} },
+        {
+          provide: getRepositoryToken(SectionEditorAssignment),
+          useValue: { exists: jest.fn().mockResolvedValue(false) },
+        },
+        {
+          provide: JournalMembershipService,
+          useValue: {
+            listJournalIdsForUser: jest
+              .fn()
+              .mockResolvedValue(['journal-medj']),
+          },
+        },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: ManuscriptStyleRegistryService, useValue: {} },
         { provide: JournalDirectoryService, useValue: {} },

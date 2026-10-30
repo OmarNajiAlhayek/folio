@@ -10,6 +10,8 @@ export type PreSubmitAnalysisData = {
   contentHash: string;
   formatIssues: string[];
   grammarNotes: PreSubmitGrammarNote[];
+  /** Absent on analyses saved before the flag existed. */
+  grammarUnavailable?: boolean;
   referenceIssues: string[];
   aiUnavailable: boolean;
   acknowledged: boolean;

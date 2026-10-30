@@ -327,7 +327,10 @@ export class SubmissionLifecycleService {
   ): ConstructorValidationError[] {
     const styleId = this.manuscriptStyles.resolveEffectiveStyleId(content);
     const profile = this.manuscriptStyles.getProfile(styleId);
-    return validateConstructorContentForSubmit(content, profile.constructorGuidance);
+    return validateConstructorContentForSubmit(
+      content,
+      profile.constructorGuidance,
+    );
   }
 
   private async assertSubmissionSlugAvailable(
@@ -750,6 +753,7 @@ export class SubmissionLifecycleService {
       'Editor role required',
     );
     const s = await this.access.getBySlugOrThrow(slug);
+    await this.access.assertStaffSubmissionScope(s, user);
     const allowed = EDITOR_TRANSITIONS[s.status];
     if (!allowed?.includes(next)) {
       throw new BadRequestException({

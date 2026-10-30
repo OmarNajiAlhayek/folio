@@ -20,6 +20,7 @@ import {
   ROLE_SLUGS,
 } from '@/lib/permissions';
 import { PAGE_SHELL } from '@/lib/page-shell';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -663,9 +664,17 @@ export default function DashboardPage() {
                 </span>
                 <div>
                   <strong className="text-ink">
-                    {t('tipConstructorTitle')}
+                    {t(
+                      CONSTRUCTOR_ENTRY_POINTS_ENABLED
+                        ? 'tipConstructorTitle'
+                        : 'tipUploadTitle',
+                    )}
                   </strong>{' '}
-                  {t('tipConstructorBody')}
+                  {t(
+                    CONSTRUCTOR_ENTRY_POINTS_ENABLED
+                      ? 'tipConstructorBody'
+                      : 'tipUploadBody',
+                  )}
                 </div>
               </li>
               <li className="flex gap-2.5 items-start">

@@ -6,6 +6,7 @@ export type {
 export type ManuscriptAnalysisResult = {
   formatIssues: string[];
   grammarNotes: import('@folio/shared/contracts/pre-submit-analysis').PreSubmitGrammarNote[];
+  grammarUnavailable: boolean;
   referenceIssues: string[];
   aiUnavailable: boolean;
 };

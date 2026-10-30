@@ -16,10 +16,24 @@ import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { hasPermission } from '../common/authorization/permission-checks';
 import type { RequestUser } from '../common/types/request-user';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { JournalMembershipService } from '../journals/journal-membership.service';
+import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { submissionToViewerJson } from './submission-response.mapper';
 import type { SubmissionViewerRole } from './submission-viewer-role';
 import { REVIEW_CONFIGURATION_STATUSES } from './submission-workflow.constants';
+
+const JOURNAL_OUT_OF_SCOPE = 'JOURNAL_OUT_OF_SCOPE';
+
+function isJournalOutOfScope(err: unknown): err is ForbiddenException {
+  if (!(err instanceof ForbiddenException)) return false;
+  const body = err.getResponse();
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'code' in body &&
+    (body as { code?: unknown }).code === JOURNAL_OUT_OF_SCOPE
+  );
+}
 
 @Injectable()
 export class SubmissionAccessService {
@@ -32,6 +46,7 @@ export class SubmissionAccessService {
     private readonly copyeditAssignmentsRepo: Repository<CopyeditAssignment>,
     @InjectRepository(SectionEditorAssignment)
     private readonly seAssignmentsRepo: Repository<SectionEditorAssignment>,
+    private readonly journalMemberships: JournalMembershipService,
   ) {}
 
   /** Sync caller slug check — same source as {@link PermissionsGuard}. */
@@ -68,13 +83,43 @@ export class SubmissionAccessService {
     }
   }
 
+  /**
+   * Staff may act on a submission only inside the scope the queue already
+   * applies. `journal_manager` is press-wide. An editor needs an `editor`
+   * membership for this journal; none means no journals. A section editor
+   * needs an assignment to this submission. Holding both roles passes if
+   * either rule matches.
+   *
+   * Author, reviewer, and copyeditor checks stay in {@link assertCanRead}.
+   * This helper does not grant those roles a journal.
+   */
+  async assertStaffSubmissionScope(
+    submission: Submission,
+    user: RequestUser,
+  ): Promise<void> {
+    if (await this.staffSubmissionInScope(submission, user)) return;
+    throw new ForbiddenException({
+      message: 'This submission is outside your journal scope',
+      code: JOURNAL_OUT_OF_SCOPE,
+    });
+  }
+
   async assertCanRead(
     submission: Submission,
     user: RequestUser,
   ): Promise<void> {
+    // Out-of-scope editors still fall through, so an editor who is also the
+    // author, the assigned reviewer, or the assigned copyeditor keeps that path.
+    let editorOutOfScope: ForbiddenException | null = null;
     if (this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)) {
       this.assertEditorQueueSubmissionVisible(submission);
-      return;
+      try {
+        await this.assertStaffSubmissionScope(submission, user);
+        return;
+      } catch (err) {
+        if (!isJournalOutOfScope(err)) throw err;
+        editorOutOfScope = err;
+      }
     }
     if (submission.authorId === user.sub) {
       return;
@@ -104,10 +149,43 @@ export class SubmissionAccessService {
       });
       if (seAssigned) return;
     }
+    if (editorOutOfScope) throw editorOutOfScope;
     throw new ForbiddenException({
       message: 'Cannot access this submission',
       code: 'FORBIDDEN',
     });
+  }
+
+  /**
+   * Same split as `editorQueueJournalIds`: the journal manager is every
+   * journal, and everyone else is the journals they actually hold.
+   */
+  private async staffSubmissionInScope(
+    submission: Submission,
+    user: RequestUser,
+  ): Promise<boolean> {
+    if (user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) return true;
+    if (user.roleSlugs.includes(ROLE_SLUGS.EDITOR)) {
+      const journalIds = await this.journalMemberships.listJournalIdsForUser(
+        user.sub,
+        ROLE_SLUGS.EDITOR,
+      );
+      if (submission.journalId && journalIds.includes(submission.journalId)) {
+        return true;
+      }
+    }
+    if (
+      user.roleSlugs.includes(ROLE_SLUGS.SECTION_EDITOR) ||
+      this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
+    ) {
+      return this.seAssignmentsRepo.exists({
+        where: {
+          submissionId: submission.id,
+          sectionEditorId: user.sub,
+        },
+      });
+    }
+    return false;
   }
 
   async getBySlugOrThrow(slug: string): Promise<Submission> {

@@ -185,6 +185,10 @@ export class SubmissionsService implements OnModuleInit {
    * An editor with no memberships is scoped to nothing rather than to
    * everything — the opposite default would make the scope silently
    * unenforced for exactly the accounts nobody has configured yet.
+   *
+   * Reading or mutating one submission by slug uses the same rule in
+   * `SubmissionAccessService.assertStaffSubmissionScope`, which also
+   * requires a section editor to be assigned to that submission.
    */
   private async editorQueueJournalIds(
     user: RequestUser,

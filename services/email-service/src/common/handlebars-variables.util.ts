@@ -9,7 +9,11 @@ const BLOCK_HELPERS = new Set([
   'log',
 ]);
 
-const PARTIALS = new Set(['folio-email-layout', 'folio-email-button']);
+const PARTIALS = new Set([
+  'folio-email-layout',
+  'folio-email-button',
+  'folio-email-button-secondary',
+]);
 
 const DATA_VARIABLES = new Set([
   '@root',

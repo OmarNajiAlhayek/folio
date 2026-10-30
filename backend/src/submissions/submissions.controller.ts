@@ -51,6 +51,10 @@ import { SubmitSubmissionDto } from './dto/submit-submission.dto';
 import { PatchDisciplineDto } from './dto/patch-discipline.dto';
 import { SuggestKeywordsPreviewDto } from './dto/suggest-keywords-preview.dto';
 import type { ConstructorContent } from './constructor-content.types';
+import {
+  assertWordConstructorEnabled,
+  WORD_CONSTRUCTOR_ENABLED,
+} from './word-constructor.feature';
 import { Readable } from 'stream';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -103,6 +107,7 @@ export class SubmissionsController {
   })
   @UseInterceptors(FileInterceptor('file', constructorDocxMulterOptions))
   importDocxToConstructor(@UploadedFile() file: Express.Multer.File) {
+    assertWordConstructorEnabled();
     if (!file?.buffer?.length) {
       throw new BadRequestException({
         message: 'Word file is required',
@@ -117,6 +122,7 @@ export class SubmissionsController {
   @Throttle({ docx: {} })
   @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
   async generateStandaloneDocx(@Body() dto: GenerateDocxDto) {
+    assertWordConstructorEnabled();
     const buffer = await this.submissionsService.generateDocxStandalone(
       dto.content as unknown as ConstructorContent,
     );
@@ -376,6 +382,9 @@ export class SubmissionsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateSubmissionDto,
   ) {
+    if (!WORD_CONSTRUCTOR_ENABLED) {
+      delete dto.constructorContent;
+    }
     return this.submissionsService.update(slug, user, dto);
   }
 
@@ -409,12 +418,14 @@ export class SubmissionsController {
     @Body() dto: SubmitSubmissionDto,
   ) {
     return this.submissionsService.submit(slug, user, {
-      constructorContent: dto.constructorContent as
-        | ConstructorContent
-        | undefined,
+      constructorContent: WORD_CONSTRUCTOR_ENABLED
+        ? (dto.constructorContent as ConstructorContent | undefined)
+        : undefined,
       useUploadedManuscript: dto.useUploadedManuscript,
       presentUploadedManuscript: dto.presentUploadedManuscript,
-      presentConstructorManuscript: dto.presentConstructorManuscript,
+      presentConstructorManuscript: WORD_CONSTRUCTOR_ENABLED
+        ? dto.presentConstructorManuscript
+        : false,
       authorResponseToReviewers: dto.authorResponseToReviewers,
     });
   }
@@ -567,6 +578,9 @@ export class SubmissionsController {
         code: 'VALIDATION_ERROR',
       });
     }
+    if (kind === 'manuscript_constructor') {
+      assertWordConstructorEnabled();
+    }
     return this.submissionsService.addFile(slug, user, file, kind);
   }
 
@@ -610,6 +624,7 @@ export class SubmissionsController {
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
   ) {
+    assertWordConstructorEnabled();
     const buffer =
       await this.submissionsService.readAttachedConstructorDocxBuffer(
         slug,
@@ -628,6 +643,7 @@ export class SubmissionsController {
     @Body() dto: GenerateDocxDto,
     @Query('attach') attachQuery?: string,
   ) {
+    assertWordConstructorEnabled();
     const attach =
       dto.attach === true || attachQuery === 'true' || attachQuery === '1';
     const attachKind =

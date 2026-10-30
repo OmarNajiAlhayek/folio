@@ -304,6 +304,7 @@ export class SubmissionAiService {
     if (
       this.access.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
     ) {
+      await this.access.assertStaffSubmissionScope(s, user);
       s.disciplines = disciplines;
       s.disciplineSource = SubmissionDisciplineSource.EDITOR;
       return this.submissionsRepo.save(s);

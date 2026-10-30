@@ -122,6 +122,7 @@ export class ReviewWorkflowService {
     method: SubmissionReviewMethod,
   ): Promise<Submission> {
     const s = await this.access.getBySlugOrThrow(slug);
+    await this.access.assertStaffSubmissionScope(s, user);
     this.access.assertSubmissionAllowsReviewConfiguration(s);
     s.reviewMethod = method;
     return this.submissionsRepo.save(s);
@@ -134,6 +135,7 @@ export class ReviewWorkflowService {
     stage: SubmissionFileStage,
   ): Promise<SubmissionFile> {
     const s = await this.access.getBySlugOrThrow(submissionSlug);
+    await this.access.assertStaffSubmissionScope(s, user);
     this.access.assertSubmissionAllowsReviewConfiguration(s);
     const file = await this.filesRepo.findOne({
       where: { id: fileId, submissionId: s.id },
@@ -232,6 +234,7 @@ export class ReviewWorkflowService {
       'Editor role required',
     );
     const submission = await this.access.getBySlugOrThrow(submissionSlug);
+    await this.access.assertStaffSubmissionScope(submission, editor);
     this.access.assertSubmissionAllowsReviewConfiguration(submission);
     if (!submission.slug) {
       throw new BadRequestException({

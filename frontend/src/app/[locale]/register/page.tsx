@@ -23,6 +23,7 @@ import { type KeywordAddFailure, serializeKeywords } from '@/lib/keywords';
 import { type z } from 'zod';
 import { registerSchema, translatedZodResolver } from '@/lib/validation';
 import { OrcidButton, OrcidDivider } from '@/components/auth/orcid-button';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 
 const REGISTER_KEYWORD_TOAST_ID = 'register-keyword-add';
 
@@ -179,9 +180,17 @@ function RegisterForm() {
                 </span>
                 <div>
                   <strong className="text-ink">
-                    {tMarketing('pillar1Title')}
+                    {tMarketing(
+                      CONSTRUCTOR_ENTRY_POINTS_ENABLED
+                        ? 'pillar1Title'
+                        : 'pillar1TitleUpload',
+                    )}
                   </strong>{' '}
-                  {tMarketing('pillar1Body')}
+                  {tMarketing(
+                    CONSTRUCTOR_ENTRY_POINTS_ENABLED
+                      ? 'pillar1Body'
+                      : 'pillar1BodyUpload',
+                  )}
                 </div>
               </li>
               <li className="flex gap-2.5 items-start">

@@ -77,6 +77,7 @@ export class PreSubmitAnalysisService {
       contentHash,
       formatIssues: result.formatIssues,
       grammarNotes: stripGrammarOffsets(result.grammarNotes),
+      grammarUnavailable: result.grammarUnavailable,
       referenceIssues: result.referenceIssues,
       aiUnavailable: result.aiUnavailable,
       acknowledged: result.grammarNotes.length === 0,

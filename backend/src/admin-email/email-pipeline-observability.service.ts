@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { redactOperatorErrorMessage } from '../common/email-operator-error-redaction';
 import { EmailServiceClient } from '../email-client/email-client.service';
 import type {
   EmailLogStatusCount,
+  EmailPipelineSlice,
   FailedEmailSample,
   ReminderStatusCount,
 } from '../email-client/email-client.types';
@@ -49,7 +50,31 @@ export type PipelineStatusResponse = {
     stuckPendingPastDue: number;
   };
   rabbitMq: RabbitMqPipelineMetrics;
+  /** False when the mail worker cannot be reached. Outbox and broker stats still return. */
+  emailWorker: { available: boolean };
 };
+
+const EMPTY_EMAIL_SLICE: EmailPipelineSlice = {
+  emailLog: {
+    counts: { pending: 0, sent: 0, failed: 0 },
+    failedSample: [] as FailedEmailSample[],
+  },
+  reminders: {
+    counts: { pending: 0, sent: 0, cancelled: 0 },
+    stuckPendingPastDue: 0,
+  },
+};
+
+function isEmailWorkerDown(err: unknown): boolean {
+  if (!(err instanceof HttpException) || err.getStatus() !== 503) return false;
+  const body = err.getResponse();
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'code' in body &&
+    (body as { code?: string }).code === 'EMAIL_SERVICE_UNAVAILABLE'
+  );
+}
 
 @Injectable()
 export class EmailPipelineObservabilityService {
@@ -70,7 +95,6 @@ export class EmailPipelineObservabilityService {
       dueNow,
       deadSampleRows,
       rabbitMq,
-      emailSlice,
     ] = await Promise.all([
       this.outboxRepo.count({ where: { status: 'pending' } }),
       this.outboxRepo.count({ where: { status: 'dead' } }),
@@ -99,8 +123,18 @@ export class EmailPipelineObservabilityService {
         select: ['id', 'routingKey', 'attempts', 'createdAt', 'lastError'],
       }),
       this.queueMetrics.getCachedMetrics(),
-      this.emailClient.getPipelineSlice(),
     ]);
+
+    let emailSlice: Awaited<
+      ReturnType<EmailServiceClient['getPipelineSlice']>
+    > = EMPTY_EMAIL_SLICE;
+    let emailWorkerAvailable = true;
+    try {
+      emailSlice = await this.emailClient.getPipelineSlice();
+    } catch (err) {
+      if (!isEmailWorkerDown(err)) throw err;
+      emailWorkerAvailable = false;
+    }
 
     return {
       outbox: {
@@ -127,6 +161,7 @@ export class EmailPipelineObservabilityService {
       emailLog: emailSlice.emailLog,
       reminders: emailSlice.reminders,
       rabbitMq,
+      emailWorker: { available: emailWorkerAvailable },
     };
   }
 }

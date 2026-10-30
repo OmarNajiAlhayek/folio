@@ -113,11 +113,16 @@ After `npm run seed` in `backend/`:
 
 | Email | Password | Roles |
 |-------|----------|-------|
-| `author@folio.local` | `Author123!` | Author |
-| `manager@folio.local` | `Manager123!` | Journal manager |
-| `editor@folio.local` | `Editor123!` | Editor + reviewer |
-| `reviewer@folio.local` | `Reviewer123!` | Reviewer |
+| `author@folio.dev` | `Author123!` | Author |
+| `manager@folio.local` | `Manager123!` | Journal manager (every journal; edits titles) |
+| `editor@folio.dev` | `Editor123!` | Editor-in-chief of `econj` only |
+| `editor.<slug>@folio.dev` | `Editor123!` | Editor-in-chief of that journal (`artsj`, `hisj`, `basj`, `eduj`, `agrj`, `medj`, `lawj`, `engj`) |
+| `section.<slug>@folio.dev` | `Section123!` | Section editor of that journal. `section.eduj@folio.dev` is assigned to the education revisions demo |
+| `reviewer@folio.dev` | `Reviewer123!` | Reviewer |
 | `copyeditor@folio.local` | `Copyeditor123!` | Copyeditor |
+
+The `editor` role is university-wide. Which journal that person may edit is a
+`journal_memberships` row, so each catalog journal has its own login.
 
 Seed variants:
 

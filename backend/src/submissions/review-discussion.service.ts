@@ -48,22 +48,32 @@ export class ReviewDiscussionService {
       PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
     );
     const isOwnerReviewer = assignment.reviewerId === actor.sub;
-    if (!isEditor && !isOwnerReviewer) {
+    if (isOwnerReviewer) {
+      if (
+        !isEditor &&
+        assignment.status !== AssignmentStatus.ACCEPTED &&
+        assignment.status !== AssignmentStatus.COMPLETED
+      ) {
+        throw new BadRequestException({
+          message: 'Accept the review invitation before starting a discussion',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+      return assignment;
+    }
+    if (!isEditor) {
       throw new ForbiddenException({
         message: 'Access denied',
         code: 'FORBIDDEN',
       });
     }
-    if (
-      !isEditor &&
-      assignment.status !== AssignmentStatus.ACCEPTED &&
-      assignment.status !== AssignmentStatus.COMPLETED
-    ) {
-      throw new BadRequestException({
-        message: 'Accept the review invitation before starting a discussion',
-        code: 'VALIDATION_ERROR',
+    if (!assignment.submission) {
+      throw new NotFoundException({
+        message: 'Submission not found',
+        code: 'NOT_FOUND',
       });
     }
+    await this.access.assertStaffSubmissionScope(assignment.submission, actor);
     return assignment;
   }
 

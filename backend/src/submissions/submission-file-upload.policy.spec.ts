@@ -1,7 +1,9 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { minimalPdf } from '../common/minimal-pdf';
 import {
   acceptAttributeForKind,
+  bufferHasPdfTrailer,
   isExtensionAllowedForKind,
   sniffUploadMime,
 } from './submission-file-upload.policy';
@@ -16,6 +18,16 @@ describe('submission-file-upload.policy', () => {
     const buf = Buffer.from('%PDF-1.4\n');
     const result = sniffUploadMime(buf, '.pdf', 'manuscript');
     expect(result).toEqual({ ok: true, mimeType: 'application/pdf' });
+  });
+
+  it('rejects a PDF header that has no trailer', () => {
+    const buf = Buffer.from('%PDF-1.4 not a real document\n');
+    expect(sniffUploadMime(buf, '.pdf', 'manuscript').ok).toBe(true);
+    expect(bufferHasPdfTrailer(buf)).toBe(false);
+  });
+
+  it('accepts a one-page PDF that a viewer can open', () => {
+    expect(bufferHasPdfTrailer(minimalPdf('Sample manuscript'))).toBe(true);
   });
 
   it('rejects exe renamed to pdf', () => {

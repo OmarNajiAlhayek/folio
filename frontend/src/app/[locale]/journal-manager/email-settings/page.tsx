@@ -177,6 +177,7 @@ type PipelineStatus = {
     error?: string;
     queues: Record<string, { messageCount: number; consumerCount: number }>;
   };
+  emailWorker?: { available: boolean };
 };
 
 export default function EmailSettingsPage() {
@@ -205,6 +206,15 @@ export default function EmailSettingsPage() {
   const [dlqReplayLimit, setDlqReplayLimit] = useState('1');
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const { resolve: resolveApiError } = useApiErrorMessages();
+  const describeEmailError = useCallback(
+    (err: unknown, fallback: string) => {
+      if (err instanceof ApiError && err.code === 'EMAIL_SERVICE_UNAVAILABLE') {
+        return t('serviceUnavailable');
+      }
+      return resolveApiError(err, fallback);
+    },
+    [resolveApiError, t],
+  );
   const showApiError = useToastApiError();
 
   // Premium UI Interactive states
@@ -224,9 +234,16 @@ export default function EmailSettingsPage() {
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
 
   const loadPolicy = useCallback(async () => {
-    const p = await apiJson<ReminderPolicy>('/admin/email/reminder-policy');
-    setPolicy(p);
-    setPolicyDays(String(p.reviewDueInDays));
+    try {
+      const p = await apiJson<ReminderPolicy>('/admin/email/reminder-policy');
+      setPolicy(p);
+      setPolicyDays(String(p.reviewDueInDays));
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'EMAIL_SERVICE_UNAVAILABLE') {
+        return;
+      }
+      throw err;
+    }
   }, []);
 
   const loadTemplates = useCallback(async (templateLocale: 'en' | 'ar') => {
@@ -272,11 +289,11 @@ export default function EmailSettingsPage() {
       const p = await apiJson<PipelineStatus>('/admin/email/pipeline-status');
       setPipeline(p);
     } catch (err) {
-      setPipelineError(resolveApiError(err, t('pipelineFailed')));
+      setPipelineError(describeEmailError(err, t('pipelineFailed')));
     } finally {
       setPipelineLoading(false);
     }
-  }, [t, resolveApiError]);
+  }, [t, describeEmailError]);
 
   const requeueDeadOutbox = useCallback(
     async (id: string) => {
@@ -346,13 +363,13 @@ export default function EmailSettingsPage() {
         await Promise.all([loadPolicy(), loadPipeline()]);
       } catch (err) {
         if (cancelled) return;
-        setError(resolveApiError(err, t('loadFailed')));
+        setError(describeEmailError(err, t('loadFailed')));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [me, loadPolicy, loadPipeline, t, resolveApiError]);
+  }, [me, loadPolicy, loadPipeline, t, describeEmailError]);
 
   useEffect(() => {
     if (!me?.permissions.includes(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS)) {
@@ -363,6 +380,12 @@ export default function EmailSettingsPage() {
     void loadTemplates(editTemplateLocale)
       .catch((err) => {
         if (cancelled) return;
+        if (
+          err instanceof ApiError &&
+          err.code === 'EMAIL_SERVICE_UNAVAILABLE'
+        ) {
+          return;
+        }
         showApiError(err, t('loadFailed'), { id: 'email-settings-templates' });
       })
       .finally(() => {
@@ -606,10 +629,10 @@ export default function EmailSettingsPage() {
               setError(null);
               void Promise.all([
                 loadPolicy().catch((err) => {
-                  setError(resolveApiError(err, t('loadFailed')));
+                  setError(describeEmailError(err, t('loadFailed')));
                 }),
                 loadTemplates(editTemplateLocale).catch((err) => {
-                  setError(resolveApiError(err, t('loadFailed')));
+                  setError(describeEmailError(err, t('loadFailed')));
                 }),
                 loadPipeline(),
               ]);
@@ -652,6 +675,17 @@ export default function EmailSettingsPage() {
           </p>
         </div>
       </header>
+
+      {pipeline?.emailWorker?.available === false ? (
+        <p
+          role="status"
+          className="rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          {pipeline.rabbitMq.available
+            ? t('workerDownBrokerUp')
+            : t('workerDownBrokerDown')}
+        </p>
+      ) : null}
 
       {/* Modern High-Fidelity Interactive Navigation Tabs */}
       <div
@@ -1022,8 +1056,13 @@ export default function EmailSettingsPage() {
                 </div>
                 {/* Terminal Screen */}
                 <div className="bg-[#0f141c] text-[#a6acb9] font-mono text-xs p-5 max-h-96 overflow-y-auto space-y-4">
-                  {pipeline.outbox.deadSample.length === 0 &&
-                  pipeline.emailLog.failedSample.length === 0 ? (
+                  {pipeline.emailWorker?.available === false ? (
+                    <div className="text-center py-8 text-[#5c6370] space-y-1">
+                      <p>{t('workerDownLogLine')}</p>
+                      <p className="text-[10px]">{t('workerDownLogDetail')}</p>
+                    </div>
+                  ) : pipeline.outbox.deadSample.length === 0 &&
+                    pipeline.emailLog.failedSample.length === 0 ? (
                     <div className="text-center py-8 text-[#5c6370] space-y-1">
                       <p>&gt; SYSTEM STATUS STABLE: SMTP PIPELINE DRAINED</p>
                       <p className="text-[10px]">

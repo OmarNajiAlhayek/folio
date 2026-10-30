@@ -10,12 +10,14 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { ClsService } from 'nestjs-cls';
 import { Request, Response } from 'express';
 import { LOG_FIELDS } from '@folio/shared/observability';
+import { MulterError } from 'multer';
 
 function statusToCode(status: number): string {
   if (status === 400) return 'VALIDATION_ERROR';
   if (status === 401) return 'UNAUTHORIZED';
   if (status === 403) return 'FORBIDDEN';
   if (status === 404) return 'NOT_FOUND';
+  if (status === 413) return 'FILE_TOO_LARGE';
   if (status === 429) return 'TOO_MANY_REQUESTS';
   return 'HTTP_ERROR';
 }
@@ -35,6 +37,17 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
     const requestId = this.cls.get<string>('requestId');
 
+    if (
+      exception instanceof MulterError &&
+      exception.code === 'LIMIT_FILE_SIZE'
+    ) {
+      return res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+        message: 'File is larger than 25 MB',
+        code: 'FILE_TOO_LARGE',
+        ...(requestId ? { requestId } : {}),
+      });
+    }
+
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const excResponse = exception.getResponse();
@@ -53,6 +66,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
       let message = Array.isArray(messageRaw)
         ? messageRaw.join('; ')
         : (messageRaw ?? exception.message);
+      if (status === 413) {
+        message = 'File is larger than 25 MB';
+      }
       if (status === 429) {
         message = 'Too many requests. Please try again in a minute.';
       }

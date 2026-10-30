@@ -7,6 +7,8 @@ import logging
 import requests
 from bs4 import BeautifulSoup
 
+from app.ml.safe_http import guarded_get
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 10
@@ -15,7 +17,8 @@ _MIN_PARAGRAPH_CHARS = 20
 
 def fetch_web_paragraphs(url: str, *, timeout: int = _DEFAULT_TIMEOUT) -> list[str]:
     try:
-        response = requests.get(
+        response = guarded_get(
+            requests.get,
             url,
             timeout=timeout,
             headers={"User-Agent": "FolioJournalBot/1.0 (similarity-check)"},

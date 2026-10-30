@@ -12,6 +12,7 @@ import type { Server, WebSocket } from 'ws';
 import { JwtService } from '@nestjs/jwt';
 import { SubmissionsService } from './submissions.service';
 import type { ConstructorContent } from './constructor-content.types';
+import { WORD_CONSTRUCTOR_ENABLED } from './word-constructor.feature';
 
 type CollabClient = WebSocket & {
   tabId?: string;
@@ -64,6 +65,10 @@ export class ConstructorCollabGateway
   }
 
   async handleConnection(client: CollabClient): Promise<void> {
+    if (!WORD_CONSTRUCTOR_ENABLED) {
+      client.close(4404, 'Not found');
+      return;
+    }
     try {
       const url = new URL(client.url ?? '', 'http://localhost');
       const token =

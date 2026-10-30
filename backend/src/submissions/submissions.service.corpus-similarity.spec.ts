@@ -56,6 +56,7 @@ describe('SubmissionsService.startCorpusSimilarityJob', () => {
     id: 'sub-1',
     slug: 'paper-1',
     authorId: 'author-1',
+    journalId: 'journal-medj',
     status: SubmissionStatus.SUBMITTED,
     title: 'Title',
     abstract: 'A'.repeat(MIN_CORPUS_PLAIN_TEXT_CHARS),
@@ -145,7 +146,9 @@ describe('SubmissionsService.startCorpusSimilarityJob', () => {
         {
           provide: JournalMembershipService,
           useValue: {
-            listJournalIdsForUser: jest.fn().mockResolvedValue([]),
+            listJournalIdsForUser: jest
+              .fn()
+              .mockResolvedValue(['journal-medj']),
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
             disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
             disciplineLabelForJournal: jest.fn().mockResolvedValue(null),

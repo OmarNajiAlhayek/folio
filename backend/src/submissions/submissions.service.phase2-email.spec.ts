@@ -87,6 +87,7 @@ describe('SubmissionsService phase2 email (outbox)', () => {
     title: 'Paper Title',
     status: SubmissionStatus.UNDER_REVIEW,
     authorId: author.id,
+    journalId: 'journal-medj',
   } as Submission;
 
   beforeEach(async () => {
@@ -171,7 +172,9 @@ describe('SubmissionsService phase2 email (outbox)', () => {
         {
           provide: JournalMembershipService,
           useValue: {
-            listJournalIdsForUser: jest.fn().mockResolvedValue([]),
+            listJournalIdsForUser: jest
+              .fn()
+              .mockResolvedValue(['journal-medj']),
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
             disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
             disciplineLabelForJournal: jest.fn().mockResolvedValue(null),

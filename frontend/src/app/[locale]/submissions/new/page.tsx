@@ -194,6 +194,7 @@ export default function NewSubmissionPage() {
 
   // Handle returning from Word Constructor draft
   useEffect(() => {
+    if (!CONSTRUCTOR_ENTRY_POINTS_ENABLED) return;
     if (fromConstructor !== '1') return;
     if (typeof window === 'undefined') return;
     try {
@@ -327,7 +328,9 @@ export default function NewSubmissionPage() {
   }
 
   const showConstructorManuscript =
-    !constructorManuscriptDismissed && constructorManuscriptName != null;
+    CONSTRUCTOR_ENTRY_POINTS_ENABLED &&
+    !constructorManuscriptDismissed &&
+    constructorManuscriptName != null;
   const hasStagedUpload = Boolean(stagedFiles.manuscript);
   const hasStagedConstructor = showConstructorManuscript;
   const stagedSources = {

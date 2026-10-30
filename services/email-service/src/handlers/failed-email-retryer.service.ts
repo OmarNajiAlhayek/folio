@@ -102,8 +102,12 @@ export class FailedEmailRetryerService {
           "retry_count",
           ("context" ->> 'reminderId') AS reminder_id`,
       [MAX_RETRY_COUNT, BATCH_SIZE],
-    )) as FailedRow[];
-    return raw;
+    )) as FailedRow[] | [FailedRow[], number];
+    // TypeORM's Postgres driver returns UPDATE ... RETURNING as [rows, rowCount].
+    if (Array.isArray(raw[0]) && typeof raw[1] === 'number') {
+      return raw[0];
+    }
+    return raw as FailedRow[];
   }
 
   private async retryOne(row: FailedRow): Promise<void> {

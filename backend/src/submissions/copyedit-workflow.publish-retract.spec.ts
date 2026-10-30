@@ -52,6 +52,7 @@ describe('CopyeditWorkflowService publish override and retract', () => {
   let access: {
     getBySlugOrThrow: jest.Mock;
     assertEditorQueueSubmissionVisible: jest.Mock;
+    assertStaffSubmissionScope: jest.Mock;
     hasPerm: jest.Mock;
   };
   let copyeditAssignmentsRepo: { find: jest.Mock };
@@ -96,6 +97,7 @@ describe('CopyeditWorkflowService publish override and retract', () => {
     access = {
       getBySlugOrThrow: jest.fn().mockResolvedValue(submission),
       assertEditorQueueSubmissionVisible: jest.fn(),
+      assertStaffSubmissionScope: jest.fn().mockResolvedValue(undefined),
       hasPerm: jest.fn((user: RequestUser, slug: string) =>
         user.permissionSlugs.includes(slug),
       ),
@@ -179,6 +181,7 @@ describe('CopyeditWorkflowService publish override and retract', () => {
     expect(saved.status).toBe(SubmissionStatus.PUBLISHED);
     expect(setPublishedManuscriptFile).toHaveBeenCalled();
     expect(claimStatusTransition).toHaveBeenCalled();
+    expect(access.assertStaffSubmissionScope).not.toHaveBeenCalled();
   });
 
   it('lets a chief editor publish without being the assigned copyeditor', async () => {
@@ -195,6 +198,10 @@ describe('CopyeditWorkflowService publish override and retract', () => {
       ISSUE_ID,
     );
     expect(saved.status).toBe(SubmissionStatus.PUBLISHED);
+    expect(access.assertStaffSubmissionScope).toHaveBeenCalledWith(
+      submission,
+      editor,
+    );
   });
 
   it('still blocks an unassigned copyeditor', async () => {
@@ -208,12 +215,17 @@ describe('CopyeditWorkflowService publish override and retract', () => {
     await expect(
       service.publishSubmission('paper-one', copyeditor, ISSUE_ID),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(access.assertStaffSubmissionScope).not.toHaveBeenCalled();
   });
 
   it('retracts a published article and demotes public files', async () => {
     submission.status = SubmissionStatus.PUBLISHED;
 
     const saved = await service.retractSubmission('paper-one', editor);
+    expect(access.assertStaffSubmissionScope).toHaveBeenCalledWith(
+      submission,
+      editor,
+    );
     expect(saved.status).toBe(SubmissionStatus.RETRACTED);
     expect(clearPublicSubmissionFiles).toHaveBeenCalled();
     expect(events.enqueueSubmissionRetractedNotification).toHaveBeenCalled();

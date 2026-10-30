@@ -29,6 +29,7 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from app.ml.exact_match.text_extract import TextExtractionError, extract_pdf_bytes
+from app.ml.safe_http import guarded_get
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +86,17 @@ class FullText:
 
 
 def _get(session: Any, url: str, *, timeout: int, stream: bool = False) -> Any | None:
+    """GET one URL, then each redirect, refusing internal addresses on every hop.
+
+    Unpaywall and OpenAlex return the PDF location. A 302 from that host must
+    not land on a loopback, private, or link-local address.
+    """
+
+    def request(target: str, **kwargs: Any) -> Any:
+        return session.get(target, timeout=timeout, stream=stream, **kwargs)
+
     try:
-        return session.get(url, timeout=timeout, stream=stream, allow_redirects=True)
+        return guarded_get(request, url)
     except Exception as exc:
         logger.debug("GET failed for %s: %s", url, exc)
         return None

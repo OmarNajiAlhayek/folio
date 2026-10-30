@@ -95,6 +95,10 @@ const PREVIEW_CONTEXT: Record<
     messageForAuthor:
       'Please address the reviewers’ comments on methodology before resubmitting.',
     hasMessageForAuthor: true,
+    isDeskReject: false,
+    isMajorRevision: false,
+    hasReviewFiles: true,
+    reviewFileCount: 1,
   },
   'submission-under-review': {
     authorDisplayName: 'Author Example',

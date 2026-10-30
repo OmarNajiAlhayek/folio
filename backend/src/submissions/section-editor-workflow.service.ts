@@ -74,6 +74,7 @@ export class SectionEditorWorkflowService {
 
     const submission = await this.access.getBySlugOrThrow(submissionSlug);
     this.access.assertEditorQueueSubmissionVisible(submission);
+    await this.access.assertStaffSubmissionScope(submission, caller);
 
     const hasSectionEditorRole = await this.rbacService.userHasPermission(
       sectionEditorId,
@@ -129,6 +130,7 @@ export class SectionEditorWorkflowService {
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
     );
     const submission = await this.access.getBySlugOrThrow(submissionSlug);
+    await this.access.assertStaffSubmissionScope(submission, caller);
     await this.seAssignmentsRepo.delete({ submissionId: submission.id });
   }
 

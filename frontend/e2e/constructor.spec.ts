@@ -1,6 +1,7 @@
-import { test, expect } from './fixtures/auth';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { join } from 'node:path';
+import { test, expect } from './fixtures/auth';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '../src/lib/constructor-entry-points';
 import {
   createSubmission,
   apiV1Absolute,
@@ -10,6 +11,11 @@ import {
 import { hideNextJsDevPortals } from './helpers/hide-next-dev-portals';
 import { waitForAutosave } from './helpers/waits';
 import { mockedValidationErrors } from './fixtures/validation-errors';
+
+test.skip(
+  !CONSTRUCTOR_ENTRY_POINTS_ENABLED,
+  'Word Constructor is hidden. Flip CONSTRUCTOR_ENTRY_POINTS_ENABLED to run these tests.',
+);
 
 test.setTimeout(60_000);
 

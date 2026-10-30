@@ -58,6 +58,7 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
     id: 'sub-submitted',
     slug: 'paper-submitted',
     authorId: 'author-1',
+    journalId: 'journal-medj',
     status: SubmissionStatus.SUBMITTED,
   } as Submission;
 
@@ -129,7 +130,9 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
         {
           provide: JournalMembershipService,
           useValue: {
-            listJournalIdsForUser: jest.fn().mockResolvedValue([]),
+            listJournalIdsForUser: jest
+              .fn()
+              .mockResolvedValue(['journal-medj']),
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
             disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
             disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
@@ -196,7 +199,7 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
   });
 
   describe('assertCanRead', () => {
-    it('allows editor to read submitted submission', async () => {
+    it('allows an editor to read a submitted submission in their journal', async () => {
       await expect(
         service.assertCanRead(submittedSubmission, editorUser),
       ).resolves.toBeUndefined();

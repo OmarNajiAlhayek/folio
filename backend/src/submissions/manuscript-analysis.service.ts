@@ -77,7 +77,7 @@ export class ManuscriptAnalysisService {
     ];
 
     const bodyText = buildBodyPlainText(content);
-    const grammarNotes = await this.languageTool.check(bodyText);
+    const grammar = await this.languageTool.inspect(bodyText);
 
     const referenceList = extractReferenceList(content);
     const inlineCitations = extractInlineCitations(content);
@@ -95,7 +95,13 @@ export class ManuscriptAnalysisService {
       aiUnavailable = true;
     }
 
-    return { formatIssues, grammarNotes, referenceIssues, aiUnavailable };
+    return {
+      formatIssues,
+      grammarNotes: grammar.notes,
+      grammarUnavailable: grammar.unavailable,
+      referenceIssues,
+      aiUnavailable,
+    };
   }
 
   /** `null` when the journal is unknown — style-specific checks are skipped. */

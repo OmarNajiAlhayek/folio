@@ -11,7 +11,7 @@ import { damascusUniversityJournalV1 } from '../manuscript-styles/profiles/damas
 describe('ManuscriptAnalysisService', () => {
   let service: ManuscriptAnalysisService;
   let submissionsRepo: { findOne: jest.Mock };
-  let languageTool: { check: jest.Mock };
+  let languageTool: { inspect: jest.Mock };
   let aiClient: { checkReferences: jest.Mock };
   let journals: { findJournal: jest.Mock };
 
@@ -35,11 +35,10 @@ describe('ManuscriptAnalysisService', () => {
       }),
     };
     languageTool = {
-      check: jest
-        .fn()
-        .mockResolvedValue([
-          { excerpt: 'teh', suggestion: 'the', rule: 'SPELL' },
-        ]),
+      inspect: jest.fn().mockResolvedValue({
+        notes: [{ excerpt: 'teh', suggestion: 'the', rule: 'SPELL' }],
+        unavailable: false,
+      }),
     };
     aiClient = {
       checkReferences: jest.fn().mockResolvedValue({
@@ -72,7 +71,8 @@ describe('ManuscriptAnalysisService', () => {
 
   it('combines structure, grammar, and reference checks', async () => {
     const result = await service.analyzeSubmission('sub-1');
-    expect(languageTool.check).toHaveBeenCalled();
+    expect(languageTool.inspect).toHaveBeenCalled();
+    expect(result.grammarUnavailable).toBe(false);
     expect(aiClient.checkReferences).toHaveBeenCalled();
     expect(result.grammarNotes).toHaveLength(1);
     expect(result.referenceIssues).toContain('Missing reference for [1]');

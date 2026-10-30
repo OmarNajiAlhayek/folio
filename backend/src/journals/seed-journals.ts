@@ -52,6 +52,21 @@ export function journalSlugForSampleLabel(
   return journalEntryForDisciplineLabel(label)?.slug ?? JOURNAL_FALLBACK_SLUG;
 }
 
+/** Kept stable so existing Playwright logins still reach the econj queue. */
+export const SEEDED_PRESS_EDITOR_EMAIL = 'editor@folio.dev';
+export const SEEDED_EDITOR_PASSWORD = 'Editor123!';
+export const SEEDED_SECTION_EDITOR_PASSWORD = 'Section123!';
+
+export function seededEditorEmail(slug: string): string {
+  return slug === 'econj'
+    ? SEEDED_PRESS_EDITOR_EMAIL
+    : `editor.${slug}@folio.dev`;
+}
+
+export function seededSectionEditorEmail(slug: string): string {
+  return `section.${slug}@folio.dev`;
+}
+
 export async function loadCatalogJournals(
   dataSource: DataSource,
 ): Promise<Map<string, Journal>> {
@@ -102,6 +117,35 @@ export async function ensureSeedIssues(
     }
   }
   return publishedByJournal;
+}
+
+/**
+ * One user holds `roleSlug` on exactly one journal. Extra rows for that pair
+ * are removed so a re-seed does not leave the old press-wide editor in place.
+ */
+export async function ensureExclusiveJournalMembership(
+  dataSource: DataSource,
+  journal: Journal,
+  userId: string,
+  roleSlug: string,
+): Promise<boolean> {
+  const repo = dataSource.getRepository(JournalMembership);
+  const rows = await repo.find({ where: { userId, roleSlug } });
+  const extras = rows.filter((row) => row.journalId !== journal.id);
+  if (extras.length > 0) {
+    await repo.remove(extras);
+  }
+  if (rows.some((row) => row.journalId === journal.id)) {
+    return false;
+  }
+  await repo.save(
+    repo.create({
+      journalId: journal.id,
+      userId,
+      roleSlug,
+    }),
+  );
+  return true;
 }
 
 export async function ensureStaffMemberships(

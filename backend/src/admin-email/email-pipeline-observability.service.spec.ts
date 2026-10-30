@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { EmailServiceClient } from '../email-client/email-client.service';
 import { EmailPipelineObservabilityService } from './email-pipeline-observability.service';
 import { RabbitMqQueueMetricsService } from '../messaging/rabbitmq-queue-metrics.service';
@@ -101,6 +102,32 @@ describe('EmailPipelineObservabilityService', () => {
     expect(res.reminders.counts.pending).toBe(4);
     expect(res.reminders.stuckPendingPastDue).toBe(0);
     expect(res.rabbitMq.available).toBe(true);
+    expect(res.emailWorker.available).toBe(true);
     expect(emailClient.getPipelineSlice).toHaveBeenCalled();
+  });
+
+  it('keeps broker and outbox stats when the mail worker is down', async () => {
+    emailClient.getPipelineSlice.mockRejectedValue(
+      new ServiceUnavailableException({
+        message: 'Email service is unavailable',
+        code: 'EMAIL_SERVICE_UNAVAILABLE',
+      }),
+    );
+    const outboxRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
+      }),
+    };
+    const svc = makeService(outboxRepo);
+    const res = await svc.getPipelineStatus();
+    expect(res.emailWorker.available).toBe(false);
+    expect(res.emailLog.counts).toEqual({ pending: 0, sent: 0, failed: 0 });
+    expect(res.rabbitMq.available).toBe(true);
+    expect(res.outbox.pending).toBe(0);
   });
 });

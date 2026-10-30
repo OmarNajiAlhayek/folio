@@ -159,6 +159,10 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
       PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
       PERMISSION_SLUGS.AUDIT_LOG_VIEW,
+      // Every journal: titles, ISSNs, aims and scope, editorial board.
+      // An editor-in-chief keeps metadata only, and only on their journals.
+      PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
+      PERMISSION_SLUGS.JOURNAL_EDIT_TITLES,
     ];
     const reviewerPerms = [
       PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,

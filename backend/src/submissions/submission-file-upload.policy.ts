@@ -74,6 +74,12 @@ function readAscii(buf: Buffer, len: number): string {
   return buf.subarray(0, Math.min(len, buf.length)).toString('ascii');
 }
 
+/** A PDF viewers can open ends with a trailer. A `%PDF-` header alone does not. */
+export function bufferHasPdfTrailer(buf: Buffer): boolean {
+  const start = Math.max(0, buf.length - 8192);
+  return buf.subarray(start).toString('latin1').includes('%%EOF');
+}
+
 /**
  * Lightweight magic-byte sniff (first ~4KB). Extension must already match policy.
  */

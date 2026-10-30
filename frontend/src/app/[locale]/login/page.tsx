@@ -17,6 +17,7 @@ import { FormField } from '@/components/ui/form-field';
 import { Input, inputFieldClass } from '@/components/ui/input';
 import { loginSchema, translatedZodResolver } from '@/lib/validation';
 import { OrcidButton, OrcidDivider } from '@/components/auth/orcid-button';
+import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 import { parseOrcidAuthError } from '@/lib/orcid-auth';
 import { toast } from '@/lib/toast';
 
@@ -106,9 +107,17 @@ function LoginForm() {
                 </span>
                 <div>
                   <strong className="text-ink">
-                    {tMarketing('pillar1Title')}
+                    {tMarketing(
+                      CONSTRUCTOR_ENTRY_POINTS_ENABLED
+                        ? 'pillar1Title'
+                        : 'pillar1TitleUpload',
+                    )}
                   </strong>{' '}
-                  {tMarketing('pillar1Body')}
+                  {tMarketing(
+                    CONSTRUCTOR_ENTRY_POINTS_ENABLED
+                      ? 'pillar1Body'
+                      : 'pillar1BodyUpload',
+                  )}
                 </div>
               </li>
               <li className="flex gap-2.5 items-start">

@@ -105,6 +105,21 @@ describe('FailedEmailRetryerService', () => {
     );
   });
 
+  it('unwraps TypeORM UPDATE RETURNING tuples before resending', async () => {
+    const row = makeClaimedRow();
+    mockQuery.mockResolvedValueOnce([[row], 1]);
+
+    await service.tick();
+
+    expect(mockProvider.send).toHaveBeenCalledTimes(1);
+    expect(mockProvider.send).toHaveBeenCalledWith({
+      to: 'r@test.dev',
+      subject: 'Subject',
+      html: '<p>Hi</p>',
+      text: 'Hi',
+    });
+  });
+
   it('marks reminder sent when context carries reminderId', async () => {
     const reminderUpdate = jest.fn().mockResolvedValue({ affected: 1 });
     txManager.getRepository.mockReturnValue({ update: reminderUpdate });

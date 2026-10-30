@@ -31,6 +31,13 @@ narrows it.
   worked because `journals.discipline_label` is unique and 1:1 with the
   classifier labels (`user_section_editor_disciplines` was dropped in
   `1783200000000-JournalScopedSectionEditors`).
+- **Slug access uses the same scope as the queue.**
+  `SubmissionAccessService.assertStaffSubmissionScope` allows `journal_manager`
+  on every journal, an `editor` only on journals where they hold an `editor`
+  membership, and a `section_editor` only on submissions they are assigned to.
+  `assertCanRead` applies it to `submission.view_editor_queue` after the draft
+  check. Staff mutations that load a submission by slug call it too. Author,
+  reviewer, and assigned copyeditor rules are unchanged.
 - **Editors-in-chief are placed the same way**, through
   `GET/PUT /users/:id/editor-journals` (role `editor`, "Editor-in-chief of" on
   the users screen). Before this endpoint only the seed could create editor
@@ -113,12 +120,12 @@ Methods below declare why caller checks are kept or omitted.
 **Read submission (`GET /submissions/:slug`)**
 
 1. Guard: caller has one of `SUBMISSION_READ_PERMISSIONS`.
-2. Service: `assertCanRead` — author owns draft, editor skips drafts, reviewer must be assigned, etc.
+2. Service: `assertCanRead` — drafts stay hidden from the editor queue. A caller with `submission.view_editor_queue` must also be in journal scope. Author, reviewer, copyeditor, and assigned section-editor rules still apply.
 
 **Assign reviewer (`POST …/assign-reviewer`)**
 
 1. Guard: `SUBMISSION_ASSIGN_REVIEWER`.
-2. Service: same slug via `assertCallerPermission` (seed calls this directly).
+2. Service: same slug via `assertCallerPermission` (seed calls this directly), then `assertStaffSubmissionScope`.
 3. Service: `userHasPermission(reviewerId, REVIEW_SUBMIT)` — target must be a reviewer.
 4. Service, inside the invitation transaction: re-read the reviewer `FOR UPDATE`, then refuse `REVIEWER_UNAVAILABLE` or `REVIEWER_AT_CAPACITY` (invited + accepted ≥ `reviewer_max_active_reviews`). The row lock is what stops two editors inviting at once from both seeing "2 of 3". Rules live in `reviewer-availability.ts`, shared with the reviewer directory.
 

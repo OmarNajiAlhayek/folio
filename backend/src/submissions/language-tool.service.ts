@@ -9,6 +9,12 @@ export type GrammarNote = {
   length: number;
 };
 
+export type GrammarCheckResult = {
+  notes: GrammarNote[];
+  /** True when the checker is off or the LanguageTool process cannot be reached. */
+  unavailable: boolean;
+};
+
 type LtMatch = {
   message: string;
   shortMessage?: string;
@@ -46,13 +52,15 @@ export class LanguageToolService {
 
   /**
    * Checks the provided text for grammar/spelling issues.
-   * Returns an empty array when LanguageTool is disabled or unavailable.
+   * Notes are empty when LanguageTool is disabled, the text is empty, or the
+   * server cannot be reached. `unavailable` distinguishes a real pass from a
+   * checker that did not run.
    * Language is auto-detected (`language=auto`).
    */
-  async check(text: string): Promise<GrammarNote[]> {
-    if (!this.isEnabled()) return [];
+  async inspect(text: string): Promise<GrammarCheckResult> {
+    if (!this.isEnabled()) return { notes: [], unavailable: true };
     const trimmed = text.trim();
-    if (!trimmed) return [];
+    if (!trimmed) return { notes: [], unavailable: false };
 
     const url = `${this.baseUrl()}/check`;
     const body = new URLSearchParams({
@@ -74,11 +82,11 @@ export class LanguageToolService {
           'LanguageTool returned HTTP %d for grammar check',
           res.status,
         );
-        return [];
+        return { notes: [], unavailable: true };
       }
 
       const data = (await res.json()) as LtResponse;
-      return (data.matches ?? [])
+      const notes = (data.matches ?? [])
         .filter((m) => m.replacements.length > 0 || m.shortMessage)
         .slice(0, 50)
         .map((m) => ({
@@ -95,12 +103,18 @@ export class LanguageToolService {
           offset: m.offset,
           length: m.length,
         }));
+      return { notes, unavailable: false };
     } catch (err) {
       this.logger.warn(
         'LanguageTool unavailable: %s',
         err instanceof Error ? err.message : String(err),
       );
-      return [];
+      return { notes: [], unavailable: true };
     }
+  }
+
+  async check(text: string): Promise<GrammarNote[]> {
+    const result = await this.inspect(text);
+    return result.notes;
   }
 }
