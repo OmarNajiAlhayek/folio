@@ -64,8 +64,9 @@ COPY --from=workspace /srv/folio/packages ./packages
 COPY backend/package.json backend/package-lock.json backend/
 RUN --mount=type=cache,target=/root/.npm \
     cd backend && npm ci --omit=dev
-# Linked packages ship only their compiled dist at runtime; npm hoisted their
-# runtime dependencies into backend/node_modules already.
+# Linked packages ship only their compiled dist at runtime. npm hoists their
+# runtime dependencies into backend/node_modules. Node never walks from
+# /srv/folio/packages into that directory, so the runtime stage sets NODE_PATH.
 RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
 
 # ---------- runtime ------------------------------------------------------------
@@ -76,7 +77,8 @@ ENV NODE_ENV=production \
     PORT=5243 \
     UPLOAD_DIR=/srv/folio/uploads \
     LOG_FORMAT=json \
-    NPM_CONFIG_UPDATE_NOTIFIER=false
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NODE_PATH=/srv/folio/backend/node_modules
 
 # No browser in the default image, so equations render through MathJax only.
 # Set this to 0 at runtime when the image was built with WITH_CHROMIUM=true.

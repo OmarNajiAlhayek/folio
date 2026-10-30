@@ -247,6 +247,9 @@ services:
         WITH_CHROMIUM: ${BACKEND_WITH_CHROMIUM:-false}
     environment:
       NODE_ENV: production
+      # @folio/shared and @folio/nest-observability live under /srv/folio/packages.
+      # Their hoisted dependencies are in this service's node_modules.
+      NODE_PATH: /srv/folio/backend/node_modules
       PORT: "5243"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: json

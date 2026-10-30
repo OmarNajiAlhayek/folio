@@ -1,0 +1,50 @@
+{
+  "failed": [
+    {
+      "name": "unverified user can sign in",
+      "ok": false,
+      "detail": "HTTP 429"
+    },
+    {
+      "name": "manager grants reviewer and copyeditor",
+      "ok": false,
+      "detail": "HTTP 200 [null,null,null]"
+    },
+    {
+      "name": "invitee sees the role invitation",
+      "ok": false,
+      "detail": "HTTP 401 {\"message\":\"Session ended\",\"code\":\"UNAUTHORIZED\"}"
+    },
+    {
+      "name": "submit rejects a keyword list that is not five words",
+      "ok": false,
+      "detail": "HTTP 400 SUBMISSION_INCOMPLETE_FILES"
+    },
+    {
+      "name": "uploaded file downloads",
+      "ok": false,
+      "detail": "{\"message\":\"File type not allowed for figure\",\"code\":\"VALIDATION_ERROR\"}"
+    },
+    {
+      "name": "constructor exports a docx",
+      "ok": false,
+      "detail": "HTTP 201 bytes=54744 "
+    },
+    {
+      "name": "discipline suggest degrades with AI off",
+      "ok": false,
+      "detail": "HTTP 403 FORBIDDEN"
+    },
+    {
+      "name": "editor sets double-blind",
+      "ok": false,
+      "detail": "HTTP 400 VALIDATION_ERROR"
+    },
+    {
+      "name": "reviewer attaches a review file",
+      "ok": false,
+      "detail": "HTTP 400 VALIDATION_ERROR"
+    }
+  ],
+  "total": 121
+}
