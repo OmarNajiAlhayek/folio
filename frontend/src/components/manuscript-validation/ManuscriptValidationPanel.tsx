@@ -82,9 +82,16 @@ function BlockingSection({
   );
 }
 
-function GrammarSection({ notes }: { notes: GrammarNote[] }) {
+function GrammarSection({
+  notes,
+  unavailable,
+}: {
+  notes: GrammarNote[];
+  unavailable?: boolean;
+}) {
   const t = useTranslations('ManuscriptValidation');
   const [open, setOpen] = useState(true);
+  const down = Boolean(unavailable) && notes.length === 0;
 
   return (
     <div className="rounded-lg border border-ink/10 bg-paper/60">
@@ -102,6 +109,10 @@ function GrammarSection({ notes }: { notes: GrammarNote[] }) {
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
               {t('warningsLabel', { count: String(notes.length) })}
             </span>
+          ) : down ? (
+            <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-medium text-ink/70">
+              {t('badgeUnavailable')}
+            </span>
           ) : (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
               {t('passLabel')}
@@ -116,7 +127,9 @@ function GrammarSection({ notes }: { notes: GrammarNote[] }) {
         slide={false}
         contentClassName="border-t border-ink/10 px-4 py-3 space-y-3"
       >
-        {notes.length === 0 ? (
+        {down ? (
+          <p className="text-xs text-ink/55">{t('grammarUnavailableNote')}</p>
+        ) : notes.length === 0 ? (
           <p className="text-xs text-ink/55">{t('passLabel')}</p>
         ) : (
           <ul className="space-y-2">
@@ -203,7 +216,8 @@ export function ManuscriptValidationPanel({
     Boolean(analysis) &&
     !isStale &&
     !hasBlocking &&
-    analysis!.grammarNotes.length === 0;
+    analysis!.grammarNotes.length === 0 &&
+    analysis!.grammarUnavailable !== true;
 
   return (
     <section
@@ -259,7 +273,10 @@ export function ManuscriptValidationPanel({
             }
             unavailableNote={t('aiUnavailableNote')}
           />
-          <GrammarSection notes={isStale ? [] : analysis.grammarNotes} />
+          <GrammarSection
+            notes={isStale ? [] : analysis.grammarNotes}
+            unavailable={!isStale && analysis.grammarUnavailable === true}
+          />
         </div>
       ) : (
         <p className="mt-4 text-xs text-ink/55">{t('notRunHint')}</p>

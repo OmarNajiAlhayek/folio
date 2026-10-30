@@ -80,7 +80,10 @@ async function run() {
 
   const accounts = await seedCoreAccounts(ctx);
   const press = await seedPressFixtures(dataSource, [
-    { userId: accounts.reviewer.id, roleSlug: ROLE_SLUGS.REVIEWER },
+    ...accounts.reviewers.map((user) => ({
+      userId: user.id,
+      roleSlug: ROLE_SLUGS.REVIEWER,
+    })),
     { userId: accounts.copyeditor.id, roleSlug: ROLE_SLUGS.COPYEDITOR },
   ]);
   const journalStaff = await seedJournalEditors({ ctx, press });
@@ -125,7 +128,7 @@ async function run() {
 
   printSeedSummary({
     author: accounts.author,
-    reviewer: accounts.reviewer,
+    reviewers: accounts.reviewers,
     copyeditor: accounts.copyeditor,
     press,
     placement,

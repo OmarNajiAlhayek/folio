@@ -118,7 +118,9 @@ After `npm run seed` in `backend/`:
 | `editor@folio.dev` | `Editor123!` | Editor-in-chief of `econj` only |
 | `editor.<slug>@folio.dev` | `Editor123!` | Editor-in-chief of that journal (`artsj`, `hisj`, `basj`, `eduj`, `agrj`, `medj`, `lawj`, `engj`) |
 | `section.<slug>@folio.dev` | `Section123!` | Section editor of that journal. `section.eduj@folio.dev` is assigned to the education revisions demo |
-| `reviewer@folio.dev` | `Reviewer123!` | Reviewer |
+| `reviewer@folio.dev` | `Reviewer123!` | Reviewer (holds the demo assignments) |
+| `reviewer2@folio.dev` | `Reviewer123!` | Reviewer |
+| `reviewer3@folio.dev` | `Reviewer123!` | Reviewer |
 | `copyeditor@folio.local` | `Copyeditor123!` | Copyeditor |
 
 The `editor` role is university-wide. Which journal that person may edit is a

@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 import { Repository } from 'typeorm';
+import mammoth from 'mammoth';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionFile } from '../entities/submission-file.entity';
+import { resolveUploadRoot } from '../common/upload-root';
 import { AiClientService } from '../ai/ai-client.service';
 import { JournalDirectoryService } from '../journals/journal-directory.service';
 import { ManuscriptStyleRegistryService } from '../manuscript-styles/manuscript-style-registry.service';
@@ -14,6 +19,7 @@ import type { ManuscriptAnalysisResult } from './pre-submit-analysis.types';
 import type { ConstructorContent } from './constructor-content.types';
 import {
   buildBodyPlainText,
+  MAX_GRAMMAR_TEXT_CHARS,
   checkDamascusStructure,
   damascusCitationStyleIssues,
   damascusDisciplineIssues,
@@ -27,6 +33,8 @@ export type ManuscriptAnalysisContext = {
   disciplines: string[];
   /** The manuscript's journal decides the citation style (APA / Vancouver). */
   journalId: string | null;
+  /** When set, grammar can fall back to the uploaded manuscript file. */
+  submissionId?: string;
 };
 
 @Injectable()
@@ -34,6 +42,8 @@ export class ManuscriptAnalysisService {
   constructor(
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
+    @InjectRepository(SubmissionFile)
+    private readonly filesRepo: Repository<SubmissionFile>,
     private readonly languageTool: LanguageToolService,
     private readonly aiClient: AiClientService,
     private readonly journals: JournalDirectoryService,
@@ -51,6 +61,7 @@ export class ManuscriptAnalysisService {
       return {
         formatIssues: ['Submission not found'],
         grammarNotes: [],
+        grammarUnavailable: true,
         referenceIssues: [],
         aiUnavailable: false,
       };
@@ -58,6 +69,7 @@ export class ManuscriptAnalysisService {
     return this.analyzeContent(submission.constructorContent, {
       disciplines: submission.disciplines ?? [],
       journalId: submission.journalId ?? null,
+      submissionId,
     });
   }
 
@@ -76,7 +88,9 @@ export class ManuscriptAnalysisService {
       ...damascusCitationStyleIssues(citationStyle, content),
     ];
 
-    const bodyText = buildBodyPlainText(content);
+    const bodyText =
+      buildBodyPlainText(content) ||
+      (await this.uploadedManuscriptText(context.submissionId));
     const grammar = await this.languageTool.inspect(bodyText);
 
     const referenceList = extractReferenceList(content);
@@ -102,6 +116,29 @@ export class ManuscriptAnalysisService {
       referenceIssues,
       aiUnavailable,
     };
+  }
+
+  /**
+   * Word Constructor is off, so most manuscripts exist only as an uploaded
+   * file. Grammar still has to read that file.
+   */
+  private async uploadedManuscriptText(
+    submissionId: string | undefined,
+  ): Promise<string> {
+    if (!submissionId) return '';
+    const file = await this.filesRepo.findOne({
+      where: { submissionId, kind: 'manuscript' },
+      order: { createdAt: 'DESC' },
+    });
+    const name = file?.originalName?.toLowerCase() ?? '';
+    if (!file?.storageKey || !name.endsWith('.docx')) return '';
+    try {
+      const buffer = await readFile(join(resolveUploadRoot(), file.storageKey));
+      const { value } = await mammoth.extractRawText({ buffer });
+      return (value ?? '').trim().slice(0, MAX_GRAMMAR_TEXT_CHARS);
+    } catch {
+      return '';
+    }
   }
 
   /** `null` when the journal is unknown — style-specific checks are skipped. */

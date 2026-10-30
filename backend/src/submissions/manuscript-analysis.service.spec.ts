@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
 import { Submission } from '../entities/submission.entity';
+import { SubmissionFile } from '../entities/submission-file.entity';
 import { LanguageToolService } from './language-tool.service';
 import { AiClientService } from '../ai/ai-client.service';
 import { JournalDirectoryService } from '../journals/journal-directory.service';
@@ -53,6 +54,10 @@ describe('ManuscriptAnalysisService', () => {
       providers: [
         ManuscriptAnalysisService,
         { provide: getRepositoryToken(Submission), useValue: submissionsRepo },
+        {
+          provide: getRepositoryToken(SubmissionFile),
+          useValue: { findOne: jest.fn().mockResolvedValue(null) },
+        },
         { provide: LanguageToolService, useValue: languageTool },
         { provide: AiClientService, useValue: aiClient },
         { provide: JournalDirectoryService, useValue: journals },

@@ -30,7 +30,9 @@ export type SeedEditorRequests = {
 
 export type SeededCoreAccounts = {
   author: User;
+  /** First reviewer. Demo assignments stay on this account. */
   reviewer: User;
+  reviewers: User[];
   copyeditor: User;
   authorReq: RequestUser;
   copyeditorReq: RequestUser;
@@ -227,6 +229,34 @@ export async function seedCoreAccounts(
       willingToReview: true,
     },
   });
+  // Serials 100+ stay clear of the per-journal editor ORCIDs, which start at 6.
+  const reviewer2 = await ensureUser(usersService, rbacService, {
+    email: 'reviewer2@folio.dev',
+    password: 'Reviewer123!',
+    displayName: 'S. Reviewer',
+    roleSlugs: [ROLE_SLUGS.REVIEWER],
+    profile: {
+      affiliation: 'Faculty of Education, Damascus University',
+      orcid: devOrcid(100),
+      reviewKeywords:
+        'formative assessment, feedback, pedagogy, learning outcomes, higher education',
+      willingToReview: true,
+    },
+  });
+  const reviewer3 = await ensureUser(usersService, rbacService, {
+    email: 'reviewer3@folio.dev',
+    password: 'Reviewer123!',
+    displayName: 'L. Reviewer',
+    roleSlugs: [ROLE_SLUGS.REVIEWER],
+    profile: {
+      affiliation: 'Faculty of Law, Damascus University',
+      orcid: devOrcid(101),
+      reviewKeywords:
+        'privacy law, data protection, legislation, compliance, research ethics',
+      willingToReview: true,
+    },
+  });
+  const reviewers = [reviewer, reviewer2, reviewer3];
   const copyeditor = await ensureUser(usersService, rbacService, {
     email: 'copyeditor@folio.local',
     password: 'Copyeditor123!',
@@ -245,5 +275,12 @@ export async function seedCoreAccounts(
     copyeditor.id,
   );
 
-  return { author, reviewer, copyeditor, authorReq, copyeditorReq };
+  return {
+    author,
+    reviewer,
+    reviewers,
+    copyeditor,
+    authorReq,
+    copyeditorReq,
+  };
 }

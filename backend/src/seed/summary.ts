@@ -23,13 +23,18 @@ import {
 
 export function printSeedSummary(options: {
   author: User;
-  reviewer: User;
+  reviewers: User[];
   copyeditor: User;
   press: SeededPress & { membershipsCreated: number };
   placement: { placed: number; publishedPlaced: number };
   aiEnabled: boolean;
 }): void {
-  const { author, reviewer, copyeditor, press, placement, aiEnabled } = options;
+  const { author, reviewers, copyeditor, press, placement, aiEnabled } =
+    options;
+  const reviewer = reviewers[0];
+  if (!reviewer) {
+    throw new Error('Seed: no reviewers');
+  }
   const tDraft = SAMPLE_DRAFT_TITLE;
   const tQueue = SAMPLE_QUEUE_TITLE;
   const tInvitePending = SAMPLE_INVITE_PENDING_TITLE;
@@ -47,6 +52,8 @@ export function printSeedSummary(options: {
     'manager@folio.local         / Manager123!     roles: journal_manager (every journal; edits titles)',
   );
   console.log('reviewer@folio.dev          / Reviewer123!    roles: reviewer');
+  console.log('reviewer2@folio.dev         / Reviewer123!    roles: reviewer');
+  console.log('reviewer3@folio.dev         / Reviewer123!    roles: reviewer');
   console.log(
     'copyeditor@folio.local      / Copyeditor123!  roles: copyeditor',
   );
@@ -77,7 +84,7 @@ export function printSeedSummary(options: {
     `${press.journalsBySlug.size} journals × 3 issues (published 2025/2, published 2026/1, open 2026/2)`,
   );
   console.log(
-    `Staff memberships: reviewer and copyeditor on every journal (${press.membershipsCreated} new). Each journal has its own editor-in-chief and section editor. journal_manager stays global.`,
+    `Staff memberships: ${reviewers.length} reviewers and the copyeditor on every journal (${press.membershipsCreated} new). Each journal has its own editor-in-chief and section editor. journal_manager stays global.`,
   );
   console.log(
     `Placed ${placement.placed} demo submission(s) onto journals (${placement.publishedPlaced} into العدد 1، 2026).`,

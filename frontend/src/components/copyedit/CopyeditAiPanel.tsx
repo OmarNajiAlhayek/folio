@@ -18,6 +18,7 @@ type GrammarNote = {
 type AnalysisResult = {
   formatIssues: string[];
   grammarNotes: GrammarNote[];
+  grammarUnavailable?: boolean;
   referenceIssues: string[];
   aiUnavailable: boolean;
 };
@@ -92,9 +93,16 @@ function CheckSection({
   );
 }
 
-function GrammarSection({ notes }: { notes: GrammarNote[] }) {
+function GrammarSection({
+  notes,
+  unavailable,
+}: {
+  notes: GrammarNote[];
+  unavailable?: boolean;
+}) {
   const t = useTranslations('CopyeditAi');
   const [open, setOpen] = useState(true);
+  const down = Boolean(unavailable) && notes.length === 0;
 
   return (
     <div className="rounded-lg border border-ink/10 bg-paper/60">
@@ -112,6 +120,10 @@ function GrammarSection({ notes }: { notes: GrammarNote[] }) {
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
               {t('issuesLabel', { count: String(notes.length) })}
             </span>
+          ) : down ? (
+            <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-medium text-ink/70">
+              {t('grammarUnavailableBadge')}
+            </span>
           ) : (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
               {t('passLabel')}
@@ -126,7 +138,9 @@ function GrammarSection({ notes }: { notes: GrammarNote[] }) {
         slide={false}
         contentClassName="border-t border-ink/10 px-4 py-3"
       >
-        {notes.length === 0 ? (
+        {down ? (
+          <p className="text-xs text-ink/55">{t('grammarUnavailableNote')}</p>
+        ) : notes.length === 0 ? (
           <p className="text-xs text-ink/55">{t('passLabel')}</p>
         ) : (
           <ul className="space-y-2">
@@ -198,7 +212,10 @@ export function CopyeditAiPanel({
       {result && (
         <div className="mt-5 space-y-3">
           <CheckSection title={t('formatTitle')} issues={result.formatIssues} />
-          <GrammarSection notes={result.grammarNotes} />
+          <GrammarSection
+            notes={result.grammarNotes}
+            unavailable={result.grammarUnavailable}
+          />
           <CheckSection
             title={t('referencesTitle')}
             issues={result.referenceIssues}
