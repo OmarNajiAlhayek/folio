@@ -66,15 +66,15 @@ COPY backend/package.json backend/package-lock.json backend/
 # packages' prepare scripts (`tsc`), and typescript lives in those devDependencies.
 RUN --mount=type=cache,target=/root/.npm \
     cd backend && npm ci --omit=dev
-# The backend lockfile does not hoist @folio/shared or @folio/nest-observability
-# dependencies, and Node resolves those requires from /srv/folio/packages.
-# Swap the workspace install (devDependencies included) for production deps.
-# --ignore-scripts: dist is already built, and tsc is not a production dep.
+# The backend lockfile does not hoist these dependencies, and Node resolves
+# them from /srv/folio/packages. Do not `npm ci` the linked packages here:
+# installing @folio/nest-observability runs @folio/shared's prepare script
+# (`tsc`) even with --ignore-scripts. Prune the workspace install instead.
 # NODE_PATH still covers peer deps (@nestjs/*, nestjs-cls, nestjs-pino).
-RUN --mount=type=cache,target=/root/.npm \
-    rm -rf packages/shared/node_modules packages/nest-observability/node_modules \
- && cd packages/shared && npm ci --omit=dev --ignore-scripts \
- && cd ../nest-observability && npm ci --omit=dev --ignore-scripts
+RUN npm pkg delete scripts.prepare --prefix packages/shared \
+ && npm pkg delete scripts.prepare --prefix packages/nest-observability \
+ && cd packages/shared && npm prune --omit=dev --ignore-scripts \
+ && cd ../nest-observability && npm prune --omit=dev --ignore-scripts
 
 # ---------- runtime ------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime

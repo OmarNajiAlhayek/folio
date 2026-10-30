@@ -56,12 +56,13 @@ COPY services/email-service/package.json services/email-service/package-lock.jso
 # prepare scripts can run tsc.
 RUN --mount=type=cache,target=/root/.npm \
     cd services/email-service && npm ci --omit=dev
-# Production deps stay beside each package. --ignore-scripts: dist is already built.
+# Do not `npm ci` the linked packages here: that runs @folio/shared's prepare
+# script (`tsc`) even with --ignore-scripts. Prune the workspace install instead.
 # NODE_PATH covers peer deps (@nestjs/*, nestjs-cls).
-RUN --mount=type=cache,target=/root/.npm \
-    rm -rf packages/shared/node_modules packages/nest-observability/node_modules \
- && cd packages/shared && npm ci --omit=dev --ignore-scripts \
- && cd ../nest-observability && npm ci --omit=dev --ignore-scripts
+RUN npm pkg delete scripts.prepare --prefix packages/shared \
+ && npm pkg delete scripts.prepare --prefix packages/nest-observability \
+ && cd packages/shared && npm prune --omit=dev --ignore-scripts \
+ && cd ../nest-observability && npm prune --omit=dev --ignore-scripts
 
 # ---------- runtime -------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
