@@ -61,18 +61,19 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=workspace /srv/folio/packages ./packages
-# The workspace install includes devDependencies. The backend lockfile does not
-# hoist @folio/shared or @folio/nest-observability dependencies, and Node
-# resolves those requires from the real path under /srv/folio/packages — not
-# from backend/node_modules. Reinstall production deps beside each package
-# after the backend install so they are actually present at runtime.
-# NODE_PATH still covers peer deps (@nestjs/*, nestjs-cls, nestjs-pino).
-RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
 COPY backend/package.json backend/package-lock.json backend/
+# Keep the workspace node_modules for this install. `npm ci` runs the linked
+# packages' prepare scripts (`tsc`), and typescript lives in those devDependencies.
 RUN --mount=type=cache,target=/root/.npm \
     cd backend && npm ci --omit=dev
+# The backend lockfile does not hoist @folio/shared or @folio/nest-observability
+# dependencies, and Node resolves those requires from /srv/folio/packages.
+# Swap the workspace install (devDependencies included) for production deps.
+# --ignore-scripts: dist is already built, and tsc is not a production dep.
+# NODE_PATH still covers peer deps (@nestjs/*, nestjs-cls, nestjs-pino).
 RUN --mount=type=cache,target=/root/.npm \
-    cd packages/shared && npm ci --omit=dev --ignore-scripts \
+    rm -rf packages/shared/node_modules packages/nest-observability/node_modules \
+ && cd packages/shared && npm ci --omit=dev --ignore-scripts \
  && cd ../nest-observability && npm ci --omit=dev --ignore-scripts
 
 # ---------- runtime ------------------------------------------------------------

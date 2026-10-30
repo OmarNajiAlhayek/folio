@@ -51,15 +51,16 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=workspace /srv/folio/packages ./packages
-# Same layout as the backend image: linked-package production deps stay beside
-# each package. The service lockfile does not hoist them, and Node resolves
-# from /srv/folio/packages. NODE_PATH covers peer deps (@nestjs/*, nestjs-cls).
-RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
 COPY services/email-service/package.json services/email-service/package-lock.json services/email-service/
+# Keep the workspace node_modules for this install so the linked packages'
+# prepare scripts can run tsc.
 RUN --mount=type=cache,target=/root/.npm \
     cd services/email-service && npm ci --omit=dev
+# Production deps stay beside each package. --ignore-scripts: dist is already built.
+# NODE_PATH covers peer deps (@nestjs/*, nestjs-cls).
 RUN --mount=type=cache,target=/root/.npm \
-    cd packages/shared && npm ci --omit=dev --ignore-scripts \
+    rm -rf packages/shared/node_modules packages/nest-observability/node_modules \
+ && cd packages/shared && npm ci --omit=dev --ignore-scripts \
  && cd ../nest-observability && npm ci --omit=dev --ignore-scripts
 
 # ---------- runtime -------------------------------------------------------------
