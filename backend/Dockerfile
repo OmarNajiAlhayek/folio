@@ -61,13 +61,19 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=workspace /srv/folio/packages ./packages
+# The workspace install includes devDependencies. The backend lockfile does not
+# hoist @folio/shared or @folio/nest-observability dependencies, and Node
+# resolves those requires from the real path under /srv/folio/packages — not
+# from backend/node_modules. Reinstall production deps beside each package
+# after the backend install so they are actually present at runtime.
+# NODE_PATH still covers peer deps (@nestjs/*, nestjs-cls, nestjs-pino).
+RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
 COPY backend/package.json backend/package-lock.json backend/
 RUN --mount=type=cache,target=/root/.npm \
     cd backend && npm ci --omit=dev
-# Linked packages ship only their compiled dist at runtime. npm hoists their
-# runtime dependencies into backend/node_modules. Node never walks from
-# /srv/folio/packages into that directory, so the runtime stage sets NODE_PATH.
-RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
+RUN --mount=type=cache,target=/root/.npm \
+    cd packages/shared && npm ci --omit=dev --ignore-scripts \
+ && cd ../nest-observability && npm ci --omit=dev --ignore-scripts
 
 # ---------- runtime ------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
@@ -98,6 +104,9 @@ COPY --from=prod-deps --chown=folio:folio /srv/folio/packages /srv/folio/package
 COPY --from=prod-deps --chown=folio:folio /srv/folio/backend/node_modules ./node_modules
 COPY --from=build     --chown=folio:folio /srv/folio/backend/dist ./dist
 COPY --chown=folio:folio backend/package.json ./package.json
+
+# Fail the build if a linked package cannot resolve its own runtime deps.
+RUN node -e "require('/srv/folio/packages/shared/dist/observability/amqp-context.js'); require('/srv/folio/packages/nest-observability/dist/telemetry.js')"
 
 RUN if [ "$WITH_CHROMIUM" = "true" ]; then \
       npx --yes playwright install --with-deps chromium; \

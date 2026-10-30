@@ -51,10 +51,16 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=workspace /srv/folio/packages ./packages
+# Same layout as the backend image: linked-package production deps stay beside
+# each package. The service lockfile does not hoist them, and Node resolves
+# from /srv/folio/packages. NODE_PATH covers peer deps (@nestjs/*, nestjs-cls).
+RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
 COPY services/email-service/package.json services/email-service/package-lock.json services/email-service/
 RUN --mount=type=cache,target=/root/.npm \
     cd services/email-service && npm ci --omit=dev
-RUN rm -rf packages/shared/node_modules packages/nest-observability/node_modules
+RUN --mount=type=cache,target=/root/.npm \
+    cd packages/shared && npm ci --omit=dev --ignore-scripts \
+ && cd ../nest-observability && npm ci --omit=dev --ignore-scripts
 
 # ---------- runtime -------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
@@ -62,7 +68,8 @@ ENV NODE_ENV=production \
     HTTP_PORT=5244 \
     HTTP_BIND_HOST=0.0.0.0 \
     LOG_FORMAT=json \
-    NPM_CONFIG_UPDATE_NOTIFIER=false
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NODE_PATH=/srv/folio/services/email-service/node_modules
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends dumb-init wget ca-certificates \
@@ -78,6 +85,8 @@ COPY --from=build     --chown=folio:folio /srv/folio/services/email-service/dist
 # Handlebars templates are read from disk at send time, not bundled.
 COPY --chown=folio:folio services/email-service/templates ./templates
 COPY --chown=folio:folio services/email-service/package.json ./package.json
+
+RUN node -e "require('/srv/folio/packages/shared/dist/observability/amqp-context.js'); require('/srv/folio/packages/nest-observability/dist/telemetry.js')"
 
 USER folio
 EXPOSE 5244
