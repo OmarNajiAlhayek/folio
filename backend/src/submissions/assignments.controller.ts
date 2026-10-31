@@ -140,6 +140,7 @@ export class AssignmentsController {
   @Permissions(
     PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
   )
   listDiscussions(
     @Param('slug') slug: string,
@@ -153,6 +154,7 @@ export class AssignmentsController {
   @Permissions(
     PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
   )
   createDiscussion(
     @Param('slug') slug: string,
@@ -172,6 +174,7 @@ export class AssignmentsController {
   @Permissions(
     PERMISSION_SLUGS.ASSIGNMENT_VIEW_OWN,
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
   )
   addMessage(
     @Param('slug') slug: string,

@@ -56,6 +56,8 @@ export function journalSlugForSampleLabel(
 export const SEEDED_PRESS_EDITOR_EMAIL = 'editor@folio.dev';
 export const SEEDED_EDITOR_PASSWORD = 'Editor123!';
 export const SEEDED_SECTION_EDITOR_PASSWORD = 'Section123!';
+export const SEEDED_MANAGER_PASSWORD = 'Manager123!';
+export const SEEDED_PRESS_MANAGER_EMAIL = 'manager@folio.local';
 
 export function seededEditorEmail(slug: string): string {
   return slug === 'econj'
@@ -65,6 +67,12 @@ export function seededEditorEmail(slug: string): string {
 
 export function seededSectionEditorEmail(slug: string): string {
   return `section.${slug}@folio.dev`;
+}
+
+export function seededManagerEmail(slug: string): string {
+  return slug === 'econj'
+    ? SEEDED_PRESS_MANAGER_EMAIL
+    : `manager.${slug}@folio.dev`;
 }
 
 export async function loadCatalogJournals(

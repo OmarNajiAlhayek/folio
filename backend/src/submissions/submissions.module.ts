@@ -9,7 +9,9 @@ import { ReviewDiscussionMessage } from '../entities/review-discussion-message.e
 import { CopyeditAssignment } from '../entities/copyedit-assignment.entity';
 import { CopyeditNote } from '../entities/copyedit-note.entity';
 import { User } from '../entities/user.entity';
+import { JournalSection } from '../entities/journal-section.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { SectionEditorLink } from '../entities/section-editor.entity';
 import { Journal } from '../entities/journal.entity';
 import { JournalIssue } from '../entities/journal-issue.entity';
 import { JournalMembership } from '../entities/journal-membership.entity';
@@ -40,6 +42,7 @@ import { ConstructorCollabGateway } from './constructor-collab.gateway';
 import { LanguageToolService } from './language-tool.service';
 import { RemindersService } from './reminders.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { ReviewerDirectoryService } from './reviewer-directory.service';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { JournalsModule } from '../journals/journals.module';
@@ -73,6 +76,8 @@ import { AuthModule } from '../auth/auth.module';
       CopyeditAssignment,
       CopyeditNote,
       User,
+      JournalSection,
+      SectionEditorLink,
       SectionEditorAssignment,
       Journal,
       JournalIssue,
@@ -107,6 +112,7 @@ import { AuthModule } from '../auth/auth.module';
     ConstructorCollabGateway,
     LanguageToolService,
     SectionEditorWorkflowService,
+    SubmissionRoutingService,
     ReviewerDirectoryService,
     PermissionsGuard,
   ],

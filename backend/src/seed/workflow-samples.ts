@@ -6,12 +6,11 @@ import {
   ReviewAssignment,
 } from '../entities/review-assignment.entity';
 import { ReviewRecommendation } from '../entities/review.entity';
-import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { Submission } from '../entities/submission.entity';
 import type { User } from '../entities/user.entity';
 import type { SeededPress } from '../journals/seed-journals';
-import type { SeedEditorRequests, SeededJournalStaff } from './accounts';
+import type { SeedEditorRequests } from './accounts';
 import type { SeedContext } from './context';
 import {
   queueSampleDisciplineLabel,
@@ -163,17 +162,15 @@ export async function seedWorkflowSamples(options: {
   reviewer: User;
   copyeditor: User;
   press: SeededPress;
-  journalStaff: SeededJournalStaff;
   editors: SeedEditorRequests;
 }): Promise<void> {
   const {
-    ctx: { dataSource, submissionsService, sectionEditors },
+    ctx: { dataSource, submissionsService },
     author,
     authorReq,
     reviewer,
     copyeditor,
     press,
-    journalStaff,
     editors,
   } = options;
   const editorReq = editors.econj;
@@ -410,32 +407,6 @@ export async function seedWorkflowSamples(options: {
           `Repaired: ${tRev} (new invited assignment — round-2 invite was missing or already accepted)`,
         );
       }
-    }
-  }
-
-  const educationRevision = await findSampleSubmission(
-    dataSource,
-    author.id,
-    tRev,
-  );
-  if (educationRevision?.slug) {
-    const alreadyAssigned = await dataSource
-      .getRepository(SectionEditorAssignment)
-      .findOne({ where: { submissionId: educationRevision.id } });
-    if (!alreadyAssigned) {
-      const educationSectionEditor =
-        journalStaff.sectionEditorBySlug.get('eduj');
-      if (!educationSectionEditor) {
-        throw new Error('Seed: missing education section editor');
-      }
-      await sectionEditors.assignSectionEditor(
-        educationRevision.slug,
-        educationSectionEditor.id,
-        edujEditorReq,
-      );
-      console.log(
-        `Assigned ${educationSectionEditor.email} to ${educationRevision.title}`,
-      );
     }
   }
 

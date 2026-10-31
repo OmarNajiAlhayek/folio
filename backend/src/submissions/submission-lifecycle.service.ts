@@ -10,6 +10,7 @@ import { In, Repository } from 'typeorm';
 import { unlinkSync } from 'fs';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
 import { SubmissionFile } from '../entities/submission-file.entity';
@@ -17,7 +18,6 @@ import { Notification } from '../entities/notification.entity';
 import type { RequestUser } from '../common/types/request-user';
 import { assertCallerPermission } from '../common/authorization/permission-checks';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
-import { RbacService } from '../rbac/rbac.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { ContributorDto } from './dto/contributor.dto';
@@ -49,6 +49,7 @@ import {
 import { AiClientService } from '../ai/ai-client.service';
 import { JournalDirectoryService } from '../journals/journal-directory.service';
 import { SubmissionAccessService } from './submission-access.service';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { SubmissionFileService } from './submission-file.service';
 import { SubmissionEventsService } from './submission-events.service';
 import { SubmissionAiService } from './submission-ai.service';
@@ -77,9 +78,10 @@ export class SubmissionLifecycleService {
   constructor(
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
+    @InjectRepository(SectionEditorAssignment)
+    private readonly sectionAssignmentsRepo: Repository<SectionEditorAssignment>,
     @InjectRepository(SubmissionFile)
     private readonly filesRepo: Repository<SubmissionFile>,
-    private readonly rbacService: RbacService,
     private readonly docxGeneratorService: DocxGeneratorService,
     private readonly manuscriptStyles: ManuscriptStyleRegistryService,
     private readonly aiClient: AiClientService,
@@ -89,6 +91,7 @@ export class SubmissionLifecycleService {
     private readonly ai: SubmissionAiService,
     private readonly preSubmitAnalysis: PreSubmitAnalysisService,
     private readonly journals: JournalDirectoryService,
+    private readonly routing: SubmissionRoutingService,
   ) {}
 
   private parseKeywordList(raw: string | null | undefined): string[] {
@@ -360,11 +363,15 @@ export class SubmissionLifecycleService {
     // Reject a retired or unknown journal here so the author sees a validation
     // error, not the foreign key's 500.
     await this.journals.assertSubmittableJournal(dto.journalId);
+    if (dto.sectionId) {
+      await this.routing.sectionForJournal(dto.sectionId, dto.journalId);
+    }
     const slug = slugifySubmissionTitle(dto.title);
     await this.assertSubmissionSlugAvailable(slug);
     const s = this.submissionsRepo.create({
       authorId,
       journalId: dto.journalId,
+      sectionId: dto.sectionId ?? null,
       title: dto.title,
       titleAr: dto.titleAr,
       abstract: dto.abstract,
@@ -408,9 +415,29 @@ export class SubmissionLifecycleService {
         code: 'VALIDATION_ERROR',
       });
     }
+    if (
+      s.status !== SubmissionStatus.DRAFT &&
+      ((dto.journalId !== undefined && dto.journalId !== s.journalId) ||
+        (dto.sectionId !== undefined && dto.sectionId !== s.sectionId))
+    ) {
+      throw new BadRequestException({
+        message:
+          'The journal and section cannot change after the manuscript is submitted',
+        code: 'SECTION_LOCKED',
+      });
+    }
     if (dto.journalId !== undefined && dto.journalId !== s.journalId) {
       await this.journals.assertSubmittableJournal(dto.journalId);
       s.journalId = dto.journalId;
+      if (dto.sectionId === undefined) s.sectionId = null;
+    }
+    if (dto.sectionId !== undefined) {
+      if (dto.sectionId === null) {
+        s.sectionId = null;
+      } else {
+        await this.routing.sectionForJournal(dto.sectionId, s.journalId);
+        s.sectionId = dto.sectionId;
+      }
     }
     if (dto.title !== undefined) {
       const nextSlug = slugifySubmissionTitle(dto.title);
@@ -620,9 +647,8 @@ export class SubmissionLifecycleService {
       s.authorResponseToReviewers =
         options?.authorResponseToReviewers?.trim() || null;
     }
+    await this.routing.assertReadySection(s.sectionId, s.journalId);
     await this.submissionsRepo.save(s);
-    const editorIds =
-      await this.rbacService.listWorkflowNotificationRecipientIds();
 
     const pending: Notification[] = [];
     return this.submissionsRepo.manager
@@ -638,6 +664,7 @@ export class SubmissionLifecycleService {
         );
         s.status = SubmissionStatus.SUBMITTED;
         const saved = await submissionRepo.save(s);
+        const editorIds = await this.routing.routeOnSubmit(em, saved, user.sub);
         const created = await this.events.enqueueSubmissionSubmittedForEditors(
           {
             submission: saved,
@@ -754,6 +781,7 @@ export class SubmissionLifecycleService {
     );
     const s = await this.access.getBySlugOrThrow(slug);
     await this.access.assertStaffSubmissionScope(s, user);
+    await this.access.assertCanRecordDecision(s, user);
     const allowed = EDITOR_TRANSITIONS[s.status];
     if (!allowed?.includes(next)) {
       throw new BadRequestException({
@@ -888,5 +916,44 @@ export class SubmissionLifecycleService {
         this.events.emitPendingNotifications(pending);
         return saved;
       });
+  }
+
+  /**
+   * A section editor without `canRecordDecision` writes a recommendation.
+   * The text is stored on their assignment and does not change status.
+   */
+  async recordSectionRecommendation(
+    slug: string,
+    user: RequestUser,
+    recommendation: string,
+  ): Promise<{ recommendation: string }> {
+    const s = await this.access.getBySlugOrThrow(slug);
+    await this.access.assertStaffSubmissionScope(s, user);
+    const text = recommendation.trim();
+    if (!text) {
+      throw new BadRequestException({
+        message: 'Recommendation cannot be empty',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const row = await this.sectionAssignmentsRepo.findOne({
+      where: { submissionId: s.id, sectionEditorId: user.sub },
+    });
+    if (!row) {
+      throw new ForbiddenException({
+        message: 'Only an assigned section editor can recommend',
+        code: 'FORBIDDEN',
+      });
+    }
+    if (await this.access.canRecordDecision(s, user)) {
+      throw new ForbiddenException({
+        message:
+          'Record the decision from the status controls. A recommendation is only for an assignee who cannot record one',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    row.recommendation = text;
+    await this.sectionAssignmentsRepo.save(row);
+    return { recommendation: text };
   }
 }

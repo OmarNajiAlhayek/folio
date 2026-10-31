@@ -20,8 +20,10 @@ import { Notification } from '../entities/notification.entity';
 import type { AuthorReviewPublicView } from '../reviews/author-review-public.view';
 import type { RequestUser } from '../common/types/request-user';
 import { assertCallerPermission } from '../common/authorization/permission-checks';
-import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
+import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
 import { RbacService } from '../rbac/rbac.service';
+import { JournalMembershipService } from '../journals/journal-membership.service';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import type {
   ReviewInvitationAcceptedEvent,
@@ -69,6 +71,8 @@ export class ReviewWorkflowService {
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
     private readonly rbacService: RbacService,
+    private readonly journalMemberships: JournalMembershipService,
+    private readonly routing: SubmissionRoutingService,
     private readonly access: SubmissionAccessService,
     private readonly events: SubmissionEventsService,
     private readonly files: SubmissionFileService,
@@ -259,6 +263,17 @@ export class ReviewWorkflowService {
       });
     }
     this.assertNoReviewerConflictOfInterest(submission, reviewer);
+    const inJournal = await this.journalMemberships.filterUserIdsInJournal(
+      [reviewerId],
+      submission.journalId,
+      ROLE_SLUGS.REVIEWER,
+    );
+    if (inJournal.length === 0) {
+      throw new BadRequestException({
+        message: 'This reviewer is not a member of this journal',
+        code: 'REVIEWER_NOT_IN_JOURNAL',
+      });
+    }
 
     const activeDup = await this.assignmentsRepo.findOne({
       where: {
@@ -348,7 +363,7 @@ export class ReviewWorkflowService {
       }));
     const editorIds =
       submissionRow?.slug && assignment.slug && reviewer
-        ? await this.rbacService.listWorkflowNotificationRecipientIds()
+        ? await this.routing.assigneeIds(submissionRow.id)
         : [];
     const pending: Notification[] = [];
     const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
@@ -455,7 +470,7 @@ export class ReviewWorkflowService {
     const reviewer = assignment.reviewer;
     const editorIds =
       submissionRow?.slug && assignment.slug && reviewer
-        ? await this.rbacService.listWorkflowNotificationRecipientIds()
+        ? await this.routing.assigneeIds(submissionRow.id)
         : [];
     const pending: Notification[] = [];
     const saved = await this.assignmentsRepo.manager.transaction(async (em) => {
@@ -654,11 +669,8 @@ export class ReviewWorkflowService {
     if (ids.length === 0) {
       return [];
     }
-    const editor = this.access.hasPerm(
-      user,
-      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-    );
-    const relations = editor
+    const editorial = await this.access.hasEditorialAccess(submission, user);
+    const relations = editorial
       ? (['assignment', 'assignment.reviewer'] as const)
       : (['assignment'] as const);
     const reviews = await this.reviewsRepo.find({
@@ -666,7 +678,7 @@ export class ReviewWorkflowService {
       relations: [...relations],
     });
 
-    if (editor) {
+    if (editorial) {
       return reviews;
     }
 
@@ -732,7 +744,7 @@ export class ReviewWorkflowService {
     const submission = assignment.submission;
     const editorIds =
       submission?.slug && assignment.slug
-        ? await this.rbacService.listWorkflowNotificationRecipientIds()
+        ? await this.routing.assigneeIds(submission.id)
         : [];
     const pending: Notification[] = [];
     const review = await this.assignmentsRepo.manager.transaction(

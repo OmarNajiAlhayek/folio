@@ -32,6 +32,13 @@ export type PortalJournal = {
 };
 
 /** One option in the author's journal picker (`GET /submissions/journal-options`). */
+export type JournalSectionOption = {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  sortOrder: number;
+};
+
 export type JournalOption = {
   id: string;
   slug: string;
@@ -60,6 +67,18 @@ export function useJournals() {
     queryFn: () => publicJson<PortalJournal[]>('/public/journals'),
     // Reference data — nine rows that change when a journal is founded.
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useJournalSections(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['journal', slug ?? '', 'sections'] as const,
+    queryFn: () =>
+      publicJson<JournalSectionOption[]>(
+        `/public/journals/${encodeURIComponent(slug ?? '')}/sections`,
+      ),
+    enabled: Boolean(slug),
+    staleTime: 60 * 1000,
   });
 }
 

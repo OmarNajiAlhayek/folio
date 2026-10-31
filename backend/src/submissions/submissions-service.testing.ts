@@ -29,7 +29,10 @@ import { SubmissionEventsService } from './submission-events.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SectionEditorWorkflowService } from './section-editor-workflow.service';
+import { JournalSection } from '../entities/journal-section.entity';
+import { SectionEditorLink } from '../entities/section-editor.entity';
 import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { ManuscriptAnalysisService } from './manuscript-analysis.service';
@@ -103,6 +106,7 @@ export type SubmissionsRepoMocks = {
   rbacService?: Record<string, unknown>;
   eventPublisher?: Record<string, unknown>;
   sectionEditorAssignmentsRepo?: Record<string, unknown>;
+  routingService?: Record<string, unknown>;
   journalMembershipService?: Record<string, unknown>;
   journalIssuesService?: Record<string, unknown>;
   journalDirectoryService?: Record<string, unknown>;
@@ -152,7 +156,28 @@ export function submissionsServiceTestProviders(
     { provide: getRepositoryToken(User), useValue: mocks.usersRepo ?? {} },
     {
       provide: getRepositoryToken(SectionEditorAssignment),
-      useValue: mocks.sectionEditorAssignmentsRepo ?? {},
+      useValue: mocks.sectionEditorAssignmentsRepo ?? {
+        exists: jest.fn().mockResolvedValue(false),
+        find: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn().mockResolvedValue(null),
+      },
+    },
+    {
+      provide: getRepositoryToken(JournalSection),
+      useValue: {},
+    },
+    {
+      provide: getRepositoryToken(SectionEditorLink),
+      useValue: {},
+    },
+    {
+      provide: SubmissionRoutingService,
+      useValue: mocks.routingService ?? {
+        routeOnSubmit: jest.fn().mockResolvedValue([]),
+        assigneeIds: jest.fn().mockResolvedValue([]),
+        assertReadySection: jest.fn().mockResolvedValue(undefined),
+        sectionForJournal: jest.fn().mockResolvedValue({ id: 'section' }),
+      },
     },
     {
       provide: JournalMembershipService,
@@ -160,6 +185,7 @@ export function submissionsServiceTestProviders(
         // Default: staff scoped to no journal. Specs that exercise a
         // journal-scoped queue override this explicitly.
         listJournalIdsForUser: jest.fn().mockResolvedValue([]),
+        listUserIdsForJournal: jest.fn().mockResolvedValue([]),
         filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
         disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
         disciplineLabelForJournal: jest.fn().mockResolvedValue(null),

@@ -455,6 +455,7 @@ export class SubmissionAiService {
       });
     }
     await this.access.assertCanRead(s, user);
+    await this.access.assertStaffSubmissionScope(s, user);
 
     assertCallerHasEveryPermission(
       user,
@@ -471,7 +472,12 @@ export class SubmissionAiService {
       return { status: 'no_text' };
     }
 
-    const profiles = await this.listReviewerProfilesForMatching();
+    const memberIds = new Set(
+      s.journalId ? await this.access.reviewerIdsForJournal(s.journalId) : [],
+    );
+    const profiles = (await this.listReviewerProfilesForMatching()).filter(
+      (profile) => memberIds.has(profile.id),
+    );
     if (profiles.length === 0) {
       return { status: 'no_candidates' };
     }

@@ -56,6 +56,7 @@ import { useMe } from '@/lib/queries/auth';
 import { useJournalOptions } from '@/lib/queries/journals';
 import { SimpleSelect } from '@/components/ui/select';
 import { SubmissionJournalPicker } from '@/components/submission-journal-picker';
+import { SubmissionSectionPicker } from '@/components/submission-section-picker';
 import { fileFieldKey, fileRowCls } from '@/lib/submission-field-errors';
 import { SUBMISSION_ARTICLE_TYPES } from '@/lib/validation';
 import { Spinner } from '@/components/ui/spinner';
@@ -112,6 +113,8 @@ export default function NewSubmissionPage() {
 
   const [articleType, setArticleType] = useState('');
   const [journalId, setJournalId] = useState('');
+  const [sectionId, setSectionId] = useState('');
+  const [journalLocked, setJournalLocked] = useState(false);
   const { data: journalOptions } = useJournalOptions();
   const selectedJournal = journalOptions?.find((j) => j.id === journalId);
   const selectedJournalTitle = selectedJournal
@@ -148,6 +151,18 @@ export default function NewSubmissionPage() {
   // mode = "upload" sticky in search query if chosen
   const mode = searchParams.get('mode');
   const fromConstructor = searchParams.get('fromConstructor');
+  const journalSlug = searchParams.get('journal');
+
+  useEffect(() => {
+    if (!journalSlug || !journalOptions?.length) return;
+    const match = journalOptions.find(
+      (journal) => journal.slug === journalSlug,
+    );
+    if (!match) return;
+    setJournalId(match.id);
+    metadataFormRef.current?.setJournalId(match.id);
+    setJournalLocked(true);
+  }, [journalSlug, journalOptions]);
 
   // Fetch current user to auto pre-populate first author profile
   const meQuery = useMe();
@@ -367,8 +382,19 @@ export default function NewSubmissionPage() {
   const syncJournal = useCallback(
     (value: string) => {
       setJournalId(value);
+      setSectionId('');
       metadataFormRef.current?.setJournalId(value);
       clearErr('journalId');
+      clearErr('sectionId');
+    },
+    [clearErr],
+  );
+
+  const syncSection = useCallback(
+    (value: string) => {
+      setSectionId(value);
+      metadataFormRef.current?.setSectionId(value);
+      clearErr('sectionId');
     },
     [clearErr],
   );
@@ -385,6 +411,10 @@ export default function NewSubmissionPage() {
         if (!journalId) {
           errors.add('journalId');
           setFirst(tWf('validationJournalRequired'));
+        }
+        if (!sectionId) {
+          errors.add('sectionId');
+          setFirst(tWf('validationSectionRequired'));
         }
         if (!articleType) {
           errors.add('articleType');
@@ -416,7 +446,15 @@ export default function NewSubmissionPage() {
 
       return { errors, message };
     },
-    [journalId, articleType, stagedFiles, showConstructorManuscript, t, tWf],
+    [
+      journalId,
+      sectionId,
+      articleType,
+      stagedFiles,
+      showConstructorManuscript,
+      t,
+      tWf,
+    ],
   );
 
   const validateStep = useCallback(
@@ -489,6 +527,7 @@ export default function NewSubmissionPage() {
       // them back in before the form validates and posts.
       metadataFormRef.current?.setArticleType(articleType);
       metadataFormRef.current?.setJournalId(journalId);
+      metadataFormRef.current?.setSectionId(sectionId);
 
       for (let s = 1; s <= 5; s++) {
         if (!(await validateStep(s))) {
@@ -512,6 +551,7 @@ export default function NewSubmissionPage() {
   }, [
     articleType,
     journalId,
+    sectionId,
     reportValidationError,
     resolveApiError,
     tWf,
@@ -714,8 +754,17 @@ export default function NewSubmissionPage() {
               <SubmissionJournalPicker
                 value={journalId}
                 onChange={syncJournal}
+                disabled={journalLocked}
                 invalid={hasErr('journalId')}
               />
+              <div className="mt-4">
+                <SubmissionSectionPicker
+                  journalId={journalId}
+                  value={sectionId}
+                  onChange={syncSection}
+                  invalid={hasErr('sectionId')}
+                />
+              </div>
             </div>
 
             {/* Article type selector */}

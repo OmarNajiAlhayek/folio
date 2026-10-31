@@ -1,5 +1,27 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
 import { apiJson } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 import type { AdminUserListResult } from '@/lib/users-admin';
+
+export type JournalRoleHolder = {
+  journalSlug: string;
+  userId: string;
+  displayName: string;
+};
+
+export function useJournalRoleHolders(roleSlug: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.journalRoleHolders(roleSlug),
+    queryFn: () =>
+      apiJson<JournalRoleHolder[]>(
+        `/users/journal-role-holders?roleSlug=${encodeURIComponent(roleSlug)}`,
+      ),
+    enabled,
+    staleTime: 30_000,
+  });
+}
 
 export async function fetchAdminUsers(params: {
   q?: string;
@@ -32,7 +54,7 @@ export async function patchUserRoles(
 
 export async function createRoleInvitation(
   userId: string,
-  roleSlug: 'editor' | 'journal_manager',
+  roleSlug: 'editor' | 'journal_manager' | 'section_editor',
 ): Promise<void> {
   await apiJson(`/users/${encodeURIComponent(userId)}/role-invitations`, {
     method: 'POST',

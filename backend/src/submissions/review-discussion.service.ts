@@ -43,14 +43,19 @@ export class ReviewDiscussionService {
         code: 'NOT_FOUND',
       });
     }
-    const isEditor = this.access.hasPerm(
-      actor,
-      PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-    );
+    const hasQueuePermission =
+      this.access.hasPerm(
+        actor,
+        PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      ) ||
+      this.access.hasPerm(
+        actor,
+        PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
+      );
     const isOwnerReviewer = assignment.reviewerId === actor.sub;
     if (isOwnerReviewer) {
       if (
-        !isEditor &&
+        !hasQueuePermission &&
         assignment.status !== AssignmentStatus.ACCEPTED &&
         assignment.status !== AssignmentStatus.COMPLETED
       ) {
@@ -61,16 +66,16 @@ export class ReviewDiscussionService {
       }
       return assignment;
     }
-    if (!isEditor) {
-      throw new ForbiddenException({
-        message: 'Access denied',
-        code: 'FORBIDDEN',
-      });
-    }
     if (!assignment.submission) {
       throw new NotFoundException({
         message: 'Submission not found',
         code: 'NOT_FOUND',
+      });
+    }
+    if (!hasQueuePermission) {
+      throw new ForbiddenException({
+        message: 'Access denied',
+        code: 'FORBIDDEN',
       });
     }
     await this.access.assertStaffSubmissionScope(assignment.submission, actor);

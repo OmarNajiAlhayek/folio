@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { BadRequestException } from '@nestjs/common';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -142,6 +143,17 @@ describe('SubmissionsService phase2 email (outbox)', () => {
         SubmissionFileService,
         SubmissionEventsService,
         ReviewWorkflowService,
+        {
+          provide: SubmissionRoutingService,
+          useValue: {
+            routeOnSubmit: jest
+              .fn()
+              .mockResolvedValue(['editor-1', 'editor-2']),
+            assigneeIds: jest.fn().mockResolvedValue(['editor-1', 'editor-2']),
+            assertReadySection: jest.fn().mockResolvedValue(undefined),
+            sectionForJournal: jest.fn().mockResolvedValue({ id: 'section' }),
+          },
+        },
         CopyeditWorkflowService,
         SectionEditorWorkflowService,
         SubmissionLifecycleService,

@@ -900,32 +900,6 @@ export class UsersService {
     return { ok: true };
   }
 
-  async listSectionEditorCandidates(): Promise<
-    { id: string; displayName: string; email: string; journals: string[] }[]
-  > {
-    const ids = await this.rbacService.listUserIdsWithPermission(
-      PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
-    );
-    if (ids.length === 0) return [];
-    const [users, journalMap] = await Promise.all([
-      this.usersRepo.find({
-        where: { id: In(ids) },
-        select: ['id', 'displayName', 'email'],
-        order: { displayName: 'ASC' },
-      }),
-      this.journalMemberships.journalSlugsByUser(
-        ids,
-        ROLE_SLUGS.SECTION_EDITOR,
-      ),
-    ]);
-    return users.map((u) => ({
-      id: u.id,
-      displayName: u.displayName,
-      email: u.email,
-      journals: journalMap.get(u.id) ?? [],
-    }));
-  }
-
   /**
    * Section-editor scope, as journal slugs.
    *
@@ -944,8 +918,14 @@ export class UsersService {
   async setSectionEditorJournals(
     userId: string,
     journals: string[],
+    actorUserId: string,
   ): Promise<string[]> {
-    return this.setJournalScope(userId, ROLE_SLUGS.SECTION_EDITOR, journals);
+    return this.setJournalScope(
+      userId,
+      ROLE_SLUGS.SECTION_EDITOR,
+      journals,
+      actorUserId,
+    );
   }
 
   /**
@@ -967,14 +947,70 @@ export class UsersService {
   async setEditorJournals(
     userId: string,
     journals: string[],
+    actorUserId: string,
   ): Promise<string[]> {
-    return this.setJournalScope(userId, ROLE_SLUGS.EDITOR, journals);
+    return this.setJournalScope(
+      userId,
+      ROLE_SLUGS.EDITOR,
+      journals,
+      actorUserId,
+    );
+  }
+
+  async getJournalManagerJournals(userId: string): Promise<string[]> {
+    return this.journalMemberships.journalSlugsForUser(
+      userId,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    );
+  }
+
+  /**
+   * Journals this user manages. A manager handing one of their own journals
+   * to this user releases that seat in the same save.
+   */
+  async setJournalManagerJournals(
+    userId: string,
+    journals: string[],
+    actorUserId: string,
+  ): Promise<string[]> {
+    return this.setJournalScope(
+      userId,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+      journals,
+      actorUserId,
+    );
+  }
+
+  async getReviewerJournals(userId: string): Promise<string[]> {
+    return this.journalMemberships.journalSlugsForUser(
+      userId,
+      ROLE_SLUGS.REVIEWER,
+    );
+  }
+
+  async setReviewerJournals(
+    userId: string,
+    journals: string[],
+    actorUserId: string,
+  ): Promise<string[]> {
+    return this.setJournalScope(
+      userId,
+      ROLE_SLUGS.REVIEWER,
+      journals,
+      actorUserId,
+    );
+  }
+
+  /** Who holds the single editor-in-chief or journal-manager seat on each journal. */
+  listJournalRoleHolders(roleSlug: string) {
+    return this.journalMemberships.listSingletonRoleHolders(roleSlug);
   }
 
   private async setJournalScope(
     userId: string,
     roleSlug: string,
     journals: string[],
+    actorUserId: string,
   ): Promise<string[]> {
     const user = await this.findById(userId);
     if (!user) {
@@ -983,7 +1019,8 @@ export class UsersService {
         code: 'NOT_FOUND',
       });
     }
-    return this.journalMemberships.setJournalSlugsForUser(
+    return this.journalMemberships.setJournalSlugsWithinActor(
+      actorUserId,
       userId,
       roleSlug,
       journals,

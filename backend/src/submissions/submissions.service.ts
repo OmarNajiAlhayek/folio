@@ -19,12 +19,11 @@ import {
   JournalIssuesService,
   type PublishableIssue,
 } from '../journals/journal-issues.service';
-import { JournalMembershipService } from '../journals/journal-membership.service';
 import {
   JournalDirectoryService,
   type JournalOption,
 } from '../journals/journal-directory.service';
-import { PERMISSION_SLUGS, ROLE_SLUGS } from '../rbac/permission-slugs';
+import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { slugifySubmissionTitle } from './slugify-submission-title';
@@ -52,7 +51,6 @@ import {
 } from './submission-lifecycle.service';
 import { SubmissionAiService } from './submission-ai.service';
 import { PreSubmitAnalysisService } from './pre-submit-analysis.service';
-import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 
 @Injectable()
 export class SubmissionsService implements OnModuleInit {
@@ -71,8 +69,6 @@ export class SubmissionsService implements OnModuleInit {
     private readonly lifecycle: SubmissionLifecycleService,
     private readonly ai: SubmissionAiService,
     private readonly preSubmitAnalysis: PreSubmitAnalysisService,
-    private readonly sectionEditorWorkflow: SectionEditorWorkflowService,
-    private readonly journalMemberships: JournalMembershipService,
     private readonly journalDirectory: JournalDirectoryService,
     private readonly journalIssues: JournalIssuesService,
   ) {}
@@ -178,36 +174,16 @@ export class SubmissionsService implements OnModuleInit {
     return this.lifecycle.create(authorId, dto);
   }
 
-  /**
-   * Journals whose queue this editor may see, or `'all'` for the
-   * university-wide `journal_manager`.
-   *
-   * An editor with no memberships is scoped to nothing rather than to
-   * everything — the opposite default would make the scope silently
-   * unenforced for exactly the accounts nobody has configured yet.
-   *
-   * Reading or mutating one submission by slug uses the same rule in
-   * `SubmissionAccessService.assertStaffSubmissionScope`, which also
-   * requires a section editor to be assigned to that submission.
-   */
-  private async editorQueueJournalIds(
-    user: RequestUser,
-  ): Promise<string[] | 'all'> {
-    if (user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) {
-      return 'all';
-    }
-    return this.journalMemberships.listJournalIdsForUser(
-      user.sub,
-      ROLE_SLUGS.EDITOR,
-    );
-  }
-
   async findAllForUser(
     user: RequestUser,
     status?: SubmissionStatus,
   ): Promise<Submission[]> {
     if (
-      this.access.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
+      this.access.hasPerm(
+        user,
+        PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      ) ||
+      this.access.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
     ) {
       const qb = this.submissionsRepo
         .createQueryBuilder('s')
@@ -216,22 +192,20 @@ export class SubmissionsService implements OnModuleInit {
       if (status) {
         qb.andWhere('s.status = :status', { status });
       }
-      const journalIds = await this.editorQueueJournalIds(user);
-      if (journalIds !== 'all') {
-        // Every submission has a journal since slice 6, so there is no triage
-        // bucket left to keep visible: an editor sees their journals and
-        // nothing else, and one with no memberships sees nothing at all.
-        if (journalIds.length === 0) {
-          return [];
-        }
+      const journalIds = await this.access.editorQueueJournalIds(user);
+      const assignedIds = await this.access.assignedSubmissionIds(user);
+      if (journalIds.length === 0 && assignedIds.length === 0) return [];
+      if (journalIds.length > 0 && assignedIds.length > 0) {
+        qb.andWhere(
+          '(s.journal_id IN (:...journalIds) OR s.id IN (:...assignedIds))',
+          { journalIds, assignedIds },
+        );
+      } else if (journalIds.length > 0) {
         qb.andWhere('s.journal_id IN (:...journalIds)', { journalIds });
+      } else {
+        qb.andWhere('s.id IN (:...assignedIds)', { assignedIds });
       }
       return qb.getMany();
-    }
-    if (
-      this.access.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
-    ) {
-      return this.sectionEditorWorkflow.listSectionQueue(user.sub, status);
     }
     const qb = this.submissionsRepo
       .createQueryBuilder('s')
@@ -400,6 +374,18 @@ export class SubmissionsService implements OnModuleInit {
    */
   async generateDocxStandalone(content: ConstructorContent): Promise<Buffer> {
     return this.lifecycle.generateDocxStandalone(content);
+  }
+
+  recordSectionRecommendation(
+    slug: string,
+    user: RequestUser,
+    recommendation: string,
+  ): Promise<{ recommendation: string }> {
+    return this.lifecycle.recordSectionRecommendation(
+      slug,
+      user,
+      recommendation,
+    );
   }
 
   async updateStatus(

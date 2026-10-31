@@ -4,6 +4,7 @@ import {
   SEEDED_EDITOR_PASSWORD,
   SEEDED_SECTION_EDITOR_PASSWORD,
   seededEditorEmail,
+  seededManagerEmail,
   seededSectionEditorEmail,
   type SeededPress,
 } from '../journals/seed-journals';
@@ -49,7 +50,7 @@ export function printSeedSummary(options: {
   console.log('\n--- Sample accounts (change passwords in production) ---');
   console.log('author@folio.dev            / Author123!      roles: author');
   console.log(
-    'manager@folio.local         / Manager123!     roles: journal_manager (every journal; edits titles)',
+    'manager@folio.local         / Manager123!     roles: journal manager of econj',
   );
   console.log('reviewer@folio.dev          / Reviewer123!    roles: reviewer');
   console.log('reviewer2@folio.dev         / Reviewer123!    roles: reviewer');
@@ -63,6 +64,14 @@ export function printSeedSummary(options: {
   for (const entry of JOURNAL_CATALOG) {
     console.log(
       `${seededEditorEmail(entry.slug).padEnd(32)} editor of ${entry.slug}`,
+    );
+  }
+  console.log(
+    `\n--- Journal manager, one journal each (password Manager123!) ---`,
+  );
+  for (const entry of JOURNAL_CATALOG) {
+    console.log(
+      `${seededManagerEmail(entry.slug).padEnd(32)} manager of ${entry.slug}`,
     );
   }
   console.log(
@@ -84,7 +93,7 @@ export function printSeedSummary(options: {
     `${press.journalsBySlug.size} journals × 3 issues (published 2025/2, published 2026/1, open 2026/2)`,
   );
   console.log(
-    `Staff memberships: ${reviewers.length} reviewers and the copyeditor on every journal (${press.membershipsCreated} new). Each journal has its own editor-in-chief and section editor. journal_manager stays global.`,
+    `Copyeditor is on every journal (${press.membershipsCreated} new memberships). reviewer@folio.dev is economics only; reviewer2 is law only; reviewer3 has no journal. Each journal has its own manager, editor-in-chief, and a Research articles section.`,
   );
   console.log(
     `Placed ${placement.placed} demo submission(s) onto journals (${placement.publishedPlaced} into العدد 1، 2026).`,
@@ -113,7 +122,7 @@ export function printSeedSummary(options: {
     `Author (${author.email}): ${tDraft} — edit metadata, files, optional AI suggest; ${tRev} — resubmit flow`,
   );
   console.log(
-    `Editor (${seededEditorEmail('econj')}): ${tQueue}, ${tReview}, and the published econj articles. ${seededEditorEmail('lawj')} reads ${tCompleted}. ${seededEditorEmail('engj')} owns ${tCopyedit}. ${seededEditorEmail('medj')} publishes ${tPub3}. ${seededSectionEditorEmail('eduj')} is assigned to ${tRev}.`,
+    `Editor-in-chief (${seededEditorEmail('econj')}): ${tQueue}, ${tReview}, and the published econj articles. ${seededEditorEmail('lawj')} reads ${tCompleted}. ${seededEditorEmail('engj')} owns ${tCopyedit}. ${seededEditorEmail('medj')} publishes ${tPub3}. Section editor ${seededSectionEditorEmail('eduj')} sees ${tRev} only when that paper is assigned to them.`,
   );
   console.log(
     `Reviewer (${reviewer.email} / Reviewer123!): ${tInvitePending} — invited (email accept link works); ${tReview} — active review; ${tRev} — round-2 invite if still pending`,

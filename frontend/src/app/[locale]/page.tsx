@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { BadgeCheck, CloudUpload, Globe } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -11,9 +11,83 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 
 type TabKind = 'author' | 'editor' | 'reviewer' | 'copyeditor';
+type RoleCardKind = Exclude<TabKind, 'editor'>;
+
+/** Press desk: one general editor-in-chief, then each journal's own chief. */
+function EditorDesk() {
+  const t = useTranslations('Home');
+  const journalStats = [
+    { label: t('simulator.editor.statReviewers'), val: '5' },
+    {
+      label: t('simulator.editor.statScope'),
+      val: t('simulator.editor.statScopeValue'),
+    },
+  ];
+
+  return (
+    <div className="relative rounded-2xl border border-ink/[0.06] bg-surface/40 p-5 shadow-xs dark:border-white/[0.06] dark:bg-surface-muted/30">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-serif text-lg font-bold leading-tight text-ink">
+            {t('simulator.editor.generalTitle')}
+          </h3>
+          <p className="mt-1.5 text-[11px] font-semibold text-accent">
+            {t('simulator.editor.generalScope')}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-ink/70">
+            {t('simulator.editor.generalDetails')}
+          </p>
+        </div>
+        <div className="shrink-0 text-end">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-ink/40">
+            {t('simulator.editor.journalCountLabel')}
+          </p>
+          <p className="mt-0.5 font-serif text-base font-bold text-ink">
+            {t('simulator.editor.journalCount')}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 border-s-2 border-accent/40 ps-4">
+        <h4 className="font-serif text-lg font-bold leading-tight text-ink">
+          {t('simulator.editor.journalTitle')}
+        </h4>
+        <p className="mt-1.5 text-[11px] font-semibold text-accent-2">
+          {t('simulator.editor.journalScope')}
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-ink/70">
+          {t('simulator.editor.journalDetails')}
+        </p>
+
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold text-ink/55">
+            <span>{t('simulator.editor.milestone')}</span>
+            <span>50%</span>
+          </div>
+          <Progress value={50} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-ink/[0.06] pt-4 dark:border-white/[0.06]">
+          {journalStats.map((stat) => (
+            <div key={stat.label}>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-ink/40">
+                {stat.label}
+              </p>
+              <p className="mt-0.5 font-serif text-base font-bold text-ink">
+                {stat.val}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const t = useTranslations('Home');
+  const locale = useLocale();
+  const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const [activeTimelineStep, setActiveTimelineStep] = useState<number>(2); // Default to Peer Review
 
   const features = [
@@ -56,7 +130,7 @@ export default function HomePage() {
   ];
 
   // Dynamic content for the Peer Review Simulator widget based on locale and selected tab
-  const getSimulatorContent = (tab: TabKind) => {
+  const getSimulatorContent = (tab: RoleCardKind) => {
     switch (tab) {
       case 'author':
         return {
@@ -88,24 +162,6 @@ export default function HomePage() {
                   val: t('simulator.author.statReadyValue'),
                 },
               ],
-        };
-      case 'editor':
-        return {
-          title: t('simulator.editor.title'),
-          roleLabel: t('simulator.editor.roleLabel'),
-          status: t('simulator.editor.status'),
-          statusColor: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
-          statusIndicator: 'bg-indigo-500',
-          progress: 50,
-          milestone: t('simulator.editor.milestone'),
-          details: t('simulator.editor.details'),
-          stats: [
-            {
-              label: t('simulator.editor.statReviewers'),
-              val: '5',
-            },
-            { label: t('simulator.editor.statScope'), val: 'Clear' },
-          ],
         };
       case 'reviewer':
         return {
@@ -268,7 +324,7 @@ export default function HomePage() {
           </div>
 
           {/* Interactive Role Tabs Selector */}
-          <Tabs defaultValue="author" className="relative">
+          <Tabs defaultValue="author" dir={dir} className="relative">
             <TabsList className="mb-5">
               {(
                 ['author', 'editor', 'reviewer', 'copyeditor'] as TabKind[]
@@ -281,6 +337,13 @@ export default function HomePage() {
 
             {(['author', 'editor', 'reviewer', 'copyeditor'] as TabKind[]).map(
               (tab) => {
+                if (tab === 'editor') {
+                  return (
+                    <TabsContent key={tab} value={tab}>
+                      <EditorDesk />
+                    </TabsContent>
+                  );
+                }
                 const sim = getSimulatorContent(tab);
                 return (
                   <TabsContent key={tab} value={tab}>

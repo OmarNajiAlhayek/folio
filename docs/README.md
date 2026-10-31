@@ -1,12 +1,15 @@
 # Documentation index
 
-Central map of the Folio (Damascus University Journal) documentation. New here? Read
-[`ARCHITECTURE.md`](./ARCHITECTURE.md), then [`DEVELOPMENT.md`](./DEVELOPMENT.md).
+Central map of the Folio (Damascus University Journal) documentation. New to the
+product? Read [`roles-and-features.md`](./roles-and-features.md). New to the
+codebase? Read [`ARCHITECTURE.md`](./ARCHITECTURE.md), then
+[`DEVELOPMENT.md`](./DEVELOPMENT.md).
 
 ## Getting started
 
 | Document | Purpose |
 |----------|---------|
+| [`roles-and-features.md`](./roles-and-features.md) | Plain guide: what the app does, and which role uses which screen |
 | [`../README.md`](../README.md) | Project overview, components, quick start |
 | [`DEVELOPMENT.md`](./DEVELOPMENT.md) | Local setup (four variants), sample accounts, tests, migrations, troubleshooting |
 | [`PREP-STEPS.md`](./PREP-STEPS.md) | Condensed prerequisites and run-order checklist |

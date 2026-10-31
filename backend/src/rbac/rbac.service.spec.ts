@@ -63,25 +63,6 @@ describe('RbacService', () => {
     jest.restoreAllMocks();
   });
 
-  it('listWorkflowNotificationRecipientIds unions editors and journal managers', async () => {
-    listUserIdsWithPermission.mockImplementation((slug: string) => {
-      if (slug === PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS) {
-        return ['editor-1', 'both-roles'];
-      }
-      if (slug === PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS) {
-        return ['manager-1', 'both-roles'];
-      }
-      return [];
-    });
-
-    const ids = await service.listWorkflowNotificationRecipientIds();
-
-    expect(ids).toEqual(
-      expect.arrayContaining(['editor-1', 'manager-1', 'both-roles']),
-    );
-    expect(ids).toHaveLength(3);
-  });
-
   it('batchUpsertPermissions inserts new rows in one save', async () => {
     const result = await service['batchUpsertPermissions']([
       {

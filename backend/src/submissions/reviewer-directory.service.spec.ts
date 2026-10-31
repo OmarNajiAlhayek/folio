@@ -99,6 +99,9 @@ function build(opts: {
     listJournalIdsForUser: jest.fn((_userId: string, role: string) =>
       Promise.resolve(role === 'editor' ? (opts.editorJournals ?? []) : []),
     ),
+    listUserIdsForJournal: jest
+      .fn()
+      .mockResolvedValue(opts.pool.map((user) => user.id)),
   } as unknown as JournalMembershipService;
   const access = {
     getBySlugOrThrow: jest.fn().mockResolvedValue(submission),

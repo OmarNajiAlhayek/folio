@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  ValidateIf,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -18,14 +19,22 @@ import { ConstructorContentDto } from './constructor-content.dto';
 
 export class UpdateSubmissionDto {
   /**
-   * Authors may still move a manuscript between journals while it is editable
-   * (draft or revisions requested); `update` rejects any later status, so a
-   * placed article can never drift away from the issue it was filed into.
+   * Authors choose the journal while the manuscript is still a draft.
+   * `update` rejects a journal or section change after submit, including
+   * while revisions are requested, so the paper stays with the people it
+   * was routed to.
    */
   @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   journalId?: string;
+
+  /** `null` clears the section. Changing the journal without a section clears it. */
+  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  sectionId?: string | null;
 
   @ApiPropertyOptional({ minLength: 1, maxLength: 500 })
   @IsOptional()

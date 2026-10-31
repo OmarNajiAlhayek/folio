@@ -24,6 +24,12 @@ import {
 import { UpdateJournalMetadataDto } from './dto/update-journal-metadata.dto';
 import { EditorialBoardService } from './editorial-board.service';
 import { JournalMetadataService } from './journal-metadata.service';
+import { JournalSectionsService } from './journal-sections.service';
+import {
+  CreateJournalSectionDto,
+  SetSectionEditorsDto,
+  UpdateJournalSectionDto,
+} from './dto/journal-section.dto';
 
 /**
  * Staff editing of journal metadata and editorial boards. The guard admits
@@ -38,6 +44,7 @@ export class JournalAdminController {
   constructor(
     private readonly metadata: JournalMetadataService,
     private readonly board: EditorialBoardService,
+    private readonly sections: JournalSectionsService,
   ) {}
 
   @Get('editable')
@@ -54,6 +61,44 @@ export class JournalAdminController {
     @Body() dto: UpdateJournalMetadataDto,
   ) {
     return this.metadata.update(user, slug, dto);
+  }
+
+  @Get(':slug/sections')
+  @Permissions(PERMISSION_SLUGS.JOURNAL_EDIT_METADATA)
+  listSections(@CurrentUser() user: RequestUser, @Param('slug') slug: string) {
+    return this.sections.listForManager(user, slug);
+  }
+
+  @Post(':slug/sections')
+  @Permissions(PERMISSION_SLUGS.JOURNAL_EDIT_METADATA)
+  createSection(
+    @CurrentUser() user: RequestUser,
+    @Param('slug') slug: string,
+    @Body() dto: CreateJournalSectionDto,
+  ) {
+    return this.sections.create(user, slug, dto);
+  }
+
+  @Patch(':slug/sections/:sectionId')
+  @Permissions(PERMISSION_SLUGS.JOURNAL_EDIT_METADATA)
+  updateSection(
+    @CurrentUser() user: RequestUser,
+    @Param('slug') slug: string,
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @Body() dto: UpdateJournalSectionDto,
+  ) {
+    return this.sections.update(user, slug, sectionId, dto);
+  }
+
+  @Put(':slug/sections/:sectionId/editors')
+  @Permissions(PERMISSION_SLUGS.JOURNAL_EDIT_METADATA)
+  setSectionEditors(
+    @CurrentUser() user: RequestUser,
+    @Param('slug') slug: string,
+    @Param('sectionId', ParseUUIDPipe) sectionId: string,
+    @Body() dto: SetSectionEditorsDto,
+  ) {
+    return this.sections.setEditors(user, slug, sectionId, dto);
   }
 
   @Get(':slug/editorial-board')

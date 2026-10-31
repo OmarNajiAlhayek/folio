@@ -67,8 +67,23 @@ truth for journal-scoped queues.
 - `(journal_id, user_id, role_slug)` unique.
 - Replaced the old `user_section_editor_disciplines` table (migration
   `JournalScopedSectionEditors`).
-- `journal_manager` is deliberately **not** scoped by membership: it is a
-  university-wide role.
+- Partial unique indexes keep one `editor` and one `journal_manager` per journal.
+  `section_editor` and `reviewer` may repeat. `copyeditor` is unchanged.
+- `journal_manager` membership is the manager seat. Templates, reminder policy,
+  and `audit_log` have no `journal_id` and stay site-wide.
+
+### JournalSection and SectionEditorLink
+
+`sections` belongs to one journal (`name_ar`, `name_en`, `sort_order`,
+`is_active`). `section_editors` links a user to a section, unique on
+`(section_id, user_id)`, with `can_record_decision`. Linking also creates a
+`section_editor` membership so the role exists; the queue is the assignment
+rows, not that membership.
+
+On submit, `SubmissionRoutingService` assigns every linked section editor and
+copies `can_record_decision` onto `section_editor_assignments`. If the section
+has no links, it assigns the single editor-in-chief, else the single journal
+manager, else nobody. Later edits to the link do not rewrite open papers.
 
 ### User
 
@@ -80,6 +95,8 @@ truth for journal-scoped queues.
 ### Submission
 
 - Belongs to one **author** (`User` as `author_id`).
+- **`section_id`** (nullable, FK to `sections`, `ON DELETE RESTRICT`) — the
+  section the author chose. Required before submit.
 - **`journal_id` (NOT NULL)** — the editorial home, chosen by the author in the
   submission wizard. Landed nullable in `MultiJournalIssues` (no picker existed
   yet) and was tightened by `SubmissionJournalRequired` once

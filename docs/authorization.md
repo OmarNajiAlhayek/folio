@@ -15,8 +15,10 @@ Now that Folio is a press of nine journals, a permission says *what* a staff use
 may do and a membership says *where*. RBAC stays university-wide; `journal_memberships`
 narrows it.
 
-- **`journal_manager` is never scoped.** It is the university-wide role and reads
-  as "every journal"; it holds no membership rows.
+- **`journal_manager` is one seat per journal.** The membership is stored like
+  the editor-in-chief seat. A manager sees the queue, titles, and sections of
+  those journals only. Email templates, reminder policy, and the audit log stay
+  one site-wide copy and are not filtered by journal.
 - **An editor with no memberships is scoped to nothing**, not to everything. The
   opposite default would silently leave the scope unenforced for exactly the
   accounts nobody has configured yet.
@@ -32,9 +34,10 @@ narrows it.
   classifier labels (`user_section_editor_disciplines` was dropped in
   `1783200000000-JournalScopedSectionEditors`).
 - **Slug access uses the same scope as the queue.**
-  `SubmissionAccessService.assertStaffSubmissionScope` allows `journal_manager`
-  on every journal, an `editor` only on journals where they hold an `editor`
-  membership, and a `section_editor` only on submissions they are assigned to.
+  `SubmissionAccessService.staffSubmissionInScope` allows an `editor` or
+  `journal_manager` on journals where they hold that membership, and a
+  `section_editor` only on submissions that have a `section_editor_assignments`
+  row for them. Section-editor membership does not open the journal queue.
   `assertCanRead` applies it to `submission.view_editor_queue` after the draft
   check. Staff mutations that load a submission by slug call it too. Author,
   reviewer, and assigned copyeditor rules are unchanged.
@@ -53,8 +56,9 @@ page `/journal-manager/journals`), under a split the university set on
 
 | Field | Permission | Held by | Scope |
 |-------|------------|---------|-------|
-| `issn`, `eissn`, `description_ar`, `description_en` | `journal.edit_metadata` | `editor`, `journal_manager` | an editor: journals with an `editor` membership; the journal manager: all |
-| `title_ar`, `title_en` | `journal.edit_titles` | `journal_manager` only | all |
+| `issn`, `eissn`, `description_ar`, `description_en` | `journal.edit_metadata` | `editor`, `journal_manager` | journals where the caller holds `editor` or `journal_manager` |
+| `title_ar`, `title_en` | `journal.edit_titles` | `journal_manager` only | journals where the caller holds `journal_manager` |
+| Sections and section-editor links | `journal.edit_metadata` | `journal_manager` only | journals where the caller holds `journal_manager` |
 | Editorial board (`editorial_board_members`) | `journal.edit_metadata` | `editor`, `journal_manager` | same as ISSNs |
 
 The guard checks `journal.edit_metadata`; `JournalMetadataService` checks the
@@ -94,7 +98,7 @@ Defined in `permission-slugs.ts` and kept in sync with controllers and services:
 | `SUBMISSION_LIST_PERMISSIONS` | OR slugs for author list vs editor queue list |
 | `EDITOR_REVIEW_CONFIG_PERMISSIONS` | OR slugs for review-method / file-stage setup routes |
 | `ASSIGNMENT_REMINDER_PERMISSIONS` | OR slugs for assignment reminder admin routes |
-| `SUGGESTED_REVIEWERS_CALLER_PERMISSIONS` | **AND** slugs enforced in service (`getSuggestedReviewers`; guard checks assign only) |
+| `SUGGESTED_REVIEWERS_CALLER_PERMISSIONS` | Assign permission. The service also requires staff scope, and only offers that journal's reviewers |
 
 ## Service entry-point audit
 
@@ -107,7 +111,7 @@ Methods below declare why caller checks are kept or omitted.
 | `CopyeditWorkflowService.assignCopyeditor` | `assertCallerPermission(ASSIGN_COPYEDITOR)` | seed + HTTP |
 | `CopyeditWorkflowService.publishSubmission` | `assertCallerPermission(COPYEDIT_PUBLISH)` plus assigned copyeditor **or** `VIEW_EDITOR_QUEUE` | seed + HTTP |
 | `CopyeditWorkflowService.retractSubmission` | `assertCallerPermission(VIEW_EDITOR_QUEUE)` | HTTP |
-| `SubmissionAiService.getSuggestedReviewers` | `assertCallerHasEveryPermission(...)` | guard OR is looser than AND rule |
+| `SubmissionAiService.getSuggestedReviewers` | `assertCallerHasEveryPermission(ASSIGN_REVIEWER)` plus `assertStaffSubmissionScope` | candidates are reviewer members of that journal |
 | `ReviewWorkflowService.listAssignments` | `assertCanRead` | Guard slug is held by section editors too — see below |
 | `CopyeditWorkflowService.listCopyeditAssignments` | `assertCanRead` | Same rule, kept symmetrical |
 | `ReviewWorkflowService.updateReviewMethod` | none | HTTP-only; guard matches OR list |
@@ -120,20 +124,20 @@ Methods below declare why caller checks are kept or omitted.
 **Read submission (`GET /submissions/:slug`)**
 
 1. Guard: caller has one of `SUBMISSION_READ_PERMISSIONS`.
-2. Service: `assertCanRead` — drafts stay hidden from the editor queue. A caller with `submission.view_editor_queue` must also be in journal scope. Author, reviewer, copyeditor, and assigned section-editor rules still apply.
+2. Service: `assertCanRead` — drafts stay hidden from staff. A caller with `submission.view_editor_queue` or `submission.view_section_queue` must also be in journal scope. Author, reviewer, and copyeditor rules still apply.
 
 **Assign reviewer (`POST …/assign-reviewer`)**
 
 1. Guard: `SUBMISSION_ASSIGN_REVIEWER`.
 2. Service: same slug via `assertCallerPermission` (seed calls this directly), then `assertStaffSubmissionScope`.
-3. Service: `userHasPermission(reviewerId, REVIEW_SUBMIT)` — target must be a reviewer.
+3. Service: the reviewer must hold a `reviewer` membership on the submission's journal (`REVIEWER_NOT_IN_JOURNAL` otherwise), and `userHasPermission(reviewerId, REVIEW_SUBMIT)`.
 4. Service, inside the invitation transaction: re-read the reviewer `FOR UPDATE`, then refuse `REVIEWER_UNAVAILABLE` or `REVIEWER_AT_CAPACITY` (invited + accepted ≥ `reviewer_max_active_reviews`). The row lock is what stops two editors inviting at once from both seeing "2 of 3". Rules live in `reviewer-availability.ts`, shared with the reviewer directory.
 
 **Reviewer directory (`GET /submissions/:slug/reviewer-directory[/:reviewerId]`)**
 
 1. Guard: `SUBMISSION_ASSIGN_REVIEWER`.
 2. Service: `assertCanRead` — required for the same reason as the assignment list: `section_editor` holds the slug, and the directory carries every reviewer's email and workload.
-3. The detail's recent-assignment titles are limited to journals the caller holds `editor` / `section_editor` membership in, plus the manuscript in hand. Unpublished titles from other journals are not the caller's to read.
+3. The detail's recent-assignment titles are limited to journals the caller holds `editor`, `section_editor`, or `journal_manager` membership in, plus the manuscript in hand. Opening one paper does not reveal every other title in that journal.
 
 **List reviewer assignments (`GET /submissions/:slug/assignments`)**
 

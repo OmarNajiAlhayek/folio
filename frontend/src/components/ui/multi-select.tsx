@@ -6,7 +6,11 @@ import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { selectTriggerClass } from '@/components/ui/select';
 
-export type MultiSelectOption = { value: string; label: string };
+export type MultiSelectOption = {
+  value: string;
+  label: string;
+  disabled?: boolean;
+};
 
 export function MultiSelect({
   options,
@@ -43,7 +47,10 @@ export function MultiSelect({
   }, [value, options, emptyLabel, manySelectedLabel]);
 
   function toggle(v: string) {
-    if (value.includes(v)) onChange(value.filter((x) => x !== v));
+    const option = options.find((o) => o.value === v);
+    const selected = value.includes(v);
+    if (option?.disabled && !selected) return;
+    if (selected) onChange(value.filter((x) => x !== v));
     else onChange([...value, v]);
   }
 
@@ -76,14 +83,22 @@ export function MultiSelect({
           >
             {options.map((o) => {
               const checked = value.includes(o.value);
+              const blocked = Boolean(o.disabled) && !checked;
               return (
                 <li key={o.value} role="presentation">
                   <button
                     type="button"
                     role="option"
                     aria-selected={checked}
+                    aria-disabled={blocked || undefined}
+                    disabled={blocked}
                     onClick={() => toggle(o.value)}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-start text-sm text-ink outline-none hover:bg-accent/10 focus-visible:bg-accent/10"
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-3 py-2 text-start text-sm text-ink outline-none',
+                      blocked
+                        ? 'cursor-not-allowed opacity-50'
+                        : 'cursor-pointer hover:bg-accent/10 focus-visible:bg-accent/10',
+                    )}
                   >
                     <span
                       className={cn(

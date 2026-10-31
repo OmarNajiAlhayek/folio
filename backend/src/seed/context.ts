@@ -1,7 +1,6 @@
 import type { DataSource } from 'typeorm';
 import type { AiClientService } from '../ai/ai-client.service';
 import type { RbacService } from '../rbac/rbac.service';
-import type { SectionEditorWorkflowService } from '../submissions/section-editor-workflow.service';
 import type { SubmissionsService } from '../submissions/submissions.service';
 import type { UsersService } from '../users/users.service';
 
@@ -11,6 +10,5 @@ export type SeedContext = {
   usersService: UsersService;
   rbacService: RbacService;
   submissionsService: SubmissionsService;
-  sectionEditors: SectionEditorWorkflowService;
   aiClient: AiClientService;
 };

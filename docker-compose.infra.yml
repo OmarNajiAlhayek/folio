@@ -60,7 +60,13 @@ services:
     volumes:
       - folio-typesense-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8108/health | grep -q 'ok'"]
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/8108 && printf 'GET /health HTTP/1.0\r\n\r\n' >&3 && grep -q ok <&3",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

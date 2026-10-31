@@ -24,6 +24,12 @@ export class CreateSubmissionDto {
   @IsUUID()
   journalId: string;
 
+  /** Active section of `journalId`. Required before submit, optional on the draft. */
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  sectionId?: string;
+
   @ApiProperty({ minLength: 1, maxLength: 500 })
   @IsString()
   @MinLength(1)

@@ -92,6 +92,8 @@ function rolePillClass(slug: string): string {
       return `${ROLE_PILL_BASE} bg-amber-500/8 border-amber-500/15 text-amber-600 dark:text-amber-400`;
     case ROLE_SLUGS.JOURNAL_MANAGER:
       return `${ROLE_PILL_BASE} bg-rose-500/8 border-rose-500/15 text-rose-600 dark:text-rose-400`;
+    case ROLE_SLUGS.SECTION_EDITOR:
+      return `${ROLE_PILL_BASE} bg-teal-500/8 border-teal-500/15 text-teal-700 dark:text-teal-400`;
     default:
       return `${ROLE_PILL_BASE} bg-ink/5 border-ink/10 text-ink/60`;
   }
@@ -863,6 +865,11 @@ export default function JournalManagerUsersPage() {
                             {t('inviteSectionEditor')}
                           </Button>
                         )}
+                        {editorPending || sePending || jmPending ? (
+                          <p className="text-xs leading-relaxed text-ink/60">
+                            {t('journalsAfterAccept')}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -870,10 +877,10 @@ export default function JournalManagerUsersPage() {
                   {/* Editor-in-chief journal scope */}
                   {editorHas && (
                     <div className="border-t border-ink/8 px-5 pb-5 pt-4">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">
+                      <p className="text-sm font-semibold text-ink">
                         {t('editorJournals')}
                       </p>
-                      <p className="mb-2.5 mt-1 text-xs text-ink/55">
+                      <p className="mb-2.5 mt-1 text-xs leading-relaxed text-ink/60">
                         {t('editorJournalsHint')}
                       </p>
                       <StaffJournalScopeEditor userId={row.id} scope="editor" />
@@ -883,12 +890,56 @@ export default function JournalManagerUsersPage() {
                   {/* Section editor journal scope */}
                   {seHas && (
                     <div className="border-t border-ink/8 px-5 pb-5 pt-4">
-                      <p className="mb-2.5 text-[10px] font-bold uppercase tracking-wider text-ink/40">
-                        {t('sectionEditorDisciplines')}
+                      <p className="text-sm font-semibold text-ink">
+                        {t('sectionEditorJournals')}
+                      </p>
+                      <p className="mb-2.5 mt-1 text-xs leading-relaxed text-ink/60">
+                        {t('sectionEditorJournalsHint')}
                       </p>
                       <StaffJournalScopeEditor
                         userId={row.id}
                         scope="section-editor"
+                      />
+                    </div>
+                  )}
+
+                  {jmHas && row.id === me.data?.id ? (
+                    <div className="border-t border-ink/8 px-5 pb-5 pt-4">
+                      <p className="text-sm font-semibold text-ink">
+                        {t('journalManagerJournals')}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-ink/60">
+                        {t('journalManagerSelfHint')}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {jmHas && row.id !== me.data?.id ? (
+                    <div className="border-t border-ink/8 px-5 pb-5 pt-4">
+                      <p className="text-sm font-semibold text-ink">
+                        {t('journalManagerJournals')}
+                      </p>
+                      <p className="mb-2.5 mt-1 text-xs leading-relaxed text-ink/60">
+                        {t('journalManagerJournalsHint')}
+                      </p>
+                      <StaffJournalScopeEditor
+                        userId={row.id}
+                        scope="journal-manager"
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasRole(row, ROLE_SLUGS.REVIEWER) && (
+                    <div className="border-t border-ink/8 px-5 pb-5 pt-4">
+                      <p className="text-sm font-semibold text-ink">
+                        {t('reviewerJournals')}
+                      </p>
+                      <p className="mb-2.5 mt-1 text-xs leading-relaxed text-ink/60">
+                        {t('reviewerJournalsHint')}
+                      </p>
+                      <StaffJournalScopeEditor
+                        userId={row.id}
+                        scope="reviewer"
                       />
                     </div>
                   )}

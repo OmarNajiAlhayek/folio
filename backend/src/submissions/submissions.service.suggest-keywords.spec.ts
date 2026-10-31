@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test } from '@nestjs/testing';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -87,6 +88,15 @@ describe('SubmissionsService.suggestKeywords', () => {
         SubmissionFileService,
         SubmissionEventsService,
         ReviewWorkflowService,
+        {
+          provide: SubmissionRoutingService,
+          useValue: {
+            routeOnSubmit: jest.fn().mockResolvedValue([]),
+            assigneeIds: jest.fn().mockResolvedValue([]),
+            assertReadySection: jest.fn().mockResolvedValue(undefined),
+            sectionForJournal: jest.fn().mockResolvedValue({ id: 'section' }),
+          },
+        },
         CopyeditWorkflowService,
         SectionEditorWorkflowService,
         SubmissionLifecycleService,

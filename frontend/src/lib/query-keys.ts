@@ -23,6 +23,8 @@ export const queryKeys = {
     ['publication', slug, 'related'] as const,
   journals: ['journals'] as const,
   journalOptions: ['journals', 'options'] as const,
+  journalRoleHolders: (roleSlug: string) =>
+    ['users', 'journal-role-holders', roleSlug] as const,
   /** Staff editing (`GET /journals/editable`); under `journals` so portal invalidation reaches it. */
   editableJournals: ['journals', 'editable'] as const,
   editorialBoard: (slug: string) =>

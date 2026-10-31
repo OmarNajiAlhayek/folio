@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
+import { SubmissionRoutingService } from './submission-routing.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
@@ -143,6 +144,15 @@ describe('SubmissionsService under_review author email', () => {
         SubmissionFileService,
         SubmissionEventsService,
         ReviewWorkflowService,
+        {
+          provide: SubmissionRoutingService,
+          useValue: {
+            routeOnSubmit: jest.fn().mockResolvedValue([]),
+            assigneeIds: jest.fn().mockResolvedValue([]),
+            assertReadySection: jest.fn().mockResolvedValue(undefined),
+            sectionForJournal: jest.fn().mockResolvedValue({ id: 'section' }),
+          },
+        },
         CopyeditWorkflowService,
         SectionEditorWorkflowService,
         SubmissionLifecycleService,

@@ -38,9 +38,8 @@ import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { UpdateSubmissionDto } from './dto/update-submission.dto';
 import { PublishSubmissionDto } from './dto/publish-submission.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { SectionRecommendationDto } from './dto/section-recommendation.dto';
 import { AssignReviewerDto } from './dto/assign-reviewer.dto';
-import { AssignSectionEditorDto } from './dto/assign-section-editor.dto';
-import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { ReviewerDirectoryService } from './reviewer-directory.service';
 import { AssignCopyeditorDto } from './dto/assign-copyeditor.dto';
 import { UpdateReviewMethodDto } from './dto/update-review-method.dto';
@@ -76,7 +75,6 @@ export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
     private readonly docxImportService: DocxImportService,
-    private readonly sectionEditorWorkflowService: SectionEditorWorkflowService,
     private readonly reviewerDirectoryService: ReviewerDirectoryService,
   ) {}
 
@@ -238,47 +236,6 @@ export class SubmissionsController {
     );
   }
 
-  @Get(':slug/suggested-section-editors')
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
-  getSuggestedSectionEditors(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    return this.sectionEditorWorkflowService.getSuggestedSectionEditors(
-      slug,
-      user,
-    );
-  }
-
-  @Post(':slug/section-editor-assignment')
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
-  assignSectionEditor(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-    @Body() dto: AssignSectionEditorDto,
-    @Headers('x-folio-locale') folioLocale?: string,
-  ) {
-    return this.sectionEditorWorkflowService.assignSectionEditor(
-      slug,
-      dto.sectionEditorId,
-      user,
-      folioLocale,
-    );
-  }
-
-  @Delete(':slug/section-editor-assignment')
-  @HttpCode(204)
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
-  removeSectionEditorAssignment(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    return this.sectionEditorWorkflowService.removeSectionEditorAssignment(
-      slug,
-      user,
-    );
-  }
-
   @Get(':slug')
   @Permissions(...SUBMISSION_READ_PERMISSIONS)
   findOne(@Param('slug') slug: string, @CurrentUser() user: RequestUser) {
@@ -428,6 +385,20 @@ export class SubmissionsController {
         : false,
       authorResponseToReviewers: dto.authorResponseToReviewers,
     });
+  }
+
+  @Patch(':slug/section-recommendation')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
+  recordSectionRecommendation(
+    @Param('slug') slug: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SectionRecommendationDto,
+  ) {
+    return this.submissionsService.recordSectionRecommendation(
+      slug,
+      user,
+      dto.recommendation,
+    );
   }
 
   @Patch(':slug/status')

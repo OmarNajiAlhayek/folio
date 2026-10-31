@@ -171,7 +171,7 @@ export class ReviewerDirectoryService {
     user: RequestUser,
   ): Promise<ReviewerDirectoryEntry[]> {
     const submission = await this.readableSubmission(slug, user);
-    const reviewers = await this.loadReviewerPool();
+    const reviewers = await this.loadReviewerPool(submission.journalId);
     if (reviewers.length === 0) return [];
     return this.buildEntries(submission, reviewers);
   }
@@ -217,10 +217,18 @@ export class ReviewerDirectoryService {
   }
 
   /** The same pool `GET /users/reviewer-candidates` has always offered. */
-  private async loadReviewerPool(): Promise<User[]> {
-    const ids = await this.rbacService.listUserIdsWithPermission(
-      PERMISSION_SLUGS.REVIEW_SUBMIT,
+  private async loadReviewerPool(journalId: string): Promise<User[]> {
+    const memberIds = await this.journalMemberships.listUserIdsForJournal(
+      journalId,
+      ROLE_SLUGS.REVIEWER,
     );
+    if (memberIds.length === 0) return [];
+    const permitted = new Set(
+      await this.rbacService.listUserIdsWithPermission(
+        PERMISSION_SLUGS.REVIEW_SUBMIT,
+      ),
+    );
+    const ids = memberIds.filter((id) => permitted.has(id));
     if (ids.length === 0) return [];
     return this.usersRepo.find({
       where: { id: In(ids), willingToReview: true },
@@ -335,30 +343,36 @@ export class ReviewerDirectoryService {
 
   /**
    * Titles of unpublished manuscripts are editorial information of the
-   * journal they were sent to. An editor of one journal sees titles from the
-   * journals they edit (and from the manuscript in front of them); anything
-   * else shows only as "a manuscript in {journal}".
+   * journal they were sent to. The caller sees titles from journals where
+   * they are editor-in-chief, section editor, or journal manager, and the
+   * manuscript in front of them. Anything else shows only as "a manuscript
+   * in {journal}".
    */
   private async loadRecent(
     reviewerId: string,
     current: Submission,
     user: RequestUser,
   ): Promise<ReviewerRecentAssignment[]> {
-    const [editorJournals, sectionJournals, rows] = await Promise.all([
-      this.journalMemberships.listJournalIdsForUser(
-        user.sub,
-        ROLE_SLUGS.EDITOR,
-      ),
-      this.journalMemberships.listJournalIdsForUser(
-        user.sub,
-        ROLE_SLUGS.SECTION_EDITOR,
-      ),
-      this.queryRecent(reviewerId),
-    ]);
+    const [editorJournals, sectionJournals, managerJournals, rows] =
+      await Promise.all([
+        this.journalMemberships.listJournalIdsForUser(
+          user.sub,
+          ROLE_SLUGS.EDITOR,
+        ),
+        this.journalMemberships.listJournalIdsForUser(
+          user.sub,
+          ROLE_SLUGS.SECTION_EDITOR,
+        ),
+        this.journalMemberships.listJournalIdsForUser(
+          user.sub,
+          ROLE_SLUGS.JOURNAL_MANAGER,
+        ),
+        this.queryRecent(reviewerId),
+      ]);
     const visibleJournals = new Set([
       ...editorJournals,
       ...sectionJournals,
-      current.journalId,
+      ...managerJournals,
     ]);
     return rows.map((row) => ({
       assignmentId: row.assignmentId,

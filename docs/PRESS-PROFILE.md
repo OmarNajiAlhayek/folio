@@ -80,9 +80,10 @@ app at *Journal details* (`/journal-manager/journals`), not in code:
 
 | Field | Edited by |
 |-------|-----------|
-| Registered titles, Arabic and English | the journal manager only |
-| ISSN and e-ISSN | the journal manager, or that journal's editor-in-chief |
-| Aims and scope, Arabic and English | the journal manager, or that journal's editor-in-chief |
+| Registered titles, Arabic and English | the manager of that journal only |
+| ISSN and e-ISSN | the manager of that journal, or that journal's editor-in-chief |
+| Aims and scope, Arabic and English | the manager of that journal, or that journal's editor-in-chief |
+| Sections | the manager of that journal |
 
 The database is the source of truth from then on. `JOURNAL_CATALOG` holds only
 the values the rows were first created with, and migration
@@ -168,17 +169,21 @@ leave them as they are for now (G4, 2026-09-14).
 |------|-----------|
 | Primary Contact | Head of the journals section, Directorate of Scientific Research — `journals.dpt@damascusuniversity.edu.sy` |
 | Journal Manager (system administrator) | The DU Informatics Directorate (مديرية المعلوماتية) |
-| Section Editors | **Two administrative staff per journal**, 18 accounts in total, named per journal (`eng.editor@…`, `med.editor@…`) so journal scopes stay fully separated |
+| Section Editors | Staff linked to sections of one journal. One person may serve several sections. They see a paper only when it is submitted to a linked section. |
+| Reviewers | Belong to a journal, not a section. An invitation assigns them to one article. A second journal needs a second reviewer membership. |
+| Journal manager | One seat per journal. Sees that journal's queue and may invite reviewers and record decisions. Email templates, reminder policy, and the audit log stay one site-wide copy. |
 
-Section editors screen submissions **formally** before they reach reviewers.
+The author chooses the journal and one section. The paper goes to that section's editors. It does not pass the manager's desk first. If the section has no editor, it goes to the editor-in-chief, then to the manager only when the chief seat is empty.
 
 **Editors-in-chief and editors are entered by the university in the app
 (2026-09-14).** Editors-in-chief change every year, so nobody supplies a list for
 the developer to load. The journal manager invites the person as *editor*, and
-once they accept, sets **Editor-in-chief of** on the users screen. That one
-setting gives them their journal's submission queue and lets them edit its ISSNs
-and aims and scope. Section editors are placed the same way with their own
-journal setting.
+once they accept, sets **Editor-in-chief of** on the users screen, and only for
+journals that manager holds. That seat gives them their journal's submission
+queue and lets them edit its ISSNs and aims and scope. Section editors get the
+role the same way; the manager then links them to sections under Journal
+details. Reviewer membership is set on the same users card, for the manager's
+journals only.
 
 Supplied on 2026-09-12 for reference (3 of 9); the accounts themselves are
 created by the university:

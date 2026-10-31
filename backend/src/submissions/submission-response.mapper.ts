@@ -149,6 +149,14 @@ export function submissionToViewerJson(
     // The editorial home. Every viewer may know it — the portal publishes the
     // journal anyway — and the author's metadata form needs it to round-trip.
     journalId: s.journalId,
+    sectionId: s.sectionId ?? null,
+    section: s.section
+      ? {
+          id: s.section.id,
+          nameAr: s.section.nameAr,
+          nameEn: s.section.nameEn,
+        }
+      : null,
     keywords: s.keywords,
     keywordsAr: s.keywordsAr,
     status: s.status,
@@ -254,19 +262,24 @@ export function submissionToViewerJson(
     );
   }
 
-  if (viewer === 'editor' && s.sectionEditorAssignment) {
-    base.sectionEditorAssignment = {
-      id: s.sectionEditorAssignment.id,
-      sectionEditorId: s.sectionEditorAssignment.sectionEditorId,
-      assignedAt: s.sectionEditorAssignment.assignedAt,
-      sectionEditor: s.sectionEditorAssignment.sectionEditor
+  if (
+    (viewer === 'editor' || viewer === 'section_editor') &&
+    s.sectionEditorAssignments?.length
+  ) {
+    base.sectionEditorAssignments = s.sectionEditorAssignments.map((row) => ({
+      id: row.id,
+      sectionEditorId: row.sectionEditorId,
+      canRecordDecision: row.canRecordDecision,
+      recommendation: row.recommendation,
+      assignedAt: row.assignedAt,
+      sectionEditor: row.sectionEditor
         ? {
-            id: s.sectionEditorAssignment.sectionEditor.id,
-            displayName: s.sectionEditorAssignment.sectionEditor.displayName,
-            email: s.sectionEditorAssignment.sectionEditor.email,
+            id: row.sectionEditor.id,
+            displayName: row.sectionEditor.displayName,
+            email: row.sectionEditor.email,
           }
         : undefined,
-    };
+    }));
   }
 
   return base;

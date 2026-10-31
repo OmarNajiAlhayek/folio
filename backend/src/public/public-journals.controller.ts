@@ -9,6 +9,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { EditorialBoardService } from '../journals/editorial-board.service';
 import { JournalPortalService } from '../journals/journal-portal.service';
+import { JournalSectionsService } from '../journals/journal-sections.service';
 import { PublicationCatalogService } from '../submissions/publication-catalog.service';
 
 /**
@@ -27,6 +28,7 @@ export class PublicJournalsController {
     private readonly portal: JournalPortalService,
     private readonly catalog: PublicationCatalogService,
     private readonly board: EditorialBoardService,
+    private readonly sections: JournalSectionsService,
   ) {}
 
   @Get()
@@ -37,6 +39,12 @@ export class PublicJournalsController {
   @Get(':slug')
   getJournal(@Param('slug') slug: string) {
     return this.portal.getJournalBySlug(slug);
+  }
+
+  /** Active sections an author may choose when submitting to this journal. */
+  @Get(':slug/sections')
+  listSections(@Param('slug') slug: string) {
+    return this.sections.listActiveBySlug(slug);
   }
 
   /** The page URL given to DOAJ as the journal's editorial board. */

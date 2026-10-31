@@ -87,6 +87,12 @@ export default async function JournalPage({ params }: Props) {
           {journal.issn && <span dir="ltr">ISSN {journal.issn}</span>}
           {journal.eissn && <span dir="ltr">e-ISSN {journal.eissn}</span>}
           <Link
+            href={`/submissions/new?journal=${journal.slug}`}
+            className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
+          >
+            {t('submitToJournal')}
+          </Link>
+          <Link
             href={`/journals/${journal.slug}/editorial-board`}
             className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
           >

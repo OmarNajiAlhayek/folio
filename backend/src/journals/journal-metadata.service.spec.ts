@@ -75,16 +75,21 @@ describe('JournalMetadataService', () => {
   });
 
   describe('listEditable', () => {
-    it('gives the journal manager every journal, titles included', async () => {
+    it('gives the journal manager the journals they manage, titles included', async () => {
       const rows = await service.listEditable(MANAGER);
 
+      expect(listJournalIdsForUser).toHaveBeenCalledWith(
+        'jm-1',
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      );
       expect(rows).toEqual([
         expect.objectContaining({ slug: 'medj', canEditTitles: true }),
       ]);
-      expect(journalsRepo.find).toHaveBeenCalledWith({
-        order: { sortOrder: 'ASC' },
-      });
-      expect(listJournalIdsForUser).not.toHaveBeenCalled();
+      expect(journalsRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          order: { sortOrder: 'ASC' },
+        }),
+      );
     });
 
     it('gives an editor only the journals they are editor-in-chief of', async () => {

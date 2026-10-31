@@ -570,7 +570,7 @@ describe('checkDocxFormat', () => {
         (x) => x.code === 'MARGIN_TOP',
       );
       expect(mv).toBeDefined();
-      expect(mv!.expected).toBe('30 mm');
+      expect(mv!.expected).toBe('3 cm');
       expect(mv!.message).toMatch(/top margin/);
       expect(mv!.messageAr).toMatch(/الهامش العلوي/);
     });
@@ -580,7 +580,7 @@ describe('checkDocxFormat', () => {
       const mv = (await checkDocxFormat(buf, PROFILE)).find(
         (x) => x.code === 'MARGIN_BOTTOM',
       );
-      expect(mv?.expected).toBe('20 mm');
+      expect(mv?.expected).toBe('2 cm');
     });
 
     it.each([
@@ -630,13 +630,17 @@ describe('checkDocxFormat', () => {
       );
     });
 
-    it('violation message includes actual and expected mm values', async () => {
+    it('violation message includes actual and expected centimeter values', async () => {
       const buf = await makeDocx({ margins: { top: MM(25) } });
       const mv = (await checkDocxFormat(buf, PROFILE)).find(
         (x) => x.code === 'MARGIN_TOP',
       )!;
-      expect(mv.message).toMatch(/25/);
-      expect(mv.message).toMatch(/30/);
+      expect(mv.found).toBe('2.5 cm');
+      expect(mv.expected).toBe('3 cm');
+      expect(mv.message).toContain('2.5 cm');
+      expect(mv.message).toContain('3 cm');
+      expect(mv.messageAr).toContain('2.5 سم');
+      expect(mv.messageAr).toContain('3 سم');
     });
 
     it('flags typical Microsoft Word default margins (2.54cm = 1440 twips)', async () => {
@@ -670,9 +674,9 @@ describe('checkDocxFormat', () => {
       );
       expect(cv).toBeDefined();
       expect(cv!.severity).toBe('error');
-      expect(cv!.expected).toBe('1 column(s)');
-      expect(cv!.found).toBe('2 column(s)');
-      expect(cv!.messageAr).toMatch(/الأعمدة/);
+      expect(cv!.expected).toBe('1 column');
+      expect(cv!.found).toBe('2 columns');
+      expect(cv!.messageAr).toMatch(/عمود/);
     });
 
     it('reports COLUMN_COUNT when document has 1 column but 2 expected', async () => {
@@ -680,8 +684,8 @@ describe('checkDocxFormat', () => {
       const cv = (
         await checkDocxFormat(buf, PROFILE, { expectedColumns: 2 })
       ).find((x) => x.code === 'COLUMN_COUNT');
-      expect(cv?.expected).toBe('2 column(s)');
-      expect(cv?.found).toBe('1 column(s)');
+      expect(cv?.expected).toBe('2 columns');
+      expect(cv?.found).toBe('1 column');
     });
 
     it('passes when 2-column document is checked against expectedColumns=2', async () => {
@@ -702,7 +706,7 @@ describe('checkDocxFormat', () => {
       expect(fv!.severity).toBe('error');
       expect(fv!.expected).toBe('Times New Roman');
       expect(fv!.found).toBe('Arial');
-      expect(fv!.messageAr).toMatch(/اللاتيني/);
+      expect(fv!.messageAr).toMatch(/الإنكليزي/);
     });
 
     it('reports FONT_ARABIC when Arabic font is wrong', async () => {
@@ -913,9 +917,10 @@ describe('checkDocxFormat', () => {
       );
       expect(lv).toBeDefined();
       expect(lv!.severity).toBe('error');
-      expect(lv!.expected).toContain('240');
-      expect(lv!.found).toContain('480');
-      expect(lv!.messageAr).toMatch(/تباعد/);
+      expect(lv!.expected).toBe('Single');
+      expect(lv!.found).toBe('Double');
+      expect(lv!.message).toMatch(/Double/);
+      expect(lv!.messageAr).toMatch(/مزدوج/);
     });
 
     it.each(['exact', 'atLeast'])('flags lineRule="%s"', async (lineRule) => {
@@ -951,9 +956,10 @@ describe('checkDocxFormat', () => {
         (x) => x.code === 'PARA_SPACING_AFTER',
       );
       expect(pv).toBeDefined();
-      expect(pv!.expected).toBe('0 twips');
-      expect(pv!.found).toBe('160 twips');
+      expect(pv!.expected).toBe('0 pt');
+      expect(pv!.found).toBe('8 pt');
       expect(pv!.messageAr).toMatch(/بعد الفقرة/);
+      expect(pv!.messageAr).toContain('8 نقطة');
     });
 
     it('flags spacing before=200', async () => {
@@ -961,7 +967,7 @@ describe('checkDocxFormat', () => {
       const pv = (await checkDocxFormat(buf, PROFILE)).find(
         (x) => x.code === 'PARA_SPACING_BEFORE',
       );
-      expect(pv!.found).toBe('200 twips');
+      expect(pv!.found).toBe('10 pt');
       expect(pv!.messageAr).toMatch(/قبل الفقرة/);
     });
 
@@ -1089,7 +1095,8 @@ describe('checkDocxFormat', () => {
         (x) => x.code === 'LINE_NUMBERS_MISSING',
       );
       expect(lv?.severity).toBe('warning');
-      expect(lv?.expected).toBe('line numbers (left)');
+      expect(lv?.expected).toBe('left');
+      expect(lv?.found).toBe('none');
     });
 
     it('warns when an Arabic article numbers lines on the right (RTL section)', async () => {

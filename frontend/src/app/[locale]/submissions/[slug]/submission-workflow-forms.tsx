@@ -59,6 +59,7 @@ import {
 type MetadataPayload = z.infer<typeof createSubmissionSchema>;
 import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
 import { SubmissionJournalPicker } from '@/components/submission-journal-picker';
+import { SubmissionSectionPicker } from '@/components/submission-section-picker';
 import type { SubmissionDisciplineFields } from '@/lib/discipline-labels';
 import { DisciplineBadges } from '@/components/discipline-badges';
 
@@ -73,6 +74,7 @@ export type ContributorRow = {
 export type SubmissionMetadataFormInitial = {
   /** Journal id — required on create, and always present on an existing draft. */
   journalId: string;
+  sectionId?: string | null;
   title: string;
   titleAr: string;
   abstract: string;
@@ -144,6 +146,8 @@ type SubmissionMetadataFormProps = SubmissionFieldErrorProps &
         createMode?: false;
         slug: string;
         canEdit: boolean;
+        /** Journal and section stay put after the first submit. */
+        lockJournalSection?: boolean;
         initial: SubmissionMetadataFormInitial;
         onSaved: () => void;
         onError: (msg: string) => void;
@@ -170,11 +174,13 @@ export type SubmissionMetadataFormHandle = {
   mergeInitial: (partial: Partial<SubmissionMetadataFormInitial>) => void;
   setArticleType: (value: string) => void;
   setJournalId: (value: string) => void;
+  setSectionId: (value: string) => void;
 };
 
 export function emptySubmissionMetadataInitial(): SubmissionMetadataFormInitial {
   return {
     journalId: '',
+    sectionId: '',
     title: '',
     titleAr: '',
     abstract: '',
@@ -193,6 +199,7 @@ export function emptySubmissionMetadataInitial(): SubmissionMetadataFormInitial 
 
 type SubmissionMetadataFormValues = {
   journalId: string;
+  sectionId: string;
   title: string;
   titleAr: string;
   abstract: string;
@@ -239,6 +246,7 @@ function initialToFormValues(
 ): SubmissionMetadataFormValues {
   return {
     journalId: initial.journalId ?? '',
+    sectionId: initial.sectionId ?? '',
     title: initial.title,
     titleAr: initial.titleAr,
     abstract: initial.abstract,
@@ -268,6 +276,7 @@ export const SubmissionMetadataForm = forwardRef<
   const isCreate = props.createMode === true;
   const slug = !isCreate ? props.slug : '';
   const canEdit = isCreate ? true : props.canEdit;
+  const lockJournalSection = !isCreate && props.lockJournalSection === true;
   const initial = props.initial;
   const onError = props.onError;
   const saveLabelOverride = props.saveButtonLabel;
@@ -623,6 +632,7 @@ export const SubmissionMetadataForm = forwardRef<
       const merged: SubmissionMetadataFormInitial = {
         ...initial,
         journalId: partial.journalId ?? current.journalId,
+        sectionId: partial.sectionId ?? current.sectionId,
         title: partial.title ?? current.title,
         titleAr: partial.titleAr ?? current.titleAr,
         abstract: partial.abstract ?? current.abstract,
@@ -675,8 +685,20 @@ export const SubmissionMetadataForm = forwardRef<
 
   const setJournalId = useCallback(
     (value: string) => {
+      const current = getValues('journalId');
       setValue('journalId', value);
+      if (current && current !== value) {
+        setValue('sectionId', '');
+      }
       clearFormErr('journalId');
+    },
+    [getValues, setValue, clearFormErr],
+  );
+
+  const setSectionId = useCallback(
+    (value: string) => {
+      setValue('sectionId', value);
+      clearFormErr('sectionId');
     },
     [setValue, clearFormErr],
   );
@@ -860,6 +882,7 @@ export const SubmissionMetadataForm = forwardRef<
       mergeInitial,
       setArticleType,
       setJournalId,
+      setSectionId,
     }),
     [
       save,
@@ -868,6 +891,7 @@ export const SubmissionMetadataForm = forwardRef<
       mergeInitial,
       setArticleType,
       setJournalId,
+      setSectionId,
     ],
   );
 
@@ -967,10 +991,29 @@ export const SubmissionMetadataForm = forwardRef<
                     value={field.value}
                     onChange={(v) => {
                       field.onChange(v);
+                      setValue('sectionId', '');
                       clearFormErr('journalId');
                     }}
-                    disabled={!canEdit}
+                    disabled={!canEdit || lockJournalSection}
                     invalid={hasErr('journalId')}
+                  />
+                )}
+              />
+            ) : null}
+            {!hideJournal ? (
+              <Controller
+                name="sectionId"
+                control={control}
+                render={({ field }) => (
+                  <SubmissionSectionPicker
+                    journalId={watch('journalId')}
+                    value={field.value}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      clearFormErr('sectionId');
+                    }}
+                    disabled={!canEdit || lockJournalSection}
+                    invalid={hasErr('sectionId')}
                   />
                 )}
               />

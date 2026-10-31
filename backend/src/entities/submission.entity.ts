@@ -6,12 +6,12 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
-  OneToOne,
   UpdateDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '../common/base.entity';
 import { User } from './user.entity';
 import { Journal } from './journal.entity';
+import { JournalSection } from './journal-section.entity';
 import { JournalIssue } from './journal-issue.entity';
 import { SubmissionStatus } from './submission-status.enum';
 import { SubmissionArticleType } from './submission-article-type.enum';
@@ -63,6 +63,17 @@ export class Submission extends BaseEntity {
   @ManyToOne(() => Journal, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'journal_id' })
   journal: Journal;
+
+  /**
+   * Section inside {@link journalId}, chosen by the author. Null on a draft
+   * until they pick one; required before submit.
+   */
+  @Column({ name: 'section_id', type: 'uuid', nullable: true })
+  sectionId: string | null;
+
+  @ManyToOne(() => JournalSection, { onDelete: 'RESTRICT', nullable: true })
+  @JoinColumn({ name: 'section_id' })
+  section: JournalSection | null;
 
   /**
    * Issue (العدد) the article is placed in. Null until publish; publishing
@@ -345,8 +356,6 @@ export class Submission extends BaseEntity {
   @OneToMany(() => CopyeditAssignment, (a) => a.submission)
   copyeditAssignments: CopyeditAssignment[];
 
-  @OneToOne(() => SectionEditorAssignment, (a) => a.submission, {
-    nullable: true,
-  })
-  sectionEditorAssignment: SectionEditorAssignment | null;
+  @OneToMany(() => SectionEditorAssignment, (a) => a.submission)
+  sectionEditorAssignments: SectionEditorAssignment[];
 }

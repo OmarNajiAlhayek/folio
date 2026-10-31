@@ -16,7 +16,6 @@ import {
   describeSeedTarget,
   SeedNotAllowedError,
 } from './seed-guard';
-import { SectionEditorWorkflowService } from './submissions/section-editor-workflow.service';
 import { SubmissionsService } from './submissions/submissions.service';
 import { RbacService } from './rbac/rbac.service';
 import { UsersService } from './users/users.service';
@@ -24,7 +23,12 @@ import {
   requireSeedEditors,
   seedCoreAccounts,
   seedJournalEditors,
+  seedJournalManagers,
 } from './seed/accounts';
+import {
+  seedReviewerMemberships,
+  seedSubmissionSections,
+} from './seed/sections';
 import type { SeedContext } from './seed/context';
 import { seedPerfFixtures } from './seed/perf-fixtures';
 import { seedPublishedSamples } from './seed/published-samples';
@@ -58,7 +62,6 @@ async function run() {
   const usersService = app.get(UsersService);
   const rbacService = app.get(RbacService);
   const submissionsService = app.get(SubmissionsService);
-  const sectionEditors = app.get(SectionEditorWorkflowService);
   const aiClient = app.get(AiClientService);
   const aiEnabled = aiClient.isEnabled();
   const ctx: SeedContext = {
@@ -66,7 +69,6 @@ async function run() {
     usersService,
     rbacService,
     submissionsService,
-    sectionEditors,
     aiClient,
   };
 
@@ -80,13 +82,11 @@ async function run() {
 
   const accounts = await seedCoreAccounts(ctx);
   const press = await seedPressFixtures(dataSource, [
-    ...accounts.reviewers.map((user) => ({
-      userId: user.id,
-      roleSlug: ROLE_SLUGS.REVIEWER,
-    })),
     { userId: accounts.copyeditor.id, roleSlug: ROLE_SLUGS.COPYEDITOR },
   ]);
   const journalStaff = await seedJournalEditors({ ctx, press });
+  await seedJournalManagers({ ctx, press });
+  await seedReviewerMemberships(dataSource, press, accounts.reviewers);
   const editors = requireSeedEditors(journalStaff);
 
   await seedWorkflowSamples({
@@ -96,7 +96,6 @@ async function run() {
     reviewer: accounts.reviewer,
     copyeditor: accounts.copyeditor,
     press,
-    journalStaff,
     editors,
   });
   await seedPublishedSamples({
@@ -113,6 +112,11 @@ async function run() {
     dataSource,
     press.journalsBySlug,
     press.publishedIssueByJournalId,
+  );
+  await seedSubmissionSections(
+    dataSource,
+    press,
+    journalStaff.sectionEditorBySlug,
   );
 
   if (

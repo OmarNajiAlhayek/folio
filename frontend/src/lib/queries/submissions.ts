@@ -94,6 +94,17 @@ export type SubmissionRecord = {
   reviewMethod?: string;
   /** The journal this manuscript belongs to; NOT NULL on the server. */
   journalId?: string | null;
+  sectionId?: string | null;
+  section?: { id: string; nameAr: string; nameEn: string } | null;
+  viewerCanRecordDecision?: boolean;
+  sectionEditorAssignments?: Array<{
+    id: string;
+    sectionEditorId: string;
+    canRecordDecision: boolean;
+    recommendation: string | null;
+    assignedAt: string;
+    sectionEditor?: { id: string; displayName: string; email: string };
+  }>;
   articleType?: string | null;
   keywords?: string | null;
   keywordsAr?: string | null;
@@ -150,13 +161,6 @@ export type SubmissionRecord = {
     suggestion: string;
     rule: string;
   }> | null;
-  sectionEditorAssignment?: {
-    id: string;
-    sectionEditorId: string;
-    assignedById: string;
-    assignedAt: string;
-    sectionEditor?: { id: string; displayName: string; email: string };
-  } | null;
 };
 
 export type ReviewForEditor = {
@@ -192,14 +196,6 @@ export type AssignmentRow = {
   reviewer?: { displayName?: string; email?: string };
 };
 
-export type SectionEditorCandidate = {
-  id: string;
-  displayName: string;
-  email: string;
-  /** Journal slugs this section editor serves (`engj`). */
-  journals: string[];
-};
-
 export type SubmissionDetailPayload = {
   me: { id: string; permissions: string[] };
   sub: SubmissionRecord;
@@ -212,7 +208,6 @@ export type SubmissionDetailPayload = {
   assignmentReminders: Record<string, ReminderRow[]>;
   /** True when GET …/reminders failed for that assignment slug (not "empty list"). */
   reminderLoadFailedByAssignment: Record<string, boolean>;
-  sectionEditorCandidates: SectionEditorCandidate[];
 };
 
 export async function fetchSubmissionDetail(
@@ -226,9 +221,9 @@ export async function fetchSubmissionDetail(
   const s = await apiJson<SubmissionRecord>(`/submissions/${enc}`);
 
   const permissions = me.permissions ?? [];
-  const isEditorView = permissions.includes(
-    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-  );
+  const isEditorView =
+    permissions.includes(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE) ||
+    permissions.includes(PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE);
   const isOwner = s.authorId === me.id;
   const canListAssignments =
     isEditorView &&
@@ -264,34 +259,20 @@ export async function fetchSubmissionDetail(
     }
   }
 
-  // Round 3: section-editor candidates + all reminders in parallel. The
-  // reviewer pool is not loaded here: the reviewer browser fetches its own
-  // directory, which already marks who is on this manuscript.
+  // Reminders load after assignments. The reviewer pool is not loaded here:
+  // the reviewer browser fetches its own directory.
   const assignmentsWithSlug = assignmentRows.filter((a) => a.slug);
 
-  const canAssignSectionEditor = permissions.includes(
-    PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
-  );
   const canLoadReminders =
     canManageAssignmentReminders(permissions) && assignmentsWithSlug.length > 0;
 
-  const [seCandidatesResult, remindersResult] = await Promise.all([
-    canAssignSectionEditor
-      ? apiJson<SectionEditorCandidate[]>('/users/section-editor-candidates')
-          .then((data) => ({ ok: true as const, data }))
-          .catch(() => ({
-            ok: false as const,
-            data: [] as SectionEditorCandidate[],
-          }))
-      : Promise.resolve(null),
-    canLoadReminders
-      ? apiJson<Record<string, ReminderRow[]>>(
-          `/submissions/${enc}/assignment-reminders`,
-        )
-          .then((data) => ({ ok: true as const, data }))
-          .catch(() => ({ ok: false as const }))
-      : Promise.resolve(null),
-  ]);
+  const remindersResult = canLoadReminders
+    ? await apiJson<Record<string, ReminderRow[]>>(
+        `/submissions/${enc}/assignment-reminders`,
+      )
+        .then((data) => ({ ok: true as const, data }))
+        .catch(() => ({ ok: false as const }))
+    : null;
 
   const reminderMap: Record<string, ReminderRow[]> =
     remindersResult?.ok === true ? remindersResult.data : {};
@@ -300,9 +281,6 @@ export async function fetchSubmissionDetail(
       ? assignmentsWithSlug.map((a) => [String(a.slug), true])
       : [],
   );
-
-  const sectionEditorCandidates: SectionEditorCandidate[] =
-    seCandidatesResult?.ok ? seCandidatesResult.data : [];
 
   return {
     me: { id: me.id, permissions },
@@ -315,7 +293,6 @@ export async function fetchSubmissionDetail(
     editorAssignmentRows: assignmentRows,
     assignmentReminders: reminderMap,
     reminderLoadFailedByAssignment,
-    sectionEditorCandidates,
   };
 }
 

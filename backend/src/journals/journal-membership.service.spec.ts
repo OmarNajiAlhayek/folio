@@ -1,5 +1,7 @@
+import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { QueryFailedError } from 'typeorm';
 import { Journal } from '../entities/journal.entity';
 import { JournalMembership } from '../entities/journal-membership.entity';
 import { ROLE_SLUGS } from '../rbac/permission-slugs';
@@ -22,8 +24,12 @@ describe('JournalMembershipService', () => {
     find: jest.Mock;
     findOne: jest.Mock;
     delete: jest.Mock;
+    remove: jest.Mock;
     save: jest.Mock;
     create: jest.Mock;
+    manager: {
+      transaction: jest.Mock;
+    };
   };
   let journalsRepo: { find: jest.Mock; findOne: jest.Mock };
 
@@ -32,8 +38,18 @@ describe('JournalMembershipService', () => {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
       delete: jest.fn().mockResolvedValue({ affected: 0 }),
+      remove: jest.fn().mockResolvedValue(undefined),
       save: jest.fn((rows: unknown) => Promise.resolve(rows)),
       create: jest.fn((row: unknown) => row),
+      manager: {
+        transaction: jest.fn(
+          (
+            fn: (em: {
+              getRepository: () => typeof membershipsRepo;
+            }) => unknown,
+          ) => fn({ getRepository: () => membershipsRepo }),
+        ),
+      },
     };
     journalsRepo = {
       find: jest.fn().mockResolvedValue([MEDJ, ENGJ]),
@@ -179,6 +195,128 @@ describe('JournalMembershipService', () => {
     expect(stored).toEqual([]);
     expect(membershipsRepo.delete).toHaveBeenCalled();
     expect(membershipsRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('keeps a journal the same person already holds', async () => {
+    membershipsRepo.find.mockResolvedValue([
+      {
+        userId: 'se-1',
+        journalId: 'journal-engj',
+        user: { displayName: 'Section editor' },
+      },
+    ]);
+
+    const stored = await service.setJournalSlugsForUser(
+      'se-1',
+      ROLE_SLUGS.SECTION_EDITOR,
+      ['engj'],
+    );
+
+    expect(stored).toEqual(['engj']);
+    expect(membershipsRepo.delete).toHaveBeenCalled();
+  });
+
+  it('refuses a journal another person already holds', async () => {
+    membershipsRepo.find.mockResolvedValue([
+      {
+        userId: 'other',
+        journalId: 'journal-engj',
+        user: { displayName: 'Ada' },
+      },
+    ]);
+
+    await expect(
+      service.setJournalSlugsForUser('se-1', ROLE_SLUGS.EDITOR, ['engj']),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(membershipsRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it('turns a one-per-journal unique violation into the same conflict', async () => {
+    membershipsRepo.save.mockRejectedValue(
+      new QueryFailedError('INSERT', [], {
+        code: '23505',
+        constraint: 'uq_journal_memberships_one_editor',
+      }),
+    );
+
+    await expect(
+      service.setJournalSlugsForUser('se-1', ROLE_SLUGS.EDITOR, ['engj']),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('transfers a journal-manager seat the actor already holds', async () => {
+    membershipsRepo.find.mockImplementation(
+      (opts: { where: { userId?: unknown } }) => {
+        const userId = opts.where.userId;
+        if (userId === 'actor') {
+          return Promise.resolve([
+            {
+              userId: 'actor',
+              journalId: 'journal-engj',
+              roleSlug: 'journal_manager',
+            },
+            {
+              userId: 'actor',
+              journalId: 'journal-medj',
+              roleSlug: 'journal_manager',
+            },
+          ]);
+        }
+        if (userId === 'next') return Promise.resolve([]);
+        if (userId && typeof userId === 'object') {
+          return Promise.resolve([
+            { userId: 'next', journalId: 'journal-engj' },
+          ]);
+        }
+        return Promise.resolve([
+          {
+            userId: 'actor',
+            journalId: 'journal-engj',
+            user: { displayName: 'Current manager' },
+          },
+        ]);
+      },
+    );
+
+    const stored = await service.setJournalSlugsWithinActor(
+      'actor',
+      'next',
+      ROLE_SLUGS.JOURNAL_MANAGER,
+      ['engj'],
+    );
+
+    expect(membershipsRepo.remove).toHaveBeenCalledWith([
+      expect.objectContaining({ userId: 'actor', journalId: 'journal-engj' }),
+    ]);
+    expect(membershipsRepo.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        userId: 'next',
+        journalId: 'journal-engj',
+        roleSlug: ROLE_SLUGS.JOURNAL_MANAGER,
+      }),
+    ]);
+    expect(stored).toEqual(['engj']);
+  });
+
+  it('lists who holds each singleton seat', async () => {
+    membershipsRepo.find.mockResolvedValue([
+      {
+        userId: 'chief',
+        journal: { slug: 'medj' },
+        user: { displayName: 'Ada' },
+      },
+      {
+        userId: 'missing-journal',
+        journal: null,
+        user: { displayName: 'Dropped' },
+      },
+    ]);
+
+    await expect(
+      service.listSingletonRoleHolders(ROLE_SLUGS.EDITOR),
+    ).resolves.toEqual([
+      { journalSlug: 'medj', userId: 'chief', displayName: 'Ada' },
+    ]);
   });
 
   it('still resolves the classifier label for one journal', async () => {

@@ -18,8 +18,8 @@ export function Progress({
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="h-full w-full flex-1 bg-accent transition-all duration-500 ease-out rounded-full"
-        style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
+        className="absolute inset-y-0 start-0 h-full rounded-full bg-accent transition-all duration-500 ease-out"
+        style={{ width: `${value ?? 0}%` }}
       />
     </ProgressPrimitive.Root>
   );

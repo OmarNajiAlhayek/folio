@@ -42,9 +42,9 @@ const DESCRIPTION_FIELDS = ['descriptionAr', 'descriptionEn'] as const;
  * Titles are narrower because Scholar, DOAJ and the citation tags match on
  * them. Aims and scope change hands with each year's editor-in-chief.
  *
- * Scope is the press-wide rule from docs/authorization.md: `journal_manager` is
- * never scoped, an editor acts only where they hold an `editor` membership,
- * and an editor with no memberships can edit nothing.
+ * A journal manager acts only where they hold a `journal_manager` membership.
+ * An editor-in-chief acts only where they hold an `editor` membership.
+ * Titles stay with the manager of that journal.
  *
  * `JOURNAL_CATALOG` only seeded these columns. Nothing re-applies it, so a
  * value saved here stands until someone edits it again.
@@ -62,18 +62,18 @@ export class JournalMetadataService {
    * included: a retired title's archive still publishes its ISSN.
    */
   async listEditable(user: RequestUser): Promise<EditableJournal[]> {
-    const canEditTitles = this.canEditTitles(user);
-    if (this.isJournalManager(user)) {
-      const all = await this.journalsRepo.find({ order: { sortOrder: 'ASC' } });
-      return all.map((j) => this.toEditable(j, canEditTitles));
-    }
-    const ids = await this.editorJournalIds(user);
+    const managerIds = await this.managerJournalIds(user);
+    const editorIds = await this.editorJournalIds(user);
+    const ids = [...new Set([...managerIds, ...editorIds])];
     if (ids.length === 0) return [];
     const mine = await this.journalsRepo.find({
       where: { id: In(ids) },
       order: { sortOrder: 'ASC' },
     });
-    return mine.map((j) => this.toEditable(j, canEditTitles));
+    const titleIds = new Set(managerIds);
+    return mine.map((j) =>
+      this.toEditable(j, titleIds.has(j.id) && this.canEditTitles(user)),
+    );
   }
 
   /**
@@ -90,12 +90,46 @@ export class JournalMetadataService {
         code: 'NOT_FOUND',
       });
     }
-    if (
-      !this.isJournalManager(user) &&
-      !(await this.editorJournalIds(user)).includes(journal.id)
-    ) {
+    const allowed = new Set([
+      ...(await this.managerJournalIds(user)),
+      ...(await this.editorJournalIds(user)),
+    ]);
+    if (!allowed.has(journal.id)) {
       throw new ForbiddenException({
-        message: 'You can only edit journals you are editor-in-chief of',
+        message: 'You can only edit journals you manage or edit',
+        code: 'JOURNAL_OUT_OF_SCOPE',
+      });
+    }
+    return journal;
+  }
+
+  /** The journal a reader can submit to. Inactive titles are not offered. */
+  async findPublicJournal(slug: string): Promise<Journal> {
+    const journal = await this.journalsRepo.findOne({
+      where: { slug, isActive: true },
+    });
+    if (!journal) {
+      throw new NotFoundException({
+        message: 'Journal not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    return journal;
+  }
+
+  /** Sections and registered titles: the manager of this journal only. */
+  async findManagedJournal(user: RequestUser, slug: string): Promise<Journal> {
+    const journal = await this.journalsRepo.findOne({ where: { slug } });
+    if (!journal) {
+      throw new NotFoundException({
+        message: 'Journal not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    const managerIds = await this.managerJournalIds(user);
+    if (!managerIds.includes(journal.id)) {
+      throw new ForbiddenException({
+        message: 'You can only edit sections of a journal you manage',
         code: 'JOURNAL_OUT_OF_SCOPE',
       });
     }
@@ -108,7 +142,9 @@ export class JournalMetadataService {
     dto: UpdateJournalMetadataDto,
   ): Promise<EditableJournal> {
     const journal = await this.findEditableJournal(user, slug);
-    const canEditTitles = this.canEditTitles(user);
+    const canEditTitles =
+      (await this.managerJournalIds(user)).includes(journal.id) &&
+      this.canEditTitles(user);
     const patch: Partial<Journal> = {};
 
     for (const field of TITLE_FIELDS) {
@@ -159,16 +195,23 @@ export class JournalMetadataService {
     return this.toEditable(saved, canEditTitles);
   }
 
-  private isJournalManager(user: RequestUser): boolean {
-    return user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER);
-  }
-
   private canEditTitles(user: RequestUser): boolean {
     return user.permissionSlugs.includes(PERMISSION_SLUGS.JOURNAL_EDIT_TITLES);
   }
 
   private editorJournalIds(user: RequestUser): Promise<string[]> {
+    if (!user.roleSlugs.includes(ROLE_SLUGS.EDITOR)) return Promise.resolve([]);
     return this.memberships.listJournalIdsForUser(user.sub, ROLE_SLUGS.EDITOR);
+  }
+
+  private managerJournalIds(user: RequestUser): Promise<string[]> {
+    if (!user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) {
+      return Promise.resolve([]);
+    }
+    return this.memberships.listJournalIdsForUser(
+      user.sub,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    );
   }
 
   private parseIssn(raw: string | null, field: 'issn' | 'eissn') {

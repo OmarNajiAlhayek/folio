@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiErrorState } from '@/components/api-error-state';
 import { EditorialBoardEditor } from '@/components/editorial-board-editor';
+import { JournalSectionsEditor } from '@/components/journal-sections-editor';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,8 +87,7 @@ export default function JournalSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   const list = journals.data ?? [];
-  const selected =
-    list.find((j) => j.slug === selectedSlug) ?? list[0] ?? null;
+  const selected = list.find((j) => j.slug === selectedSlug) ?? list[0] ?? null;
 
   // Keyed on slug and updatedAt, so a background refetch of unchanged data
   // keeps what the user is typing, while switching journals or saving resets.
@@ -274,7 +274,11 @@ export default function JournalSettingsPage() {
           </ul>
         </nav>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="space-y-5" noValidate>
+        <form
+          onSubmit={(e) => void onSubmit(e)}
+          className="space-y-5"
+          noValidate
+        >
           <section className={SECTION_CLS} aria-labelledby="journal-titles">
             <h2
               id="journal-titles"
@@ -405,6 +409,12 @@ export default function JournalSettingsPage() {
 
         {/* Saves per change, independent of the form above; keyed so switching journals resets it. */}
         <div className="lg:col-start-2">
+          {selected.canEditTitles ? (
+            <JournalSectionsEditor
+              key={`sections-${selected.slug}`}
+              slug={selected.slug}
+            />
+          ) : null}
           <EditorialBoardEditor key={selected.slug} slug={selected.slug} />
         </div>
       </div>

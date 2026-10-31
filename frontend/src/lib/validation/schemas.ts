@@ -143,6 +143,7 @@ function refineAbstractWordLimits(
 export const createSubmissionSchema = z
   .object({
     journalId: z.string().uuid(),
+    sectionId: z.string().uuid(),
     title: z.string().trim().min(1).max(500),
     titleAr: optionalTrimmedMinMax(1, 500),
     abstract: z.string().trim().min(1).max(20000),
@@ -172,6 +173,7 @@ export const createSubmissionSchema = z
 export const submissionMetadataPatchSchema = z
   .object({
     journalId: z.string().uuid(),
+    sectionId: z.string().uuid(),
     title: z.string().trim().min(1).max(500),
     titleAr: z.string().trim().min(1).max(500),
     abstract: z.string().trim().min(1).max(20000),
@@ -220,7 +222,7 @@ export const updateUserRolesSchema = z.object({
 
 /** backend/src/users/dto/create-role-invitation.dto.ts */
 export const createRoleInvitationSchema = z.object({
-  roleSlug: z.enum(['editor', 'journal_manager']),
+  roleSlug: z.enum(['editor', 'journal_manager', 'section_editor']),
 });
 
 /** backend/src/submissions/dto/assign-reviewer.dto.ts */

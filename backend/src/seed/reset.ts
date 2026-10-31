@@ -37,6 +37,8 @@ export async function resetAllDevData(dataSource: DataSource): Promise<void> {
       article_summary_embeddings,
       article_chunk_embeddings,
       reviewer_bio_embeddings,
+      section_editors,
+      sections,
       journal_memberships,
       journal_issues
     RESTART IDENTITY CASCADE

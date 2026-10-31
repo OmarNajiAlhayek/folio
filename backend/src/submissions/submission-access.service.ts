@@ -45,7 +45,7 @@ export class SubmissionAccessService {
     @InjectRepository(CopyeditAssignment)
     private readonly copyeditAssignmentsRepo: Repository<CopyeditAssignment>,
     @InjectRepository(SectionEditorAssignment)
-    private readonly seAssignmentsRepo: Repository<SectionEditorAssignment>,
+    private readonly sectionAssignmentsRepo: Repository<SectionEditorAssignment>,
     private readonly journalMemberships: JournalMembershipService,
   ) {}
 
@@ -84,11 +84,9 @@ export class SubmissionAccessService {
   }
 
   /**
-   * Staff may act on a submission only inside the scope the queue already
-   * applies. `journal_manager` is press-wide. An editor needs an `editor`
-   * membership for this journal; none means no journals. A section editor
-   * needs an assignment to this submission. Holding both roles passes if
-   * either rule matches.
+   * Staff may act on a submission only inside the journals the queue already
+   * shows. An editor-in-chief or journal manager needs a membership on this
+   * journal. A section editor needs an assignment row on this paper.
    *
    * Author, reviewer, and copyeditor checks stay in {@link assertCanRead}.
    * This helper does not grant those roles a journal.
@@ -141,13 +139,14 @@ export class SubmissionAccessService {
       if (copyeditAssigned) return;
     }
     if (this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)) {
-      const seAssigned = await this.seAssignmentsRepo.exists({
-        where: {
-          submissionId: submission.id,
-          sectionEditorId: user.sub,
-        },
-      });
-      if (seAssigned) return;
+      this.assertEditorQueueSubmissionVisible(submission);
+      try {
+        await this.assertStaffSubmissionScope(submission, user);
+        return;
+      } catch (err) {
+        if (!isJournalOutOfScope(err)) throw err;
+        if (!editorOutOfScope) editorOutOfScope = err;
+      }
     }
     if (editorOutOfScope) throw editorOutOfScope;
     throw new ForbiddenException({
@@ -157,35 +156,129 @@ export class SubmissionAccessService {
   }
 
   /**
-   * Same split as `editorQueueJournalIds`: the journal manager is every
-   * journal, and everyone else is the journals they actually hold.
+   * Journals whose whole queue this user sees: editor-in-chief seats and
+   * journal-manager seats. Section editors are not included; they see
+   * assigned papers only ({@link assignedSubmissionIds}).
+   */
+  async editorQueueJournalIds(user: RequestUser): Promise<string[]> {
+    const ids = new Set<string>();
+    if (user.roleSlugs.includes(ROLE_SLUGS.EDITOR)) {
+      for (const id of await this.journalMemberships.listJournalIdsForUser(
+        user.sub,
+        ROLE_SLUGS.EDITOR,
+      )) {
+        ids.add(id);
+      }
+    }
+    if (user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) {
+      for (const id of await this.journalMemberships.listJournalIdsForUser(
+        user.sub,
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      )) {
+        ids.add(id);
+      }
+    }
+    return [...ids];
+  }
+
+  /** Papers assigned to this section editor. Empty when they lack the role. */
+  async assignedSubmissionIds(user: RequestUser): Promise<string[]> {
+    if (!this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)) {
+      return [];
+    }
+    const rows = await this.sectionAssignmentsRepo.find({
+      where: { sectionEditorId: user.sub },
+      select: ['submissionId'],
+    });
+    return rows.map((row) => row.submissionId);
+  }
+
+  /**
+   * Editor-in-chief and journal manager record a decision by role.
+   * A section editor records only when the assignment snapshot allows it.
+   */
+  async canRecordDecision(
+    submission: Submission,
+    user: RequestUser,
+  ): Promise<boolean> {
+    if (!submission.journalId) return false;
+    if (user.roleSlugs.includes(ROLE_SLUGS.EDITOR)) {
+      const chiefs = await this.journalMemberships.listJournalIdsForUser(
+        user.sub,
+        ROLE_SLUGS.EDITOR,
+      );
+      if (chiefs.includes(submission.journalId)) return true;
+    }
+    if (user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) {
+      const managers = await this.journalMemberships.listJournalIdsForUser(
+        user.sub,
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      );
+      if (managers.includes(submission.journalId)) return true;
+    }
+    const row = await this.sectionAssignmentsRepo.findOne({
+      where: { submissionId: submission.id, sectionEditorId: user.sub },
+      select: ['id', 'canRecordDecision'],
+    });
+    return row?.canRecordDecision === true;
+  }
+
+  /**
+   * Editor-in-chief, journal manager, or assigned section editor, and only
+   * inside the journals or papers that queue already shows. An editor who
+   * can read a paper solely as its author does not get the editorial view.
+   */
+  async hasEditorialAccess(
+    submission: Submission,
+    user: RequestUser,
+  ): Promise<boolean> {
+    if (
+      !this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE) &&
+      !this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
+    ) {
+      return false;
+    }
+    return this.staffSubmissionInScope(submission, user);
+  }
+
+  /** Reviewer members of one journal. Suggestions and invitations use this pool. */
+  reviewerIdsForJournal(journalId: string): Promise<string[]> {
+    return this.journalMemberships.listUserIdsForJournal(
+      journalId,
+      ROLE_SLUGS.REVIEWER,
+    );
+  }
+
+  async assertCanRecordDecision(
+    submission: Submission,
+    user: RequestUser,
+  ): Promise<void> {
+    if (await this.canRecordDecision(submission, user)) return;
+    throw new ForbiddenException({
+      message:
+        'You can recommend a decision on this submission, not record one',
+      code: 'RECOMMEND_ONLY',
+    });
+  }
+
+  /**
+   * Editor-in-chief and journal-manager journals, then an assignment row
+   * for a section editor. Author, reviewer, and copyeditor checks stay in
+   * {@link assertCanRead}.
    */
   private async staffSubmissionInScope(
     submission: Submission,
     user: RequestUser,
   ): Promise<boolean> {
-    if (user.roleSlugs.includes(ROLE_SLUGS.JOURNAL_MANAGER)) return true;
-    if (user.roleSlugs.includes(ROLE_SLUGS.EDITOR)) {
-      const journalIds = await this.journalMemberships.listJournalIdsForUser(
-        user.sub,
-        ROLE_SLUGS.EDITOR,
-      );
-      if (submission.journalId && journalIds.includes(submission.journalId)) {
-        return true;
-      }
+    if (!submission.journalId) return false;
+    const journalIds = await this.editorQueueJournalIds(user);
+    if (journalIds.includes(submission.journalId)) return true;
+    if (!this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)) {
+      return false;
     }
-    if (
-      user.roleSlugs.includes(ROLE_SLUGS.SECTION_EDITOR) ||
-      this.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE)
-    ) {
-      return this.seAssignmentsRepo.exists({
-        where: {
-          submissionId: submission.id,
-          sectionEditorId: user.sub,
-        },
-      });
-    }
-    return false;
+    return this.sectionAssignmentsRepo.exists({
+      where: { submissionId: submission.id, sectionEditorId: user.sub },
+    });
   }
 
   async getBySlugOrThrow(slug: string): Promise<Submission> {
@@ -232,8 +325,9 @@ export class SubmissionAccessService {
         // Needed for the author's anonymized review-progress timeline.
         'reviewAssignments.review',
         'copyeditAssignments',
-        'sectionEditorAssignment',
-        'sectionEditorAssignment.sectionEditor',
+        'section',
+        'sectionEditorAssignments',
+        'sectionEditorAssignments.sectionEditor',
       ],
     });
     if (!s) {
@@ -244,6 +338,8 @@ export class SubmissionAccessService {
     }
     await this.assertCanRead(s, user);
     const role = this.viewerRole(s, user);
-    return submissionToViewerJson(s, role);
+    const json = submissionToViewerJson(s, role);
+    json.viewerCanRecordDecision = await this.canRecordDecision(s, user);
+    return json;
   }
 }

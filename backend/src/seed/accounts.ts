@@ -5,8 +5,10 @@ import { JOURNAL_CATALOG } from '../journals/journal-catalog';
 import {
   ensureExclusiveJournalMembership,
   SEEDED_EDITOR_PASSWORD,
+  SEEDED_MANAGER_PASSWORD,
   SEEDED_SECTION_EDITOR_PASSWORD,
   seededEditorEmail,
+  seededManagerEmail,
   seededSectionEditorEmail,
   type SeededPress,
 } from '../journals/seed-journals';
@@ -164,6 +166,46 @@ export async function seedJournalEditors(options: {
   }
 
   return { editorReqBySlug, sectionEditorBySlug };
+}
+
+/**
+ * One journal manager per catalog journal. `manager@folio.local` stays the
+ * economics manager so the existing login still works. The seat is a
+ * membership, not a press-wide view.
+ */
+export async function seedJournalManagers(options: {
+  ctx: SeedContext;
+  press: SeededPress;
+}): Promise<void> {
+  const { ctx, press } = options;
+  const { dataSource, usersService, rbacService } = ctx;
+  let orcidSerial = 200;
+  for (const entry of JOURNAL_CATALOG) {
+    const journal = press.journalsBySlug.get(entry.slug);
+    if (!journal) {
+      throw new Error(`Seed: no journal row for slug "${entry.slug}"`);
+    }
+    const isPressManager = entry.slug === 'econj';
+    const manager = await ensureUser(usersService, rbacService, {
+      email: seededManagerEmail(entry.slug),
+      password: SEEDED_MANAGER_PASSWORD,
+      displayName: isPressManager
+        ? 'M. Journal Manager'
+        : `Manager, ${entry.slug}`,
+      roleSlugs: [ROLE_SLUGS.JOURNAL_MANAGER],
+      profile: {
+        affiliation: entry.titleEn,
+        orcid: isPressManager ? '0000-0000-0000-0028' : devOrcid(orcidSerial++),
+        willingToReview: false,
+      },
+    });
+    await ensureExclusiveJournalMembership(
+      dataSource,
+      journal,
+      manager.id,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    );
+  }
 }
 
 /** Looks up the five chiefs the demo manuscripts are acted on by, in seed order. */

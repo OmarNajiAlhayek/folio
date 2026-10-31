@@ -640,6 +640,80 @@ function dominantSize(t: ScriptTallies): number | undefined {
 const pt = (halfPoints: number) => `${halfPoints / 2} pt`;
 const mm = (twips: number) => Math.round((twips / MM_TO_TWIPS) * 10) / 10;
 
+function roundMeasure(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  return String(Math.round(n * 100) / 100);
+}
+
+/** Author-facing length. The journal guide states margins in centimeters. */
+function cmFromMm(mmValue: number): string {
+  return `${roundMeasure(mmValue / 10)} cm`;
+}
+
+function cmFromMmAr(mmValue: number): string {
+  return `${roundMeasure(mmValue / 10)} سم`;
+}
+
+function ptFromTwips(twips: number): string {
+  return `${roundMeasure(twips / 20)} pt`;
+}
+
+function ptFromTwipsAr(twips: number): string {
+  return `${roundMeasure(twips / 20)} نقطة`;
+}
+
+/** Word names single (240), 1.15 (276), 1.5 (360), and double (480). */
+function lineSpacingLabel(twips: number): string {
+  const lines = twips / SINGLE_LINE_TWIPS;
+  if (Math.abs(lines - 1) < 0.01) return 'Single';
+  if (Math.abs(lines - 2) < 0.01) return 'Double';
+  if (Math.abs(lines - 1.5) < 0.01) return '1.5';
+  if (Math.abs(lines - 1.15) < 0.02) return '1.15';
+  return roundMeasure(lines);
+}
+
+function lineSpacingLabelAr(label: string): string {
+  if (label === 'Single') return 'مفرد';
+  if (label === 'Double') return 'مزدوج';
+  return label;
+}
+
+function lineSpacingImperativeAr(label: string): string {
+  if (label === 'Single') return 'مفرداً';
+  if (label === 'Double') return 'مزدوجاً';
+  return lineSpacingLabelAr(label);
+}
+
+function lineRuleLabel(rule: string, twips: number): string {
+  const points = roundMeasure(twips / 20);
+  if (rule === 'exact') return `Exactly ${points} pt`;
+  if (rule === 'atLeast') return `At least ${points} pt`;
+  return rule;
+}
+
+function lineRuleLabelAr(rule: string, twips: number): string {
+  const points = roundMeasure(twips / 20);
+  if (rule === 'exact') return `تماماً ${points} نقطة`;
+  if (rule === 'atLeast') return `على الأقل ${points} نقطة`;
+  return rule;
+}
+
+function columnLabel(n: number): string {
+  return n === 1 ? '1 column' : `${n} columns`;
+}
+
+function columnAfterMin(n: number): string {
+  if (n === 1) return 'عمود واحد';
+  if (n === 2) return 'عمودين';
+  return `${n} أعمدة`;
+}
+
+function columnAccusative(n: number): string {
+  if (n === 1) return 'عموداً واحداً';
+  if (n === 2) return 'عمودين';
+  return `${n} أعمدة`;
+}
+
 /**
  * Detects dominant citation style from document body text.
  * Returns 'vancouver' for [1]/[1,2] numbered, 'apa' for (Author, Year) or
@@ -825,14 +899,14 @@ export async function checkDocxFormat(
       // The journal's own laid-out articles move these, so they only warn.
       {
         key: 'header',
-        label: 'header distance',
-        labelAr: 'مسافة الرأسية',
+        label: 'distance from the page edge to the header',
+        labelAr: 'المسافة من حافة الصفحة إلى الرأس',
         severity: 'warning',
       },
       {
         key: 'footer',
-        label: 'footer distance',
-        labelAr: 'مسافة التذييل',
+        label: 'distance from the page edge to the footer',
+        labelAr: 'المسافة من حافة الصفحة إلى التذييل',
         severity: 'warning',
       },
     ];
@@ -843,12 +917,15 @@ export async function checkDocxFormat(
       const expectedTwips = Math.round(requiredMm * MM_TO_TWIPS);
       if (Math.abs(actualTwips - expectedTwips) > MARGIN_TOLERANCE_TWIPS) {
         const actualMm = mm(actualTwips);
+        const foundEn = cmFromMm(actualMm);
+        const expectedEn = cmFromMm(requiredMm);
+        const setAr = key === 'header' || key === 'footer' ? 'اجعلها' : 'اجعله';
         push({
           code: `MARGIN_${key.toUpperCase()}`,
-          message: `Incorrect ${label}: document has ${actualMm} mm, required ${requiredMm} mm`,
-          messageAr: `${labelAr} غير صحيح: الوثيقة تحتوي على ${actualMm} ملم، المطلوب ${requiredMm} ملم`,
-          expected: `${requiredMm} mm`,
-          found: `${actualMm} mm`,
+          message: `The ${label} is ${foundEn}. Set it to ${expectedEn}.`,
+          messageAr: `${labelAr} ${cmFromMmAr(actualMm)}. ${setAr} ${cmFromMmAr(requiredMm)}.`,
+          expected: expectedEn,
+          found: foundEn,
           severity,
         });
       }
@@ -862,10 +939,10 @@ export async function checkDocxFormat(
   if (cols !== expectedColumns) {
     push({
       code: 'COLUMN_COUNT',
-      message: `Incorrect column layout: document has ${cols} column(s), required ${expectedColumns}`,
-      messageAr: `تنسيق الأعمدة غير صحيح: الوثيقة تحتوي على ${cols} عمود/أعمدة، المطلوب ${expectedColumns}`,
-      expected: `${expectedColumns} column(s)`,
-      found: `${cols} column(s)`,
+      message: `The document has ${columnLabel(cols)}. Use ${columnLabel(expectedColumns)}.`,
+      messageAr: `الوثيقة من ${columnAfterMin(cols)}. استخدم ${columnAccusative(expectedColumns)}.`,
+      expected: columnLabel(expectedColumns),
+      found: columnLabel(cols),
       severity: 'error',
     });
   }
@@ -875,8 +952,9 @@ export async function checkDocxFormat(
     push({
       code: 'DIFFERENT_FIRST_PAGE',
       message:
-        'The first page must use its own header and footer ("Different First Page")',
-      messageAr: 'يجب تفعيل خيار "صفحة أولى مختلفة" للرأس والتذييل',
+        'Turn on Different First Page so the first page has its own header and footer.',
+      messageAr:
+        'فعّل «صفحة أولى مختلفة» حتى يكون للصفحة الأولى رأس وتذييل خاصان بها.',
       expected: 'Different First Page',
       found: 'not set',
       severity: 'warning',
@@ -890,9 +968,9 @@ export async function checkDocxFormat(
     if (!firstTag(mainXml, 'w:lnNumType')) {
       push({
         code: 'LINE_NUMBERS_MISSING',
-        message: `Lines must be numbered (on the ${requiredSide} for ${articleIsArabic ? 'Arabic' : 'English'} articles)`,
-        messageAr: `يجب ترقيم الأسطر ضمن المقالة (جهة ${requiredSideAr} للمقالة المكتوبة باللغة ${articleIsArabic ? 'العربية' : 'الإنكليزية'})`,
-        expected: `line numbers (${requiredSide})`,
+        message: `Number the lines on the ${requiredSide} for ${articleIsArabic ? 'Arabic' : 'English'} articles.`,
+        messageAr: `رقّم الأسطر من جهة ${requiredSideAr} لأن المقالة ${articleIsArabic ? 'عربية' : 'إنكليزية'}.`,
+        expected: requiredSide,
         found: 'none',
         severity: 'warning',
       });
@@ -901,10 +979,11 @@ export async function checkDocxFormat(
       const numbersOnRight = Boolean(onOff(mainXml, 'w:bidi'));
       if (numbersOnRight !== !articleIsArabic) {
         const foundSide = numbersOnRight ? 'right' : 'left';
+        const foundSideAr = numbersOnRight ? 'اليمين' : 'اليسار';
         push({
           code: 'LINE_NUMBERS_SIDE',
-          message: `Line numbers must be on the ${requiredSide} for ${articleIsArabic ? 'Arabic' : 'English'} articles (found on the ${foundSide})`,
-          messageAr: `يجب أن يكون ترقيم الأسطر جهة ${requiredSideAr} للمقالة المكتوبة باللغة ${articleIsArabic ? 'العربية' : 'الإنكليزية'}`,
+          message: `Line numbers are on the ${foundSide}. Put them on the ${requiredSide} for ${articleIsArabic ? 'Arabic' : 'English'} articles.`,
+          messageAr: `ترقيم الأسطر من جهة ${foundSideAr}. انقله إلى جهة ${requiredSideAr} لأن المقالة ${articleIsArabic ? 'عربية' : 'إنكليزية'}.`,
           expected: requiredSide,
           found: foundSide,
           severity: 'warning',
@@ -919,22 +998,24 @@ export async function checkDocxFormat(
     const [rule, lineStr] = dominantLine.split(':');
     const line = Number(lineStr);
     if (rule !== 'auto') {
+      const foundEn = lineRuleLabel(rule, line);
       push({
         code: 'LINE_SPACING_RULE',
-        message: `Incorrect line spacing rule: found "${rule}", required "auto" (single spacing)`,
-        messageAr: `قاعدة تباعد الأسطر غير صحيحة: تم العثور على "${rule}"، المطلوب "auto" (مفرد)`,
-        expected: 'auto',
-        found: rule,
+        message: `Line spacing is ${foundEn}. Set it to Single.`,
+        messageAr: `تباعد الأسطر ${lineRuleLabelAr(rule, line)}. اجعله مفرداً.`,
+        expected: 'Single',
+        found: foundEn,
         severity: 'error',
       });
     } else if (line !== profile.documentLineSpacingTwips) {
-      const expected = profile.documentLineSpacingTwips;
+      const foundEn = lineSpacingLabel(line);
+      const expectedEn = lineSpacingLabel(profile.documentLineSpacingTwips);
       push({
         code: 'LINE_SPACING',
-        message: `Incorrect line spacing: found ${line} twips (${(line / SINGLE_LINE_TWIPS).toFixed(2)} lines), required ${expected} (single)`,
-        messageAr: `تباعد الأسطر غير صحيح: تم العثور على ${line} twips، المطلوب ${expected} (مفرد)`,
-        expected: `${expected} twips (single)`,
-        found: `${line} twips`,
+        message: `Line spacing is ${foundEn}. Set it to ${expectedEn}.`,
+        messageAr: `تباعد الأسطر ${lineSpacingLabelAr(foundEn)}. اجعله ${lineSpacingImperativeAr(expectedEn)}.`,
+        expected: expectedEn,
+        found: foundEn,
         severity: 'error',
       });
     }
@@ -960,13 +1041,17 @@ export async function checkDocxFormat(
   for (const { tally, expected, code, label, labelAr } of spacingChecks) {
     const found = tally.mode();
     if (found !== undefined && found !== String(expected)) {
-      const shown = found === 'auto' ? 'auto' : `${found} twips`;
+      const foundEn = found === 'auto' ? 'Auto' : ptFromTwips(Number(found));
+      const expectedEn = ptFromTwips(expected);
+      const foundAr =
+        found === 'auto' ? 'تلقائي' : ptFromTwipsAr(Number(found));
+      const expectedAr = ptFromTwipsAr(expected);
       push({
         code,
-        message: `Incorrect paragraph spacing ${label}: found ${shown}, required ${expected}`,
-        messageAr: `المسافة ${labelAr} غير صحيحة: تم العثور على ${shown}، المطلوب ${expected}`,
-        expected: `${expected} twips`,
-        found: shown,
+        message: `Space ${label} each paragraph is ${foundEn}. Set it to ${expectedEn}.`,
+        messageAr: `المسافة ${labelAr} ${foundAr}. اجعلها ${expectedAr}.`,
+        expected: expectedEn,
+        found: foundEn,
         severity: 'error',
       });
     }
@@ -982,8 +1067,6 @@ export async function checkDocxFormat(
       expSize: profile.sizesHalfPoints.bodyArabic,
       fontCode: 'FONT_ARABIC',
       sizeCode: 'FONT_SIZE_ARABIC',
-      label: 'Arabic body',
-      labelAr: 'العربي',
     },
     {
       letters: body.latinLetters,
@@ -993,8 +1076,6 @@ export async function checkDocxFormat(
       expSize: profile.sizesHalfPoints.bodyLatin,
       fontCode: 'FONT_LATIN',
       sizeCode: 'FONT_SIZE_LATIN',
-      label: 'Latin body',
-      labelAr: 'اللاتيني',
     },
   ];
   for (const c of fontChecks) {
@@ -1004,11 +1085,16 @@ export async function checkDocxFormat(
     ) {
       continue;
     }
+    const english = c.fontCode === 'FONT_LATIN';
     if (c.font && c.font.toLowerCase() !== c.expFont.toLowerCase()) {
       push({
         code: c.fontCode,
-        message: `Incorrect ${c.label} font: found "${c.font}", required "${c.expFont}"`,
-        messageAr: `خط النص ${c.labelAr} غير صحيح: تم العثور على "${c.font}"، المطلوب "${c.expFont}"`,
+        message: english
+          ? `English text is in "${c.font}". Use "${c.expFont}".`
+          : `Arabic text is in "${c.font}". Use "${c.expFont}".`,
+        messageAr: english
+          ? `النص الإنكليزي بخط "${c.font}". استخدم "${c.expFont}".`
+          : `النص العربي بخط "${c.font}". استخدم "${c.expFont}".`,
         expected: c.expFont,
         found: c.font,
         severity: 'error',
@@ -1017,8 +1103,12 @@ export async function checkDocxFormat(
     if (c.size !== undefined && c.size !== c.expSize) {
       push({
         code: c.sizeCode,
-        message: `Incorrect ${c.label} font size: found ${pt(c.size)}, required ${pt(c.expSize)}`,
-        messageAr: `حجم خط النص ${c.labelAr} غير صحيح: تم العثور على ${c.size / 2} نقطة، المطلوب ${c.expSize / 2} نقطة`,
+        message: english
+          ? `English text is ${pt(c.size)}. Set it to ${pt(c.expSize)}.`
+          : `Arabic text is ${pt(c.size)}. Set it to ${pt(c.expSize)}.`,
+        messageAr: english
+          ? `حجم النص الإنكليزي ${c.size / 2} نقطة. اجعله ${c.expSize / 2} نقطة.`
+          : `حجم النص العربي ${c.size / 2} نقطة. اجعله ${c.expSize / 2} نقطة.`,
         expected: pt(c.expSize),
         found: pt(c.size),
         severity: 'error',
@@ -1032,8 +1122,8 @@ export async function checkDocxFormat(
     const exp = profile.sizesHalfPoints.title;
     push({
       code: 'TITLE_SIZE',
-      message: `Incorrect main title font size: found ${pt(titleSize)}, required ${pt(exp)}`,
-      messageAr: `حجم خط العنوان الرئيسي غير صحيح: تم العثور على ${titleSize / 2} نقطة، المطلوب ${exp / 2} نقطة`,
+      message: `Main title is ${pt(titleSize)}. Set it to ${pt(exp)}.`,
+      messageAr: `حجم العنوان الرئيسي ${titleSize / 2} نقطة. اجعله ${exp / 2} نقطة.`,
       expected: pt(exp),
       found: pt(titleSize),
       severity: 'warning',
@@ -1042,10 +1132,10 @@ export async function checkDocxFormat(
   if (title.bold.total > 0 && title.bold.mode() === false) {
     push({
       code: 'TITLE_NOT_BOLD',
-      message: 'The main title must be bold',
-      messageAr: 'يجب أن يكون العنوان الرئيسي بخط غامق',
-      expected: 'bold',
-      found: 'regular',
+      message: 'The main title is regular. Make it bold.',
+      messageAr: 'العنوان الرئيسي عادي. اجعله غامقاً.',
+      expected: 'Bold',
+      found: 'Regular',
       severity: 'warning',
     });
   }
@@ -1057,8 +1147,8 @@ export async function checkDocxFormat(
     const exp = profile.sizesHalfPoints.heading1;
     push({
       code: 'HEADING_SIZE',
-      message: `Incorrect subheading font size: found ${pt(headingSize)}, required ${pt(exp)}`,
-      messageAr: `حجم خط العناوين الفرعية غير صحيح: تم العثور على ${headingSize / 2} نقطة، المطلوب ${exp / 2} نقطة`,
+      message: `Subheadings are ${pt(headingSize)}. Set them to ${pt(exp)}.`,
+      messageAr: `حجم العناوين الفرعية ${headingSize / 2} نقطة. اجعله ${exp / 2} نقطة.`,
       expected: pt(exp),
       found: pt(headingSize),
       severity: 'warning',
@@ -1085,8 +1175,8 @@ export async function checkDocxFormat(
     ) {
       push({
         code: 'FOOTNOTE_SIZE',
-        message: `Incorrect footnote font size: found ${pt(noteSize)}, required ${pt(expFootnote)}`,
-        messageAr: `حجم خط الحاشية السفلية غير صحيح: تم العثور على ${noteSize / 2} نقطة، المطلوب ${expFootnote / 2} نقطة`,
+        message: `Footnote text is ${pt(noteSize)}. Set it to ${pt(expFootnote)}.`,
+        messageAr: `حجم الحاشية السفلية ${noteSize / 2} نقطة. اجعله ${expFootnote / 2} نقطة.`,
         expected: pt(expFootnote),
         found: pt(noteSize),
         severity: 'warning',

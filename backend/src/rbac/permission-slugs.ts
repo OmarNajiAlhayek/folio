@@ -18,14 +18,19 @@ export const PERMISSION_SLUGS = {
   COPYEDIT_SUBMIT_NOTE: 'copyedit.submit_note',
   COPYEDIT_PUBLISH: 'copyedit.publish',
   AUDIT_LOG_VIEW: 'audit_log.view',
-  /** View submissions assigned to this section editor (section_editor role). */
+  /** View submitted papers assigned to this section editor. */
   SUBMISSION_VIEW_SECTION_QUEUE: 'submission.view_section_queue',
-  /** Assign a section editor to a submission (chief editor only). */
+  /**
+   * Retired. Papers reach section editors because the author chose their
+   * section, not because a chief assigned one paper. The slug stays so older
+   * databases still have a row for it.
+   */
   SUBMISSION_ASSIGN_SECTION_EDITOR: 'submission.assign_section_editor',
   /**
    * Edit a journal's ISSNs and aims and scope. Journal-scoped: an editor edits
-   * only journals they hold an `editor` membership in; the journal manager
-   * edits all of them. Enforced in `JournalMetadataService`.
+   * journals they hold an `editor` membership in; a journal manager edits
+   * journals they hold a `journal_manager` membership in. Enforced in
+   * `JournalMetadataService`.
    */
   JOURNAL_EDIT_METADATA: 'journal.edit_metadata',
   /**
@@ -68,12 +73,12 @@ export const ASSIGNMENT_REMINDER_PERMISSIONS = [
 ] as const;
 
 /**
- * AND list for reviewer matching — guard checks assign only; service enforces both.
- * See docs/authorization.md.
+ * Reviewer matching. The route guard checks assign only. The service also
+ * requires staff scope on that submission, and the candidate pool is the
+ * journal's reviewer members. See docs/authorization.md.
  */
 export const SUGGESTED_REVIEWERS_CALLER_PERMISSIONS = [
   PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
-  PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
 ] as const;
 
 export const ROLE_SLUGS = {

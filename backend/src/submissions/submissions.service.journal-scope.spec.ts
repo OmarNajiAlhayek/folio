@@ -7,7 +7,6 @@ import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SubmissionFileService } from './submission-file.service';
 import { SubmissionAiService } from './submission-ai.service';
-import { SectionEditorWorkflowService } from './section-editor-workflow.service';
 import { ReviewDiscussionService } from './review-discussion.service';
 import {
   getSubmissionTestServices,
@@ -117,7 +116,6 @@ describe('Submission journal scope', () => {
   let copyedit: CopyeditWorkflowService;
   let files: SubmissionFileService;
   let ai: SubmissionAiService;
-  let sectionEditors: SectionEditorWorkflowService;
   let discussions: ReviewDiscussionService;
   let listJournalIdsForUser: jest.Mock;
   let filesCount: jest.Mock;
@@ -127,11 +125,19 @@ describe('Submission journal scope', () => {
   let userHasPermission: jest.Mock;
   let transaction: jest.Mock;
   let copyeditFind: jest.Mock;
-  let seDelete: jest.Mock;
   let discussionsFind: jest.Mock;
 
   beforeAll(async () => {
     listJournalIdsForUser = jest.fn((userId: string, role: string) => {
+      if (role === ROLE_SLUGS.SECTION_EDITOR) {
+        if (userId === sectionEditor.sub) return Promise.resolve([JOURNAL]);
+        if (userId === otherSectionEditor.sub) return Promise.resolve([OTHER]);
+        return Promise.resolve([]);
+      }
+      if (role === ROLE_SLUGS.JOURNAL_MANAGER) {
+        if (userId === manager.sub) return Promise.resolve([JOURNAL]);
+        return Promise.resolve([]);
+      }
       if (role !== ROLE_SLUGS.EDITOR) return Promise.resolve([]);
       if (userId === editorMedj.sub) return Promise.resolve([JOURNAL]);
       if (userId === editorEngj.sub) return Promise.resolve([OTHER]);
@@ -144,7 +150,6 @@ describe('Submission journal scope', () => {
     userHasPermission = jest.fn().mockResolvedValue(false);
     transaction = jest.fn(() => Promise.reject(new Error('reached-write')));
     copyeditFind = jest.fn().mockResolvedValue([]);
-    seDelete = jest.fn().mockResolvedValue({ affected: 0 });
     discussionsFind = jest.fn().mockResolvedValue([]);
 
     const moduleRef = await Test.createTestingModule({
@@ -193,7 +198,15 @@ describe('Submission journal scope', () => {
                 opts?.where?.sectionEditorId === sectionEditor.sub,
               ),
             ),
-            delete: seDelete,
+            find: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn((opts: { where?: { sectionEditorId?: string } }) =>
+              Promise.resolve(
+                opts?.where?.sectionEditorId === sectionEditor.sub
+                  ? { id: 'sea-1', canRecordDecision: true }
+                  : null,
+              ),
+            ),
+            delete: jest.fn(),
           },
           journalMembershipService: {
             listJournalIdsForUser,
@@ -242,7 +255,6 @@ describe('Submission journal scope', () => {
     copyedit = services.copyeditWorkflow;
     files = services.files;
     ai = services.ai;
-    sectionEditors = moduleRef.get(SectionEditorWorkflowService);
     discussions = moduleRef.get(ReviewDiscussionService);
   });
 
@@ -290,11 +302,14 @@ describe('Submission journal scope', () => {
   }
 
   describe('assertCanRead', () => {
-    it('lets the journal manager read any journal', async () => {
+    it('lets the journal manager of that journal read it', async () => {
       await expect(
         service.assertCanRead(submission, manager),
       ).resolves.toBeUndefined();
-      expect(listJournalIdsForUser).not.toHaveBeenCalled();
+      expect(listJournalIdsForUser).toHaveBeenCalledWith(
+        manager.sub,
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      );
     });
 
     it('lets an editor read a submission in a journal they serve', async () => {
@@ -348,7 +363,7 @@ describe('Submission journal scope', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('lets an assigned section editor read and refuses one who is not', async () => {
+    it('lets an assigned section editor read and refuses one who is not assigned', async () => {
       await expect(
         service.assertCanRead(submission, sectionEditor),
       ).resolves.toBeUndefined();
@@ -380,7 +395,7 @@ describe('Submission journal scope', () => {
       expect(filesCount).toHaveBeenCalled();
     });
 
-    it('lets a journal manager change status without a membership', async () => {
+    it('lets the journal manager of that journal change status', async () => {
       await expectErrorCode(
         lifecycle.updateStatus(
           submission.slug,
@@ -389,10 +404,13 @@ describe('Submission journal scope', () => {
         ),
         'REVIEW_PACKAGE_INCOMPLETE',
       );
-      expect(listJournalIdsForUser).not.toHaveBeenCalled();
+      expect(listJournalIdsForUser).toHaveBeenCalledWith(
+        manager.sub,
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      );
     });
 
-    it('lets an assigned section editor change status and refuses any other', async () => {
+    it('lets an assigned section editor change status and refuses one who is not assigned', async () => {
       await expectOutOfScope(
         lifecycle.updateStatus(
           submission.slug,
@@ -505,32 +523,6 @@ describe('Submission journal scope', () => {
         copyedit.retractSubmission(submission.slug, editorMedj),
         'VALIDATION_ERROR',
       );
-    });
-
-    it('scopes assigning and removing a section editor', async () => {
-      await expectOutOfScope(
-        sectionEditors.assignSectionEditor(submission.slug, 'se-9', editorEngj),
-      );
-      expect(userHasPermission).not.toHaveBeenCalled();
-      await expectErrorCode(
-        sectionEditors.assignSectionEditor(submission.slug, 'se-9', editorMedj),
-        'VALIDATION_ERROR',
-      );
-      expect(userHasPermission).toHaveBeenCalled();
-
-      seDelete.mockClear();
-      await expectOutOfScope(
-        sectionEditors.removeSectionEditorAssignment(
-          submission.slug,
-          editorNone,
-        ),
-      );
-      expect(seDelete).not.toHaveBeenCalled();
-      await sectionEditors.removeSectionEditorAssignment(
-        submission.slug,
-        editorMedj,
-      );
-      expect(seDelete).toHaveBeenCalled();
     });
 
     it('lets the author set disciplines and scopes the editor', async () => {

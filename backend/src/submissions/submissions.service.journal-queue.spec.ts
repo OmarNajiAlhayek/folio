@@ -17,6 +17,9 @@ import type { RequestUser } from '../common/types/request-user';
  */
 describe('SubmissionsService journal-scoped editor queue', () => {
   let service: SubmissionsService;
+  let moduleRef: Awaited<
+    ReturnType<ReturnType<typeof Test.createTestingModule>['compile']>
+  >;
   let qb: {
     where: jest.Mock;
     andWhere: jest.Mock;
@@ -24,6 +27,7 @@ describe('SubmissionsService journal-scoped editor queue', () => {
     getMany: jest.Mock;
   };
   let listJournalIdsForUser: jest.Mock;
+  let assignmentFind: jest.Mock;
 
   const editor = (roleSlugs: string[] = [ROLE_SLUGS.EDITOR]): RequestUser => ({
     sub: 'editor-1',
@@ -40,10 +44,16 @@ describe('SubmissionsService journal-scoped editor queue', () => {
       getMany: jest.fn().mockResolvedValue([]),
     };
     listJournalIdsForUser = jest.fn().mockResolvedValue([]);
+    assignmentFind = jest.fn().mockResolvedValue([]);
 
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: submissionsServiceTestProviders({
         submissionsRepo: { createQueryBuilder: jest.fn(() => qb) },
+        sectionEditorAssignmentsRepo: {
+          exists: jest.fn().mockResolvedValue(false),
+          find: assignmentFind,
+          findOne: jest.fn().mockResolvedValue(null),
+        },
         journalMembershipService: {
           listJournalIdsForUser,
           filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
@@ -62,7 +72,24 @@ describe('SubmissionsService journal-scoped editor queue', () => {
     return calls.map((c) => String(c[0]));
   }
 
-  it('limits an editor to the journals they are a member of', async () => {
+  it('limits a section editor to the papers assigned to them', async () => {
+    const sectionEditor: RequestUser = {
+      sub: 'section-1',
+      email: 'section.eduj@folio.dev',
+      roleSlugs: [ROLE_SLUGS.SECTION_EDITOR],
+      permissionSlugs: [PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE],
+    };
+    assignmentFind.mockResolvedValue([{ submissionId: 'paper-1' }]);
+
+    await service.findAllForUser(sectionEditor);
+
+    expect(listJournalIdsForUser).not.toHaveBeenCalled();
+    expect(qb.andWhere).toHaveBeenCalledWith(expect.any(String), {
+      assignedIds: ['paper-1'],
+    });
+  });
+
+  it('still shows an editor-in-chief every paper in their journal', async () => {
     listJournalIdsForUser.mockResolvedValue(['journal-medj', 'journal-engj']);
 
     await service.findAllForUser(editor());
@@ -96,13 +123,22 @@ describe('SubmissionsService journal-scoped editor queue', () => {
     expect(qb.getMany).not.toHaveBeenCalled();
   });
 
-  it('leaves the journal_manager queue unscoped', async () => {
-    await service.findAllForUser(
-      editor([ROLE_SLUGS.EDITOR, ROLE_SLUGS.JOURNAL_MANAGER]),
+  it('scopes a journal manager to the journals they manage', async () => {
+    listJournalIdsForUser.mockImplementation((_userId: string, role: string) =>
+      Promise.resolve(
+        role === ROLE_SLUGS.JOURNAL_MANAGER ? ['journal-econj'] : [],
+      ),
     );
 
-    expect(listJournalIdsForUser).not.toHaveBeenCalled();
-    expect(predicates().some((p) => p.includes('journal_id'))).toBe(false);
+    await service.findAllForUser(editor([ROLE_SLUGS.JOURNAL_MANAGER]));
+
+    expect(listJournalIdsForUser).toHaveBeenCalledWith(
+      'editor-1',
+      ROLE_SLUGS.JOURNAL_MANAGER,
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(expect.any(String), {
+      journalIds: ['journal-econj'],
+    });
   });
 
   it('still applies the status filter alongside the journal scope', async () => {

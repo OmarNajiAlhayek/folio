@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState, useId } from 'react';
 import {
   FileText,
   Image as ImageIcon,
-  Info,
   Paperclip,
   Table,
   TriangleAlert,
@@ -20,6 +19,7 @@ import {
 } from '@/lib/upload-accept';
 import { ApiErrorState } from '@/components/api-error-state';
 import { ReviewConsensusPanel } from '@/components/ReviewConsensusPanel';
+import { SectionAssignmentPanel } from '@/components/section-assignment-panel';
 import { SubmissionStatusTimeline } from '@/components/submission-status-timeline';
 import { EditorAssignmentDiscussion } from '@/components/EditorAssignmentDiscussion';
 import { Spinner } from '@/components/ui/spinner';
@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonLoadingStatus } from '@/components/ui/skeleton-loading-status';
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { DocxFormatReport } from '@/components/submissions/DocxFormatReport';
 import { toast } from '@/lib/toast';
 import { getApiErrorKind } from '@/lib/api-error-message';
 import { useApiErrorMessages } from '@/lib/use-api-error-messages';
@@ -49,7 +50,6 @@ import {
   type RevisionSeverity,
   type SubmissionFileRow,
 } from '@/lib/queries/submissions';
-import { SearchableSelect } from '@/components/ui/searchable-select';
 import { SimpleSelect } from '@/components/ui/select';
 import {
   assignmentStatusLabel,
@@ -112,8 +112,6 @@ import {
 } from '@/components/reviewer-browser/reviewer-picker-field';
 import { ReviewerStatsDialog } from '@/components/reviewer-browser/reviewer-stats-dialog';
 import { useInvalidateReviewerDirectory } from '@/lib/queries/reviewers';
-import { SectionEditorSuggestionsPanel } from '@/components/section-editor-suggestions-panel';
-import type { SectionEditorCandidate } from '@/lib/queries/submissions';
 import type {
   ConstructorContent,
   ConstructorValidationError,
@@ -418,8 +416,6 @@ export default function SubmissionDetailPage() {
   const detail = detailQuery.data;
   const me = detail?.me ?? null;
   const sub = detail?.sub ?? null;
-  const sectionEditorCandidates: SectionEditorCandidate[] =
-    detail?.sectionEditorCandidates ?? [];
   const editorReviews = detail?.editorReviews ?? [];
   const authorReviews = detail?.authorReviews ?? [];
   const reviewsError = detail?.reviewsLoadFailed
@@ -455,7 +451,6 @@ export default function SubmissionDetailPage() {
   const [assignResponseDue, setAssignResponseDue] = useState('');
   const [assignReviewDue, setAssignReviewDue] = useState('');
   const [assignEditorInstructions, setAssignEditorInstructions] = useState('');
-  const [sectionEditorPick, setSectionEditorPick] = useState('');
   const [statusPick, setStatusPick] = useState('');
   const [messageForAuthor, setMessageForAuthor] = useState('');
   const [revisionSeverity, setRevisionSeverity] = useState<
@@ -840,51 +835,6 @@ export default function SubmissionDetailPage() {
     }
   }
 
-  async function assignSectionEditor() {
-    if (!sub || !sectionEditorPick.trim()) return;
-    setBusy(true);
-    try {
-      await apiJson(
-        `/submissions/${encodeURIComponent(sub.slug)}/section-editor-assignment`,
-        {
-          method: 'POST',
-          headers: { 'X-Folio-Locale': locale },
-          body: JSON.stringify({ sectionEditorId: sectionEditorPick }),
-        },
-      );
-      toast.success(t('sectionEditorAssignSuccess'), {
-        id: 'se-assign-success',
-      });
-      setSectionEditorPick('');
-      invalidateDetail(slug);
-    } catch (err) {
-      showApiError(err, t('sectionEditorAssignFailed'), { id: 'se-assign' });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeSectionEditorAssignment() {
-    if (!sub) return;
-    setBusy(true);
-    try {
-      await apiJson(
-        `/submissions/${encodeURIComponent(sub.slug)}/section-editor-assignment`,
-        { method: 'DELETE' },
-      );
-      toast.success(t('sectionEditorUnassignSuccess'), {
-        id: 'se-unassign-success',
-      });
-      invalidateDetail(slug);
-    } catch (err) {
-      showApiError(err, t('sectionEditorUnassignFailed'), {
-        id: 'se-unassign',
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function retractSubmission() {
     if (!sub) return;
     if (!confirm(t('retractConfirm'))) return;
@@ -1121,6 +1071,7 @@ export default function SubmissionDetailPage() {
     sub.authorId != null && sub.authorId !== '' && sub.authorId === me.id;
   const canManageOwn = canManageOwnSubmissions(me.permissions);
   const isEditorView = detail!.isEditorView;
+  const canRecordDecision = sub.viewerCanRecordDecision === true;
   const showCorpusSimilarity =
     !isAuthor && (isEditorView || sub.status !== 'draft');
   const canConfigureReview =
@@ -1139,9 +1090,6 @@ export default function SubmissionDetailPage() {
     isEditorView &&
     me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER) &&
     canConfigureReviewForStatus;
-  const canAssignSectionEditor =
-    isEditorView &&
-    me.permissions.includes(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR);
   const canEditManuscript =
     canManageOwn &&
     isAuthor &&
@@ -1162,6 +1110,7 @@ export default function SubmissionDetailPage() {
 
   const metadataFormInitial = {
     journalId: sub.journalId ?? '',
+    sectionId: sub.sectionId ?? '',
     title: sub.title,
     titleAr: sub.titleAr ?? '',
     abstract: sub.abstract,
@@ -1217,14 +1166,8 @@ export default function SubmissionDetailPage() {
     (f) => f.kind === 'review_response',
   );
   const authorFiles = files.filter((f) => f.kind !== 'review_response');
-  // Rows stored before severities existed have none; the API treats them as blocking.
+  // Rows stored before severities existed have none; the report treats those as blocking.
   const docxViolations = sub.docxManuscriptViolations ?? [];
-  const docxBlockingViolations = docxViolations.filter(
-    (v) => v.severity !== 'warning',
-  );
-  const docxAdvisoryViolations = docxViolations.filter(
-    (v) => v.severity === 'warning',
-  );
   /** Editors see who wrote each review file; the author sees `displayName`. */
   const reviewerLabelForFile = (f: SubmissionFileRow): string => {
     const row = editorAssignmentRows.find((a) => a.id === f.reviewAssignmentId);
@@ -1491,6 +1434,7 @@ export default function SubmissionDetailPage() {
                   key={sub.updatedAt}
                   slug={sub.slug}
                   canEdit
+                  lockJournalSection={sub.status !== 'draft'}
                   initial={metadataFormInitial}
                   fieldErrors={submitFieldErrors}
                   clearFieldError={clearSubmitFieldError}
@@ -1638,59 +1582,8 @@ export default function SubmissionDetailPage() {
                         </label>
                       </div>
                     </FileDropZone>
-                    {kind === 'manuscript' &&
-                    docxBlockingViolations.length > 0 ? (
-                      <div className="mt-3 rounded-xl border border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20 dark:border-amber-500/30 px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                              {t('docxViolationsHeading')}
-                            </p>
-                            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400/80">
-                              {t('docxViolationsBody')}
-                            </p>
-                            <ul className="mt-2 space-y-1">
-                              {docxBlockingViolations.map((v) => (
-                                <li
-                                  key={v.code}
-                                  className="text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5"
-                                >
-                                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" />
-                                  {locale === 'ar' ? v.messageAr : v.message}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                    {kind === 'manuscript' &&
-                    docxAdvisoryViolations.length > 0 ? (
-                      <div className="mt-3 rounded-xl border border-ink/10 dark:border-white/10 bg-ink/[0.02] dark:bg-white/[0.03] px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          <Info className="mt-0.5 size-4 shrink-0 text-ink/50 dark:text-white/50" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-ink/80 dark:text-white/80">
-                              {t('docxWarningsHeading')}
-                            </p>
-                            <p className="mt-0.5 text-xs text-ink/60 dark:text-white/60">
-                              {t('docxWarningsBody')}
-                            </p>
-                            <ul className="mt-2 space-y-1">
-                              {docxAdvisoryViolations.map((v) => (
-                                <li
-                                  key={v.code}
-                                  className="text-xs text-ink/75 dark:text-white/75 flex items-start gap-1.5"
-                                >
-                                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-ink/30 dark:bg-white/30" />
-                                  {locale === 'ar' ? v.messageAr : v.message}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
+                    {kind === 'manuscript' && docxViolations.length > 0 ? (
+                      <DocxFormatReport violations={docxViolations} />
                     ) : null}
                     {kind === 'manuscript' &&
                     sub.docxGrammarNotes &&
@@ -2306,6 +2199,12 @@ export default function SubmissionDetailPage() {
                 </span>
               </div>
 
+              <SectionAssignmentPanel
+                submission={sub}
+                meId={me.id}
+                canRecordDecision={canRecordDecision}
+              />
+
               {isPublishedSubmission &&
                 me.permissions.includes(
                   PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
@@ -2359,219 +2258,158 @@ export default function SubmissionDetailPage() {
                 </div>
               )}
 
-              {/* Set Status Box */}
-              <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                  {t('updateStatus')}
-                </h3>
-                <p className="text-[10px] text-ink/50">
-                  {t('editorWorkflowColumnHint')}
-                </p>
-                <div className="flex flex-col gap-1 text-sm font-medium text-ink">
-                  <span id="status-select-label" className="sr-only">
-                    {t('setStatus')}
-                  </span>
-                  <SimpleSelect
-                    value={statusPick}
-                    onValueChange={setStatusPick}
-                    options={statuses.map((s) => ({
-                      value: s,
-                      label:
-                        s === 'rejected'
-                          ? sub.status === 'submitted'
-                            ? tSub('stRejectedDeskReject')
-                            : tSub('stRejectedPostReview')
-                          : submissionStatusLabel(s, tSub),
-                    }))}
-                    className="w-full"
-                    aria-labelledby="status-select-label"
-                  />
-                </div>
-                {statusPick === 'revisions_requested' && (
-                  <fieldset className="space-y-1.5">
-                    <legend className="text-xs font-semibold text-ink">
-                      {t('revisionSeverityLabel')}
-                    </legend>
-                    <p className="text-[10px] text-ink/50">
-                      {t('revisionSeverityHint')}
-                    </p>
-                    <div className="flex gap-2">
-                      {REVISION_SEVERITIES.map((sev) => (
-                        <label
-                          key={sev}
-                          className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors ${
-                            revisionSeverity === sev
-                              ? 'border-accent bg-accent/10 text-accent'
-                              : 'border-ink/15 dark:border-white/15 bg-paper text-ink/70 hover:border-accent/40'
-                          } ${busy ? 'pointer-events-none opacity-50' : ''}`}
-                        >
-                          <input
-                            type="radio"
-                            name="revision-severity"
-                            className="sr-only"
-                            checked={revisionSeverity === sev}
-                            disabled={busy}
-                            onChange={() => setRevisionSeverity(sev)}
-                          />
-                          {revisionSeverityLabel(sev, t)}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                )}
-                {isEditorDecisionStatus(statusPick) &&
-                  reviewerResponseFiles.length > 0 && (
-                    <fieldset className="space-y-1.5">
-                      <legend className="text-xs font-semibold text-ink">
-                        {t('releaseFilesLabel')}
-                      </legend>
-                      <p className="text-[10px] text-ink/50">
-                        {t('releaseFilesHint')}
-                      </p>
-                      <ul className="space-y-1.5">
-                        {reviewerResponseFiles.map((f) => {
-                          const alreadyReleased = f.releasedToAuthorAt != null;
-                          return (
-                            <li key={f.id}>
-                              <label
-                                className={`flex items-start gap-2 rounded-lg border border-ink/10 dark:border-white/10 bg-paper px-3 py-2 text-[11px] ${
-                                  alreadyReleased || busy
-                                    ? 'opacity-60'
-                                    : 'cursor-pointer hover:border-accent/40'
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="mt-0.5 size-3.5 accent-[var(--accent)]"
-                                  disabled={busy || alreadyReleased}
-                                  checked={
-                                    alreadyReleased ||
-                                    releaseFileIds.includes(f.id)
-                                  }
-                                  onChange={(e) =>
-                                    setReleaseFileIds((prev) =>
-                                      e.target.checked
-                                        ? [...prev, f.id]
-                                        : prev.filter((id) => id !== f.id),
-                                    )
-                                  }
-                                />
-                                <span className="min-w-0">
-                                  <span className="block font-semibold text-ink">
-                                    {reviewerLabelForFile(f)}
-                                  </span>
-                                  <span className="block truncate text-ink/50">
-                                    {f.originalName}
-                                  </span>
-                                  {alreadyReleased && (
-                                    <span className="block text-emerald-600 dark:text-emerald-400">
-                                      {t('releaseFilesAlreadyReleased')}
-                                    </span>
-                                  )}
-                                </span>
-                              </label>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </fieldset>
-                  )}
-                {isEditorDecisionStatus(statusPick) && (
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="message-for-author"
-                      className="text-xs font-semibold text-ink"
-                    >
-                      {t('messageForAuthorLabel')}
-                    </label>
-                    <p className="text-[10px] text-ink/50">
-                      {t('messageForAuthorHint')}
-                    </p>
-                    <textarea
-                      id="message-for-author"
-                      value={messageForAuthor}
-                      onChange={(e) => setMessageForAuthor(e.target.value)}
-                      placeholder={t('messageForAuthorPlaceholder')}
-                      disabled={busy}
-                      rows={4}
-                      maxLength={4000}
-                      className="w-full rounded-lg border border-ink/15 dark:border-white/15 bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
-                    />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void updateStatus()}
-                  className="w-full rounded-xl bg-ink text-paper dark:bg-white dark:text-paper px-4 py-2.5 text-xs font-bold shadow-2xs hover:bg-ink/90 active:scale-[0.98] select-none transition-all duration-150 disabled:opacity-50"
-                >
-                  {t('applyStatus')}
-                </button>
-              </div>
-
-              {/* Assign Section Editor Box */}
-              {canAssignSectionEditor && (
+              {/* Set Status Box. A recommend-only section editor writes text instead. */}
+              {canRecordDecision ? (
                 <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-ink/40">
-                    {t('sectionEditorPanel')}
+                    {t('updateStatus')}
                   </h3>
-                  {sub.sectionEditorAssignment?.sectionEditor && (
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-ink/10 dark:border-white/10 bg-paper/60 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-ink">
-                          {
-                            sub.sectionEditorAssignment.sectionEditor
-                              .displayName
-                          }
-                        </p>
-                        <p className="truncate text-[10px] text-ink/50">
-                          {sub.sectionEditorAssignment.sectionEditor.email}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void removeSectionEditorAssignment()}
-                        className="shrink-0 rounded-lg border border-red-400/30 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
-                      >
-                        {t('removeSectionEditorAssignment')}
-                      </button>
-                    </div>
-                  )}
-                  <SectionEditorSuggestionsPanel
-                    slug={sub.slug}
-                    disabled={busy}
-                    onPick={setSectionEditorPick}
-                  />
+                  <p className="text-[10px] text-ink/50">
+                    {t('editorWorkflowColumnHint')}
+                  </p>
                   <div className="flex flex-col gap-1 text-sm font-medium text-ink">
-                    <span id="se-select-label" className="sr-only">
-                      {t('sectionEditorLabel')}
+                    <span id="status-select-label" className="sr-only">
+                      {t('setStatus')}
                     </span>
-                    <SearchableSelect
-                      options={sectionEditorCandidates.map((c) => ({
-                        value: c.id,
-                        label: `${c.displayName} (${c.email})`,
-                        keywords: [c.displayName, c.email, ...c.journals],
+                    <SimpleSelect
+                      value={statusPick}
+                      onValueChange={setStatusPick}
+                      options={statuses.map((s) => ({
+                        value: s,
+                        label:
+                          s === 'rejected'
+                            ? sub.status === 'submitted'
+                              ? tSub('stRejectedDeskReject')
+                              : tSub('stRejectedPostReview')
+                            : submissionStatusLabel(s, tSub),
                       }))}
-                      value={sectionEditorPick}
-                      onValueChange={setSectionEditorPick}
-                      placeholder={t('sectionEditorPlaceholder')}
-                      searchPlaceholder={tUi('searchPlaceholder')}
-                      emptyText={tUi('noResults')}
-                      disabled={busy}
-                      className="w-full animate-fade-in"
-                      aria-labelledby="se-select-label"
+                      className="w-full"
+                      aria-labelledby="status-select-label"
                     />
                   </div>
-                  <Button
-                    disabled={busy || !sectionEditorPick.trim()}
-                    onClick={() => void assignSectionEditor()}
-                    className="w-full text-xs font-bold"
+                  {statusPick === 'revisions_requested' && (
+                    <fieldset className="space-y-1.5">
+                      <legend className="text-xs font-semibold text-ink">
+                        {t('revisionSeverityLabel')}
+                      </legend>
+                      <p className="text-[10px] text-ink/50">
+                        {t('revisionSeverityHint')}
+                      </p>
+                      <div className="flex gap-2">
+                        {REVISION_SEVERITIES.map((sev) => (
+                          <label
+                            key={sev}
+                            className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-semibold transition-colors ${
+                              revisionSeverity === sev
+                                ? 'border-accent bg-accent/10 text-accent'
+                                : 'border-ink/15 dark:border-white/15 bg-paper text-ink/70 hover:border-accent/40'
+                            } ${busy ? 'pointer-events-none opacity-50' : ''}`}
+                          >
+                            <input
+                              type="radio"
+                              name="revision-severity"
+                              className="sr-only"
+                              checked={revisionSeverity === sev}
+                              disabled={busy}
+                              onChange={() => setRevisionSeverity(sev)}
+                            />
+                            {revisionSeverityLabel(sev, t)}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+                  {isEditorDecisionStatus(statusPick) &&
+                    reviewerResponseFiles.length > 0 && (
+                      <fieldset className="space-y-1.5">
+                        <legend className="text-xs font-semibold text-ink">
+                          {t('releaseFilesLabel')}
+                        </legend>
+                        <p className="text-[10px] text-ink/50">
+                          {t('releaseFilesHint')}
+                        </p>
+                        <ul className="space-y-1.5">
+                          {reviewerResponseFiles.map((f) => {
+                            const alreadyReleased =
+                              f.releasedToAuthorAt != null;
+                            return (
+                              <li key={f.id}>
+                                <label
+                                  className={`flex items-start gap-2 rounded-lg border border-ink/10 dark:border-white/10 bg-paper px-3 py-2 text-[11px] ${
+                                    alreadyReleased || busy
+                                      ? 'opacity-60'
+                                      : 'cursor-pointer hover:border-accent/40'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5 size-3.5 accent-[var(--accent)]"
+                                    disabled={busy || alreadyReleased}
+                                    checked={
+                                      alreadyReleased ||
+                                      releaseFileIds.includes(f.id)
+                                    }
+                                    onChange={(e) =>
+                                      setReleaseFileIds((prev) =>
+                                        e.target.checked
+                                          ? [...prev, f.id]
+                                          : prev.filter((id) => id !== f.id),
+                                      )
+                                    }
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block font-semibold text-ink">
+                                      {reviewerLabelForFile(f)}
+                                    </span>
+                                    <span className="block truncate text-ink/50">
+                                      {f.originalName}
+                                    </span>
+                                    {alreadyReleased && (
+                                      <span className="block text-emerald-600 dark:text-emerald-400">
+                                        {t('releaseFilesAlreadyReleased')}
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </fieldset>
+                    )}
+                  {isEditorDecisionStatus(statusPick) && (
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="message-for-author"
+                        className="text-xs font-semibold text-ink"
+                      >
+                        {t('messageForAuthorLabel')}
+                      </label>
+                      <p className="text-[10px] text-ink/50">
+                        {t('messageForAuthorHint')}
+                      </p>
+                      <textarea
+                        id="message-for-author"
+                        value={messageForAuthor}
+                        onChange={(e) => setMessageForAuthor(e.target.value)}
+                        placeholder={t('messageForAuthorPlaceholder')}
+                        disabled={busy}
+                        rows={4}
+                        maxLength={4000}
+                        className="w-full rounded-lg border border-ink/15 dark:border-white/15 bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink/40 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void updateStatus()}
+                    className="w-full rounded-xl bg-ink text-paper dark:bg-white dark:text-paper px-4 py-2.5 text-xs font-bold shadow-2xs hover:bg-ink/90 active:scale-[0.98] select-none transition-all duration-150 disabled:opacity-50"
                   >
-                    {t('assignSectionEditor')}
-                  </Button>
+                    {t('applyStatus')}
+                  </button>
                 </div>
-              )}
+              ) : null}
 
               {/* Assign Reviewer Box */}
               <div className="rounded-xl border border-ink/10 dark:border-white/10 bg-paper/40 p-4 space-y-3">

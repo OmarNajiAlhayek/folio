@@ -21,6 +21,7 @@ import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
 import { CreateRoleInvitationDto } from './dto/create-role-invitation.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
 import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
+import { JournalRoleHoldersQueryDto } from './dto/journal-role-holders.query.dto';
 import { SetSectionEditorJournalsDto } from './dto/set-section-editor-journals.dto';
 import { UsersService } from './users.service';
 
@@ -62,10 +63,10 @@ export class UsersController {
     return this.usersService.listCopyeditorCandidates();
   }
 
-  @Get('section-editor-candidates')
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR)
-  sectionEditorCandidates() {
-    return this.usersService.listSectionEditorCandidates();
+  @Get('journal-role-holders')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  journalRoleHolders(@Query() query: JournalRoleHoldersQueryDto) {
+    return this.usersService.listJournalRoleHolders(query.roleSlug);
   }
 
   @Get(':id/section-editor-journals')
@@ -79,8 +80,13 @@ export class UsersController {
   setSectionEditorJournals(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SetSectionEditorJournalsDto,
+    @CurrentUser() actor: RequestUser,
   ) {
-    return this.usersService.setSectionEditorJournals(id, dto.journals);
+    return this.usersService.setSectionEditorJournals(
+      id,
+      dto.journals,
+      actor.sub,
+    );
   }
 
   @Get(':id/editor-journals')
@@ -94,8 +100,45 @@ export class UsersController {
   setEditorJournals(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SetSectionEditorJournalsDto,
+    @CurrentUser() actor: RequestUser,
   ) {
-    return this.usersService.setEditorJournals(id, dto.journals);
+    return this.usersService.setEditorJournals(id, dto.journals, actor.sub);
+  }
+
+  @Get(':id/journal-manager-journals')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  getJournalManagerJournals(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getJournalManagerJournals(id);
+  }
+
+  @Put(':id/journal-manager-journals')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  setJournalManagerJournals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetSectionEditorJournalsDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.usersService.setJournalManagerJournals(
+      id,
+      dto.journals,
+      actor.sub,
+    );
+  }
+
+  @Get(':id/reviewer-journals')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  getReviewerJournals(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getReviewerJournals(id);
+  }
+
+  @Put(':id/reviewer-journals')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  setReviewerJournals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetSectionEditorJournalsDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.usersService.setReviewerJournals(id, dto.journals, actor.sub);
   }
 
   @Post(':id/role-invitations')

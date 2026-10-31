@@ -98,12 +98,12 @@ export class RbacService implements OnModuleInit {
       },
       {
         slug: PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
-        description:
-          'View submissions assigned to this section editor (section queue)',
+        description: 'View submissions assigned to this section editor',
       },
       {
         slug: PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
-        description: 'Assign a section editor to a submission',
+        description:
+          'Retired. Section editors see a paper because it was submitted to their section.',
       },
       {
         slug: PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
@@ -135,7 +135,6 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
       PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
-      PERMISSION_SLUGS.SUBMISSION_ASSIGN_SECTION_EDITOR,
       // Chief editor can publish when the assigned copyeditor cannot
       // (leave, lockout). The service still requires every assignment
       // ready_for_review — this is an actor override, not a quality skip.
@@ -154,12 +153,14 @@ export class RbacService implements OnModuleInit {
     ];
     const journalManagerPerms = [
       PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+      PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
       PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
       PERMISSION_SLUGS.USERS_MANAGE_ROLES,
       PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
       PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,
       PERMISSION_SLUGS.AUDIT_LOG_VIEW,
-      // Every journal: titles, ISSNs, aims and scope, editorial board.
+      // Titles, ISSNs, aims and scope of the journals this manager holds.
       // An editor-in-chief keeps metadata only, and only on their journals.
       PERMISSION_SLUGS.JOURNAL_EDIT_METADATA,
       PERMISSION_SLUGS.JOURNAL_EDIT_TITLES,
@@ -431,18 +432,6 @@ export class RbacService implements OnModuleInit {
       .select('DISTINCT ur.userId', 'userId')
       .getRawMany<{ userId: string }>();
     return rows.map((r) => r.userId);
-  }
-
-  /**
-   * Editors and journal managers who receive workflow emails and in-app
-   * notifications (new submissions, review activity).
-   */
-  async listWorkflowNotificationRecipientIds(): Promise<string[]> {
-    const [editorIds, journalManagerIds] = await Promise.all([
-      this.listUserIdsWithPermission(PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS),
-      this.listUserIdsWithPermission(PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS),
-    ]);
-    return [...new Set([...editorIds, ...journalManagerIds])];
   }
 
   async countUsersWithRoleSlug(slug: string): Promise<number> {
