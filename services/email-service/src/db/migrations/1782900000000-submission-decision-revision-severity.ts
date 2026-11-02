@@ -40,11 +40,11 @@ export class SubmissionDecisionRevisionSeverity1782900000000 implements Migratio
     arHtml = arHtml.replace('Message from the editor', 'رسالة من المحرر');
     arHtml = arHtml.replace(
       'The editor has requested <strong style="color:#92400e;">major revisions</strong> for your manuscript <strong>{{submissionTitle}}</strong>. Substantial changes are needed, and the revised manuscript may be sent back to the reviewers.',
-      'طلب المحرر <strong style="color:#92400e;">تعديلات جوهرية</strong> على مخطوطتك <strong>{{submissionTitle}}</strong>. المطلوب إجراء تغييرات كبيرة، وقد تُعاد المخطوطة المنقّحة إلى المحكّمين.',
+      'طلب المحرر <strong style="color:#92400e;">تعديلات جوهرية</strong> على مقالتك <strong>{{submissionTitle}}</strong>. المطلوب إجراء تغييرات كبيرة، وقد تُعاد المقالة المنقّحة إلى المحكّمين.',
     );
     arHtml = arHtml.replace(
       'The editor has requested <strong style="color:#92400e;">minor revisions</strong> for your manuscript <strong>{{submissionTitle}}</strong>. The changes required are limited in scope.',
-      'طلب المحرر <strong style="color:#92400e;">تعديلات طفيفة</strong> على مخطوطتك <strong>{{submissionTitle}}</strong>. التغييرات المطلوبة محدودة النطاق.',
+      'طلب المحرر <strong style="color:#92400e;">تعديلات طفيفة</strong> على مقالتك <strong>{{submissionTitle}}</strong>. التغييرات المطلوبة محدودة النطاق.',
     );
     arHtml = arHtml.replace(
       '<strong>{{reviewFileCount}}</strong> reviewer file(s) have been shared with you. You can download them from your submission page.',

@@ -108,7 +108,7 @@ export class RebrandEmailTemplates1781600000000 implements MigrationInterface {
     // Arabic subject lines that embed the old brand name.
     await queryRunner.query(`
       UPDATE "email"."email_template"
-         SET "subject_template" = REPLACE("subject_template", 'مخطوطة Folio', 'مخطوطة المجلة'),
+         SET "subject_template" = REPLACE("subject_template", 'مقالة Folio', 'مقالة المجلة'),
              "updated_at" = now()
        WHERE "locale" = 'ar'
          AND "subject_template" LIKE '%Folio%'

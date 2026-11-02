@@ -11,14 +11,14 @@ export class ArEmailTemplateDefaultCopy1714600000003
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const reviewerSubject =
-      'دعوة تحكيم: {{#if submissionTitle}}{{submissionTitle}}{{else}}مخطوطة Folio{{/if}}';
+      'دعوة تحكيم: {{#if submissionTitle}}{{submissionTitle}}{{else}}مقالة Folio{{/if}}';
 
     const reviewerHtml = `<!doctype html>
 <html dir="rtl" lang="ar">
   <body>
     <p>مرحبًا {{reviewerDisplayName}}،</p>
     <p>
-      تمت دعوتك لتحكيم المخطوطة
+      تمت دعوتك لتحكيم المقالة
       <strong>{{submissionTitle}}</strong> في مجلة Folio.
     </p>
     <p>
@@ -32,7 +32,7 @@ export class ArEmailTemplateDefaultCopy1714600000003
 
     const reviewerText = `مرحبًا {{reviewerDisplayName}}،
 
-تمت دعوتك لتحكيم المخطوطة "{{submissionTitle}}" في مجلة Folio.
+تمت دعوتك لتحكيم المقالة "{{submissionTitle}}" في مجلة Folio.
 
 قبول الدعوة: {{acceptUrl}}
 رفض الدعوة: {{declineUrl}}
@@ -42,7 +42,7 @@ export class ArEmailTemplateDefaultCopy1714600000003
 `;
 
     const reminderSubject =
-      '{{#if isOverdue}}مراجعة متأخرة: {{#if submissionTitle}}{{submissionTitle}}{{else}}مخطوطة Folio{{/if}}{{else}}تذكير: موعد تسليم المراجعة {{#if submissionTitle}}{{submissionTitle}}{{else}}مخطوطة Folio{{/if}}{{/if}}';
+      '{{#if isOverdue}}مراجعة متأخرة: {{#if submissionTitle}}{{submissionTitle}}{{else}}مقالة Folio{{/if}}{{else}}تذكير: موعد تسليم المراجعة {{#if submissionTitle}}{{submissionTitle}}{{else}}مقالة Folio{{/if}}{{/if}}';
 
     const reminderHtml = `<!doctype html>
 <html dir="rtl" lang="ar">
@@ -50,12 +50,12 @@ export class ArEmailTemplateDefaultCopy1714600000003
     <p>مرحبًا {{reviewerDisplayName}}،</p>
     {{#if isOverdue}}
       <p>
-        كانت مراجعتك لمخطوطة <strong>{{submissionTitle}}</strong> مستحقّة في
+        كانت مراجعتك لمقالة <strong>{{submissionTitle}}</strong> مستحقّة في
         {{dueAt}} وهي الآن متأخرة. يُرجى إكمالها في أقرب وقت، أو التواصل مع المحرّر إن لم يعد بإمكانك التحكيم.
       </p>
     {{else}}
       <p>
-        تذكير ودي: موعد تسليم مراجعتك لمخطوطة
+        تذكير ودي: موعد تسليم مراجعتك لمقالة
         <strong>{{submissionTitle}}</strong> هو {{dueAt}}.
       </p>
     {{/if}}
@@ -70,9 +70,9 @@ export class ArEmailTemplateDefaultCopy1714600000003
     const reminderText = `مرحبًا {{reviewerDisplayName}}،
 
 {{#if isOverdue}}
-كانت مراجعتك لمخطوطة "{{submissionTitle}}" مستحقّة في {{dueAt}} وهي الآن متأخرة. يُرجى إكمالها في أقرب وقت، أو التواصل مع المحرّر إن لم يعد بإمكانك التحكيم.
+كانت مراجعتك لمقالة "{{submissionTitle}}" مستحقّة في {{dueAt}} وهي الآن متأخرة. يُرجى إكمالها في أقرب وقت، أو التواصل مع المحرّر إن لم يعد بإمكانك التحكيم.
 {{else}}
-تذكير ودي: موعد تسليم مراجعتك لمخطوطة "{{submissionTitle}}" هو {{dueAt}}.
+تذكير ودي: موعد تسليم مراجعتك لمقالة "{{submissionTitle}}" هو {{dueAt}}.
 {{/if}}
 
 فتح المهمّة: {{assignmentUrl}}
