@@ -48,6 +48,10 @@ const GENERIC_UNAUTHORIZED_MESSAGE_RE = /^unauthorized$/i;
 /** Auth login failure — backend English copy; map to `invalidCredentials` in UI. */
 const INVALID_CREDENTIALS_MESSAGE_RE = /^invalid email or password\.?$/i;
 
+/** PermissionsGuard boilerplate — use the translated `forbidden` copy instead. */
+const GENERIC_FORBIDDEN_MESSAGE_RE =
+  /^(insufficient permissions|forbidden|route requires explicit permissions)\.?$/i;
+
 const CSRF_MESSAGE_RE = /invalid or missing csrf token/i;
 
 const STATUS_TRANSITION_MESSAGE_RE = /^cannot transition from \S+ to \S+$/i;
@@ -64,6 +68,7 @@ export function isUserFacingApiMessage(message: string): boolean {
   if (!trimmed) return false;
   if (THROTTLE_MESSAGE_RE.test(trimmed)) return false;
   if (GENERIC_UNAUTHORIZED_MESSAGE_RE.test(trimmed)) return false;
+  if (GENERIC_FORBIDDEN_MESSAGE_RE.test(trimmed)) return false;
   if (CSRF_MESSAGE_RE.test(trimmed)) return false;
   if (STATUS_TRANSITION_MESSAGE_RE.test(trimmed)) return false;
   if (AI_FEATURE_MESSAGE_RE.test(trimmed)) return false;
