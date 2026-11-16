@@ -473,7 +473,10 @@ export class SubmissionsController {
   }
 
   @Get(':slug/copyedit-assignments')
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
+  @Permissions(
+    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
+    PERMISSION_SLUGS.SUBMISSION_VIEW_SECTION_QUEUE,
+  )
   listCopyeditAssignments(
     @Param('slug') slug: string,
     @CurrentUser() user: RequestUser,
