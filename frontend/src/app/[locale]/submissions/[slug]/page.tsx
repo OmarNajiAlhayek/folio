@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useParams } from 'next/navigation';
+import { useJournalOptions } from '@/lib/queries/journals';
 import { apiBlob, apiJson, apiUpload, ApiError } from '@/lib/api';
 import {
   ACCEPT_FIGURE,
@@ -401,6 +402,7 @@ export default function SubmissionDetailPage() {
   const tReviewerBrowser = useTranslations('ReviewerBrowser');
   const tv = useTranslations('Validation');
   const locale = useLocale();
+  const { data: journalOptions } = useJournalOptions();
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
@@ -1226,6 +1228,19 @@ export default function SubmissionDetailPage() {
 
   const statuses = editorStatusOptions(sub.status);
 
+  const isAr = locale === 'ar';
+  const journalOpt = journalOptions?.find((j) => j.id === sub.journalId);
+  const journalLabel = journalOpt
+    ? isAr
+      ? journalOpt.titleAr || journalOpt.titleEn
+      : journalOpt.titleEn || journalOpt.titleAr
+    : null;
+  const sectionLabel = sub.section
+    ? isAr
+      ? sub.section.nameAr || sub.section.nameEn
+      : sub.section.nameEn || sub.section.nameAr
+    : null;
+
   const statusLabel = submissionStatusLabel(sub.status, tSub);
   const tWfAny = tWf as unknown as (k: string) => string;
 
@@ -1323,31 +1338,62 @@ export default function SubmissionDetailPage() {
         <div className="mt-6 flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-accent/8 dark:bg-accent/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent font-semibold">
-                {sub.articleType
-                  ? tWfAny(`articleType_${sub.articleType}`)
-                  : t('manuscriptBadge')}
-              </span>
+              {/* "Other" carries no information, so it is hidden rather than shown as a vague chip. */}
+              {sub.articleType && sub.articleType !== 'other' ? (
+                <span className="inline-flex items-center rounded-md border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                  {tWfAny(`articleType_${sub.articleType}`)}
+                </span>
+              ) : null}
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold shadow-2xs ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-semibold ${
                   sub.status === 'draft'
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                    : sub.status === 'under_review'
-                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                      : sub.status === 'accepted' || sub.status === 'published'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
-                        : 'bg-ink/5 text-ink/70 dark:bg-white/10 dark:text-white/70'
+                    ? 'border-amber-500/30 bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200'
+                    : sub.status === 'submitted'
+                      ? 'border-indigo-500/30 bg-indigo-100 text-indigo-900 dark:bg-indigo-900/30 dark:text-indigo-200'
+                      : sub.status === 'under_review'
+                        ? 'border-blue-500/30 bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-200'
+                        : sub.status === 'accepted' ||
+                            sub.status === 'published'
+                          ? 'border-emerald-500/30 bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200'
+                          : 'border-ink/15 bg-ink/5 text-ink/80 dark:bg-white/10 dark:text-white/80'
                 }`}
               >
-                {sub.status === 'draft' && (
-                  <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
-                )}
-                {sub.status === 'under_review' && (
-                  <span className="size-1.5 rounded-full bg-blue-500 animate-pulse" />
+                {(sub.status === 'draft' ||
+                  sub.status === 'submitted' ||
+                  sub.status === 'under_review') && (
+                  <span
+                    aria-hidden
+                    className={`size-2 rounded-full ${
+                      sub.status === 'draft'
+                        ? 'bg-amber-500'
+                        : sub.status === 'submitted'
+                          ? 'bg-indigo-500'
+                          : 'bg-blue-500'
+                    } ${sub.status === 'submitted' ? '' : 'animate-pulse'}`}
+                  />
                 )}
                 {statusLabel}
               </span>
             </div>
+
+            <dl className="flex flex-wrap gap-x-6 gap-y-2 rounded-lg border border-accent/15 bg-accent/5 px-4 py-2.5 text-sm">
+              <div className="flex items-baseline gap-2">
+                <dt className="text-xs font-medium text-ink/60">
+                  {t('journalLabel')}
+                </dt>
+                <dd className="font-semibold text-ink">
+                  {journalLabel ?? '—'}
+                </dd>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <dt className="text-xs font-medium text-ink/60">
+                  {t('sectionLabel')}
+                </dt>
+                <dd className="font-semibold text-ink">
+                  {sectionLabel ?? '—'}
+                </dd>
+              </div>
+            </dl>
 
             <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-ink leading-snug">
               {sub.title}
@@ -1582,6 +1628,36 @@ export default function SubmissionDetailPage() {
                         </label>
                       </div>
                     </FileDropZone>
+                    {authorFiles.some((f) => visibleFileKind(f.kind) === kind) ? (
+                      <ul className="mt-3 divide-y divide-ink/[0.05] dark:divide-white/[0.05]">
+                        {authorFiles
+                          .filter((f) => visibleFileKind(f.kind) === kind)
+                          .map((f) => (
+                            <SubmissionFileRow
+                              key={f.id}
+                              f={f}
+                              showRemove={canRemoveFiles}
+                              busy={busy}
+                              t={t}
+                              tWf={tWf}
+                              showWorkflowStageBadge={showFileWorkflowStage}
+                              showPublicBadge={isPublishedSubmission}
+                              editorCanTogglePackage={allowReviewPackageEdits}
+                              onTogglePackage={
+                                allowReviewPackageEdits
+                                  ? (row) => void patchFileReviewStage(row)
+                                  : undefined
+                              }
+                              onDownload={(row) =>
+                                void downloadSubmissionFile(row)
+                              }
+                              onRemove={(fileId) =>
+                                requestRemoveSubmissionFile(fileId)
+                              }
+                            />
+                          ))}
+                      </ul>
+                    ) : null}
                     {kind === 'manuscript' && docxViolations.length > 0 ? (
                       <DocxFormatReport violations={docxViolations} />
                     ) : null}
@@ -1687,37 +1763,6 @@ export default function SubmissionDetailPage() {
                   />
                 </div>
               ) : null}
-              {authorFiles.length > 0 && (
-                <div className="pt-4 border-t border-ink/[0.05] dark:border-white/[0.05]">
-                  <h3 className="text-sm font-semibold text-ink mb-3">
-                    {t('yourFiles')}
-                  </h3>
-                  <ul className="mt-2 divide-y divide-ink/[0.05] dark:divide-white/[0.05]">
-                    {authorFiles.map((f) => (
-                      <SubmissionFileRow
-                        key={f.id}
-                        f={f}
-                        showRemove={canRemoveFiles}
-                        busy={busy}
-                        t={t}
-                        tWf={tWf}
-                        showWorkflowStageBadge={showFileWorkflowStage}
-                        showPublicBadge={isPublishedSubmission}
-                        editorCanTogglePackage={allowReviewPackageEdits}
-                        onTogglePackage={
-                          allowReviewPackageEdits
-                            ? (row) => void patchFileReviewStage(row)
-                            : undefined
-                        }
-                        onDownload={(row) => void downloadSubmissionFile(row)}
-                        onRemove={(fileId) =>
-                          requestRemoveSubmissionFile(fileId)
-                        }
-                      />
-                    ))}
-                  </ul>
-                </div>
-              )}
             </section>
           )}
 
