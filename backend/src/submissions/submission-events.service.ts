@@ -8,6 +8,7 @@ import { EntityManager, In } from 'typeorm';
 import { EventPublisherService } from '../messaging/event-publisher.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_TYPE } from '../notifications/notification-types';
+import { copyeditUnassignedNotifKey } from '../notifications/notification-idempotency';
 import { Notification } from '../entities/notification.entity';
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
 import type {
@@ -595,6 +596,30 @@ export class SubmissionEventsService {
         params: { submissionTitle: submission.title },
         href: `/copyedit-assignments/${assignment.slug}`,
         idempotencyKey: copyeditAssignedKey(assignment.slug),
+      },
+      em,
+    );
+  }
+
+  /**
+   * In-app only: tells a copyeditor they were taken off a submission. The
+   * assignment row is deleted by the caller, so the link goes to the queue.
+   */
+  async enqueueCopyeditUnassignedNotification(
+    args: {
+      assignmentId: string;
+      submission: Submission;
+      copyeditorId: string;
+    },
+    em: EntityManager,
+  ): Promise<Notification | null> {
+    return this.notifications.createIfAbsent(
+      {
+        userId: args.copyeditorId,
+        type: NOTIFICATION_TYPE.COPYEDIT_UNASSIGNED,
+        params: { submissionTitle: args.submission.title },
+        href: '/copyedit-assignments',
+        idempotencyKey: copyeditUnassignedNotifKey(args.assignmentId),
       },
       em,
     );

@@ -4,6 +4,7 @@ export const NOTIFICATION_TYPE = {
   SUBMISSION_DECISION: 'submission_decision',
   SUBMISSION_UNDER_REVIEW: 'submission_under_review',
   COPYEDIT_ASSIGNED: 'copyedit_assigned',
+  COPYEDIT_UNASSIGNED: 'copyedit_unassigned',
   COPYEDIT_QUERIES_SENT: 'copyedit_queries_sent',
   COPYEDIT_AUTHOR_READY: 'copyedit_author_ready',
   REVIEW_INVITATION_ACCEPTED: 'review_invitation_accepted',
@@ -44,6 +45,10 @@ export const NOTIFICATION_I18N: Record<
   [NOTIFICATION_TYPE.COPYEDIT_ASSIGNED]: {
     titleKey: 'Notifications.copyeditAssigned.title',
     bodyKey: 'Notifications.copyeditAssigned.body',
+  },
+  [NOTIFICATION_TYPE.COPYEDIT_UNASSIGNED]: {
+    titleKey: 'Notifications.copyeditUnassigned.title',
+    bodyKey: 'Notifications.copyeditUnassigned.body',
   },
   [NOTIFICATION_TYPE.COPYEDIT_QUERIES_SENT]: {
     titleKey: 'Notifications.copyeditQueries.title',

@@ -141,6 +141,10 @@
       "title": "بدء التحكيم",
       "body": "بدأ التحكيم المناظر على {submissionTitle}."
     },
+    "copyeditUnassigned": {
+      "title": "إلغاء تكليف التحرير اللغوي",
+      "body": "تمت إزالتك من التحرير اللغوي لمقال {submissionTitle}."
+    },
     "copyeditAssigned": {
       "title": "تكليف تحرير",
       "body": "تم تكليفك بتحرير {submissionTitle}."

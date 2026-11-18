@@ -44,3 +44,10 @@ export function sectionEditorAssignedNotifKey(submissionSlug: string): string {
   }
   return `section_editor_assigned:${submissionSlug}`;
 }
+
+export function copyeditUnassignedNotifKey(assignmentId: string): string {
+  if (!assignmentId) {
+    throw new Error('copyeditUnassignedNotifKey: assignmentId is required');
+  }
+  return `copyedit_unassigned:${assignmentId}`;
+}

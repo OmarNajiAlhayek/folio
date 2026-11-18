@@ -141,6 +141,10 @@
       "title": "Peer review started",
       "body": "Peer review has started on {submissionTitle}."
     },
+    "copyeditUnassigned": {
+      "title": "Copyedit assignment removed",
+      "body": "You were removed from copyediting {submissionTitle}."
+    },
     "copyeditAssigned": {
       "title": "Copyedit assignment",
       "body": "You were assigned to copyedit {submissionTitle}."

@@ -247,8 +247,18 @@ export class CopyeditWorkflowService {
         code: 'NOT_FOUND',
       });
     }
+    const pending: Notification[] = [];
     await this.copyeditAssignmentsRepo.manager.transaction(async (em) => {
       await em.getRepository(CopyeditAssignment).delete({ id: assignment.id });
+      const n = await this.events.enqueueCopyeditUnassignedNotification(
+        {
+          assignmentId: assignment.id,
+          submission,
+          copyeditorId: assignment.copyeditorId,
+        },
+        em,
+      );
+      if (n) pending.push(n);
       const remaining = await em
         .getRepository(CopyeditAssignment)
         .count({ where: { submissionId: submission.id } });
@@ -261,6 +271,7 @@ export class CopyeditWorkflowService {
         );
       }
     });
+    this.events.emitPendingNotifications(pending);
     return { removed: true };
   }
 

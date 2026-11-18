@@ -92,6 +92,12 @@ export function getNotificationVisuals(
         bg: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/20',
         icon: Mail,
       };
+    case 'copyedit_unassigned':
+    case 'copyeditUnassigned':
+      return {
+        bg: 'bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400 border-red-500/20',
+        icon: Pencil,
+      };
     case 'copyeditQueries':
       return {
         bg: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 border-amber-500/20',
