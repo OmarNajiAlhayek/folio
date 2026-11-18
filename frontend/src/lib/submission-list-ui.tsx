@@ -7,7 +7,6 @@ import { Link } from '@/i18n/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonBusyRegion } from '@/components/ui/skeleton-loading-status';
 import { PAGE_SHELL, EMPTY_STATE_CLS } from '@/lib/page-shell';
-import { DisciplineBadges } from '@/components/discipline-badges';
 
 export type SubmissionsListTranslator = ReturnType<
   typeof useTranslations<'Submissions'>
@@ -23,7 +22,7 @@ export const queueRowCardLinkCls =
 
 export function statusPillClass(status: string): string {
   const base =
-    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border tabular-nums';
+    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider rtl:normal-case rtl:tracking-normal border tabular-nums';
   switch (status) {
     case 'draft':
       return `${base} bg-slate-500/8 border-slate-500/15 text-slate-600 dark:text-slate-400`;
@@ -48,7 +47,7 @@ export function statusPillClass(status: string): string {
 
 export function assignmentStatusPillClass(status: string): string {
   const base =
-    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border tabular-nums';
+    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider rtl:normal-case rtl:tracking-normal border tabular-nums';
   switch (status) {
     case 'invited':
       return `${base} bg-sky-500/8 border-sky-500/15 text-sky-600 dark:text-sky-400`;
@@ -69,7 +68,7 @@ export function assignmentStatusPillClass(status: string): string {
  */
 export function revisionSeverityPillClass(severity: string): string {
   const base =
-    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border tabular-nums';
+    'inline-flex items-center shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider rtl:normal-case rtl:tracking-normal border tabular-nums';
   return severity === 'major'
     ? `${base} bg-rose-500/8 border-rose-500/15 text-rose-600 dark:text-rose-400`
     : `${base} bg-amber-500/8 border-amber-500/15 text-amber-600 dark:text-amber-400`;
@@ -228,9 +227,27 @@ type SubmissionQueueRowProps = {
   updatedAt: string;
   locale: string;
   t: SubmissionsListTranslator;
-  disciplineSuggestedLabels?: string[] | null;
-  disciplines?: string[] | null;
+  journalName?: string | null;
+  sectionName?: string | null;
 };
+
+type NamePair = {
+  nameAr?: string;
+  nameEn?: string;
+  titleAr?: string;
+  titleEn?: string;
+};
+
+/** Pick the Arabic or English name for the active locale, falling back to the other. */
+export function localizedName(
+  item: NamePair | null | undefined,
+  locale: string,
+): string | null {
+  if (!item) return null;
+  const ar = item.nameAr || item.titleAr;
+  const en = item.nameEn || item.titleEn;
+  return (locale === 'ar' ? ar || en : en || ar) || null;
+}
 
 export function SubmissionQueueRow({
   href,
@@ -239,15 +256,11 @@ export function SubmissionQueueRow({
   updatedAt,
   locale,
   t,
-  disciplineSuggestedLabels,
-  disciplines,
+  journalName,
+  sectionName,
 }: SubmissionQueueRowProps) {
   const label = submissionStatusLabel(status, t);
   const dateStr = formatSubmissionUpdatedAt(updatedAt, locale);
-  const badgeLabels =
-    (disciplineSuggestedLabels?.length
-      ? disciplineSuggestedLabels
-      : disciplines) ?? [];
   return (
     <li>
       <Link href={href} className={queueRowCardLinkCls}>
@@ -263,6 +276,18 @@ export function SubmissionQueueRow({
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink/55 dark:text-white/55">
           <div className="flex flex-col gap-1 min-w-0">
+            {journalName || sectionName ? (
+              <span
+                className="flex flex-wrap items-center gap-x-1.5 font-semibold text-ink/80 dark:text-white/80"
+                dir="auto"
+              >
+                <span>{journalName ?? '—'}</span>
+                <span aria-hidden className="text-ink/30">
+                  ›
+                </span>
+                <span>{sectionName ?? '—'}</span>
+              </span>
+            ) : null}
             {dateStr ? (
               <span className="flex items-center gap-1">
                 <CalendarDays
@@ -274,13 +299,6 @@ export function SubmissionQueueRow({
               </span>
             ) : null}
 
-            {badgeLabels.length > 0 ? (
-              <DisciplineBadges
-                labels={badgeLabels}
-                size="sm"
-                className="max-w-xs"
-              />
-            ) : null}
           </div>
 
           <span className="inline-flex items-center gap-1 font-semibold text-accent opacity-80 transition group-hover:opacity-100 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 select-none">
