@@ -28,7 +28,7 @@
  *   review.submitted       -> ReviewSubmittedEvent
  *   review.invitation_accepted -> ReviewInvitationAcceptedEvent
  *   review.invitation_declined -> ReviewInvitationDeclinedEvent
- *   role.invitation        -> RoleInvitationCreatedEvent
+ *   role.invitation        -> RoleInvitationCreatedEvent | RoleRemovedEvent
  *   auth.verification_otp     -> AuthVerificationOtpEvent
  *   auth.password_reset       -> AuthPasswordResetEvent
  *   auth.registration_welcome -> AuthRegistrationWelcomeEvent
@@ -440,6 +440,31 @@ export type RoleInvitationCreatedEvent = {
   dashboardUrl: string;
 };
 
+/**
+ * Sent when a journal manager takes one or more roles away from a user.
+ * Travels on the `role.invitation` routing key: both are role-management mail
+ * to the same person, so no extra queue or binding is needed.
+ */
+export type RoleRemovedEvent = {
+  type: 'RoleRemoved';
+
+  occurredAt: string;
+
+  idempotencyKey: string;
+
+  removalId: string;
+
+  roleSlugs: string[];
+
+  emailLocale?: 'en' | 'ar';
+
+  user: AuthorIdentity;
+
+  removedBy: EditorIdentity;
+
+  loginUrl: string;
+};
+
 export type AuthVerificationOtpEvent = {
   type: 'AuthVerificationOtp';
 
@@ -529,6 +554,7 @@ export type FolioEvent =
   | ReviewInvitationDeclinedEvent
   | SubmissionPublishedEvent
   | RoleInvitationCreatedEvent
+  | RoleRemovedEvent
   | AuthVerificationOtpEvent
   | AuthPasswordResetEvent
   | AuthRegistrationWelcomeEvent

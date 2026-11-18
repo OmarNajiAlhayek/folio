@@ -65,6 +65,23 @@ export class ListUsersQueryDto {
   })
   joinedTo?: string;
 
+  @ApiPropertyOptional({
+    description:
+      "Viewer's Date.getTimezoneOffset() in minutes. Makes joinedFrom/joinedTo whole days in the viewer's calendar; omit for UTC.",
+    minimum: -840,
+    maximum: 840,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const n = parseInt(String(value), 10);
+    return Number.isFinite(n) ? n : undefined;
+  })
+  tzOffset?: number;
+
   @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 20 })
   @IsOptional()
   @IsInt()

@@ -59,6 +59,19 @@ export class JournalMembershipService {
     return rows.map((r) => r.journalId);
   }
 
+  /**
+   * Drops every membership this user holds for the given roles. Called when a
+   * role is taken away, so the old journal scope cannot silently come back if
+   * the role is granted again later.
+   */
+  async removeRoleMemberships(
+    userId: string,
+    roleSlugs: string[],
+  ): Promise<void> {
+    if (roleSlugs.length === 0) return;
+    await this.membershipsRepo.delete({ userId, roleSlug: In(roleSlugs) });
+  }
+
   /** Users holding `roleSlug` in this journal. */
   async listUserIdsForJournal(
     journalId: string,

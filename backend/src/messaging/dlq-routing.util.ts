@@ -16,6 +16,7 @@ const EVENT_TYPE_TO_ROUTING: Record<string, string> = {
   ReviewInvitationAccepted: ROUTING_KEY.reviewInvitationAccepted,
   ReviewInvitationDeclined: ROUTING_KEY.reviewInvitationDeclined,
   RoleInvitationCreated: ROUTING_KEY.roleInvitation,
+  RoleRemoved: ROUTING_KEY.roleInvitation,
   AuthVerificationOtp: ROUTING_KEY.authVerificationOtp,
   AuthPasswordReset: ROUTING_KEY.authPasswordReset,
   AuthRegistrationWelcome: ROUTING_KEY.authRegistrationWelcome,

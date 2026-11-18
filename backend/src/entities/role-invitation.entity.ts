@@ -12,6 +12,8 @@ export enum RoleInvitationStatus {
   INVITED = 'invited',
   ACCEPTED = 'accepted',
   DECLINED = 'declined',
+  /** Withdrawn by a journal manager before the invitee answered. */
+  CANCELLED = 'cancelled',
 }
 
 @Entity('role_invitations')

@@ -1,15 +1,23 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, EntityManager, In, Repository } from 'typeorm';
+import {
+  Brackets,
+  EntityManager,
+  In,
+  MoreThanOrEqual,
+  Repository,
+} from 'typeorm';
 import { User } from '../entities/user.entity';
 import { JournalMembershipService } from '../journals/journal-membership.service';
 import {
@@ -25,17 +33,58 @@ import { RbacService } from '../rbac/rbac.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_TYPE } from '../notifications/notification-types';
-import { roleInvitationCreatedKey } from '../notifications/notification-idempotency';
+import {
+  roleInvitationCreatedKey,
+  roleRemovedNotifKey,
+} from '../notifications/notification-idempotency';
 import { EventPublisherService } from '../messaging/event-publisher.service';
+import { generateEntityId } from '@folio/shared';
 import { ROUTING_KEY } from '@folio/shared/contracts/email-events';
-import type { RoleInvitationCreatedEvent } from '@folio/shared/contracts/email-events';
-import { roleInvitationEmailKey } from '@folio/shared/messaging/idempotency';
+import type {
+  RoleInvitationCreatedEvent,
+  RoleRemovedEvent,
+} from '@folio/shared/contracts/email-events';
+import {
+  roleInvitationEmailKey,
+  roleRemovedEmailKey,
+} from '@folio/shared/messaging/idempotency';
 import { resolveEmailLocale } from '../common/email-locale';
 import {
   reviewerAvailabilityView,
   utcToday,
   type ReviewerAvailabilityView,
 } from '../submissions/reviewer-availability';
+
+/** A role invitation not answered within this many days stops being valid. */
+export const ROLE_INVITATION_TTL_DAYS = 30;
+
+function invitationCutoff(): Date {
+  return new Date(Date.now() - ROLE_INVITATION_TTL_DAYS * 86_400_000);
+}
+
+/** Roles a manager may switch on directly; every other role needs an invitation. */
+const DIRECT_ROLES: ReadonlySet<string> = new Set([
+  ROLE_SLUGS.AUTHOR,
+  ROLE_SLUGS.REVIEWER,
+  ROLE_SLUGS.COPYEDITOR,
+]);
+
+/** Roles whose reach is narrowed by `journal_memberships`. */
+const JOURNAL_SCOPED_ROLES: readonly string[] = [
+  ROLE_SLUGS.EDITOR,
+  ROLE_SLUGS.JOURNAL_MANAGER,
+  ROLE_SLUGS.SECTION_EDITOR,
+  ROLE_SLUGS.REVIEWER,
+];
+
+/**
+ * UTC instant at which calendar day `ymd` starts for a viewer whose
+ * `Date.getTimezoneOffset()` is `tzOffsetMinutes`.
+ */
+function localDayStartUtc(ymd: string, tzOffsetMinutes: number): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + tzOffsetMinutes * 60_000);
+}
 
 export type ReviewerCandidate = {
   id: string;
@@ -104,6 +153,8 @@ export type AdminUserListResult = {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
@@ -256,9 +307,12 @@ export class UsersService {
     role?: string;
     joinedFrom?: string;
     joinedTo?: string;
+    /** Viewer's `Date.getTimezoneOffset()`, so day filters follow their calendar. */
+    tzOffset?: number;
     limit: number;
     offset: number;
   }): Promise<AdminUserListResult> {
+    const tz = query.tzOffset ?? 0;
     const qb = this.usersRepo
       .createQueryBuilder('u')
       .select([
@@ -319,14 +373,15 @@ export class UsersService {
 
     if (query.joinedFrom) {
       qb.andWhere('u.created_at >= :joinedFrom', {
-        joinedFrom: new Date(`${query.joinedFrom}T00:00:00.000Z`),
+        joinedFrom: localDayStartUtc(query.joinedFrom, tz),
       });
     }
 
     if (query.joinedTo) {
-      qb.andWhere('u.created_at <= :joinedTo', {
-        joinedTo: new Date(`${query.joinedTo}T23:59:59.999Z`),
-      });
+      const endOfDay = new Date(
+        localDayStartUtc(query.joinedTo, tz).getTime() + 86_400_000 - 1,
+      );
+      qb.andWhere('u.created_at <= :joinedTo', { joinedTo: endOfDay });
     }
 
     const [users, total] = await qb.getManyAndCount();
@@ -335,12 +390,17 @@ export class UsersService {
     }
 
     const userIds = users.map((u) => u.id);
-    const privilegedSlugs = [ROLE_SLUGS.EDITOR, ROLE_SLUGS.JOURNAL_MANAGER];
+    const privilegedSlugs = [
+      ROLE_SLUGS.EDITOR,
+      ROLE_SLUGS.JOURNAL_MANAGER,
+      ROLE_SLUGS.SECTION_EDITOR,
+    ];
     const pendingInvites = await this.roleInvRepo.find({
       where: {
         inviteeUserId: In(userIds),
         status: RoleInvitationStatus.INVITED,
         roleSlug: In(privilegedSlugs),
+        createdAt: MoreThanOrEqual(invitationCutoff()),
       },
       select: ['id', 'inviteeUserId', 'roleSlug'],
     });
@@ -608,6 +668,10 @@ export class UsersService {
         });
       }
     }
+    const added = unique.filter((slug) => !before.roleSlugs.includes(slug));
+    const removedScoped = before.roleSlugs.filter(
+      (slug) => !unique.includes(slug) && JOURNAL_SCOPED_ROLES.includes(slug),
+    );
     const hadEditor = before.roleSlugs.includes(ROLE_SLUGS.EDITOR);
     const willHaveEditor = unique.includes(ROLE_SLUGS.EDITOR);
     if (!hadEditor && willHaveEditor) {
@@ -651,8 +715,47 @@ export class UsersService {
         });
       }
     }
-    await this.rbacService.assignRoles(targetUserId, unique);
-    await this.authService.revokeAllSessionsForUser(targetUserId);
+    // Anything else that is not a plain direct role (today: section_editor)
+    // is invitation-only too, so it cannot be granted without the user's say.
+    const needsInvite = added.find((slug) => !DIRECT_ROLES.has(slug));
+    if (needsInvite) {
+      throw new BadRequestException({
+        message: `Adding the ${needsInvite} role requires an invitation. Use POST /users/:id/role-invitations with {"roleSlug":"${needsInvite}"}; the user accepts in the app.`,
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (actorUserId && removedScoped.length > 0) {
+      await this.assertRemovalWithinActorJournals(
+        actorUserId,
+        targetUserId,
+        removedScoped,
+      );
+    }
+
+    const { before: rolesBefore, after: rolesAfter } =
+      await this.rbacService.assignRoles(targetUserId, unique);
+    // A role that is gone takes its journal scope with it; otherwise the old
+    // scope would reappear if the role were granted again.
+    await this.journalMemberships.removeRoleMemberships(
+      targetUserId,
+      removedScoped,
+    );
+    // Sessions carry the old role claims, so they only need to go when the
+    // role set actually changed.
+    const changed =
+      [...rolesBefore.roleSlugs].sort().join('|') !==
+      [...rolesAfter.roleSlugs].sort().join('|');
+    if (changed) {
+      await this.authService.revokeAllSessionsForUser(targetUserId);
+    }
+    // Tell the person why they were signed out. Only when someone else did it;
+    // giving up your own role needs no message.
+    const removed = rolesBefore.roleSlugs.filter(
+      (slug) => !rolesAfter.roleSlugs.includes(slug),
+    );
+    if (actorUserId && actorUserId !== targetUserId && removed.length > 0) {
+      await this.notifyRolesRemoved(actorUserId, target, removed);
+    }
     const profile = await this.toPublicProfile(targetUserId);
     if (!profile) {
       throw new NotFoundException({
@@ -661,6 +764,146 @@ export class UsersService {
       });
     }
     return profile;
+  }
+
+  /**
+   * In-app notification (one per role) and one email listing every role that
+   * was removed. The role change is already saved, so a failure here is logged
+   * instead of failing the request.
+   */
+  private async notifyRolesRemoved(
+    actorUserId: string,
+    target: User,
+    removedRoles: string[],
+  ): Promise<void> {
+    try {
+      const actor = await this.findById(actorUserId);
+      const removedByDisplayName = actor?.displayName ?? 'Journal manager';
+      const removalId = generateEntityId();
+      const emailLocale = resolveEmailLocale({
+        recipientPreferred: target.preferredLocale,
+        siteDefault: this.config.get<string>('DEFAULT_EMAIL_LOCALE', 'en'),
+      });
+      const payload: RoleRemovedEvent = {
+        type: 'RoleRemoved',
+        occurredAt: new Date().toISOString(),
+        idempotencyKey: roleRemovedEmailKey(removalId),
+        removalId,
+        roleSlugs: removedRoles,
+        emailLocale,
+        user: {
+          id: target.id,
+          email: target.email,
+          displayName: target.displayName,
+        },
+        removedBy: { id: actorUserId, displayName: removedByDisplayName },
+        loginUrl: `${this.appBaseUrl()}/login`,
+      };
+      const created: NonNullable<
+        Awaited<ReturnType<NotificationsService['createIfAbsent']>>
+      >[] = [];
+      await this.roleInvRepo.manager.transaction(async (em) => {
+        await this.eventPublisher.enqueue(
+          ROUTING_KEY.roleInvitation,
+          payload as unknown as Record<string, unknown>,
+          em,
+        );
+        for (const roleSlug of removedRoles) {
+          const notification = await this.notifications.createIfAbsent(
+            {
+              userId: target.id,
+              type: NOTIFICATION_TYPE.ROLE_REMOVED,
+              params: { removedByDisplayName, role: roleSlug },
+              href: '/dashboard',
+              idempotencyKey: roleRemovedNotifKey(removalId, roleSlug),
+            },
+            em,
+          );
+          if (notification) created.push(notification);
+        }
+      });
+      if (created.length > 0) this.notifications.emitCreated(created);
+    } catch (err) {
+      this.logger.error(
+        `role-removed notification failed for ${target.id}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  /**
+   * A journal manager may take a journal-scoped role away only from someone
+   * whose seats are all on journals the manager runs. Otherwise a manager of
+   * one journal could strip an editor or reviewer of another.
+   */
+  private async assertRemovalWithinActorJournals(
+    actorUserId: string,
+    targetUserId: string,
+    roleSlugs: string[],
+  ): Promise<void> {
+    const actorIds = new Set(
+      await this.journalMemberships.listJournalIdsForUser(
+        actorUserId,
+        ROLE_SLUGS.JOURNAL_MANAGER,
+      ),
+    );
+    for (const roleSlug of roleSlugs) {
+      const targetIds = await this.journalMemberships.listJournalIdsForUser(
+        targetUserId,
+        roleSlug,
+      );
+      if (targetIds.some((id) => !actorIds.has(id))) {
+        throw new ForbiddenException({
+          message: `This user holds the ${roleSlug} role on a journal you do not manage, so you cannot remove it.`,
+          code: 'JOURNAL_OUT_OF_SCOPE',
+        });
+      }
+    }
+  }
+
+  /**
+   * Grants and revokes individual roles against the roles the user holds now,
+   * not a list the caller read earlier. `roleSlugs` (replace the whole set) is
+   * still accepted for older callers.
+   */
+  async changeRolesForUser(
+    targetUserId: string,
+    change: { roleSlugs?: string[]; add?: string[]; remove?: string[] },
+    actorUserId?: string,
+  ): Promise<PublicUserProfile> {
+    const { roleSlugs, add, remove } = change;
+    const incremental = add !== undefined || remove !== undefined;
+    if ((roleSlugs !== undefined) === incremental) {
+      throw new BadRequestException({
+        message: 'Send either roleSlugs, or add and/or remove',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    if (roleSlugs !== undefined) {
+      return this.setRolesForUser(targetUserId, roleSlugs, actorUserId);
+    }
+    const addSet = new Set(add ?? []);
+    const removeSet = new Set(remove ?? []);
+    if ([...addSet].some((slug) => removeSet.has(slug))) {
+      throw new BadRequestException({
+        message: 'A role cannot be added and removed in the same request',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const target = await this.findById(targetUserId);
+    if (!target) {
+      throw new NotFoundException({
+        message: 'User not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    const current = await this.rbacService.getEffectiveForUser(targetUserId);
+    const next = new Set(current.roleSlugs);
+    for (const slug of removeSet) next.delete(slug);
+    for (const slug of addSet) next.add(slug);
+    next.add(ROLE_SLUGS.AUTHOR);
+    return this.setRolesForUser(targetUserId, [...next], actorUserId);
   }
 
   async createRoleInvitation(
@@ -720,6 +963,7 @@ export class UsersService {
         inviteeUserId: targetUserId,
         roleSlug,
         status: RoleInvitationStatus.INVITED,
+        createdAt: MoreThanOrEqual(invitationCutoff()),
       },
     });
     if (pending) {
@@ -823,6 +1067,7 @@ export class UsersService {
       where: {
         inviteeUserId,
         status: RoleInvitationStatus.INVITED,
+        createdAt: MoreThanOrEqual(invitationCutoff()),
       },
       relations: ['invitedBy'],
       order: { createdAt: 'DESC' },
@@ -858,6 +1103,12 @@ export class UsersService {
         code: 'VALIDATION_ERROR',
       });
     }
+    if (inv.createdAt < invitationCutoff()) {
+      throw new BadRequestException({
+        message: `This invitation expired after ${ROLE_INVITATION_TTL_DAYS} days. Ask a journal manager to send a new one.`,
+        code: 'INVITATION_EXPIRED',
+      });
+    }
     const { roleSlugs } =
       await this.rbacService.getEffectiveForUser(inviteeUserId);
     const next = [...new Set([...roleSlugs, inv.roleSlug])];
@@ -873,6 +1124,32 @@ export class UsersService {
       });
     }
     return profile;
+  }
+
+  /** Withdraws a pending invitation so the manager can re-invite or move on. */
+  async cancelRoleInvitation(
+    targetUserId: string,
+    invitationId: string,
+  ): Promise<{ ok: true }> {
+    const inv = await this.roleInvRepo.findOne({
+      where: { id: invitationId, inviteeUserId: targetUserId },
+    });
+    if (!inv) {
+      throw new NotFoundException({
+        message: 'Invitation not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    if (inv.status !== RoleInvitationStatus.INVITED) {
+      throw new BadRequestException({
+        message: 'Invitation is not pending',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    inv.status = RoleInvitationStatus.CANCELLED;
+    inv.resolvedAt = new Date();
+    await this.roleInvRepo.save(inv);
+    return { ok: true };
   }
 
   async declineRoleInvitation(

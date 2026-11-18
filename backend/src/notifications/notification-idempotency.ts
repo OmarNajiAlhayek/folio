@@ -26,6 +26,16 @@ export function roleInvitationCreatedKey(invitationId: string): string {
   return `role_invitation_created:${invitationId}`;
 }
 
+export function roleRemovedNotifKey(
+  removalId: string,
+  roleSlug: string,
+): string {
+  if (!removalId || !roleSlug) {
+    throw new Error('roleRemovedNotifKey: removalId and roleSlug are required');
+  }
+  return `role_removed:${removalId}:${roleSlug}`;
+}
+
 export function sectionEditorAssignedNotifKey(submissionSlug: string): string {
   if (!submissionSlug) {
     throw new Error(

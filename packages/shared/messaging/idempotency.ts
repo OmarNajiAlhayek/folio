@@ -18,6 +18,7 @@
  *   - ReviewInvitationDeclined -> "review_invitation_declined:" + assignmentSlug + ":" + editorUserId
  *   - SubmissionPublished  -> "submission_published:" + submissionSlug
  *   - RoleInvitationCreated -> "role_invitation:" + invitationId
+ *   - RoleRemoved           -> "role_removed:" + removalId
  */
 
 export function reviewerInvitedKey(assignmentSlug: string): string {
@@ -195,6 +196,13 @@ export function roleInvitationEmailKey(invitationId: string): string {
     throw new Error('roleInvitationEmailKey: invitationId is required');
   }
   return `role_invitation:${invitationId}`;
+}
+
+export function roleRemovedEmailKey(removalId: string): string {
+  if (!removalId) {
+    throw new Error('roleRemovedEmailKey: removalId is required');
+  }
+  return `role_removed:${removalId}`;
 }
 
 export function authVerificationOtpKey(challengeId: string): string {

@@ -193,6 +193,12 @@ export function classifyAuditAction(
     actionType = AuditActionType.PERMISSION_CHANGE;
   } else if (
     resourceType === AuditResourceType.ROLE_INVITATION &&
+    method === 'DELETE'
+  ) {
+    // DELETE :id/role-invitations/:invitationId (cancel)
+    actionType = AuditActionType.PERMISSION_CHANGE;
+  } else if (
+    resourceType === AuditResourceType.ROLE_INVITATION &&
     (lastSeg === 'accept' || lastSeg === 'decline')
   ) {
     actionType = AuditActionType.PERMISSION_CHANGE;

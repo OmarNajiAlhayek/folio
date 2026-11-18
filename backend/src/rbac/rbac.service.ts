@@ -395,10 +395,14 @@ export class RbacService implements OnModuleInit {
         code: 'VALIDATION_ERROR',
       });
     }
-    await this.userRoleRepo.delete({ userId });
-    for (const role of roles) {
-      await this.userRoleRepo.save({ userId, roleId: role.id });
-    }
+    // One transaction: a failure part-way must not leave the user with no roles.
+    await this.userRoleRepo.manager.transaction(async (em) => {
+      const repo = em.getRepository(UserRole);
+      await repo.delete({ userId });
+      if (roles.length > 0) {
+        await repo.save(roles.map((role) => ({ userId, roleId: role.id })));
+      }
+    });
     const after = await this.getEffectiveForUser(userId);
     return { before, after };
   }

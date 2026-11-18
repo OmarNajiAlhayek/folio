@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -40,6 +42,7 @@ export class UsersController {
       role: query.role,
       joinedFrom: query.joinedFrom,
       joinedTo: query.joinedTo,
+      tzOffset: query.tzOffset,
       limit: query.limit ?? 20,
       offset: query.offset ?? 0,
     });
@@ -71,7 +74,20 @@ export class UsersController {
 
   @Get(':id/section-editor-journals')
   @AllowAuthenticated()
-  getSectionEditorJournals(@Param('id', ParseUUIDPipe) id: string) {
+  getSectionEditorJournals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    // Staff assignments are not public: the person themself or a role admin.
+    if (
+      id !== actor.sub &&
+      !actor.permissionSlugs.includes(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+    ) {
+      throw new ForbiddenException({
+        message: 'You cannot view this user’s journal assignments',
+        code: 'FORBIDDEN',
+      });
+    }
     return this.usersService.getSectionEditorJournals(id);
   }
 
@@ -151,6 +167,15 @@ export class UsersController {
     return this.usersService.createRoleInvitation(user.sub, id, dto.roleSlug);
   }
 
+  @Delete(':id/role-invitations/:invitationId')
+  @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
+  cancelRoleInvitation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
+  ) {
+    return this.usersService.cancelRoleInvitation(id, invitationId);
+  }
+
   @Patch(':id/roles')
   @Permissions(PERMISSION_SLUGS.USERS_MANAGE_ROLES)
   updateRoles(
@@ -158,6 +183,10 @@ export class UsersController {
     @Body() dto: UpdateUserRolesDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.usersService.setRolesForUser(id, dto.roleSlugs, actor.sub);
+    return this.usersService.changeRolesForUser(
+      id,
+      { roleSlugs: dto.roleSlugs, add: dto.add, remove: dto.remove },
+      actor.sub,
+    );
   }
 }

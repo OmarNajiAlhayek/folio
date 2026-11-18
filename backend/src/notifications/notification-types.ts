@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPE = {
   REVIEW_INVITATION_DECLINED: 'review_invitation_declined',
   REVIEW_SUBMITTED: 'review_submitted',
   ROLE_INVITATION_CREATED: 'role_invitation_created',
+  ROLE_REMOVED: 'role_removed',
   SUBMISSION_PUBLISHED: 'submission_published',
   SUBMISSION_RETRACTED: 'submission_retracted',
   AI_CORPUS_SIMILARITY_COMPLETED: 'ai_corpus_similarity_completed',
@@ -67,6 +68,10 @@ export const NOTIFICATION_I18N: Record<
   [NOTIFICATION_TYPE.ROLE_INVITATION_CREATED]: {
     titleKey: 'Notifications.roleInvitation.title',
     bodyKey: 'Notifications.roleInvitation.body',
+  },
+  [NOTIFICATION_TYPE.ROLE_REMOVED]: {
+    titleKey: 'Notifications.roleRemoved.title',
+    bodyKey: 'Notifications.roleRemoved.body',
   },
   [NOTIFICATION_TYPE.SUBMISSION_PUBLISHED]: {
     titleKey: 'Notifications.submissionPublished.title',
