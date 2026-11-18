@@ -19,6 +19,7 @@ export function reviewAssignmentToEditorJson(
     slug: a.slug,
     submissionId: a.submissionId,
     reviewerId: a.reviewerId,
+    round: a.round ?? 0,
     status: a.status,
     assignedAt: a.assignedAt,
     respondedAt: a.respondedAt ?? null,

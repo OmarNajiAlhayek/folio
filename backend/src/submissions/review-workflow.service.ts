@@ -279,12 +279,17 @@ export class ReviewWorkflowService {
       where: {
         submissionId,
         reviewerId,
-        status: In([AssignmentStatus.INVITED, AssignmentStatus.ACCEPTED]),
+        round: submission.revisionRound ?? 0,
+        status: In([
+          AssignmentStatus.INVITED,
+          AssignmentStatus.ACCEPTED,
+          AssignmentStatus.COMPLETED,
+        ]),
       },
     });
     if (activeDup) {
       throw new BadRequestException({
-        message: 'Reviewer already assigned',
+        message: 'Reviewer already assigned in this review round',
         code: 'VALIDATION_ERROR',
       });
     }
@@ -301,6 +306,7 @@ export class ReviewWorkflowService {
         const row = assignmentRepo.create({
           submissionId,
           reviewerId,
+          round: submission.revisionRound ?? 0,
           status: AssignmentStatus.INVITED,
           slug: assignmentSlug,
           assignedById: editor.sub,

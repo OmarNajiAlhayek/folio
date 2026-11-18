@@ -204,6 +204,54 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
     expect(typeof manager.getRepository).toBe('function');
   });
 
+  it('checks for duplicates within the current round and counts completed reviews', async () => {
+    mockSubmissionsRepoFindBySlug(
+      submissionsRepo,
+      () => ({ ...submission, revisionRound: 1 }) as Submission,
+    );
+    await service.assignReviewer('paper-one', reviewer.id, editorUser);
+
+    const where = assignmentsRepo.findOne.mock.calls[0][0].where as {
+      round: number;
+      status: { _value: string[] };
+    };
+    expect(where.round).toBe(1);
+    expect(where.status._value).toEqual(
+      expect.arrayContaining([
+        AssignmentStatus.INVITED,
+        AssignmentStatus.ACCEPTED,
+        AssignmentStatus.COMPLETED,
+      ]),
+    );
+  });
+
+  it('rejects an invitation when the reviewer already has one this round', async () => {
+    assignmentsRepo.findOne.mockResolvedValueOnce({
+      ...savedAssignment,
+      status: AssignmentStatus.COMPLETED,
+    });
+    await expect(
+      service.assignReviewer('paper-one', reviewer.id, editorUser),
+    ).rejects.toThrow('Reviewer already assigned in this review round');
+  });
+
+  it('stamps the new assignment with the submission revision round', async () => {
+    mockSubmissionsRepoFindBySlug(
+      submissionsRepo,
+      () => ({ ...submission, revisionRound: 2 }) as Submission,
+    );
+    const em = makeTxEm();
+    nextTransactionUses(em);
+    await service.assignReviewer('paper-one', reviewer.id, editorUser);
+
+    const repo = em.getRepository(ReviewAssignment) as unknown as {
+      create: jest.Mock;
+    };
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ round: 2 }),
+    );
+  });
+
   it('rolls back when enqueue rejects (transaction propagates error)', async () => {
     eventPublisher.enqueue.mockRejectedValueOnce(
       new Error('outbox insert failed'),

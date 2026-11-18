@@ -198,6 +198,25 @@ describe('ReviewerDirectoryService.listForSubmission', () => {
     expect(row.thisSubmissionStatus).toBe('declined');
     expect(row.blockReason).toBeNull();
   });
+
+  it('blocks a reviewer who already completed a review in this round', async () => {
+    const service = build({
+      pool: [reviewer('done')],
+      onSubmission: [{ reviewerId: 'done', status: 'completed' }],
+    });
+    const [row] = await service.listForSubmission('paper-one', editor);
+    expect(row.blockReason).toBe('already_assigned');
+  });
+
+  it('only looks at assignments from the current review round', async () => {
+    const service = build({ pool: [reviewer('r1')] });
+    await service.listForSubmission('paper-one', editor);
+    const repo = (service as unknown as {
+      assignmentsRepo: { find: jest.Mock };
+    }).assignmentsRepo;
+    const where = repo.find.mock.calls[0][0].where as { round: number };
+    expect(where.round).toBe(submission.revisionRound ?? 0);
+  });
 });
 
 describe('ReviewerDirectoryService.getReviewerDetail', () => {

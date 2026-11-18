@@ -2532,6 +2532,15 @@ export default function SubmissionDetailPage() {
                               {name}
                             </button>
                             <div className="flex items-center gap-1.5">
+                              {editorAssignmentRows.some(
+                                (x) => (x.round ?? 0) > 0,
+                              ) && (
+                                <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10px] font-semibold text-ink/60">
+                                  {t('reviewRoundLabel', {
+                                    round: (a.round ?? 0) + 1,
+                                  })}
+                                </span>
+                              )}
                               {reviewForAssignment && (
                                 <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
                                   {recommendationLabel(

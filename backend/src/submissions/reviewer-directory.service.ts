@@ -243,7 +243,11 @@ export class ReviewerDirectoryService {
     const ids = reviewers.map((r) => r.id);
     const [aggregates, onThisSubmission] = await Promise.all([
       this.loadAggregates(ids),
-      this.loadStatusOnSubmission(submission.id, ids),
+      this.loadStatusOnSubmission(
+        submission.id,
+        ids,
+        submission.revisionRound ?? 0,
+      ),
     ]);
     const today = utcToday();
     return reviewers.map((r) => {
@@ -266,9 +270,12 @@ export class ReviewerDirectoryService {
         conflictOfInterest,
         blockReason: reviewerBlockReason({
           conflictOfInterest,
-          alreadyAssigned: (
-            ACTIVE_REVIEW_STATUSES as readonly string[]
-          ).includes(thisStatus ?? ''),
+          // Invited, accepted or completed in the current round. A completed
+          // review also blocks: re-inviting is for the next round.
+          alreadyAssigned: [
+            ...(ACTIVE_REVIEW_STATUSES as readonly string[]),
+            'completed',
+          ].includes(thisStatus ?? ''),
           available: availability.available,
           activeLoad: agg.active,
           maxActive: r.reviewerMaxActiveReviews,
@@ -311,14 +318,15 @@ export class ReviewerDirectoryService {
     return new Map(rows.map((row) => [row.reviewerId, row]));
   }
 
-  /** Newest assignment per reviewer on this manuscript. */
+  /** Newest assignment per reviewer on this manuscript, in the current round. */
   private async loadStatusOnSubmission(
     submissionId: string,
     reviewerIds: string[],
+    round: number,
   ): Promise<Map<string, string>> {
     if (reviewerIds.length === 0) return new Map();
     const rows = await this.assignmentsRepo.find({
-      where: { submissionId, reviewerId: In(reviewerIds) },
+      where: { submissionId, reviewerId: In(reviewerIds), round },
       select: ['reviewerId', 'status', 'assignedAt'],
       order: { assignedAt: 'ASC' },
     });

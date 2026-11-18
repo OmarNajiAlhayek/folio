@@ -44,6 +44,14 @@ export class ReviewAssignment extends BaseEntity {
   @JoinColumn({ name: 'reviewer_id' })
   reviewer: User;
 
+  /**
+   * Review round, copied from `Submission.revisionRound` when the invitation
+   * is created (0 = first round). A reviewer can hold one non-declined
+   * assignment per round; a later round lets the editor invite them again.
+   */
+  @Column({ type: 'int', default: 0 })
+  round: number;
+
   @Column({
     type: 'varchar',
     length: 32,

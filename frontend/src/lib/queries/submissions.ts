@@ -193,6 +193,8 @@ export type AssignmentRow = {
   id: string;
   slug?: string | null;
   reviewerId: string;
+  /** Review round the invitation belongs to (0 = first round). */
+  round?: number;
   status: string;
   reviewer?: { displayName?: string; email?: string };
 };
