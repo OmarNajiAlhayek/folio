@@ -2421,8 +2421,8 @@ export default function SubmissionDetailPage() {
                       onSelect={setReviewerPick}
                       disabled={busy}
                     />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex flex-col gap-1">
+                    <div className="grid grid-cols-2 items-stretch gap-2">
+                      <div className="flex flex-col justify-end gap-1">
                         <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
                           {t('assignResponseDue')}
                         </label>
@@ -2436,7 +2436,7 @@ export default function SubmissionDetailPage() {
                           disabled={busy}
                         />
                       </div>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col justify-end gap-1">
                         <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
                           {t('assignReviewDue')}
                         </label>
