@@ -47,6 +47,38 @@ describe('submission-file-upload.policy', () => {
     }
   });
 
+  it('allows xlsx and csv only for supplementary files', () => {
+    expect(isExtensionAllowedForKind('data.xlsx', 'supplementary')).toBe(true);
+    expect(isExtensionAllowedForKind('data.csv', 'supplementary')).toBe(true);
+    expect(isExtensionAllowedForKind('data.xlsx', 'manuscript')).toBe(false);
+    expect(isExtensionAllowedForKind('data.csv', 'figure')).toBe(false);
+  });
+
+  it('sniffs xlsx as a ZIP container', () => {
+    const ok = sniffUploadMime(
+      Buffer.from([0x50, 0x4b, 3, 4]),
+      '.xlsx',
+      'supplementary',
+    );
+    expect(ok.ok).toBe(true);
+    expect(
+      sniffUploadMime(Buffer.from('MZ\x90\x00'), '.xlsx', 'supplementary').ok,
+    ).toBe(false);
+  });
+
+  it('accepts text csv and rejects binary renamed to csv', () => {
+    const ok = sniffUploadMime(
+      Buffer.from('a,b\n1,2\n'),
+      '.csv',
+      'supplementary',
+    );
+    expect(ok).toEqual({ ok: true, mimeType: 'text/csv' });
+    expect(
+      sniffUploadMime(Buffer.from('MZ\x90\x00\x03'), '.csv', 'supplementary')
+        .ok,
+    ).toBe(false);
+  });
+
   it('builds accept attribute for figure', () => {
     const accept = acceptAttributeForKind('figure');
     expect(accept).toContain('.png');

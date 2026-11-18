@@ -4,6 +4,9 @@ import { SubmissionFileKind } from './submission-file-kinds';
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+const XLSX_MIME =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 const POLICY: Record<
   SubmissionFileKind,
   { extensions: readonly string[]; mimeTypes: readonly string[] }
@@ -33,8 +36,14 @@ const POLICY: Record<
     mimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
   },
   supplementary: {
-    extensions: ['.pdf', '.docx', '.zip'],
-    mimeTypes: ['application/pdf', DOCX_MIME, 'application/zip'],
+    extensions: ['.pdf', '.docx', '.xlsx', '.csv', '.zip'],
+    mimeTypes: [
+      'application/pdf',
+      DOCX_MIME,
+      XLSX_MIME,
+      'text/csv',
+      'application/zip',
+    ],
   },
   review_response: {
     extensions: ['.pdf', '.docx'],
@@ -97,17 +106,32 @@ export function sniffUploadMime(
     return { ok: true, mimeType: 'application/pdf' };
   }
 
-  if (normalizedExt === '.docx' || normalizedExt === '.zip') {
+  if (
+    normalizedExt === '.docx' ||
+    normalizedExt === '.xlsx' ||
+    normalizedExt === '.zip'
+  ) {
     if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
       return {
         ok: false,
-        reason: 'File content does not match ZIP/DOCX archive',
+        reason: 'File content does not match ZIP/DOCX/XLSX archive',
       };
     }
     if (normalizedExt === '.docx') {
       return { ok: true, mimeType: DOCX_MIME };
     }
+    if (normalizedExt === '.xlsx') {
+      return { ok: true, mimeType: XLSX_MIME };
+    }
     return { ok: true, mimeType: 'application/zip' };
+  }
+
+  if (normalizedExt === '.csv') {
+    // Plain text: reject binary content (NUL bytes) and archive/PDF/exe headers.
+    if (buf.includes(0x00)) {
+      return { ok: false, reason: 'File content does not match CSV text' };
+    }
+    return { ok: true, mimeType: 'text/csv' };
   }
 
   if (normalizedExt === '.png') {

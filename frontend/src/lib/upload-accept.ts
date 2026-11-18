@@ -6,4 +6,4 @@ export const ACCEPT_FIGURE =
   "image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp";
 
 export const ACCEPT_SUPPLEMENTARY =
-  "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,.pdf,.docx,.zip";
+  "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/zip,.pdf,.docx,.xlsx,.csv,.zip";
