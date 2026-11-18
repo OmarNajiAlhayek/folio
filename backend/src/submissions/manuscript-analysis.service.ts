@@ -22,7 +22,7 @@ import {
   MAX_GRAMMAR_TEXT_CHARS,
   checkDamascusStructure,
   damascusCitationStyleIssues,
-  damascusDisciplineIssues,
+  damascusJournalLayoutIssues,
   damascusFormatIssues,
   extractInlineCitations,
   extractReferenceList,
@@ -30,7 +30,6 @@ import {
 
 /** What the analysis needs to know about the submission besides its content. */
 export type ManuscriptAnalysisContext = {
-  disciplines: string[];
   /** The manuscript's journal decides the citation style (APA / Vancouver). */
   journalId: string | null;
   /** When set, grammar can fall back to the uploaded manuscript file. */
@@ -55,7 +54,7 @@ export class ManuscriptAnalysisService {
   ): Promise<ManuscriptAnalysisResult> {
     const submission = await this.submissionsRepo.findOne({
       where: { id: submissionId },
-      select: ['id', 'constructorContent', 'disciplines', 'journalId'],
+      select: ['id', 'constructorContent', 'journalId'],
     });
     if (!submission) {
       return {
@@ -67,7 +66,6 @@ export class ManuscriptAnalysisService {
       };
     }
     return this.analyzeContent(submission.constructorContent, {
-      disciplines: submission.disciplines ?? [],
       journalId: submission.journalId ?? null,
       submissionId,
     });
@@ -77,14 +75,14 @@ export class ManuscriptAnalysisService {
     content: ConstructorContent | null,
     context: ManuscriptAnalysisContext,
   ): Promise<ManuscriptAnalysisResult> {
-    const citationStyle = await this.citationStyleFor(
-      content,
-      context.journalId,
-    );
+    const journal = context.journalId
+      ? await this.journals.findJournal(context.journalId)
+      : null;
+    const citationStyle = this.citationStyleFor(content, journal?.slug);
     const structureCheck = checkDamascusStructure(content);
     const formatIssues = [
       ...damascusFormatIssues(structureCheck),
-      ...damascusDisciplineIssues(context.disciplines, content),
+      ...damascusJournalLayoutIssues(journal?.slug, content),
       ...damascusCitationStyleIssues(citationStyle, content),
     ];
 
@@ -142,17 +140,14 @@ export class ManuscriptAnalysisService {
   }
 
   /** `null` when the journal is unknown — style-specific checks are skipped. */
-  private async citationStyleFor(
+  private citationStyleFor(
     content: ConstructorContent | null,
-    journalId: string | null,
-  ): Promise<CitationStyle | null> {
-    const journal = journalId
-      ? await this.journals.findJournal(journalId)
-      : null;
-    if (!journal) return null;
+    journalSlug: string | undefined,
+  ): CitationStyle | null {
+    if (!journalSlug) return null;
     const profile = this.manuscriptStyles.getProfile(
       this.manuscriptStyles.resolveEffectiveStyleId(content),
     );
-    return resolveCitationStyle(profile, journal.disciplineLabel);
+    return resolveCitationStyle(profile, journalSlug);
   }
 }

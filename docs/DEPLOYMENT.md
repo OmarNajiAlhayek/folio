@@ -60,7 +60,7 @@ stages. The runtime stage contains no toolchain, no dev dependencies, no source.
 |--------------|---------------|---------|
 | `corpus` (default) | ~250 MB | Exact-overlap plagiarism, corpus importers |
 | `corpus,similarity` | ~3 GB | + embeddings, related articles, reviewer matching |
-| `corpus,similarity,ml` | ~3.5 GB | + AraBERT discipline classifier |
+| `corpus,similarity,ml` | ~3.5 GB | + AraBERT classifier (unused by the backend) |
 | `+ web_similarity` | + ~50 MB | + Google CSE web plagiarism stage |
 
 Installing an extra only makes the code available; the matching env flag still has to be on.

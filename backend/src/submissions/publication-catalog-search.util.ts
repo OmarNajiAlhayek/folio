@@ -11,7 +11,6 @@ export type PublicationCatalogFilters = {
   author?: string;
   /** Journal slug from the URL (`?journal=engj`), not the internal id. */
   journal?: string;
-  discipline?: string;
   articleType?: SubmissionArticleType;
   publishedFrom?: Date;
   publishedTo?: Date;
@@ -32,7 +31,6 @@ export function publicationCatalogHasTextOrFilters(
     filters.q ||
     filters.author ||
     filters.journal ||
-    filters.discipline ||
     filters.articleType ||
     filters.publishedFrom ||
     filters.publishedTo,
@@ -259,12 +257,6 @@ export function applyPublicationCatalogQuery(
     );
   }
 
-  if (filters.discipline) {
-    qb.andWhere(':pubDiscipline = ANY(s.disciplines)', {
-      pubDiscipline: filters.discipline,
-    });
-  }
-
   if (filters.articleType) {
     qb.andWhere('s.articleType = :pubArticleType', {
       pubArticleType: filters.articleType,
@@ -291,7 +283,6 @@ export function publicationCatalogBoundParamNames(): string[] {
     PUBLICATION_QUICK_SEARCH_RANK_SQL,
     PUBLICATION_ADVANCED_AUTHOR_MATCH_SQL,
     's.status = :pubStatus',
-    ':pubDiscipline = ANY(s.disciplines)',
     's.articleType = :pubArticleType',
     's.publishedAt >= :pubFrom',
     's.publishedAt <= :pubTo',

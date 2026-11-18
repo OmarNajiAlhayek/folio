@@ -39,7 +39,6 @@ export type PublicationListItem = {
   articleType: Submission['articleType'];
   keywords: string | null;
   keywordsAr: string | null;
-  disciplines: string[] | null;
   /** Null only when the journal relation was not loaded for this query. */
   journal: { slug: string; titleAr: string; titleEn: string } | null;
   publishedAt: Date | null;
@@ -69,7 +68,6 @@ export class PublicationCatalogService {
       articleType: s.articleType,
       keywords: s.keywords,
       keywordsAr: s.keywordsAr,
-      disciplines: s.disciplines,
       journal: s.journal
         ? {
             slug: s.journal.slug,

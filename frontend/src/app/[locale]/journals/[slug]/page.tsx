@@ -68,9 +68,6 @@ export default async function JournalPage({ params }: Props) {
       </nav>
 
       <header className="border-s-4 border-s-accent/35 ps-5">
-        <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-accent">
-          {journal.disciplineLabel}
-        </p>
         <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           {isAr ? journal.titleAr : journal.titleEn}
         </h1>

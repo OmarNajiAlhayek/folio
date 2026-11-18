@@ -6,13 +6,6 @@ export type ClassifyArticleResponse = {
   probabilities: Record<string, number>;
 };
 
-export type DisciplineClassificationJson = {
-  probabilities: Record<string, number>;
-  classifiedAt: string;
-  scopeInJournal: boolean;
-  scopeWarning: string | null;
-};
-
 export type SimilarArticleHit = {
   article_id: string;
   abstract: string;

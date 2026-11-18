@@ -142,7 +142,6 @@ describe('publication-catalog-search.util', () => {
 
     applyPublicationCatalogQuery(qb, {
       q: 'metadata',
-      discipline: 'العلوم الأساسية',
       articleType: SubmissionArticleType.REVIEW_ARTICLE,
     });
 
@@ -163,12 +162,6 @@ describe('publication-catalog-search.util', () => {
     expect(orderBy).toHaveBeenCalledWith(
       PUBLICATION_QUICK_SEARCH_RANK_ALIAS,
       'DESC',
-    );
-    expect(andWhere).toHaveBeenCalledWith(
-      ':pubDiscipline = ANY(s.disciplines)',
-      {
-        pubDiscipline: 'العلوم الأساسية',
-      },
     );
   });
 });

@@ -231,8 +231,7 @@ ALTER TABLE journals
       coalesce(title_en, '') || ' ' ||
       coalesce(title_ar, '') || ' ' ||
       coalesce(description_en, '') || ' ' ||
-      coalesce(description_ar, '') || ' ' ||
-      coalesce(discipline_label, '')
+      coalesce(description_ar, '')
     )
   ) STORED;
 

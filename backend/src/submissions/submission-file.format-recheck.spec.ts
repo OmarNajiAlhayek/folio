@@ -24,7 +24,6 @@ describe('SubmissionFileService.refreshManuscriptFormatViolations', () => {
   const submission = () =>
     ({
       id: 'sub-1',
-      disciplines: [],
       constructorContent: null,
       docxManuscriptViolations: stale,
     }) as unknown as Submission;

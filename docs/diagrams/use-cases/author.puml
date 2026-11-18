@@ -1,6 +1,6 @@
 @startuml folio-author-use-cases
 ' Damascus University Journal — Author essentials (submission.manage_own only)
-' AI: suggest discipline, keyword suggestions (docs/plans/ai-service.md)
+' AI: keyword suggestions (docs/plans/ai-service.md)
 ' Excludes staff roles (editor, journal manager, reviewer, copyeditor diagrams)
 ' Render: https://www.plantuml.com/plantuml
 
@@ -21,7 +21,6 @@ rectangle "Damascus University Journal — author scope" {
   usecase "Revise and resubmit" as UC_Revise
   usecase "View reviewer feedback" as UC_Feedback
 
-  usecase "Suggest discipline (AI)" as UC_AiDiscipline
   usecase "Keywords suggestion (AI)" as UC_AiKeywords
 }
 
@@ -35,7 +34,6 @@ UC_Constructor .> UC_Edit : <<extend>>
 UC_Revise .> UC_Own : <<extend>>
 UC_Feedback .> UC_List : <<extend>>
 
-UC_AiDiscipline .> UC_Edit : <<extend>>
 UC_AiKeywords .> UC_Edit : <<extend>>
 UC_AiKeywords .> UC_Create : <<extend>>
 

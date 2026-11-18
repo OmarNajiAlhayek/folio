@@ -77,7 +77,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
   s.abstractAr = 'ملخص.';
   s.keywords = 'test, unit';
   s.keywordsAr = 'اختبار';
-  s.disciplines = ['Computer Science'];
   s.articleType = 'original_research' as Submission['articleType'];
   s.status = SubmissionStatus.PUBLISHED;
   s.publishedAt = new Date('2024-01-01');
@@ -180,7 +179,6 @@ describe('SearchService', () => {
           slug: 'test-article',
           title: 'Test Article',
           authorDisplayName: 'Jane Doe',
-          disciplines: ['Computer Science'],
           publishedAt: sub.publishedAt!.getTime(),
         }),
       );
@@ -391,7 +389,6 @@ describe('SearchService', () => {
               keywords: 'test',
               keywordsAr: '',
               authorDisplayName: 'Jane Doe',
-              disciplines: ['CS'],
               articleType: 'original_research',
               publishedAt: 1704067200000,
             },
@@ -412,16 +409,6 @@ describe('SearchService', () => {
         unknown
       >;
       expect(searchCall['filter_by']).toContain('journalSlug:="engj"');
-    });
-
-    it('applies discipline filter_by', async () => {
-      mocks.mockDocuments.search.mockResolvedValueOnce({ found: 0, hits: [] });
-      await service.searchAsSubmissions({ discipline: 'Physics' });
-      const searchCall = mocks.mockDocuments.search.mock.calls[0][0] as Record<
-        string,
-        unknown
-      >;
-      expect(searchCall['filter_by']).toContain('disciplines:="Physics"');
     });
 
     it('applies articleType filter_by', async () => {

@@ -22,7 +22,6 @@ export type PortalJournal = {
   slug: string;
   titleAr: string;
   titleEn: string;
-  disciplineLabel: string;
   issn: string | null;
   eissn: string | null;
   descriptionAr: string | null;
@@ -44,7 +43,6 @@ export type JournalOption = {
   slug: string;
   titleAr: string;
   titleEn: string;
-  disciplineLabel: string;
 };
 
 /**

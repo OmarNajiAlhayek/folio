@@ -137,7 +137,7 @@ Failed messages route to a dead-letter queue with replay tooling
 
 Two distinct paths, chosen by cost:
 
-**Synchronous gRPC** — keyword suggestions, discipline classification, reviewer matching,
+**Synchronous gRPC** — keyword suggestions, reviewer matching,
 copyedit reference checks. Sub-request latency, deadline-bounded, degrades to "unavailable"
 in the UI when the service is off.
 
@@ -150,7 +150,6 @@ The client polls job status; nothing blocks on a multi-minute computation.
 flowchart LR
     subgraph sync["Synchronous (gRPC, deadline-bounded)"]
         A[Author keywords] --> G1[KeywordService]
-        C[Discipline classify] --> G2[ClassifierService]
         E[Reviewer matching] --> G3[ReviewerMatchingService]
         F[Copyedit refs] --> G4[CopyeditService]
     end

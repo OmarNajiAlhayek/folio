@@ -30,7 +30,6 @@ function medj(): Journal {
     slug: 'medj',
     titleAr: 'مجلة جامعة دمشق للعلوم الطبية',
     titleEn: 'Damascus University Journal for Medical Sciences',
-    disciplineLabel: 'العلوم الطبية',
     issn: '2072-2265',
     eissn: '2789-6889',
     descriptionAr: null,

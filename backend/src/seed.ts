@@ -63,7 +63,6 @@ async function run() {
   const rbacService = app.get(RbacService);
   const submissionsService = app.get(SubmissionsService);
   const aiClient = app.get(AiClientService);
-  const aiEnabled = aiClient.isEnabled();
   const ctx: SeedContext = {
     dataSource,
     usersService,
@@ -136,7 +135,6 @@ async function run() {
     copyeditor: accounts.copyeditor,
     press,
     placement,
-    aiEnabled,
   });
 
   if (process.env.SEED_PERF_FIXTURES === '1') {

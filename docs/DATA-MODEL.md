@@ -15,9 +15,6 @@ tags. `journals` holds one row per Damascus University series (`artsj`, `hisj`,
 - `slug` (unique) — **public URL contract**, mirrors the DU OJS paths
   (`/journals/engj/issues/2026/3`). Frozen: changing one breaks live links.
 - `title_ar` / `title_en`, optional `issn` / `eissn`, optional descriptions.
-- `discipline_label` (unique) — the exact Arabic label the AraBERT classifier
-  emits, so a classification maps to at most one journal and there is no second
-  taxonomy. `غير محدد` is deliberately **not** a journal.
 - `is_active` — soft hide from the author picker and the public portal; rows are
   never deleted, so an archive survives a journal being retired.
 - `sort_order` — catalog display order.
@@ -66,7 +63,7 @@ truth for journal-scoped queues.
 
 - `(journal_id, user_id, role_slug)` unique.
 - Replaced the old `user_section_editor_disciplines` table (migration
-  `JournalScopedSectionEditors`).
+  `JournalScopedSectionEditors`). The per-submission discipline columns and `journals.discipline_label` were dropped by `RemoveDisciplines`.
 - Partial unique indexes keep one `editor` and one `journal_manager` per journal.
   `section_editor` and `reviewer` may repeat. `copyeditor` is unchanged.
 - `journal_manager` membership is the manager seat. Templates, reminder policy,
@@ -107,7 +104,6 @@ manager, else nobody. Later edits to the link do not rewrite open papers.
   publish; publishing without an issue is rejected. Always inside `journal_id`'s
   journal.
 - Metadata: **title**, **abstract**, **article type** (enum), **keywords** (comma/semicolon-separated; 3–6 on submit), **contributors** (JSON array: full name, optional email, affiliation, sort order, corresponding flag), **funding statement**, **declarations** (conflict of interest, ethics/IRB reference, originality confirmation, AI-use statement), **suggested / opposed reviewers** (JSON arrays, max 5 each).
-- **Discipline (Arabic journal scope, OJS category-like):** optional **`disciplines`** (`text[]`, confirmed labels, max 3), **`discipline_source`** (`ai` \| `author` \| `editor`), **`discipline_suggested_labels`** (`text[]`) + **`discipline_suggested_confidence`** (from AraBERT on suggest/submit), **`discipline_classification`** (JSONB snapshot of top labels/scores). Authors confirm via API; editors may override. Catalog filter and corpus similarity can scope by any confirmed label (similarity uses first).
 - **`constructor_content`** (JSONB, nullable): Word Constructor document when the author uses builder mode; omitted from reviewer payloads.
 - **`review_manuscript_presentation`** (JSONB, nullable): Which sources (upload / constructor `.docx`) are in the review package at submit.
 - **`review_method`** (OJS-aligned enum, default `double_anonymous`): `open` | `anonymous` | `double_anonymous`. In UI/docs, label **`anonymous`** as **single-blind** (reviewer identity hidden from author; author identity still visible to reviewer unless `double_anonymous`).

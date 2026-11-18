@@ -47,7 +47,6 @@ function article(over: Partial<Submission> = {}): Submission {
     // The tag editor always re-serialises with ASCII commas, whatever the
     // language of the terms, so this is the shape actually stored.
     keywordsAr: 'جوائز, خرسانة',
-    disciplines: ['العلوم الهندسية'],
     articleType: 'research_article',
     publishedAt: new Date('2026-03-01T00:00:00Z'),
     updatedAt: new Date('2026-03-02T10:00:00Z'),

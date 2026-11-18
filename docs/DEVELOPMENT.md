@@ -147,7 +147,6 @@ Every optional capability is off by default and needs **both** sides switched on
 
 | Feature | `backend/.env` | Other side |
 |---------|----------------|-----------|
-| Discipline classification | `AI_SERVICE_ENABLED=true` | `ARABERT_ENABLED=true` + `.[ml]` + weights on disk |
 | Keyword suggestions | `AI_KEYWORDS_ENABLED=true` | `KEYWORDS_SUGGESTION_ENABLED=true`, `AI_PROVIDER=openai` |
 | Related articles, semantic search | `AI_SIMILARITY_ENABLED=true` | `SIMILARITY_ENABLED=true` + `.[similarity]` |
 | Reviewer matching | `AI_REVIEWER_MATCHING_ENABLED=true` | `REVIEWER_MATCHING_ENABLED=true` + `SIMILARITY_ENABLED=true` |

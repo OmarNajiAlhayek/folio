@@ -43,7 +43,6 @@ describe('PreSubmitAnalysisService', () => {
       authorId: author.sub,
       status: SubmissionStatus.DRAFT,
       constructorContent,
-      disciplines: [],
       preSubmitAnalysis: null,
       ...overrides,
     } as Submission;

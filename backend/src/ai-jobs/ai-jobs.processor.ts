@@ -186,7 +186,6 @@ export class AiJobsProcessor {
     const detectResult = await this.aiClient.detectCorpusSimilarity({
       submissionText: plainText,
       threshold: CORPUS_SIMILARITY_THRESHOLD,
-      category: submission.disciplines?.[0]?.trim() || undefined,
       // Without this a published article re-checked against the corpus matches
       // its own indexed copy at ~100%.
       submissionId: submission.id,

@@ -20,7 +20,6 @@ function stubSubmission(overrides: Partial<Submission>): Submission {
     abstractAr: null,
     keywords: 'kw',
     keywordsAr: null,
-    disciplines: ['العلوم الطبية'],
     constructorContent: null,
     ...overrides,
   } as Submission;
@@ -43,7 +42,7 @@ describe('publicationSimilarityIndexPayload', () => {
     expect(payload).toMatchObject({
       abstract: 'ملخص عربي',
       keywords: 'kw',
-      category: 'العلوم الطبية',
+      category: '',
     });
     expect(payload?.fullText).toContain('ملخص عربي');
   });

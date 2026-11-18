@@ -23,17 +23,6 @@ import {
 import { RbacService } from '../rbac/rbac.service';
 import { AiClientService } from '../ai/ai-client.service';
 import { AiJobsService, type AiJobResponse } from '../ai-jobs/ai-jobs.service';
-import { SubmissionDisciplineSource } from '../entities/submission-discipline-source.enum';
-import {
-  ARABIC_DISCIPLINE_LABELS,
-  labelsFromProbabilities,
-  validateDisciplines,
-} from '../ai/discipline-labels';
-import {
-  buildClassificationJson,
-  resolveClassifyText,
-  parseAllowedDisciplinesFromEnv,
-} from './submission-discipline.util';
 import {
   hasKeywordLanguagePair,
   normalizeKeywordSuggestions,
@@ -74,109 +63,6 @@ export class SubmissionAiService {
     private readonly aiJobs: AiJobsService,
     private readonly access: SubmissionAccessService,
   ) {}
-
-  listDisciplineLabels(): {
-    labels: readonly string[];
-    journalScope: string[];
-  } {
-    return {
-      labels: ARABIC_DISCIPLINE_LABELS,
-      journalScope: this.journalAllowedDisciplines(),
-    };
-  }
-
-  private journalAllowedDisciplines(): string[] {
-    return parseAllowedDisciplinesFromEnv(
-      this.config.get<string>('JOURNAL_ALLOWED_DISCIPLINES'),
-    );
-  }
-
-  async refreshDisciplineSuggestion(
-    submission: Submission,
-  ): Promise<import('../ai/ai-client.types').ClassifyArticleResponse | null> {
-    const text = resolveClassifyText(submission);
-    if (!text.abstract.trim()) {
-      return null;
-    }
-    const result = await this.aiClient.classifyArticle(text);
-    if (!result) {
-      return null;
-    }
-    const allowed = this.journalAllowedDisciplines();
-    submission.disciplineSuggestedLabels = labelsFromProbabilities(
-      result.top_label,
-      result.probabilities,
-    );
-    submission.disciplineSuggestedConfidence = String(result.top_confidence);
-    submission.disciplineClassification = buildClassificationJson(
-      result,
-      allowed,
-    );
-    return result;
-  }
-
-  async suggestDiscipline(
-    slug: string,
-    user: RequestUser,
-  ): Promise<{
-    topLabel: string;
-    topConfidence: number;
-    suggestedLabels: string[];
-    probabilities: Record<string, number>;
-    scopeInJournal: boolean;
-    scopeWarning: string | null;
-    disciplines: string[];
-  }> {
-    const s = await this.access.getBySlugOrThrow(slug);
-    if (s.authorId !== user.sub) {
-      throw new ForbiddenException({
-        message: 'Only the author can request discipline suggestion',
-        code: 'FORBIDDEN',
-      });
-    }
-    if (
-      s.status !== SubmissionStatus.DRAFT &&
-      s.status !== SubmissionStatus.REVISIONS_REQUESTED
-    ) {
-      throw new BadRequestException({
-        message:
-          'Discipline suggestion is only available while editing the draft',
-        code: 'VALIDATION_ERROR',
-      });
-    }
-    const text = resolveClassifyText(s);
-    if (!text.abstract.trim()) {
-      throw new BadRequestException({
-        message:
-          'Provide an Arabic or English abstract before requesting a discipline suggestion',
-        code: 'VALIDATION_ERROR',
-      });
-    }
-    if (!this.aiClient.isEnabled()) {
-      throw new BadRequestException({
-        message: 'AI classification service is not configured',
-        code: 'AI_SERVICE_UNAVAILABLE',
-      });
-    }
-    const result = await this.refreshDisciplineSuggestion(s);
-    if (!result) {
-      throw new BadRequestException({
-        message: 'Could not classify submission; try again later',
-        code: 'AI_CLASSIFICATION_FAILED',
-      });
-    }
-    await this.submissionsRepo.save(s);
-    const classification = s.disciplineClassification!;
-    return {
-      topLabel: result.top_label,
-      topConfidence: Number(s.disciplineSuggestedConfidence),
-      suggestedLabels: s.disciplineSuggestedLabels,
-      probabilities: classification.probabilities,
-      scopeInJournal: classification.scopeInJournal,
-      scopeWarning: classification.scopeWarning,
-      disciplines: s.disciplines ?? [],
-    };
-  }
 
   async suggestKeywordsPreview(
     _user: RequestUser,
@@ -275,45 +161,6 @@ export class SubmissionAiService {
       });
     }
     return { keywordsEn, keywordsAr };
-  }
-
-  async setDisciplineForUser(
-    slug: string,
-    user: RequestUser,
-    disciplines: string[],
-  ): Promise<Submission> {
-    try {
-      validateDisciplines(disciplines);
-    } catch (err) {
-      throw new BadRequestException({
-        message:
-          err instanceof Error ? err.message : 'Invalid discipline labels',
-        code: 'VALIDATION_ERROR',
-      });
-    }
-    const s = await this.access.getBySlugOrThrow(slug);
-    const isAuthor =
-      s.authorId === user.sub &&
-      (s.status === SubmissionStatus.DRAFT ||
-        s.status === SubmissionStatus.REVISIONS_REQUESTED);
-    if (isAuthor) {
-      s.disciplines = disciplines;
-      s.disciplineSource = SubmissionDisciplineSource.AUTHOR;
-      return this.submissionsRepo.save(s);
-    }
-    if (
-      this.access.hasPerm(user, PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE)
-    ) {
-      await this.access.assertStaffSubmissionScope(s, user);
-      s.disciplines = disciplines;
-      s.disciplineSource = SubmissionDisciplineSource.EDITOR;
-      return this.submissionsRepo.save(s);
-    }
-    throw new ForbiddenException({
-      message:
-        'Only the author or an editor can set disciplines on this submission',
-      code: 'FORBIDDEN',
-    });
   }
 
   private async assertCorpusSimilarityAccess(

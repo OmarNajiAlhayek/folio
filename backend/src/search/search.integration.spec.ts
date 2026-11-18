@@ -58,7 +58,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
   s.abstractAr = 'دراسة التعلم العميق في التنبؤ بالمناخ.';
   s.keywords = 'neural networks, climate, deep learning';
   s.keywordsAr = 'شبكات عصبية, مناخ';
-  s.disciplines = ['Computer Science'];
   s.articleType = SubmissionArticleType.ORIGINAL_RESEARCH;
   s.status = SubmissionStatus.PUBLISHED;
   s.publishedAt = new Date('2024-06-15');
@@ -193,7 +192,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
               titleAr: 'الحوسبة الكمومية في التشفير',
               abstract: 'How qubits break classical ciphers.',
               keywords: 'quantum, cryptography, qubits',
-              disciplines: ['Physics'],
               articleType: SubmissionArticleType.ORIGINAL_RESEARCH,
               publishedAt: new Date('2023-01-15'),
             }),
@@ -206,7 +204,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
               titleAr: 'التعلم الآلي في التصوير الطبي',
               abstract: 'CNNs applied to radiology scans.',
               keywords: 'machine learning, imaging, radiology',
-              disciplines: ['Medicine'],
               articleType: SubmissionArticleType.REVIEW_ARTICLE,
               publishedAt: new Date('2024-06-01'),
             }),
@@ -219,7 +216,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
               titleAr: 'التحليل الاقتصادي لتأثير تغير المناخ',
               abstract: 'Macro-level cost of rising temperatures.',
               keywords: 'climate, economics, carbon',
-              disciplines: ['Economics'],
               articleType: SubmissionArticleType.ORIGINAL_RESEARCH,
               publishedAt: new Date('2024-12-01'),
             }),
@@ -267,18 +263,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
             items[i].publishedAt!.getTime(),
           );
         }
-      });
-
-      it('filters by discipline — only Physics results returned', async () => {
-        const { items } = await service.searchAsSubmissions({
-          discipline: 'Physics',
-        });
-        expect(items.length).toBeGreaterThanOrEqual(1);
-        expect(items.every((i) => i.disciplines?.includes('Physics'))).toBe(
-          true,
-        );
-        expect(items.find((i) => i.id === docA)).toBeDefined();
-        expect(items.find((i) => i.id === docB)).toBeUndefined();
       });
 
       it('filters by articleType — only review_article results returned', async () => {
@@ -375,7 +359,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
         const doc = items.find((i) => i.id === docA);
         expect(doc).toBeDefined();
         expect(doc!.slug).toBe('test-article');
-        expect(doc!.disciplines).toEqual(['Physics']);
         expect(doc!.articleType).toBe(SubmissionArticleType.ORIGINAL_RESEARCH);
         expect(doc!.publishedAt).toEqual(new Date('2023-01-15'));
         expect(doc!.author.displayName).toBe('Alice Smith');

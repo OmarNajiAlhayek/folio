@@ -701,31 +701,22 @@ export function damascusCitationStyleIssues(
   return issues;
 }
 
-// ── Discipline-aware checks ──────────────────────────────────────────────────
+// ── Journal-aware checks ─────────────────────────────────────────────────────
 
-const ENGINEERING_DISCIPLINE = 'العلوم الهندسية';
+const ENGINEERING_JOURNAL_SLUG = 'engj';
 
 /**
- * Returns format warnings based on the submission's AI-classified disciplines:
- * the two-column layout requirement for engineering submissions (§3).
- * Citation style depends on the journal instead — see
+ * Returns format warnings that depend on the manuscript's journal: the
+ * two-column layout requirement for the engineering journal (§3).
+ * Citation style depends on the journal too — see
  * {@link damascusCitationStyleIssues}.
  */
-export function damascusDisciplineIssues(
-  disciplines: string[],
+export function damascusJournalLayoutIssues(
+  journalSlug: string | null | undefined,
   content: ConstructorContent | null | undefined,
 ): string[] {
-  if (!content || disciplines.length === 0) return [];
-  const issues: string[] = [];
-
-  const isEngineering = disciplines.includes(ENGINEERING_DISCIPLINE);
-
-  // Two-column layout warning for Engineering
-  if (isEngineering) {
-    issues.push(
-      'Engineering discipline manuscripts (العلوم الهندسية) must use a two-column page layout per Damascus University §3. Please verify the final .docx is formatted in two columns before submission.',
-    );
-  }
-
-  return issues;
+  if (!content || journalSlug !== ENGINEERING_JOURNAL_SLUG) return [];
+  return [
+    'Engineering journal manuscripts (العلوم الهندسية) must use a two-column page layout per Damascus University §3. Please verify the final .docx is formatted in two columns before submission.',
+  ];
 }

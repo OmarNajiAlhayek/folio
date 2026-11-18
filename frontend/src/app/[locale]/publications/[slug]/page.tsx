@@ -9,7 +9,6 @@ import {
   FileText,
   UserRound,
 } from 'lucide-react';
-import { DisciplineBadges } from '@/components/discipline-badges';
 import { JsonLd } from '@/components/json-ld';
 import {
   RelatedPublications,
@@ -169,9 +168,6 @@ export default async function PublicationDetailPage({ params }: Props) {
       </Link>
 
       <div className="flex flex-wrap gap-2 items-center mt-6">
-        {(article.disciplines?.length ?? 0) > 0 ? (
-          <DisciplineBadges labels={article.disciplines ?? []} />
-        ) : null}
         {article.articleType ? (
           <span className="inline-flex items-center rounded-full bg-indigo-500/8 dark:bg-indigo-500/18 border border-indigo-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
             {tWf(`articleType_${article.articleType}`)}

@@ -127,13 +127,6 @@ const ENABLED = process.env.PUBLICATION_SEARCH_INTEGRATION === '1';
       }
     });
 
-    it('rejects invalid discipline with 400', async () => {
-      await request(app.getHttpServer())
-        .get('/api/v1/public/submissions')
-        .query({ discipline: 'not-a-real-label' })
-        .expect(400);
-    });
-
     it('rejects publishedFrom after publishedTo', async () => {
       await request(app.getHttpServer())
         .get('/api/v1/public/submissions')

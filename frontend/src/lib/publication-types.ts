@@ -49,7 +49,6 @@ export type PublicationDetail = {
   titleAr?: string | null;
   abstract: string;
   abstractAr?: string | null;
-  disciplines?: string[];
   articleType?: string | null;
   keywords?: string | null;
   keywordsAr?: string | null;
@@ -73,7 +72,6 @@ export type PublicationListItem = {
   articleType?: string | null;
   keywords?: string | null;
   keywordsAr?: string | null;
-  disciplines?: string[];
   /** Journal this article was published in; null if the query did not load it. */
   journal?: { slug: string; titleAr: string; titleEn: string } | null;
   publishedAt: string | null;

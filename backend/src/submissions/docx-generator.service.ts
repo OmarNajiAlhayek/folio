@@ -117,7 +117,7 @@ export interface DocxJournalContext {
   /** Online ISSN, printed in the first-page footer when known. */
   eissn?: string | null;
   /** Picks the reference-list order via `profile.references.citationStyles`. */
-  disciplineLabel?: string | null;
+  slug?: string | null;
 }
 
 export interface DocxGenerateOptions {
@@ -445,7 +445,7 @@ export class DocxGeneratorService {
               articleDir,
               profile,
               ctx,
-              resolveCitationStyle(profile, options.journal?.disciplineLabel),
+              resolveCitationStyle(profile, options.journal?.slug),
             )),
           );
           break;

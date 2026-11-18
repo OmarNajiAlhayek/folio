@@ -39,10 +39,10 @@ interface ConstructorWorkspaceProps {
   hasUnsavedChanges?: boolean;
   articleType?: SubmissionArticleType | null;
   /**
-   * `disciplineLabel` of the submission's journal — picks APA or Vancouver for
+   * `slug` of the submission's journal — picks APA or Vancouver for
    * the references hint and preview order. Absent → no journal chosen yet.
    */
-  journalDisciplineLabel?: string | null;
+  journalSlug?: string | null;
 }
 
 export function ConstructorWorkspace({
@@ -55,7 +55,7 @@ export function ConstructorWorkspace({
   actions,
   hasUnsavedChanges,
   articleType = null,
-  journalDisciplineLabel = null,
+  journalSlug = null,
 }: ConstructorWorkspaceProps) {
   const t = useTranslations("ConstructorWorkspace");
   const tValidation = useTranslations("ConstructorValidation");
@@ -77,8 +77,8 @@ export function ConstructorWorkspace({
     return catalogEntry?.previewTheme ?? DAMASCUS_PREVIEW_THEME_FALLBACK;
   }, [catalog, catalogEntry]);
 
-  const citationStyle: CitationStyle | null = journalDisciplineLabel
-    ? resolveCitationStyle(previewTheme, journalDisciplineLabel)
+  const citationStyle: CitationStyle | null = journalSlug
+    ? resolveCitationStyle(previewTheme, journalSlug)
     : null;
 
   const styleSelectDisabled = !!readOnly || catalogFailed || !catalog;

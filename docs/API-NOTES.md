@@ -96,8 +96,7 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 > **Section-editor scope** is expressed as journal slugs:
 > `GET /users/:id/section-editor-journals` (any authenticated user) and
 > `PUT /users/:id/section-editor-journals` with `{ "journals": ["engj", …] }`
-> (`users.manage_roles`). Unknown slugs are rejected. This surface spoke Arabic
-> discipline labels before slice 7.
+> (`users.manage_roles`). Unknown slugs are rejected.
 
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
@@ -117,17 +116,14 @@ Pre-production setups may use TypeORM `synchronize: true` or reset the dev datab
 | GET | `/submissions` | Author | Own submissions only. |
 | GET | `/submissions` | Editor | Queue filter by status query params. |
 | POST | `/submissions` | Author | Create `draft`. Body: **`journalId` (required)**, `title`, `abstract`; optional article metadata (type, keywords, contributors JSON, funding, declarations, suggested/opposed reviewers). A retired or unknown journal is `400 JOURNAL_NOT_AVAILABLE`. |
-| GET | `/submissions/journal-options` | Author / Editor | Journals accepting submissions — the author picker's options: `{ id, slug, titleAr, titleEn, disciplineLabel }[]`. |
+| GET | `/submissions/journal-options` | Author / Editor | Journals accepting submissions — the author picker's options: `{ id, slug, titleAr, titleEn }[]`. |
 | GET | `/submissions/:slug` | Author / Editor / Assigned reviewer | Slug in path. JSON is **viewer-specific** (see Peer review policy above). |
 | PATCH | `/submissions/:slug` | Author | Full metadata when `draft` or `revisions_requested` (title, abstract, article type, keywords, contributors, declarations, reviewer preferences). Optional `journalId` moves the manuscript to another journal while it is still editable. |
 | PATCH | `/submissions/:slug/review-method` | Editor | Body: `{ "reviewMethod": "open" \| "anonymous" \| "double_anonymous" }`. Requires `submission.change_status` **or** `submission.assign_reviewer`. |
 | POST | `/submissions/:slug/submit` | Author | `draft` → `submitted` (or resubmit from `revisions_requested`). Validates journal-style checklist; new author uploads default `file_stage = submission`. |
 | PATCH | `/submissions/:slug/status` | Editor | Body: `{ "status": "…", "messageForAuthor"?: string, "revisionSeverity"?: "minor" \| "major", "releaseReviewFileIds"?: string[] }`. `revisionSeverity` is **required** for `revisions_requested` and rejected otherwise; it also bumps `revision_round`. `releaseReviewFileIds` releases reviewer `review_response` files to the author in the same transaction. Optional `messageForAuthor` (max 4000 chars) when setting `accepted`, `rejected`, or `revisions_requested`; persisted on the submission and included in the author decision email. `under_review` requires a review-package manuscript (see policy). |
-| GET | `/submissions/discipline-labels` | Author / Editor | Arabic discipline label list; optional journal scope via `JOURNAL_ALLOWED_DISCIPLINES`. |
-| POST | `/submissions/:slug/suggest-discipline` | Author (draft) | Calls ai-service `ClassifierService`; stores `disciplineSuggestedLabels` + classification JSON. Returns `topLabel`, `suggestedLabels[]`, `probabilities`. Requires `AI_SERVICE_ENABLED` + classifier enabled on ai-service. |
 | POST | `/submissions/:slug/suggest-keywords` | Author (draft) | Returns suggested EN/AR keyword lists (not persisted). Requires `AI_KEYWORDS_ENABLED`. |
 | POST | `/submissions/suggest-keywords-preview` | Author | Body: optional `title`, `abstract`, `titleAr`, `abstractAr` — same keyword RPC before a slug exists. |
-| PATCH | `/submissions/:slug/discipline` | Author / Editor | Body: `{ "disciplines": ["<label>", ...] }` (1–3 labels) — confirm or override; sets `discipline_source` to `author` or `editor`. |
 | GET | `/submissions/:slug/corpus-similarity` | Editor / assigned reviewer (accepted or completed) | Corpus overlap report via `PlagiarismService`. **Not** available to authors or copyeditors-only. Requires `AI_SIMILARITY_ENABLED`. Returns `{ status: "unavailable" \| "no_text" \| "ok", ... }` when disabled or insufficient text. |
 | GET | `/submissions/:slug/suggested-reviewers` | Editor | Ranked reviewer candidates via `ReviewerMatchingService`. Requires `AI_REVIEWER_MATCHING_ENABLED`. Unavailable and at-capacity reviewers are excluded. |
 | GET | `/submissions/:slug/reviewer-directory` | Editor / assigned section editor (`submission.assign_reviewer`) | The reviewer pool for this manuscript: availability, `capacity { active, max }`, lifetime stats (invitations, acceptance rate, avg days to respond/complete, on-time rate), `thisSubmissionStatus`, `conflictOfInterest`, and `blockReason` (`conflict_of_interest` \| `already_assigned` \| `unavailable` \| `at_capacity` \| null). UI: reviewer browser dialog. |
@@ -141,7 +137,7 @@ Nest talks to ai-service over **gRPC** (`AI_SERVICE_GRPC_HOST`, default port `52
 
 | Flag | Enables |
 |------|---------|
-| `AI_SERVICE_ENABLED` | gRPC client; discipline classify on submit when classifier is enabled |
+| `AI_SERVICE_ENABLED` | gRPC client for keywords, similarity, reviewer matching and copyedit analysis |
 | `AI_KEYWORDS_ENABLED` | Keyword suggestion routes |
 | `AI_SIMILARITY_ENABLED` | Related articles, semantic catalog, corpus similarity |
 | `AI_REVIEWER_MATCHING_ENABLED` | Suggested reviewers for editors |
@@ -198,7 +194,7 @@ Assignment `status`: `invited` (awaiting reviewer response), `accepted` (reviewe
 
 | Method | Path | Who | Notes |
 |--------|------|-----|--------|
-| GET | `/public/submissions` | Public | Paginated list of `published` submissions. Response: `{ items, total, limit, offset }`. Query filters: `q`, `author`, `journal` (slug, e.g. `engj`), `discipline`, `articleType`, `publishedFrom`, `publishedTo`. Keyword mode: optional `limit` (1–100, default 20), `offset` (default 0). |
+| GET | `/public/submissions` | Public | Paginated list of `published` submissions. Response: `{ items, total, limit, offset }`. Query filters: `q`, `author`, `journal` (slug, e.g. `engj`), `articleType`, `publishedFrom`, `publishedTo`. Keyword mode: optional `limit` (1–100, default 20), `offset` (default 0). |
 | GET | `/public/submissions` | Public | `searchMode=keyword` (default) — Postgres FTS + `pg_trgm`; or **Typesense** when `TYPESENSE_ENABLED=true` (weighted multi-field, typo tolerance, prefix match). `searchMode=semantic` requires `q` and `AI_SIMILARITY_ENABLED` on backend + `SIMILARITY_ENABLED` on ai-service; optional `semanticLimit` (1–30, default 20); returns same paginated envelope with `offset` 0. |
 | GET | `/public/submissions/author-suggestions` | Public | Typeahead for catalog author filter. Query: `q` (min 2 chars), optional `limit` (1–20, default 10). |
 | GET | `/public/submissions/:slug` | Public | Published metadata + downloadable files. |
@@ -226,7 +222,7 @@ Requires `TYPESENSE_ENABLED=true`. All routes need JWT + `submission.view_editor
 | PUT | `/editor/search/synonyms/:id` | Create or update a synonym rule. Body: `{ synonyms: string[], root?: string }`. |
 | DELETE | `/editor/search/synonyms/:id` | Delete a synonym (204). |
 
-**Background sync:** `SearchSyncService` runs every 5 minutes (incremental, checkpoint-based) and bootstraps on startup. Published submissions are automatically upserted; unpublished/deleted ones are removed. Weighted query fields: `title` (4), `titleAr` (3), `keywords` (4), `keywordsAr` (3), `abstract` (2), `abstractAr` (2), `authorDisplayName` (1). Facets: `disciplines` (`string[]`), `articleType`. Catalog `discipline` query param filters by overlap (any-of).
+**Background sync:** `SearchSyncService` runs every 5 minutes (incremental, checkpoint-based) and bootstraps on startup. Published submissions are automatically upserted; unpublished/deleted ones are removed. Weighted query fields: `title` (4), `titleAr` (3), `keywords` (4), `keywordsAr` (3), `abstract` (2), `abstractAr` (2), `authorDisplayName` (1). Facets: `articleType`.
 
 ### Audit log
 

@@ -57,11 +57,8 @@ import {
 } from '@/lib/validation';
 
 type MetadataPayload = z.infer<typeof createSubmissionSchema>;
-import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
 import { SubmissionJournalPicker } from '@/components/submission-journal-picker';
 import { SubmissionSectionPicker } from '@/components/submission-section-picker';
-import type { SubmissionDisciplineFields } from '@/lib/discipline-labels';
-import { DisciplineBadges } from '@/components/discipline-badges';
 
 export type ContributorRow = {
   fullName: string;
@@ -88,12 +85,6 @@ export type SubmissionMetadataFormInitial = {
   ethicalApprovalReference: string | null;
   originalityConfirmed: boolean;
   aiUsageStatement: string | null;
-  disciplines?: string[] | null;
-  disciplineSource?: string | null;
-  disciplineSuggestedLabels?: string[] | null;
-  disciplineSuggestedConfidence?: number | null;
-  disciplineScopeInJournal?: boolean | null;
-  disciplineScopeWarning?: string | null;
 };
 
 export const FILE_KIND_ORDER = [
@@ -152,7 +143,6 @@ type SubmissionMetadataFormProps = SubmissionFieldErrorProps &
         onSaved: () => void;
         onError: (msg: string) => void;
         saveButtonLabel?: string;
-        onDisciplineUpdated?: () => void;
       }
   );
 
@@ -306,10 +296,6 @@ export const SubmissionMetadataForm = forwardRef<
   const showMetadataSection = !wizardStep || wizardStep === 2;
   const showAuthorsSection = !wizardStep || wizardStep === 3;
   const showDeclarationsSection = !wizardStep || wizardStep === 4;
-  const onDisciplineUpdated =
-    !isCreate && 'onDisciplineUpdated' in props
-      ? props.onDisciplineUpdated
-      : undefined;
   const externalFieldErrors = props.fieldErrors;
   const clearFieldErrorProp = props.clearFieldError;
   const onFieldErrorsChange = props.onFieldErrorsChange;
@@ -602,6 +588,8 @@ export const SubmissionMetadataForm = forwardRef<
   }
 
   function removeContributor(idx: number) {
+    // The first author is the submitting user and cannot be removed.
+    if (idx === 0) return;
     const wasCorresponding = contributors[idx]?.isCorresponding;
     remove(idx);
     if (wasCorresponding) {
@@ -1326,7 +1314,7 @@ export const SubmissionMetadataForm = forwardRef<
                       />
                     </label>
                   </div>
-                  {fields.length > 1 && (
+                  {idx > 0 && (
                     <Button
                       type="button"
                       variant="danger-soft"
@@ -1478,24 +1466,6 @@ export const SubmissionMetadataForm = forwardRef<
         </>
       ) : null}
 
-      {!isCreate && slug && onDisciplineUpdated && (
-        <SubmissionDisciplinePanel
-          slug={slug}
-          mode="author"
-          canEdit
-          fields={{
-            disciplines: initial.disciplines ?? [],
-            disciplineSource: initial.disciplineSource ?? null,
-            disciplineSuggestedLabels: initial.disciplineSuggestedLabels ?? [],
-            disciplineSuggestedConfidence:
-              initial.disciplineSuggestedConfidence ?? null,
-            disciplineScopeInJournal: initial.disciplineScopeInJournal ?? null,
-            disciplineScopeWarning: initial.disciplineScopeWarning ?? null,
-          }}
-          onUpdated={onDisciplineUpdated}
-        />
-      )}
-
       {!hideSaveButton ? (
         <Button
           type="button"
@@ -1511,10 +1481,7 @@ export const SubmissionMetadataForm = forwardRef<
   );
 });
 
-export type MetadataDisplayInitial = MetadataDisplayInitialBase &
-  SubmissionDisciplineFields;
-
-type MetadataDisplayInitialBase = {
+export type MetadataDisplayInitial = {
   articleType: string | null;
   keywords: string | null;
   keywordsAr: string | null;
@@ -1544,59 +1511,9 @@ function MetadataReadonly({ initial }: { initial: MetadataDisplayInitial }) {
     )
       ? tKey(`articleType_${initial.articleType}`)
       : initial.articleType;
-  const disciplineFields: SubmissionDisciplineFields = {
-    disciplines: initial.disciplines ?? [],
-    disciplineSource: initial.disciplineSource ?? null,
-    disciplineSuggestedLabels: initial.disciplineSuggestedLabels ?? [],
-    disciplineSuggestedConfidence:
-      initial.disciplineSuggestedConfidence ?? null,
-    disciplineScopeInJournal: initial.disciplineScopeInJournal ?? null,
-    disciplineScopeWarning: initial.disciplineScopeWarning ?? null,
-  };
 
   return (
     <div className="space-y-4">
-      {((disciplineFields.disciplineSuggestedLabels?.length ?? 0) > 0 ||
-        (disciplineFields.disciplines?.length ?? 0) > 0) && (
-        <div
-          className="rounded-md border border-ink/10 bg-paper/40 px-3 py-2 text-sm"
-          dir="auto"
-        >
-          {(disciplineFields.disciplineSuggestedLabels?.length ?? 0) > 0 && (
-            <div className="text-ink/85">
-              <p className="font-medium text-ink">
-                {t('disciplineAiSuggestion')}
-              </p>
-              <DisciplineBadges
-                labels={disciplineFields.disciplineSuggestedLabels ?? []}
-                size="sm"
-                className="mt-1"
-              />
-              {disciplineFields.disciplineSuggestedConfidence != null && (
-                <p className="mt-1 text-ink/55">
-                  ({disciplineFields.disciplineSuggestedConfidence.toFixed(1)}%)
-                </p>
-              )}
-            </div>
-          )}
-          {(disciplineFields.disciplines?.length ?? 0) > 0 && (
-            <div className="mt-2 text-ink/85">
-              <p className="font-medium text-ink">{t('disciplineConfirmed')}</p>
-              <DisciplineBadges
-                labels={disciplineFields.disciplines ?? []}
-                size="sm"
-                className="mt-1"
-              />
-            </div>
-          )}
-          {disciplineFields.disciplineScopeWarning ===
-            'suggested_out_of_journal_scope' && (
-            <p className="mt-2 text-xs font-medium text-amber-900">
-              {t('disciplineScopeWarning')}
-            </p>
-          )}
-        </div>
-      )}
       {initial.articleType && (
         <p>
           <span className="font-medium text-ink">{t('articleType')}: </span>

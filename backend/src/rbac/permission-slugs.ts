@@ -85,7 +85,7 @@ export const ROLE_SLUGS = {
   AUTHOR: 'author',
   /** Chief editor — queue oversight, assigns section editors, editorial decisions. */
   EDITOR: 'editor',
-  /** Discipline-scoped editor — manages peer review for assigned submissions. */
+  /** Journal-scoped editor — manages peer review for assigned submissions. */
   SECTION_EDITOR: 'section_editor',
   /** Journal administration — users, email platform, queue oversight. */
   JOURNAL_MANAGER: 'journal_manager',

@@ -12,7 +12,6 @@ export type PortalJournal = {
   slug: string;
   titleAr: string;
   titleEn: string;
-  disciplineLabel: string;
   issn: string | null;
   eissn: string | null;
   descriptionAr: string | null;
@@ -168,7 +167,6 @@ export class JournalPortalService {
       slug: j.slug,
       titleAr: j.titleAr,
       titleEn: j.titleEn,
-      disciplineLabel: j.disciplineLabel,
       issn: j.issn,
       eissn: j.eissn,
       descriptionAr: j.descriptionAr,

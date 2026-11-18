@@ -14,10 +14,9 @@ import {
 } from '../journals/seed-journals';
 import type { SeedEditorRequests } from './accounts';
 import type { SeedContext } from './context';
-import { syncSampleDiscipline } from './sample-discipline';
 import {
-  SAMPLE_DISCIPLINE_DEFAULT,
-  SAMPLE_DISCIPLINE_MEDICAL,
+  SAMPLE_JOURNAL_DEFAULT,
+  SAMPLE_JOURNAL_MEDICAL,
   SAMPLE_PUB1_META,
   SAMPLE_PUB2_META,
   SAMPLE_PUB3_META,
@@ -69,7 +68,7 @@ async function resumePublishedSampleSeed(options: {
   revisionFilename: string;
   existing: Submission;
   press: SeededPress;
-  disciplineLabel: string;
+  journalSlug: string;
   logLabel: string;
 }): Promise<void> {
   const {
@@ -81,7 +80,7 @@ async function resumePublishedSampleSeed(options: {
     revisionFilename,
     existing,
     press,
-    disciplineLabel,
+    journalSlug,
     logLabel,
   } = options;
 
@@ -132,7 +131,7 @@ async function resumePublishedSampleSeed(options: {
   const resumeIssue = await placeSampleForPublication(
     dataSource,
     existing.id,
-    disciplineLabel,
+    journalSlug,
     press,
   );
   await submissionsService.publishSubmission(
@@ -157,12 +156,7 @@ async function seedPublishedSample(options: {
   publicationMeta: SampleMetaOverrides;
   manuscriptFilename: string;
   revisionFilename: string;
-  discipline: {
-    topLabel: string;
-    confidence: number;
-    suggestedLabels?: string[];
-    disciplines?: string[];
-  };
+  journalSlug: string;
   press: SeededPress;
   logLabel: string;
 }): Promise<void> {
@@ -180,20 +174,13 @@ async function seedPublishedSample(options: {
     publicationMeta,
     manuscriptFilename,
     revisionFilename,
-    discipline,
+    journalSlug,
     logLabel,
   } = options;
 
   const pdfBytes = minimalPdf(title);
   const existing = await findSampleSubmission(dataSource, author.id, title);
   if (existing) {
-    await syncSampleDiscipline(dataSource, existing.id, {
-      topLabel: discipline.topLabel,
-      confidence: discipline.confidence,
-      suggestedLabels: discipline.suggestedLabels,
-      disciplines: discipline.disciplines,
-      confirmAsAuthor: true,
-    });
     if (existing.status === SubmissionStatus.PUBLISHED) {
       return;
     }
@@ -206,7 +193,7 @@ async function seedPublishedSample(options: {
       revisionFilename,
       existing,
       press,
-      disciplineLabel: discipline.topLabel,
+      journalSlug,
       logLabel,
     });
     return;
@@ -216,7 +203,7 @@ async function seedPublishedSample(options: {
     title,
     abstract,
     ...samplePublicationMetadata(
-      seedJournalId(press, discipline.topLabel),
+      seedJournalId(press, journalSlug),
       publicationMeta,
     ),
   });
@@ -228,13 +215,6 @@ async function seedPublishedSample(options: {
     manuscriptFilename,
   );
   await submissionsService.submit(s.slug!, authorReq);
-  await syncSampleDiscipline(dataSource, s.id, {
-    topLabel: discipline.topLabel,
-    confidence: discipline.confidence,
-    suggestedLabels: discipline.suggestedLabels,
-    disciplines: discipline.disciplines,
-    confirmAsAuthor: true,
-  });
   await submissionsService.updateStatus(
     s.slug!,
     editorReq,
@@ -266,7 +246,7 @@ async function seedPublishedSample(options: {
   const issue = await placeSampleForPublication(
     dataSource,
     s.id,
-    discipline.topLabel,
+    journalSlug,
     press,
   );
   await submissionsService.publishSubmission(s.slug!, copyeditorReq, issue.id);
@@ -319,7 +299,7 @@ export async function seedPublishedSamples(options: {
     publicationMeta: SAMPLE_PUB1_META,
     manuscriptFilename: 'published.pdf',
     revisionFilename: 'published-revision.pdf',
-    discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 90 },
+    journalSlug: SAMPLE_JOURNAL_DEFAULT,
     press,
     logLabel: 'published',
   });
@@ -338,7 +318,7 @@ export async function seedPublishedSamples(options: {
     publicationMeta: SAMPLE_PUB2_META,
     manuscriptFilename: 'published-peer.pdf',
     revisionFilename: 'published-peer-revision.pdf',
-    discipline: { topLabel: SAMPLE_DISCIPLINE_DEFAULT, confidence: 88 },
+    journalSlug: SAMPLE_JOURNAL_DEFAULT,
     press,
     logLabel: 'published, related-articles peer',
   });
@@ -357,12 +337,7 @@ export async function seedPublishedSamples(options: {
     publicationMeta: SAMPLE_PUB3_META,
     manuscriptFilename: 'published-medical.pdf',
     revisionFilename: 'published-medical-revision.pdf',
-    discipline: {
-      topLabel: SAMPLE_DISCIPLINE_MEDICAL,
-      confidence: 85,
-      suggestedLabels: [SAMPLE_DISCIPLINE_MEDICAL, 'العلوم الأساسية'],
-      disciplines: [SAMPLE_DISCIPLINE_MEDICAL, 'العلوم الأساسية'],
-    },
+    journalSlug: SAMPLE_JOURNAL_MEDICAL,
     press,
     logLabel: 'published, related-articles distant peer',
   });

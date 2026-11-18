@@ -42,12 +42,6 @@ const COLLECTION_SCHEMA = {
       optional: true as const,
     },
     {
-      name: 'disciplines',
-      type: 'string[]' as const,
-      facet: true as const,
-      optional: true as const,
-    },
-    {
       name: 'articleType',
       type: 'string' as const,
       facet: true as const,
@@ -176,7 +170,6 @@ export class SearchService {
       authorDisplayName,
       journalSlug:
         (await this.journalSlugById()).get(submission.journalId) ?? '',
-      disciplines: submission.disciplines ?? [],
       articleType: submission.articleType ?? '',
       publishedAt: submission.publishedAt
         ? submission.publishedAt.getTime()
@@ -358,9 +351,6 @@ export class SearchService {
     if (filters.journal) {
       filterParts.push(`journalSlug:=${JSON.stringify(filters.journal)}`);
     }
-    if (filters.discipline) {
-      filterParts.push(`disciplines:=${JSON.stringify(filters.discipline)}`);
-    }
     if (filters.articleType) {
       filterParts.push(`articleType:=${JSON.stringify(filters.articleType)}`);
     }
@@ -436,7 +426,6 @@ export class SearchService {
         sub.journal = journal;
       }
       sub.keywordsAr = doc.keywordsAr || null;
-      sub.disciplines = doc.disciplines ?? [];
       sub.articleType = (doc.articleType as Submission['articleType']) || null;
       sub.publishedAt = doc.publishedAt ? new Date(doc.publishedAt) : null;
       const author = new User();

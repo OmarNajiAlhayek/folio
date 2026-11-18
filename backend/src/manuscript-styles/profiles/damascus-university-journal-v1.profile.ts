@@ -1,16 +1,15 @@
-import type { ArabicDisciplineLabel } from '../../ai/discipline-labels';
 import type { CitationStyle, CitationStyleRule } from '../citation-style';
 import type { ManuscriptStyleProfile } from '../manuscript-style.types';
 
 const PROFILE_ID = 'damascus-university-journal-v1';
 
 // Editorial decision: APA for every journal, Vancouver for the medical journal.
-// Keyed by `Journal.disciplineLabel`, so the manuscript's journal decides.
+// Keyed by `Journal.slug`, so the manuscript's journal decides.
 const CITATION_STYLES: CitationStyleRule = {
   default: 'apa',
-  byDisciplineLabel: {
-    'العلوم الطبية': 'vancouver',
-  } satisfies Partial<Record<ArabicDisciplineLabel, CitationStyle>>,
+  byJournalSlug: {
+    medj: 'vancouver',
+  } satisfies Record<string, CitationStyle>,
 };
 
 /**

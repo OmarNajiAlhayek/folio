@@ -125,7 +125,6 @@ if they do.** Outbound mail belongs to email-service alone.
 | `AI_REVIEWER_MATCHING_ENABLED` | `false` | Pairs with `REVIEWER_MATCHING_ENABLED` |
 | `AI_COPYEDIT_ENABLED` | `false` | Pairs with `COPYEDIT_ANALYSIS_ENABLED` |
 | `AI_WEB_SIMILARITY_ENABLED` | `false` | Pairs with `WEB_SIMILARITY_ENABLED` |
-| `JOURNAL_ALLOWED_DISCIPLINES` | unset | Pipe-separated Arabic labels; empty allows all model labels |
 
 ### Search, grammar, rendering, auditing
 
@@ -209,7 +208,7 @@ E2E-only variables (`E2E_*`, `REUSE_DEV_SERVER`) are documented in `frontend/.en
 | `COPYEDIT_ANALYSIS_ENABLED` | `false` | core | `AI_COPYEDIT_ENABLED` |
 | `EXACT_MATCH_ENABLED` | `false` | `corpus` | plagiarism jobs |
 | `WEB_SIMILARITY_ENABLED` | `false` | `ml,web_similarity` | `AI_WEB_SIMILARITY_ENABLED` |
-| `ARABERT_ENABLED` | `false` | `ml` + weights on disk | discipline classification |
+| `ARABERT_ENABLED` | `false` | `ml` + weights on disk | classifier (unused by the backend) |
 
 ### Vector database and models
 

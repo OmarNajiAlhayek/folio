@@ -60,7 +60,6 @@ export class PreSubmitAnalysisService {
     }
 
     const result = await this.analysis.analyzeContent(content, {
-      disciplines: submission.disciplines ?? [],
       journalId: submission.journalId ?? null,
     });
     const contentHash = hashConstructorContent(content);

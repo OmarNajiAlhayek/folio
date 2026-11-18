@@ -21,6 +21,8 @@ describe('SubmissionsService journal-scoped editor queue', () => {
     ReturnType<ReturnType<typeof Test.createTestingModule>['compile']>
   >;
   let qb: {
+    leftJoin: jest.Mock;
+    addSelect: jest.Mock;
     where: jest.Mock;
     andWhere: jest.Mock;
     orderBy: jest.Mock;
@@ -38,6 +40,8 @@ describe('SubmissionsService journal-scoped editor queue', () => {
 
   beforeEach(async () => {
     qb = {
+      leftJoin: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
@@ -57,8 +61,6 @@ describe('SubmissionsService journal-scoped editor queue', () => {
         journalMembershipService: {
           listJournalIdsForUser,
           filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
-          disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-          disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
         },
       }),
     }).compile();

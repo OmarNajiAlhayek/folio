@@ -26,7 +26,7 @@
 - Resubmit after *revisions requested* decisions, which are labelled **minor** or **major**
 - Track progress on a **submission timeline**: anonymised per-reviewer state (`Reviewer 1`, `Reviewer 2`, …) with dates, revision severity, and revision round
 - Download **reviewer review files** the editor has released, under an anonymised filename
-- **AI-assisted (optional):** suggest Arabic discipline; LLM keyword suggestions (EN/AR); auto-classify discipline on submit when enabled
+- **AI-assisted (optional):** LLM keyword suggestions (EN/AR)
 
 ### 2. Editor
 - View the full **submission queue** with status filters
@@ -117,7 +117,7 @@ Editors move a submission to `under_review` with `PATCH /submissions/:slug/statu
 | **i18n** | EN + AR (RTL). Per-user `preferredLocale`. Email locale via `X-Folio-Locale` header. |
 | **DOCX export** | Constructor content → `.docx` via manuscript style profile (typography, margins, headings). |
 | **Email microservice** | Decoupled via RabbitMQ; DB-backed templates editable at runtime; SMTP or noop provider. |
-| **AI microservice** | Optional gRPC features: discipline, keywords, similarity, plagiarism/corpus, reviewer matching, copyedit reference cross-check — toggled per env (see [`plans/ai-service.md`](./plans/ai-service.md)). Copyedit grammar uses LanguageTool (Nest HTTP, Docker in `docker-compose.dev.yml`). |
+| **AI microservice** | Optional gRPC features: keywords, similarity, plagiarism/corpus, reviewer matching, copyedit reference cross-check — toggled per env (see [`plans/ai-service.md`](./plans/ai-service.md)). Copyedit grammar uses LanguageTool (Nest HTTP, Docker in `docker-compose.dev.yml`). |
 | **Typesense search** | Optional full-text search for publication catalog (`TYPESENSE_ENABLED=true`). Weighted multi-field matching, typo tolerance, prefix search, facets. Background incremental sync. Editor curation API: overrides, synonyms, analytics. |
 | **ORCID OAuth** | Optional `ORCID_ENABLED=true` — Sign in with ORCID and account linking. Sandbox and production ORCID endpoints supported. |
 | **Audit log** | Every API request sampled at `AUDIT_SAMPLE_RATE` and stored in `audit_log` with user, IP, method, path, status, duration, action/resource classification. Queryable by journal managers with `audit.log.view`. |

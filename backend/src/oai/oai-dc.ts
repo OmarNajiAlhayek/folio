@@ -75,7 +75,6 @@ export function renderOaiDc(
     ...xmlEls('dc:subject', [
       ...splitKeywords(s.keywords),
       ...splitKeywords(s.keywordsAr),
-      ...(s.disciplines ?? []),
     ]),
     ...xmlEls('dc:description', [s.abstract, s.abstractAr]),
     xmlEl('dc:publisher', cfg.publisher),

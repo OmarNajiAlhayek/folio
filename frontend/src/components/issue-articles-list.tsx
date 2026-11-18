@@ -39,7 +39,6 @@ export function IssueArticlesList({ basePath, articles }: Props) {
         a.author?.displayName,
         a.keywords,
         a.keywordsAr,
-        ...(a.disciplines ?? []),
       ]
         .filter(Boolean)
         .join(' '),

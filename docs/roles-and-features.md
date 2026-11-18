@@ -38,7 +38,7 @@ Search curation (under the journal-manager menu for editors) is optional catalog
 
 These exist, and they are off unless the machine running the app turned them on:
 
-- Suggestions while writing: discipline, keywords, similar papers, suggested reviewers.
+- Suggestions while writing: keywords, similar papers, suggested reviewers.
 - Grammar and reference checks on the copyeditor’s screen.
 - Catalog search beyond ordinary keywords.
 

@@ -26,7 +26,6 @@ export type PortalJournal = {
   slug: string;
   titleAr: string;
   titleEn: string;
-  disciplineLabel: string;
   /** Null until the DU library supplies them (EXTERNAL-ACTIONS A1). */
   issn: string | null;
   eissn: string | null;

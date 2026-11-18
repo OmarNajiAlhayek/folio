@@ -226,18 +226,6 @@ export function submissionToViewerJson(
     base.revisionRound = s.revisionRound ?? 0;
     base.authorResponseToReviewers = s.authorResponseToReviewers;
     base.reviewManuscriptPresentation = s.reviewManuscriptPresentation;
-    base.disciplines = s.disciplines;
-    base.disciplineSource = s.disciplineSource;
-    base.disciplineSuggestedLabels = s.disciplineSuggestedLabels;
-    base.disciplineSuggestedConfidence =
-      s.disciplineSuggestedConfidence != null
-        ? Number(s.disciplineSuggestedConfidence)
-        : null;
-    base.disciplineClassification = s.disciplineClassification;
-    base.disciplineScopeInJournal =
-      s.disciplineClassification?.scopeInJournal ?? null;
-    base.disciplineScopeWarning =
-      s.disciplineClassification?.scopeWarning ?? null;
   }
 
   if (viewer === 'author') {

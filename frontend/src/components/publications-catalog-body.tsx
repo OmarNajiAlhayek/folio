@@ -39,7 +39,6 @@ import {
 } from '@/lib/queries/publications';
 import { useApiErrorMessages } from '@/lib/use-api-error-messages';
 import { cn } from '@/lib/utils';
-import { DisciplineBadges } from '@/components/discipline-badges';
 
 function CatalogSkeleton() {
   return (
@@ -101,9 +100,6 @@ function CatalogArticle({
           >
             {locale === 'ar' ? item.journal.titleAr : item.journal.titleEn}
           </Link>
-        ) : null}
-        {(item.disciplines?.length ?? 0) > 0 ? (
-          <DisciplineBadges labels={item.disciplines ?? []} />
         ) : null}
         {item.articleType ? (
           <span className="inline-flex items-center rounded-full bg-indigo-500/8 dark:bg-indigo-500/18 border border-indigo-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">

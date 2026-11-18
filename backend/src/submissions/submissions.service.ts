@@ -73,31 +73,9 @@ export class SubmissionsService implements OnModuleInit {
     private readonly journalIssues: JournalIssuesService,
   ) {}
 
-  listDisciplineLabels(): {
-    labels: readonly string[];
-    journalScope: string[];
-  } {
-    return this.ai.listDisciplineLabels();
-  }
-
   /** Journals an author may submit to — the picker's options. */
   listJournalOptions(): Promise<JournalOption[]> {
     return this.journalDirectory.listOptions();
-  }
-
-  async suggestDiscipline(
-    slug: string,
-    user: RequestUser,
-  ): Promise<{
-    topLabel: string;
-    topConfidence: number;
-    suggestedLabels: string[];
-    probabilities: Record<string, number>;
-    scopeInJournal: boolean;
-    scopeWarning: string | null;
-    disciplines: string[];
-  }> {
-    return this.ai.suggestDiscipline(slug, user);
   }
 
   async suggestKeywordsPreview(
@@ -117,14 +95,6 @@ export class SubmissionsService implements OnModuleInit {
     user: RequestUser,
   ): Promise<{ keywordsEn: string[]; keywordsAr: string[] }> {
     return this.ai.suggestKeywords(slug, user);
-  }
-
-  async setDisciplineForUser(
-    slug: string,
-    user: RequestUser,
-    disciplines: string[],
-  ): Promise<Submission> {
-    return this.ai.setDisciplineForUser(slug, user, disciplines);
   }
 
   async onModuleInit(): Promise<void> {

@@ -53,7 +53,7 @@
 
 ### i18n & RTL
 - **English + Arabic with full RTL support:** `next-intl`, per-user `preferredLocale`, locale-specific email templates with fallback to `en`.
-- **Arabic discipline classifier:** Fine-tuned AraBERT for 10 Arabic discipline labels — integrated via gRPC `ClassifierService`.
+- **Arabic discipline classifier:** Fine-tuned AraBERT for 10 Arabic discipline labels — still in `services/ai-service`, but no longer called by the backend.
 - **Direction heuristic for manuscript content:** Per-section Arabic ratio detection with configurable threshold.
 
 ### Infrastructure

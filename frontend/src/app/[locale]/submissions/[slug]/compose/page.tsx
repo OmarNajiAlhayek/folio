@@ -513,9 +513,8 @@ export default function SubmissionConstructorPage() {
             actions={headerActions}
             hasUnsavedChanges={hasUnsavedChanges}
             articleType={(sub.articleType as SubmissionArticleType) ?? null}
-            journalDisciplineLabel={
-              journalOptions?.find((j) => j.id === sub.journalId)
-                ?.disciplineLabel ?? null
+            journalSlug={
+              journalOptions?.find((j) => j.id === sub.journalId)?.slug ?? null
             }
           />
         </Suspense>

@@ -112,6 +112,32 @@ export class SubmissionLifecycleService {
     }));
   }
 
+  /**
+   * The primary (first) author cannot be removed once saved. A contributor
+   * counts as the same person if the email or the full name still matches,
+   * so typo fixes remain possible.
+   */
+  private assertPrimaryContributorKept(
+    current: SubmissionContributorJson[] | null | undefined,
+    next: SubmissionContributorJson[] | null,
+  ): void {
+    if (!Array.isArray(current) || current.length === 0) return;
+    const primary = [...current].sort((a, b) => a.sortOrder - b.sortOrder)[0];
+    const norm = (v?: string) => (v ?? '').trim().toLowerCase();
+    const kept = (next ?? []).some(
+      (c) =>
+        (norm(primary.email) !== '' && norm(c.email) === norm(primary.email)) ||
+        (norm(primary.fullName) !== '' &&
+          norm(c.fullName) === norm(primary.fullName)),
+    );
+    if (!kept) {
+      throw new BadRequestException({
+        message: 'The primary author cannot be removed from the submission',
+        code: 'SUBMISSION_PRIMARY_AUTHOR_REQUIRED',
+      });
+    }
+  }
+
   private countWords(s: string): number {
     const t = s.trim();
     if (!t) return 0;
@@ -466,10 +492,12 @@ export class SubmissionLifecycleService {
       s.keywordsAr = dto.keywordsAr?.trim() ?? null;
     }
     if (dto.contributors !== undefined) {
-      s.contributors =
+      const next =
         dto.contributors && dto.contributors.length > 0
           ? this.mapContributors(dto.contributors)
           : null;
+      this.assertPrimaryContributorKept(s.contributors, next);
+      s.contributors = next;
     }
     if (dto.fundingStatement !== undefined) {
       s.fundingStatement = dto.fundingStatement?.trim() ?? null;
@@ -629,17 +657,6 @@ export class SubmissionLifecycleService {
     await this.assertReadyForSubmit(s, presentation);
     await this.applyReviewManuscriptPresentation(s.id, presentation);
     s.reviewManuscriptPresentation = presentation;
-    if (this.aiClient.isEnabled()) {
-      try {
-        await this.ai.refreshDisciplineSuggestion(s);
-      } catch (err) {
-        this.logger.warn(
-          'Discipline classification on submit failed for %s: %s',
-          slug,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    }
     const previousStatus = s.status;
     const isResubmission =
       previousStatus === SubmissionStatus.REVISIONS_REQUESTED;

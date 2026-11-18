@@ -156,8 +156,6 @@ describe('SubmissionsService.assignReviewer (outbox)', () => {
           listJournalIdsForUser: jest.fn().mockResolvedValue(['journal-medj']),
           listUserIdsForJournal: jest.fn().mockResolvedValue([reviewer.id]),
           filterUserIdsInJournal: jest.fn().mockResolvedValue([reviewer.id]),
-          disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-          disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
         },
       }),
     }).compile();

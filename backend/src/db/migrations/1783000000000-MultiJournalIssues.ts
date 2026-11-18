@@ -3,8 +3,23 @@ import { generateEntityId } from '@folio/shared';
 import {
   JOURNAL_CATALOG,
   JOURNAL_FALLBACK_SLUG,
-  assertJournalCatalogMatchesDisciplines,
 } from '../../journals/journal-catalog';
+
+/**
+ * Frozen snapshot of the (since removed) discipline taxonomy, so this historic
+ * migration no longer depends on application code that was deleted.
+ */
+const DISCIPLINE_LABEL_BY_SLUG: Readonly<Record<string, string>> = {
+  artsj: 'الآداب والعلوم الإنسانية',
+  hisj: 'الدراسات التاريخية',
+  basj: 'العلوم الأساسية',
+  econj: 'العلوم الاقتصادية والسياسية',
+  eduj: 'العلوم التربوية والنفسية',
+  agrj: 'العلوم الزراعية',
+  medj: 'العلوم الطبية',
+  lawj: 'العلوم القانونية',
+  engj: 'العلوم الهندسية',
+};
 
 /**
  * Turns Folio from one journal with discipline tags into a university press of
@@ -23,8 +38,6 @@ export class MultiJournalIssues1783000000000 implements MigrationInterface {
   name = 'MultiJournalIssues1783000000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
-    assertJournalCatalogMatchesDisciplines();
-
     await queryRunner.query(`
       CREATE TABLE "journals" (
         "id"               uuid         NOT NULL,
@@ -60,7 +73,7 @@ export class MultiJournalIssues1783000000000 implements MigrationInterface {
           j.slug,
           j.titleAr,
           j.titleEn,
-          j.disciplineLabel,
+          DISCIPLINE_LABEL_BY_SLUG[j.slug],
           j.sortOrder,
         ],
       );

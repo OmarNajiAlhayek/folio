@@ -16,8 +16,6 @@ import { JournalIssue } from './journal-issue.entity';
 import { SubmissionStatus } from './submission-status.enum';
 import { SubmissionArticleType } from './submission-article-type.enum';
 import { SubmissionReviewMethod } from './submission-review-method.enum';
-import { SubmissionDisciplineSource } from './submission-discipline-source.enum';
-import type { DisciplineClassificationJson } from '../ai/ai-client.types';
 import { SubmissionFile } from './submission-file.entity';
 import { ReviewAssignment } from './review-assignment.entity';
 import { CopyeditAssignment } from './copyedit-assignment.entity';
@@ -143,38 +141,6 @@ export class Submission extends BaseEntity {
 
   @Column({ name: 'ai_usage_statement', type: 'text', nullable: true })
   aiUsageStatement: string | null;
-
-  /** Confirmed academic fields (Arabic labels from AraBERT taxonomy, max 3). */
-  @Column({ type: 'text', array: true, default: [] })
-  disciplines: string[];
-
-  @Column({
-    name: 'discipline_source',
-    type: 'enum',
-    enum: SubmissionDisciplineSource,
-    nullable: true,
-  })
-  disciplineSource: SubmissionDisciplineSource | null;
-
-  @Column({
-    name: 'discipline_suggested_labels',
-    type: 'text',
-    array: true,
-    default: [],
-  })
-  disciplineSuggestedLabels: string[];
-
-  @Column({
-    name: 'discipline_suggested_confidence',
-    type: 'decimal',
-    precision: 5,
-    scale: 2,
-    nullable: true,
-  })
-  disciplineSuggestedConfidence: string | null;
-
-  @Column({ name: 'discipline_classification', type: 'jsonb', nullable: true })
-  disciplineClassification: DisciplineClassificationJson | null;
 
   /**
    * Word-Constructor structured content. Non-null implies the submission

@@ -144,8 +144,6 @@ describe('SubmissionsService access (draft vs editor queue)', () => {
               .fn()
               .mockResolvedValue(['journal-medj']),
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
-            disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-            disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
           },
         },
         {

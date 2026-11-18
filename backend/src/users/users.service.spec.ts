@@ -55,15 +55,7 @@ describe('UsersService', () => {
         {
           // Added with the section-editor feature; this suite predates it.
           provide: JournalMembershipService,
-          useValue: {
-            disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-            disciplineLabelsForUser: jest.fn().mockResolvedValue([]),
-            setDisciplineLabelsForUser: jest
-              .fn()
-              .mockImplementation((_u: string, _r: string, labels: string[]) =>
-                Promise.resolve(labels),
-              ),
-          },
+          useValue: {},
         },
         {
           provide: RbacService,

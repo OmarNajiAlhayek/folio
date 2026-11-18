@@ -47,7 +47,6 @@ import { UpdateSubmissionFileStageDto } from './dto/update-submission-file-stage
 import { UpdateReviewFileReleaseDto } from './dto/update-review-file-release.dto';
 import { GenerateDocxDto } from './dto/constructor-content.dto';
 import { SubmitSubmissionDto } from './dto/submit-submission.dto';
-import { PatchDisciplineDto } from './dto/patch-discipline.dto';
 import { SuggestKeywordsPreviewDto } from './dto/suggest-keywords-preview.dto';
 import type { ConstructorContent } from './constructor-content.types';
 import {
@@ -152,15 +151,6 @@ export class SubmissionsController {
   )
   listJournalOptions() {
     return this.submissionsService.listJournalOptions();
-  }
-
-  @Get('discipline-labels')
-  @Permissions(
-    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
-    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-  )
-  listDisciplineLabels() {
-    return this.submissionsService.listDisciplineLabels();
   }
 
   @Get()
@@ -293,17 +283,6 @@ export class SubmissionsController {
     );
   }
 
-  @Post(':slug/suggest-discipline')
-  @UseGuards(FolioThrottlerGuard)
-  @Throttle({ default: {} })
-  @Permissions(PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN)
-  suggestDiscipline(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-  ) {
-    return this.submissionsService.suggestDiscipline(slug, user);
-  }
-
   @Post(':slug/suggest-keywords')
   @UseGuards(FolioThrottlerGuard)
   @Throttle({ default: {} })
@@ -313,23 +292,6 @@ export class SubmissionsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.submissionsService.suggestKeywords(slug, user);
-  }
-
-  @Patch(':slug/discipline')
-  @Permissions(
-    PERMISSION_SLUGS.SUBMISSION_MANAGE_OWN,
-    PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,
-  )
-  patchDiscipline(
-    @Param('slug') slug: string,
-    @CurrentUser() user: RequestUser,
-    @Body() dto: PatchDisciplineDto,
-  ) {
-    return this.submissionsService.setDisciplineForUser(
-      slug,
-      user,
-      dto.disciplines,
-    );
   }
 
   @Patch(':slug')

@@ -187,8 +187,6 @@ export function submissionsServiceTestProviders(
         listJournalIdsForUser: jest.fn().mockResolvedValue([]),
         listUserIdsForJournal: jest.fn().mockResolvedValue([]),
         filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
-        disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-        disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
       },
     },
     {

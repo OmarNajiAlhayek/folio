@@ -14,8 +14,7 @@ import { JournalMembership } from './journal-membership.entity';
  * queue and public archive (e.g. مجلة جامعة دمشق للعلوم الهندسية).
  *
  * Replaces the old "one journal, submissions tagged with disciplines" model.
- * Rows are reference data seeded 1:1 from the AraBERT classifier labels; see
- * `src/journals/journal-catalog.ts`. `غير محدد` is deliberately not a journal.
+ * Rows are reference data seeded from `src/journals/journal-catalog.ts`.
  */
 @Entity('journals')
 export class Journal extends BaseEntity {
@@ -28,13 +27,6 @@ export class Journal extends BaseEntity {
 
   @Column({ name: 'title_en', type: 'varchar', length: 300 })
   titleEn: string;
-
-  /**
-   * Exact Arabic label emitted by the classifier. Unique, so a classifier
-   * result maps to at most one journal without a second taxonomy.
-   */
-  @Column({ name: 'discipline_label', type: 'text', unique: true })
-  disciplineLabel: string;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   issn: string | null;
@@ -56,7 +48,7 @@ export class Journal extends BaseEntity {
   sortOrder: number;
 
   /**
-   * Titles, descriptions and discipline label folded by `folio_normalize_search`
+   * Titles and descriptions folded by `folio_normalize_search`
    * — a Postgres generated column, queried via raw SQL in directory search only.
    *
    * Declared here so TypeORM knows it exists: `DB_SYNCHRONIZE=true` in a dev

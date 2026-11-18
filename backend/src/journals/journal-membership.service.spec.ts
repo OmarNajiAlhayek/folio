@@ -10,12 +10,10 @@ import { JournalMembershipService } from './journal-membership.service';
 const MEDJ = {
   id: 'journal-medj',
   slug: 'medj',
-  disciplineLabel: 'العلوم الطبية',
 } as Journal;
 const ENGJ = {
   id: 'journal-engj',
   slug: 'engj',
-  disciplineLabel: 'العلوم الهندسية',
 } as Journal;
 
 describe('JournalMembershipService', () => {
@@ -317,13 +315,5 @@ describe('JournalMembershipService', () => {
     ).resolves.toEqual([
       { journalSlug: 'medj', userId: 'chief', displayName: 'Ada' },
     ]);
-  });
-
-  it('still resolves the classifier label for one journal', async () => {
-    journalsRepo.findOne.mockResolvedValue(MEDJ);
-
-    await expect(
-      service.disciplineLabelForJournal('journal-medj'),
-    ).resolves.toBe('العلوم الطبية');
   });
 });

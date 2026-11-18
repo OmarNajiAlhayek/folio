@@ -137,8 +137,6 @@ describe('SubmissionsService.generateDocx (attach)', () => {
           useValue: {
             listJournalIdsForUser: jest.fn().mockResolvedValue([]),
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
-            disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-            disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
           },
         },
         {

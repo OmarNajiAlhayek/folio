@@ -8,7 +8,6 @@ export type PublicationCatalogFilters = {
   author?: string;
   /** Journal slug (`engj`) — matches the portal URLs. */
   journal?: string;
-  discipline?: string;
   articleType?: string;
   publishedFrom?: string;
   publishedTo?: string;
@@ -23,7 +22,6 @@ const FILTER_KEYS = [
   'searchMode',
   'author',
   'journal',
-  'discipline',
   'articleType',
   'publishedFrom',
   'publishedTo',

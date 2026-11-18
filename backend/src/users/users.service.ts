@@ -903,10 +903,8 @@ export class UsersService {
   /**
    * Section-editor scope, as journal slugs.
    *
-   * Slice 3 moved storage to `journal_memberships` but kept the wire speaking
-   * discipline labels because no journal picker existed yet. Slice 6 gave
-   * authors that picker, so slice 7 makes this surface name journals too —
-   * the same slugs the portal URLs use.
+   * Stored in `journal_memberships` and exposed as the same slugs the portal
+   * URLs use.
    */
   async getSectionEditorJournals(userId: string): Promise<string[]> {
     return this.journalMemberships.journalSlugsForUser(

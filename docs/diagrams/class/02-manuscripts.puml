@@ -56,7 +56,6 @@ class Submission <<entity>> {
   +status: SubmissionStatus
   +reviewMethod: SubmissionReviewMethod
   +constructorContent: JSON?
-  +discipline: string?
   +publishedAt: Date?
   +createdAt: Date
   +updatedAt: Date

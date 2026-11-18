@@ -137,7 +137,7 @@ Entry patterns (p.8–9):
 
 ## Not from this guideline
 
-- **Columns by faculty** (two columns for engineering) and **citation style by journal** come from separate editorial decisions, not these nine pages. Citation style: APA for every journal, Vancouver for the medical journal, keyed by the submission's journal (not the classifier's disciplines). The upload check reports a mismatch as a warning only: detection is heuristic, and the journal's published engineering articles use numbered citations.
+- **Columns by faculty** (two columns for engineering) and **citation style by journal** come from separate editorial decisions, not these nine pages. Citation style: APA for every journal, Vancouver for the medical journal, keyed by the submission's journal. The upload check reports a mismatch as a warning only: detection is heuristic, and the journal's published engineering articles use numbered citations.
 - **Minimum journal self-citations** (`minJournalSelfCitations: 2`) is a journal policy enforced at submit time.
 
 ## Checked against published articles

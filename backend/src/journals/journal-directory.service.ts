@@ -13,7 +13,6 @@ export type JournalOption = {
   slug: string;
   titleAr: string;
   titleEn: string;
-  disciplineLabel: string;
 };
 
 /**
@@ -69,7 +68,6 @@ export class JournalDirectoryService {
       slug: j.slug,
       titleAr: j.titleAr,
       titleEn: j.titleEn,
-      disciplineLabel: j.disciplineLabel,
     };
   }
 }

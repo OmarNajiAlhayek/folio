@@ -188,8 +188,6 @@ describe('SubmissionsService phase2 email (outbox)', () => {
               .fn()
               .mockResolvedValue(['journal-medj']),
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
-            disciplineLabelsByUser: jest.fn().mockResolvedValue(new Map()),
-            disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
           },
         },
         {

@@ -13,18 +13,14 @@ import type { SeededPress } from '../journals/seed-journals';
 import type { SeedEditorRequests } from './accounts';
 import type { SeedContext } from './context';
 import {
-  queueSampleDisciplineLabel,
-  syncSampleDiscipline,
-} from './sample-discipline';
-import {
   SAMPLE_COMPLETED_META,
   SAMPLE_COMPLETED_TITLE,
   SAMPLE_COPYEDIT_META,
   SAMPLE_COPYEDIT_TITLE,
-  SAMPLE_DISCIPLINE_DEFAULT,
-  SAMPLE_DISCIPLINE_EDUCATION,
-  SAMPLE_DISCIPLINE_ENGINEERING,
-  SAMPLE_DISCIPLINE_LEGAL,
+  SAMPLE_JOURNAL_DEFAULT,
+  SAMPLE_JOURNAL_EDUCATION,
+  SAMPLE_JOURNAL_ENGINEERING,
+  SAMPLE_JOURNAL_LEGAL,
   SAMPLE_DRAFT_META,
   SAMPLE_DRAFT_TITLE,
   SAMPLE_INVITE_PENDING_ASSIGNMENT_SLUG,
@@ -192,9 +188,7 @@ export async function seedWorkflowSamples(options: {
       title: tDraft,
       abstract:
         'This study develops and validates a scale for measuring digital learning competencies among undergraduate students and examines the effect of immediate formative feedback on academic achievement in higher-education courses.',
-      ...sampleJournalMetadata(
-        seedJournalId(press, SAMPLE_DISCIPLINE_EDUCATION),
-      ),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_JOURNAL_EDUCATION)),
       ...SAMPLE_DRAFT_META,
     });
     await attachStandardFilePackage(
@@ -204,10 +198,6 @@ export async function seedWorkflowSamples(options: {
       minimalPdf(tDraft),
       'draft.pdf',
     );
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_EDUCATION,
-      confidence: 76,
-    });
     console.log(`Seeded: ${tDraft} (draft)`);
   }
 
@@ -217,9 +207,7 @@ export async function seedWorkflowSamples(options: {
       title: tQueue,
       abstract:
         'This study examines the impact of open-access and digital-publishing policies on the dissemination of knowledge in Arabic peer-reviewed journals, comparing funding models and article processing charges across ten journals over the period 2020–2024.',
-      ...sampleJournalMetadata(
-        seedJournalId(press, queueSampleDisciplineLabel()),
-      ),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_JOURNAL_DEFAULT)),
       ...SAMPLE_QUEUE_META,
     });
     await attachStandardFilePackage(
@@ -230,11 +218,6 @@ export async function seedWorkflowSamples(options: {
       'queue.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: queueSampleDisciplineLabel(),
-      confidence: 91,
-      confirmAsAuthor: true,
-    });
     console.log(`Seeded: ${tQueue} (submitted)`);
   }
 
@@ -244,7 +227,7 @@ export async function seedWorkflowSamples(options: {
       title: tReview,
       abstract:
         'This paper analyses open-access and digital-publishing policy frameworks adopted by Arabic scholarly journals, evaluating their effect on knowledge diffusion and comparing sustainability models across regional and international peer-reviewed outlets.',
-      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_DISCIPLINE_DEFAULT)),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_JOURNAL_DEFAULT)),
       ...SAMPLE_REVIEW_META,
     });
     await attachStandardFilePackage(
@@ -255,10 +238,6 @@ export async function seedWorkflowSamples(options: {
       'under-review.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
-      confidence: 84,
-    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     const reviewAssignment = await submissionsService.assignReviewer(
       s.slug!,
@@ -280,7 +259,7 @@ export async function seedWorkflowSamples(options: {
       title: tCompleted,
       abstract:
         'This study reviews personal-data protection provisions in selected contemporary Arab legal frameworks and compares them with the principles of the General Data Protection Regulation, focusing on data-subject consent, cross-border data transfers, and controller liability.',
-      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_DISCIPLINE_LEGAL)),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_JOURNAL_LEGAL)),
       ...SAMPLE_COMPLETED_META,
     });
     await attachStandardFilePackage(
@@ -291,10 +270,6 @@ export async function seedWorkflowSamples(options: {
       'reviewed.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_LEGAL,
-      confidence: 86,
-    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     const assignment = await submissionsService.assignReviewer(
       s.slug!,
@@ -323,9 +298,7 @@ export async function seedWorkflowSamples(options: {
       title: tRev,
       abstract:
         'This study experimentally evaluates an immediate-feedback programme delivered through an e-learning platform in an introductory statistics course, comparing short-test and final-project outcomes between two groups while analysing student perceptions of instructional clarity.',
-      ...sampleJournalMetadata(
-        seedJournalId(press, SAMPLE_DISCIPLINE_EDUCATION),
-      ),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_JOURNAL_EDUCATION)),
       ...SAMPLE_REVISIONS_META,
     });
     await attachStandardFilePackage(
@@ -336,10 +309,6 @@ export async function seedWorkflowSamples(options: {
       'revisions.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_EDUCATION,
-      confidence: 79,
-    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     const revAssignment = await submissionsService.assignReviewer(
       s.slug!,
@@ -376,11 +345,6 @@ export async function seedWorkflowSamples(options: {
       'manuscript',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
-      confidence: 82,
-      force: true,
-    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     await submissionsService.assignReviewer(
       s.slug!,
@@ -430,7 +394,7 @@ export async function seedWorkflowSamples(options: {
       title: tInvitePending,
       abstract:
         'This paper investigates open-access policies in Arabic peer-reviewed journals and their influence on knowledge dissemination, drawing on a comparative documentary analysis of ten journals from 2020 to 2024.',
-      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_DISCIPLINE_DEFAULT)),
+      ...sampleJournalMetadata(seedJournalId(press, SAMPLE_JOURNAL_DEFAULT)),
       ...SAMPLE_QUEUE_META,
     });
     await attachStandardFilePackage(
@@ -441,10 +405,6 @@ export async function seedWorkflowSamples(options: {
       'invite-pending.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_DEFAULT,
-      confidence: 88,
-    });
     await promoteManuscriptsToReviewPackage(dataSource, s.id);
     await submissionsService.assignReviewer(
       s.slug!,
@@ -485,7 +445,7 @@ export async function seedWorkflowSamples(options: {
       abstract:
         'This paper proposes an energy-efficient routing protocol for wireless sensor networks deployed in industrial IoT environments, comparing response time and power consumption against reference protocols across three load scenarios.',
       ...sampleJournalMetadata(
-        seedJournalId(press, SAMPLE_DISCIPLINE_ENGINEERING),
+        seedJournalId(press, SAMPLE_JOURNAL_ENGINEERING),
       ),
       ...SAMPLE_COPYEDIT_META,
     });
@@ -497,10 +457,6 @@ export async function seedWorkflowSamples(options: {
       'copyedit.pdf',
     );
     await submissionsService.submit(s.slug!, authorReq);
-    await syncSampleDiscipline(dataSource, s.id, {
-      topLabel: SAMPLE_DISCIPLINE_ENGINEERING,
-      confidence: 87,
-    });
     await submissionsService.updateStatus(
       s.slug!,
       engjEditorReq,

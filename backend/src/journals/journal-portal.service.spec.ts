@@ -13,7 +13,6 @@ const ENGJ = {
   slug: 'engj',
   titleAr: 'مجلة جامعة دمشق للعلوم الهندسية',
   titleEn: 'Damascus University Journal for Engineering Sciences',
-  disciplineLabel: 'العلوم الهندسية',
   issn: null,
   eissn: null,
   descriptionAr: null,

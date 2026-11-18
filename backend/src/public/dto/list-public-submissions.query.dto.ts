@@ -15,10 +15,6 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
 } from 'class-validator';
-import {
-  ARABIC_DISCIPLINE_LABELS,
-  isValidDisciplineLabel,
-} from '../../ai/discipline-labels';
 import { JOURNAL_SLUGS } from '../../journals/journal-catalog';
 import { SubmissionArticleType } from '../../entities/submission-article-type.enum';
 import {
@@ -84,15 +80,6 @@ export class ListPublicSubmissionsQueryDto {
   @IsString()
   @IsIn([...JOURNAL_SLUGS])
   journal?: string;
-
-  @ApiPropertyOptional({
-    description: 'Exact discipline label (Arabic taxonomy).',
-    enum: [...ARABIC_DISCIPLINE_LABELS],
-  })
-  @IsOptional()
-  @IsString()
-  @IsIn([...ARABIC_DISCIPLINE_LABELS])
-  discipline?: string;
 
   @ApiPropertyOptional({
     description: 'Article type; rows with null article_type are excluded.',
@@ -196,9 +183,6 @@ export function toPublicationCatalogFilters(
   }
   if (dto.journal) {
     filters.journal = dto.journal;
-  }
-  if (dto.discipline && isValidDisciplineLabel(dto.discipline)) {
-    filters.discipline = dto.discipline;
   }
   if (dto.articleType) {
     filters.articleType = dto.articleType;

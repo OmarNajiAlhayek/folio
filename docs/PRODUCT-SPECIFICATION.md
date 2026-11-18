@@ -40,7 +40,7 @@ Academic journals need a system where:
 | Public publication catalog with keyword + optional semantic search | Shipped |
 | Transactional email via RabbitMQ microservice | Shipped |
 | In-app notifications (REST + SSE) | Shipped |
-| Optional AI features (discipline, keywords, similarity, reviewer matching, copyedit analysis) | Shipped (feature-flagged) |
+| Optional AI features (keywords, similarity, reviewer matching, copyedit analysis) | Shipped (feature-flagged) |
 | Multi-journal tenancy | Out of scope (single-journal MVP) |
 
 ### 1.4 Out of scope (current release)
@@ -226,7 +226,6 @@ flowchart TB
 | Contributors | JSON array: name, email, affiliation, sort order, corresponding flag |
 | Declarations | Funding, conflict of interest, ethics/IRB, originality confirmation, AI usage statement |
 | Reviewer preferences | Suggested / opposed reviewers (max 5 each) |
-| Discipline | Arabic taxonomy; AI-suggested + author-confirmed; optional journal scope filter |
 | `constructor_content` | JSONB Word Constructor document (author/editor only; hidden from reviewers) |
 | `review_method` | `open`, `anonymous` (single-blind), `double_anonymous` (default) |
 | `message_for_author` | Optional editor message on decision (max 4000 chars) |
@@ -385,7 +384,7 @@ Reviewers may also attach **review files** (`kind = review_response`, PDF/DOCX) 
 | Keyword (default) | `searchMode=keyword` | Postgres FTS + `pg_trgm` |
 | Semantic | `searchMode=semantic` | `AI_SIMILARITY_ENABLED` + ai-service `SIMILARITY_ENABLED` |
 
-Filters: `q`, `author`, `discipline`, `articleType`, `publishedFrom`, `publishedTo`.
+Filters: `q`, `author`, `journal`, `articleType`, `publishedFrom`, `publishedTo`.
 
 ---
 
@@ -395,7 +394,6 @@ All AI is **feature-flagged**. Nest degrades gracefully when services are off or
 
 | Feature | User trigger | Backend flag | ai-service dependency |
 |---------|--------------|--------------|----------------------|
-| Arabic discipline classify | Suggest on draft; auto on submit | `AI_SERVICE_ENABLED` | `ARABERT_ENABLED` |
 | Keyword suggestions | Author UI | `AI_KEYWORDS_ENABLED` | `KEYWORDS_SUGGESTION_ENABLED`, `AI_PROVIDER` |
 | Related articles | Publication detail | `AI_SIMILARITY_ENABLED` | `SIMILARITY_ENABLED`, Chroma index |
 | Semantic catalog search | Public search | `AI_SIMILARITY_ENABLED` | Same |
@@ -459,7 +457,7 @@ Provider: SMTP or `noop` (logs would-be sends in dev).
 - **Locales:** English (`en`), Arabic (`ar`) with RTL layout.
 - **User preference:** `preferredLocale` on profile.
 - **Email locale:** `X-Folio-Locale` header on assignment creation.
-- **Bilingual manuscript fields:** titles, abstracts, keywords; discipline taxonomy in Arabic.
+- **Bilingual manuscript fields:** titles, abstracts, keywords.
 
 ---
 

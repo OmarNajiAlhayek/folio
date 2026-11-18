@@ -6,7 +6,6 @@ import { SubmissionLifecycleService } from './submission-lifecycle.service';
 import { ReviewWorkflowService } from './review-workflow.service';
 import { CopyeditWorkflowService } from './copyedit-workflow.service';
 import { SubmissionFileService } from './submission-file.service';
-import { SubmissionAiService } from './submission-ai.service';
 import { ReviewDiscussionService } from './review-discussion.service';
 import {
   getSubmissionTestServices,
@@ -14,7 +13,6 @@ import {
 } from './submissions-service.testing';
 import { Submission } from '../entities/submission.entity';
 import { SubmissionStatus } from '../entities/submission-status.enum';
-import { SubmissionDisciplineSource } from '../entities/submission-discipline-source.enum';
 import { SubmissionReviewMethod } from '../entities/submission-review-method.enum';
 import { SubmissionFileStage } from '../entities/submission-file-stage.enum';
 import { AssignmentStatus } from '../entities/review-assignment.entity';
@@ -40,8 +38,6 @@ describe('Submission journal scope', () => {
     authorId: 'author-1',
     journalId: JOURNAL,
     status: SubmissionStatus.SUBMITTED,
-    disciplines: [] as string[],
-    disciplineSource: null,
   } as Submission;
 
   const staffPerms = [
@@ -115,7 +111,6 @@ describe('Submission journal scope', () => {
   let reviewWorkflow: ReviewWorkflowService;
   let copyedit: CopyeditWorkflowService;
   let files: SubmissionFileService;
-  let ai: SubmissionAiService;
   let discussions: ReviewDiscussionService;
   let listJournalIdsForUser: jest.Mock;
   let filesCount: jest.Mock;
@@ -211,7 +206,6 @@ describe('Submission journal scope', () => {
           journalMembershipService: {
             listJournalIdsForUser,
             filterUserIdsInJournal: jest.fn().mockResolvedValue([]),
-            disciplineLabelForJournal: jest.fn().mockResolvedValue(null),
           },
           journalIssuesService: {
             listPublishableIssues: jest.fn().mockResolvedValue([]),
@@ -254,14 +248,11 @@ describe('Submission journal scope', () => {
     reviewWorkflow = services.reviewWorkflow;
     copyedit = services.copyeditWorkflow;
     files = services.files;
-    ai = services.ai;
     discussions = moduleRef.get(ReviewDiscussionService);
   });
 
   beforeEach(() => {
     submission.status = SubmissionStatus.SUBMITTED;
-    submission.disciplines = [];
-    submission.disciplineSource = null;
     jest.clearAllMocks();
     filesCount.mockResolvedValue(0);
     filesFindOne.mockResolvedValue(null);
@@ -523,26 +514,6 @@ describe('Submission journal scope', () => {
         copyedit.retractSubmission(submission.slug, editorMedj),
         'VALIDATION_ERROR',
       );
-    });
-
-    it('lets the author set disciplines and scopes the editor', async () => {
-      submission.status = SubmissionStatus.DRAFT;
-      const saved = await ai.setDisciplineForUser(submission.slug, author, [
-        'العلوم الطبية',
-      ]);
-      expect(saved.disciplineSource).toBe(SubmissionDisciplineSource.AUTHOR);
-      expect(listJournalIdsForUser).not.toHaveBeenCalled();
-
-      submission.status = SubmissionStatus.SUBMITTED;
-      await expectOutOfScope(
-        ai.setDisciplineForUser(submission.slug, editorEngj, ['العلوم الطبية']),
-      );
-      const edited = await ai.setDisciplineForUser(
-        submission.slug,
-        editorMedj,
-        ['العلوم الطبية'],
-      );
-      expect(edited.disciplineSource).toBe(SubmissionDisciplineSource.EDITOR);
     });
 
     it('scopes an editor discussion and still lets the reviewer open one', async () => {

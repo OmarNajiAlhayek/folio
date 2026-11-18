@@ -405,7 +405,7 @@ describe('DocxGeneratorService', () => {
       it('APA journals sort alphabetically, Arabic entries first', async () => {
         const xml = await extractDocumentXml(
           await generate(withRefs(), {
-            journal: { disciplineLabel: 'العلوم الهندسية' },
+            journal: { slug: 'engj' },
           }),
         );
         expect(order(xml)).toEqual(['باسل', 'Alpha', 'Zulu']);
@@ -414,7 +414,7 @@ describe('DocxGeneratorService', () => {
       it('the medical journal (Vancouver) keeps the author order of first citation', async () => {
         const xml = await extractDocumentXml(
           await generate(withRefs(), {
-            journal: { disciplineLabel: 'العلوم الطبية' },
+            journal: { slug: 'medj' },
           }),
         );
         expect(order(xml)).toEqual(['Zulu', 'باسل', 'Alpha']);

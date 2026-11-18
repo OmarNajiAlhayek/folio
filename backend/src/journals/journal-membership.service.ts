@@ -33,9 +33,7 @@ export type JournalRoleHolder = {
  * journals.
  *
  * Replaces `user_section_editor_disciplines`, which stored the same idea keyed
- * by an Arabic classifier label. Journals are 1:1 with those labels (see
- * `journal-catalog.ts`), so nothing is lost by keying on the journal instead —
- * and the label stops being a second, parallel taxonomy.
+ * by an Arabic discipline label; memberships are keyed by journal instead.
  *
  * `journal_manager` is one seat per journal, stored here like the editor seat.
  * A manager sees that journal's queue, not every journal on the site.
@@ -308,15 +306,6 @@ export class JournalMembershipService {
       }
     });
     return this.journalSlugsForUser(userId, roleSlug);
-  }
-
-  /** Arabic classifier label for one journal, or null if the row is gone. */
-  async disciplineLabelForJournal(journalId: string): Promise<string | null> {
-    const journal = await this.journalsRepo.findOne({
-      where: { id: journalId },
-      select: ['id', 'disciplineLabel'],
-    });
-    return journal?.disciplineLabel ?? null;
   }
 
   private async slugByJournalId(): Promise<Map<string, string>> {

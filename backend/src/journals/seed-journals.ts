@@ -8,8 +8,7 @@ import { SubmissionStatus } from '../entities/submission-status.enum';
 import {
   JOURNAL_CATALOG,
   JOURNAL_FALLBACK_SLUG,
-  assertJournalCatalogMatchesDisciplines,
-  journalEntryForDisciplineLabel,
+  journalEntryForSlug,
 } from './journal-catalog';
 
 /**
@@ -46,10 +45,8 @@ export type SeededPress = {
   publishedIssueByJournalId: Map<string, JournalIssue>;
 };
 
-export function journalSlugForSampleLabel(
-  label: string | null | undefined,
-): string {
-  return journalEntryForDisciplineLabel(label)?.slug ?? JOURNAL_FALLBACK_SLUG;
+export function journalSlugOrFallback(slug: string | null | undefined): string {
+  return (slug && journalEntryForSlug(slug)?.slug) || JOURNAL_FALLBACK_SLUG;
 }
 
 /** Kept stable so existing Playwright logins still reach the econj queue. */
@@ -78,7 +75,6 @@ export function seededManagerEmail(slug: string): string {
 export async function loadCatalogJournals(
   dataSource: DataSource,
 ): Promise<Map<string, Journal>> {
-  assertJournalCatalogMatchesDisciplines();
   const rows = await dataSource.getRepository(Journal).find();
   const bySlug = new Map(rows.map((j) => [j.slug, j]));
   const missing = JOURNAL_CATALOG.filter((j) => !bySlug.has(j.slug)).map(
@@ -187,11 +183,6 @@ export async function ensureStaffMemberships(
 }
 
 /**
- * Point [Demo]/[SAMPLE] rows at the catalog journal for their discipline
- * and, when already published, at that journal's latest seeded published issue.
- * In-flight manuscripts keep `issue_id` null until slice 4.
- */
-/**
  * Files one sample onto its journal and returns the issue to publish it into.
  *
  * Publishing requires an issue (slice 4), so a sample must be placed *before*
@@ -201,10 +192,10 @@ export async function ensureStaffMemberships(
 export async function placeSampleForPublication(
   dataSource: DataSource,
   submissionId: string,
-  disciplineLabel: string | null | undefined,
+  journalSlug: string | null | undefined,
   press: SeededPress,
 ): Promise<JournalIssue> {
-  const slug = journalSlugForSampleLabel(disciplineLabel);
+  const slug = journalSlugOrFallback(journalSlug);
   const journal = press.journalsBySlug.get(slug);
   if (!journal) {
     throw new Error(`Seed: no journal row for slug "${slug}"`);
@@ -230,21 +221,16 @@ export async function placeDemoSubmissions(
   const repo = dataSource.getRepository(Submission);
   const rows = await repo.find({
     where: titlePrefixes.map((prefix) => ({ title: Like(`${prefix}%`) })),
-    select: [
-      'id',
-      'status',
-      'journalId',
-      'issueId',
-      'disciplines',
-      'disciplineSuggestedLabels',
-    ],
+    select: ['id', 'status', 'journalId', 'issueId'],
   });
+  const journalsById = new Map(
+    [...journalsBySlug.values()].map((j) => [j.id, j]),
+  );
 
   let placed = 0;
   let publishedPlaced = 0;
   for (const row of rows) {
-    const label = row.disciplines?.[0] ?? row.disciplineSuggestedLabels?.[0];
-    const journal = journalsBySlug.get(journalSlugForSampleLabel(label));
+    const journal = journalsById.get(row.journalId);
     if (!journal) continue;
     const isPublished = row.status === SubmissionStatus.PUBLISHED;
     const nextIssueId = isPublished

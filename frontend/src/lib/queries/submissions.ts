@@ -147,12 +147,6 @@ export type SubmissionRecord = {
     presentUploaded: boolean;
     presentConstructor: boolean;
   } | null;
-  disciplines?: string[];
-  disciplineSource?: string | null;
-  disciplineSuggestedLabels?: string[];
-  disciplineSuggestedConfidence?: number | null;
-  disciplineScopeInJournal?: boolean | null;
-  disciplineScopeWarning?: string | null;
   preSubmitAnalysis?: PreSubmitAnalysis | null;
   docxManuscriptViolations?: Array<{
     code: string;

@@ -28,10 +28,8 @@ export function printSeedSummary(options: {
   copyeditor: User;
   press: SeededPress & { membershipsCreated: number };
   placement: { placed: number; publishedPlaced: number };
-  aiEnabled: boolean;
 }): void {
-  const { author, reviewers, copyeditor, press, placement, aiEnabled } =
-    options;
+  const { author, reviewers, copyeditor, press, placement } = options;
   const reviewer = reviewers[0];
   if (!reviewer) {
     throw new Error('Seed: no reviewers');
@@ -142,15 +140,6 @@ export function printSeedSummary(options: {
   console.log(
     '\n--- AI features (optional; enable flags in backend + ai-service .env) ---',
   );
-  if (aiEnabled) {
-    console.log(
-      'Discipline: submit() classifies from Arabic abstract; fallbacks apply only when classification did not persist.',
-    );
-  } else {
-    console.log(
-      'Discipline: seeded disciplineSuggested on each sample (no ai-service). Enable AI_SERVICE_ENABLED + gRPC, then npm run seed:reset.',
-    );
-  }
   console.log(
     `Keywords suggest: author draft ${tDraft} (AI_KEYWORDS_ENABLED + OpenAI on ai-service)`,
   );
@@ -165,9 +154,6 @@ export function printSeedSummary(options: {
   );
   console.log(
     'Semantic catalog: searchMode=semantic with q e.g. وصول مفتوح or نشر رقمي مجلات عربية',
-  );
-  console.log(
-    'JOURNAL_ALLOWED_DISCIPLINES (pipe-separated Arabic labels): out-of-scope badge on queue sample when medical label is outside scope.',
   );
   console.log(
     'After changing published Arabic text: npm run seed:reset (re-indexes similarity corpus).',

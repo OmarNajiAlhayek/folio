@@ -9,7 +9,7 @@ For architecture flags and ports, see [`plans/ai-service.md`](./plans/ai-service
 ## Table of contents
 
 1. [Shared platform](#1-shared-platform)
-2. [Arabic discipline classifier (AraBERT)](#2-arabic-discipline-classifier-arabert)
+2. [Arabic discipline classifier (removed)](#2-arabic-discipline-classifier-removed)
 3. [Keyword suggestions (LLM)](#3-keyword-suggestions-llm)
 4. [Published-article vector index (pgvector)](#4-published-article-vector-index-pgvector)
 5. [Related published articles](#5-related-published-articles)
@@ -70,78 +70,9 @@ Nest considers the base client enabled when **`AI_SERVICE_ENABLED=true`** and **
 
 ---
 
-## 2. Arabic discipline classifier (AraBERT)
+## 2. Arabic discipline classifier (removed)
 
-### Purpose
-
-Suggest one of **10 Arabic discipline labels** for a submission from its title, keywords, and abstract. The author can accept or override the suggestion; editors see scope warnings when the journal restricts allowed disciplines.
-
-### Labels
-
-Fixed set (must match model `id2label` and `backend/src/ai/discipline-labels.ts`):
-
-- الآداب والعلوم الإنسانية  
-- الدراسات التاريخية  
-- العلوم الأساسية  
-- العلوم الاقتصادية والسياسية  
-- العلوم التربوية والنفسية  
-- العلوم الزراعية  
-- العلوم الطبية  
-- العلوم القانونية  
-- العلوم الهندسية  
-- غير محدد (unspecified)
-
-`JOURNAL_ALLOWED_DISCIPLINES` (pipe-separated in backend `.env`) optionally limits which labels count as “in scope” for warnings—not for model inference.
-
-### Model and inference (ai-service)
-
-| Item | Detail |
-|------|--------|
-| Model | Fine-tuned `BertForSequenceClassification` on AraBERT (`aubmindlab/bert-base-arabertv02` preprocessor) |
-| Code | `services/ai-service/app/ml/arabic_classifier.py`, orchestrated by `ClassifierService` |
-| Input | Title, keywords, and abstract are preprocessed with `ArabertPreprocessor`, joined with `[SEP]`, truncated to 512 tokens |
-| Output | Softmax over labels → **percentages 0–100** per class; top label and confidence returned |
-| Hardware | CUDA if available, else CPU; weights can unload after idle timeout (`ARABERT_IDLE_TIMEOUT_SECONDS`) |
-| Enable | `ARABERT_ENABLED=true` + `pip install -e ".[ml]"` + weights on disk (`ARABERT_MODEL_PATH` or default under ai-service) |
-
-### Text selection (Nest)
-
-`resolveClassifyText()` prefers **Arabic** metadata when present, else English:
-
-- `title` ← `titleAr ?? title`  
-- `keywords` ← `keywordsAr ?? keywords`  
-- `abstract` ← `abstractAr ?? abstract`  
-
-Abstract must be non-empty for classification.
-
-### User-facing flows
-
-| Trigger | REST | Behavior |
-|---------|------|----------|
-| Author clicks “Suggest discipline” (draft / revisions) | `POST /submissions/:slug/suggest-discipline` | Calls gRPC `ClassifyArticle`, saves `disciplineSuggested`, `disciplineSuggestedConfidence`, `disciplineClassification` JSON on the submission |
-| Author submits manuscript | (submit handler) | Best-effort `refreshDisciplineSuggestion()`; failure is logged, submit continues |
-| Author confirms discipline | `PATCH /submissions/:slug/discipline` | Human choice; no AI call |
-| Label list for UI | `GET /submissions/discipline-labels` | Static list + journal scope from env |
-
-Frontend: `submission-discipline-panel.tsx`.
-
-### Persistence
-
-On success, Nest stores:
-
-- `disciplineSuggested` — top Arabic label string  
-- `disciplineSuggestedConfidence` — stringified number (0–100)  
-- `disciplineClassification` — JSON: full `probabilities`, `classifiedAt`, `scopeInJournal`, `scopeWarning`  
-
-The author’s confirmed `discipline` field is separate (`disciplineSource` tracks manual vs suggested).
-
-### Errors
-
-| Condition | API |
-|-----------|-----|
-| AI off or gRPC down | `AI_SERVICE_UNAVAILABLE` on explicit suggest; submit skips silently |
-| Empty abstract | `VALIDATION_ERROR` |
-| Classify returns null | `AI_CLASSIFICATION_FAILED` |
+The discipline (المجالات العلمية) feature was removed from the product: journals and sections are the editorial home of an article, so submissions no longer carry discipline tags, there is no suggest/confirm UI, and Nest no longer calls `ClassifierService` on submit. The AraBERT classifier code in `services/ai-service` and `proto/folio/ai/v1/classifier.proto` is left in place but unused by the backend.
 
 ---
 
@@ -427,7 +358,7 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 | Variable | Feature |
 |----------|---------|
 | `AI_PROVIDER=openai` + `OPENAI_API_KEY` | Keywords, copyedit references |
-| `ARABERT_ENABLED=true` + `[ml]` + weights | Discipline classifier |
+| `ARABERT_ENABLED=true` + `[ml]` + weights | Discipline classifier (unused by Nest) |
 | `SIMILARITY_ENABLED=true` + `[similarity]` | Index, related articles, semantic search, local corpus stage |
 | `WEB_SIMILARITY_ENABLED=true` + `[ml,web_similarity]` + CSE/Farasa keys | Web plagiarism stage |
 | `REVIEWER_MATCHING_ENABLED=true` | Suggested reviewers (needs similarity) |
@@ -452,7 +383,6 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 
 | Goal | Minimal setup |
 |------|----------------|
-| Discipline only | AraBERT weights, `ARABERT_ENABLED`, Nest `AI_SERVICE_ENABLED` |
 | Keywords + references | LM Studio or OpenAI, `AI_PROVIDER=openai`, both keyword/copyedit flags |
 | Similarity + reviewers | `[similarity]`, `VECTOR_DB_*`, both similarity flags |
 | Plagiarism (local + web) | `[similarity]` + `[ml,web_similarity]`, `GOOGLE_CSE_*`, `FARASA_API_KEY`, both plagiarism flags |
@@ -475,7 +405,6 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 | Nest gRPC client | `backend/src/ai/ai-client.service.ts` |
 | Submissions AI orchestration | `backend/src/submissions/submissions.service.ts` |
 | Copyedit analysis | `backend/src/submissions/submissions.service.ts` (`runCopyeditAnalysis`), `submission-copyedit-text.util.ts` |
-| Discipline helpers | `backend/src/submissions/submission-discipline.util.ts`, `backend/src/ai/discipline-labels.ts` |
 | ai-service entry | `services/ai-service/app/main.py`, `app/grpc/server.py` |
 | Vector / pgvector | `services/ai-service/app/ml/vector/` |
 | Classifier | `services/ai-service/app/ml/arabic_classifier.py` |
@@ -487,7 +416,6 @@ Align **both** Nest (`backend/.env`) and ai-service (`services/ai-service/.env`)
 
 | Feature | UI role | Transport | ML / tool |
 |---------|---------|-----------|-----------|
-| Discipline suggestion | Author | Nest → gRPC | AraBERT classifier |
 | Keywords | Author | Nest → gRPC | OpenAI-compatible LLM |
 | Related publications | Public | Nest → gRPC | pgvector summary + bi-encoder |
 | Semantic catalog search | Public | Nest → gRPC | pgvector chunks + bi-encoder |

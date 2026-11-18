@@ -26,11 +26,11 @@ const previewThemeSchema = z.object({
   tableBorders: z.enum(['grid', 'horizontalRules']).optional(),
   /** Article-language front matter first, the other language next, then the body. */
   bilingualFrontMatter: z.boolean().optional(),
-  /** Citation style by the journal's `disciplineLabel`; absent → APA for every journal. */
+  /** Citation style by the journal's `slug`; absent → APA for every journal. */
   citationStyles: z
     .object({
       default: citationStyleSchema,
-      byDisciplineLabel: z.record(z.string(), citationStyleSchema).optional(),
+      byJournalSlug: z.record(z.string(), citationStyleSchema).optional(),
     })
     .optional(),
 });
@@ -91,12 +91,12 @@ export type CitationStyle = z.infer<typeof citationStyleSchema>;
 /** Mirrors the backend `resolveCitationStyle`: the manuscript's journal decides. */
 export function resolveCitationStyle(
   theme: ManuscriptPreviewTheme,
-  journalDisciplineLabel: string | null | undefined,
+  journalSlug: string | null | undefined,
 ): CitationStyle {
   const rule = theme.citationStyles;
   if (!rule) return 'apa';
-  const label = journalDisciplineLabel?.trim();
-  return (label && rule.byDisciplineLabel?.[label]) || rule.default;
+  const slug = journalSlug?.trim();
+  return (slug && rule.byJournalSlug?.[slug]) || rule.default;
 }
 export type ManuscriptConstructorGuidance = z.infer<
   typeof constructorGuidanceSchema
@@ -140,7 +140,7 @@ export const DAMASCUS_PREVIEW_THEME_FALLBACK: ManuscriptPreviewTheme = {
   bilingualFrontMatter: true,
   citationStyles: {
     default: 'apa',
-    byDisciplineLabel: { 'العلوم الطبية': 'vancouver' },
+    byJournalSlug: { medj: 'vancouver' },
   },
 };
 

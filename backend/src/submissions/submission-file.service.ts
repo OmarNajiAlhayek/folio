@@ -323,17 +323,15 @@ export class SubmissionFileService {
       submission.constructorContent ?? null,
     );
     const profile = this.manuscriptStyles.getProfile(styleId);
-    const isEngineering = (submission.disciplines ?? []).includes(
-      'العلوم الهندسية',
-    );
-    // The journal, not the classifier's disciplines, decides the citation style.
     const journal = submission.journalId
       ? await this.journals.findJournal(submission.journalId)
       : null;
+    // The engineering journal's template is two-column.
+    const isEngineering = journal?.slug === 'engj';
     return checkDocxFormat(buffer, profile, {
       expectedColumns: isEngineering ? 2 : 1,
       citationStyle: journal
-        ? resolveCitationStyle(profile, journal.disciplineLabel)
+        ? resolveCitationStyle(profile, journal.slug)
         : undefined,
     });
   }

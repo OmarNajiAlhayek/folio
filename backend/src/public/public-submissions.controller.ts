@@ -21,7 +21,6 @@ import {
   PUBLICATION_AUTHOR_SUGGESTION_DEFAULT_LIMIT,
 } from '../submissions/publication-catalog-search.util';
 import { SubmissionArticleType } from '../entities/submission-article-type.enum';
-import { ARABIC_DISCIPLINE_LABELS } from '../ai/discipline-labels';
 import { toPublicArticleCitation } from './public-article-citation';
 
 @ApiTags('public')
@@ -39,11 +38,6 @@ export class PublicSubmissionsController {
     name: 'author',
     required: false,
     description: 'Advanced author narrowing filter',
-  })
-  @ApiQuery({
-    name: 'discipline',
-    required: false,
-    enum: ARABIC_DISCIPLINE_LABELS,
   })
   @ApiQuery({
     name: 'articleType',
@@ -143,7 +137,6 @@ export class PublicSubmissionsController {
       abstractAr: s.abstractAr,
       keywords: s.keywords,
       keywordsAr: s.keywordsAr,
-      disciplines: s.disciplines,
       articleType: s.articleType,
       publishedAt: s.publishedAt,
       ...toPublicArticleCitation(s),

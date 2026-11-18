@@ -32,7 +32,6 @@ describe('ManuscriptAnalysisService', () => {
             },
           ],
         },
-        disciplines: ['biology'],
       }),
     };
     languageTool = {
@@ -85,14 +84,13 @@ describe('ManuscriptAnalysisService', () => {
   });
 
   it.each([
-    ['العلوم الطبية', 'vancouver'],
-    ['العلوم الهندسية', 'apa'],
+    ['medj', 'vancouver'],
+    ['engj', 'apa'],
   ])(
     "checks references with the journal's citation style (%s → %s)",
-    async (disciplineLabel, citationStyle) => {
-      journals.findJournal.mockResolvedValue({ disciplineLabel });
+    async (slug, citationStyle) => {
+      journals.findJournal.mockResolvedValue({ slug });
       await service.analyzeContent(null, {
-        disciplines: [],
         journalId: 'journal-1',
       });
       expect(journals.findJournal).toHaveBeenCalledWith('journal-1');
@@ -103,7 +101,7 @@ describe('ManuscriptAnalysisService', () => {
   );
 
   it('leaves the style to the AI default when the journal is unknown', async () => {
-    await service.analyzeContent(null, { disciplines: [], journalId: null });
+    await service.analyzeContent(null, { journalId: null });
     expect(journals.findJournal).not.toHaveBeenCalled();
     expect(aiClient.checkReferences).toHaveBeenCalledWith(
       expect.objectContaining({ citationStyle: undefined }),

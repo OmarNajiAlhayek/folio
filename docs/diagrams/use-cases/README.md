@@ -15,7 +15,7 @@ Export PNG/SVG for docs or slides.
 |------|------|--------|
 | Journal manager | [`journal-manager.puml`](./journal-manager.puml) | **JM-only**: `users.manage_roles`, `email.manage_reminders` |
 | Editor | [`editor.puml`](./editor.puml) | Editorial workflow, peer review, copyeditor handoff, assignment reminders |
-| Author | [`author.puml`](./author.puml) | **Author-only**: `submission.manage_own`; **AI**: suggest discipline, keyword suggestions |
+| Author | [`author.puml`](./author.puml) | **Author-only**: `submission.manage_own`; **AI**: keyword suggestions |
 | Reviewer | [`reviewer.puml`](./reviewer.puml) | **Reviewer-only**: accept/decline invite, read manuscript, submit review |
 | Copyeditor | [`copyeditor.puml`](./copyeditor.puml) | **Copyeditor-only**: copyedit queue, queries to author, optional AI analysis, publish |
 | Reader (public) | [`reader.puml`](./reader.puml) | Published catalog (unauthenticated); **AI**: semantic search, related articles |

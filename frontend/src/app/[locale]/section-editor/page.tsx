@@ -24,8 +24,6 @@ type Submission = {
   title: string;
   status: string;
   updatedAt: string;
-  disciplineSuggestedLabels?: string[] | null;
-  disciplines?: string[] | null;
   journal?: { titleAr: string; titleEn: string } | null;
   section?: { nameAr: string; nameEn: string } | null;
 };
@@ -160,8 +158,6 @@ export default function SectionEditorPage() {
               updatedAt={s.updatedAt}
               locale={locale}
               t={tSub}
-              disciplineSuggestedLabels={s.disciplineSuggestedLabels}
-              disciplines={s.disciplines}
               journalName={localizedName(s.journal, locale)}
               sectionName={localizedName(s.section, locale)}
             />

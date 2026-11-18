@@ -24,7 +24,6 @@ export function publicationSimilarityIndexPayload(s: Submission): {
     .map((k) => k?.trim())
     .filter((k): k is string => !!k)
     .join(', ');
-  const category = s.disciplines?.[0]?.trim() ?? '';
   const fullText = buildSubmissionCorpusPlainText(s);
-  return { abstract, keywords, category, fullText };
+  return { abstract, keywords, category: '', fullText };
 }

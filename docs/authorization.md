@@ -26,13 +26,9 @@ narrows it.
   since `SubmissionJournalRequired`, so there is no unplaced triage bucket: an
   editor sees their journals and nothing else, and one with no memberships gets
   an empty queue without a database round-trip.
-- Section-editor suggestions match on the submission's **journal**, not on its
-  discipline tags. The staff-admin surface speaks journal slugs
+- Section-editor suggestions match on the submission's **journal**. The staff-admin surface speaks journal slugs
   (`GET/PUT /users/:id/section-editor-journals`) — the same identifiers the
-  portal URLs use. It spoke Arabic discipline labels until slice 7, which only
-  worked because `journals.discipline_label` is unique and 1:1 with the
-  classifier labels (`user_section_editor_disciplines` was dropped in
-  `1783200000000-JournalScopedSectionEditors`).
+  portal URLs use.
 - **Slug access uses the same scope as the queue.**
   `SubmissionAccessService.staffSubmissionInScope` allows an `editor` or
   `journal_manager` on journals where they hold that membership, and a

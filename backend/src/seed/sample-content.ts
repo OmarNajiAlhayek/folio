@@ -1,16 +1,16 @@
 import type { CreateSubmissionDto } from '../submissions/dto/create-submission.dto';
 import { SubmissionArticleType } from '../entities/submission-article-type.enum';
 import {
-  journalSlugForSampleLabel,
+  journalSlugOrFallback,
   type SeededPress,
 } from '../journals/seed-journals';
 
-/** AraBERT-style labels for dev samples when ai-service is off or unreachable. */
-export const SAMPLE_DISCIPLINE_DEFAULT = 'العلوم الاقتصادية والسياسية';
-export const SAMPLE_DISCIPLINE_MEDICAL = 'العلوم الطبية';
-export const SAMPLE_DISCIPLINE_EDUCATION = 'العلوم التربوية والنفسية';
-export const SAMPLE_DISCIPLINE_LEGAL = 'العلوم القانونية';
-export const SAMPLE_DISCIPLINE_ENGINEERING = 'العلوم الهندسية';
+/** Journal slugs the dev samples are filed under. */
+export const SAMPLE_JOURNAL_DEFAULT = 'econj';
+export const SAMPLE_JOURNAL_MEDICAL = 'medj';
+export const SAMPLE_JOURNAL_EDUCATION = 'eduj';
+export const SAMPLE_JOURNAL_LEGAL = 'lawj';
+export const SAMPLE_JOURNAL_ENGINEERING = 'engj';
 
 export const SAMPLE_TITLE_PREFIX = '[Demo]';
 
@@ -31,7 +31,7 @@ export const SAMPLE_PUBLISHED_TITLE = `${SAMPLE_TITLE_PREFIX} Digital Publishing
 export const SAMPLE_PUBLISHED_PEER_TITLE = `${SAMPLE_TITLE_PREFIX} Open-Access Policies and Knowledge Economics in Arabic Peer-Reviewed Journals`;
 export const SAMPLE_PUBLISHED_MEDICAL_TITLE = `${SAMPLE_TITLE_PREFIX} Research Ethics in Small-Sample Clinical Studies`;
 
-/** Arabic + keyword bundles for workflow samples (distinct disciplines / corpus themes). */
+/** Arabic + keyword bundles for workflow samples (distinct journals / corpus themes). */
 export const SAMPLE_DRAFT_META = {
   titleAr: 'قياس كفايات التعلم الرقمي لدى طلاب المرحلة الجامعية',
   abstractAr:
@@ -119,16 +119,14 @@ export type SampleMetaOverrides = Pick<
 >;
 
 /**
- * The journal a demo manuscript is created in — the same discipline-to-slug
- * rule `placeDemoSubmissions` sweeps with, applied up front because
- * `submissions.journal_id` is NOT NULL since slice 6. It stands in for the
- * choice a real author makes in the picker.
+ * The journal a demo manuscript is created in. `submissions.journal_id` is
+ * NOT NULL, so this stands in for the choice a real author makes in the picker.
  */
 export function seedJournalId(
   press: SeededPress,
-  disciplineLabel?: string | null,
+  journalSlug?: string | null,
 ): string {
-  const slug = journalSlugForSampleLabel(disciplineLabel);
+  const slug = journalSlugOrFallback(journalSlug);
   const journal = press.journalsBySlug.get(slug);
   if (!journal) {
     throw new Error(`Seed: no journal row for slug "${slug}"`);

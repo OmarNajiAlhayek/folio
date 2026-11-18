@@ -10,7 +10,6 @@ export type PublicationDocument = {
   authorDisplayName: string;
   /** Journal slug (`engj`) — the public URL contract, stable and facetable. */
   journalSlug: string;
-  disciplines: string[];
   articleType: string;
   publishedAt: number; // unix ms
 };

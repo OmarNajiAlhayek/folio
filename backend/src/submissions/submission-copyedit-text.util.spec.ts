@@ -2,7 +2,7 @@ import {
   buildBodyPlainText,
   checkDamascusStructure,
   damascusCitationStyleIssues,
-  damascusDisciplineIssues,
+  damascusJournalLayoutIssues,
   damascusFormatIssues,
   extractInlineCitations,
   extractReferenceList,
@@ -1032,44 +1032,27 @@ describe('damascusFormatIssues — citation page prefix', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Discipline-aware checks (§3)
+// Journal-aware checks (§3)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('damascusDisciplineIssues', () => {
-  const withAuthorYearCitations: ConstructorContent = {
-    defaultDir: 'ltr',
-    sections: [
-      {
-        id: 'p1',
-        kind: 'paragraph',
-        html: '<p>(Smith, 2020) and (Jones, 2019) and (Brown, 2018) are cited.</p>',
-      },
-      { id: 'refs', kind: 'references', items: [] },
-    ],
-  };
-
-  it('does not report citation style — the journal decides that', () => {
-    const issues = damascusDisciplineIssues(
-      ['العلوم الطبية'],
-      withAuthorYearCitations,
-    );
-    expect(issues).toEqual([]);
-  });
-
-  it('warns Engineering discipline about two-column layout — §3', () => {
-    const issues = damascusDisciplineIssues(
-      ['العلوم الهندسية'],
-      compliantContent,
-    );
+describe('damascusJournalLayoutIssues', () => {
+  it('warns the engineering journal about two-column layout — §3', () => {
+    const issues = damascusJournalLayoutIssues('engj', compliantContent);
     expect(issues.some((i) => i.includes('two-column'))).toBe(true);
   });
 
-  it('returns no issues for empty disciplines list', () => {
-    expect(damascusDisciplineIssues([], compliantContent)).toHaveLength(0);
+  it('returns no issues for other journals', () => {
+    expect(damascusJournalLayoutIssues('medj', compliantContent)).toHaveLength(
+      0,
+    );
+  });
+
+  it('returns no issues for a missing journal', () => {
+    expect(damascusJournalLayoutIssues(null, compliantContent)).toHaveLength(0);
   });
 
   it('returns no issues for null content', () => {
-    expect(damascusDisciplineIssues(['العلوم الطبية'], null)).toHaveLength(0);
+    expect(damascusJournalLayoutIssues('engj', null)).toHaveLength(0);
   });
 });
 

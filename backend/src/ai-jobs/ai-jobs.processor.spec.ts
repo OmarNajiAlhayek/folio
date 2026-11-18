@@ -48,7 +48,6 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
     title: 'Title',
     abstract: 'A'.repeat(MIN_CORPUS_PLAIN_TEXT_CHARS),
     constructorContent: null,
-    disciplines: [],
     titleAr: null,
     similarityIndexedAt: null,
     ...overrides,

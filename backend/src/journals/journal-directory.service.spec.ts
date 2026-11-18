@@ -9,7 +9,6 @@ const ENGJ = {
   slug: 'engj',
   titleAr: 'مجلة جامعة دمشق للعلوم الهندسية',
   titleEn: 'Damascus University Journal for Engineering Sciences',
-  disciplineLabel: 'العلوم الهندسية',
   isActive: true,
 } as Journal;
 
@@ -56,7 +55,6 @@ describe('JournalDirectoryService', () => {
         slug: 'engj',
         titleAr: ENGJ.titleAr,
         titleEn: ENGJ.titleEn,
-        disciplineLabel: 'العلوم الهندسية',
       });
     });
   });

@@ -103,7 +103,7 @@ See [`services/ai-service/.env.example`](../../services/ai-service/.env.example)
 
 | Variable | ai-service prerequisite | Feature |
 |----------|-------------------------|---------|
-| `AI_SERVICE_ENABLED` | gRPC reachable | Base client; discipline on submit when classifier enabled |
+| `AI_SERVICE_ENABLED` | gRPC reachable | Base client |
 | `AI_KEYWORDS_ENABLED` | `KEYWORDS_SUGGESTION_ENABLED` + `openai` | Author keyword suggestions |
 | `AI_SIMILARITY_ENABLED` | `SIMILARITY_ENABLED` | Related articles, `searchMode=semantic`, corpus similarity |
 | `AI_REVIEWER_MATCHING_ENABLED` | `REVIEWER_MATCHING_ENABLED` + `SIMILARITY_ENABLED` | `GET .../suggested-reviewers` |
@@ -151,11 +151,8 @@ All product AI traffic: **Nest → gRPC :5246**. The browser calls Nest only.
 
 | Route | Who | gRPC | Purpose |
 |-------|-----|------|---------|
-| `POST /submissions/:slug/suggest-discipline` | Author (draft) | `ClassifierService` | Store `disciplineSuggested*` |
 | `POST /submissions/:slug/suggest-keywords` | Author (draft) | `KeywordService.SuggestKeywords` | Return lists only (no persist) |
 | `POST /submissions/suggest-keywords-preview` | Author (new wizard) | `KeywordService` | Same, title/abstract in body (no slug) |
-| `PATCH /submissions/:slug/discipline` | Author | — | Confirm / override `discipline` |
-| `GET /submissions/discipline-labels` | Author / editor | — | Label list + optional journal scope |
 | `GET /submissions/:slug/corpus-similarity` | Editor / assigned reviewer | `PlagiarismService` | Overlap with indexed corpus (`AI_SIMILARITY_ENABLED`) |
 | `GET /submissions/:slug/suggested-reviewers` | Editor | `ReviewerMatchingService` | Ranked reviewer candidates |
 | `GET /public/submissions?searchMode=semantic` | Public | `SimilarityService` | Semantic publication catalog (`q` required) |
@@ -170,7 +167,6 @@ When ai-service is down or flags are off, routes return structured errors (`AI_S
 
 1. ~~Optional `X-Folio-Service-Token` validation on ai-service.~~ **Done** — gRPC interceptor when `AI_SERVICE_TOKEN` is set.
 2. ~~Redact manuscript text in Nest logs (see email-service redactor patterns).~~ **Done** — `backend/src/common/ai-log-redaction.ts` used by `AiClientService.logGrpcFailure`.
-3. Reviewer read-only discipline context in UI.
 4. gRPC server streaming for LLM tokens (separate proto RPC).
 
 **RabbitMQ** is optional later for jobs that exceed HTTP timeouts; not required for interactive UI features.

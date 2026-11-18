@@ -1,6 +1,6 @@
 @startuml folio-editor-use-cases
 ' Damascus University Journal — Editor essentials (workflow + peer review; excludes journal-manager-only scope)
-' AI: plagiarism detection, discipline comparison, suggested reviewers (docs/plans/ai-service.md)
+' AI: plagiarism detection, suggested reviewers (docs/plans/ai-service.md)
 ' Render: https://www.plantuml.com/plantuml
 
 left to right direction
@@ -21,7 +21,6 @@ rectangle "Damascus University Journal — editor scope" {
   usecase "Manage per-assignment reminders" as UC_Reminders
 
   usecase "Plagiarism Detection (AI)" as UC_AiPlagiarism
-  usecase "Compare AI discipline suggestion (AI)" as UC_AiDiscipline
   usecase "Get suggested reviewers (AI)" as UC_AiReviewers
 }
 
@@ -36,14 +35,7 @@ UC_AssignCopyeditor .> UC_Workflow : <<extend>>
 UC_Reminders .> UC_Open : <<extend>>
 
 UC_AiPlagiarism .> UC_Open : <<extend>>
-UC_AiDiscipline .> UC_Open : <<extend>>
 UC_AiReviewers .> UC_AssignReviewer : <<extend>>
-
-note bottom of UC_AiDiscipline
-  Read-only: AI suggestion (classifier on
-  author submit/suggest) vs author-confirmed
-  discipline; scope warning when out of journal.
-end note
 
 note bottom of UC_AiPlagiarism
   Overlap with indexed published corpus
