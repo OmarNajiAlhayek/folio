@@ -158,7 +158,7 @@ export type DamascusStructureCheck = {
   authorsWithoutEmail: string[];
   authorsWithoutAffiliation: string[];
   authorsWithoutTitle: string[];
-  // Keywords (§3: exactly 5 per abstract, must appear inside abstract text)
+  // Keywords (§3: 3 to 6 per abstract, must appear inside abstract text)
   hasKeywordsEn: boolean;
   hasKeywordsAr: boolean;
   keywordsEnCount: number;
@@ -543,19 +543,25 @@ export function damascusFormatIssues(check: DamascusStructureCheck): string[] {
   // ── Keywords (§3) ────────────────────────────────────────────────────────
   if (!check.hasKeywordsEn)
     issues.push(
-      'Missing keywords for the English abstract (§3: exactly 5 keywords are required).',
+      'Missing keywords for the English abstract (§3: 3 to 6 keywords are required).',
     );
   if (!check.hasKeywordsAr)
     issues.push(
-      'Missing keywords for the Arabic abstract (§3: exactly 5 keywords are required).',
+      'Missing keywords for the Arabic abstract (§3: 3 to 6 keywords are required).',
     );
-  if (check.hasKeywordsEn && check.keywordsEnCount !== 5)
+  if (
+    check.hasKeywordsEn &&
+    (check.keywordsEnCount < 3 || check.keywordsEnCount > 6)
+  )
     issues.push(
-      `English abstract has ${check.keywordsEnCount} keyword(s) — exactly 5 are required (§3).`,
+      `English abstract has ${check.keywordsEnCount} keyword(s) — between 3 and 6 are required (§3).`,
     );
-  if (check.hasKeywordsAr && check.keywordsArCount !== 5)
+  if (
+    check.hasKeywordsAr &&
+    (check.keywordsArCount < 3 || check.keywordsArCount > 6)
+  )
     issues.push(
-      `Arabic abstract has ${check.keywordsArCount} keyword(s) — exactly 5 are required (§3).`,
+      `Arabic abstract has ${check.keywordsArCount} keyword(s) — between 3 and 6 are required (§3).`,
     );
   if (check.hasKeywordsEn && !check.keywordsEnPresentInAbstract)
     issues.push(

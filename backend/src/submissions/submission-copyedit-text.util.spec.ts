@@ -72,7 +72,7 @@ const compliantContent: ConstructorContent = {
       ],
     },
 
-    // English abstract — ≤300 words, exactly 5 keywords, all present in text
+    // English abstract — ≤300 words, 3-6 keywords, all present in text
     {
       id: 'abs-en',
       kind: 'abstract',
@@ -81,7 +81,7 @@ const compliantContent: ConstructorContent = {
       keywords: 'Neural, Network, Deep, Learning, Algorithm',
     },
 
-    // Arabic abstract — ≤300 words, exactly 5 keywords, all present in text
+    // Arabic abstract — ≤300 words, 3-6 keywords, all present in text
     {
       id: 'abs-ar',
       kind: 'abstract',
@@ -547,36 +547,75 @@ describe('damascusFormatIssues — keywords', () => {
     ).toBe(true);
   });
 
-  it('flags English keyword count != 5 (too few)', () => {
+  it('flags English keyword count below 3 (too few)', () => {
     const content = withSection(compliantContent, 'abs-en', {
-      keywords: 'Neural, Network, Deep',
+      keywords: 'Neural, Network',
     });
     const issues = damascusFormatIssues(checkDamascusStructure(content));
     expect(
-      issues.some((i) => i.includes('3 keyword(s)') && i.includes('exactly 5')),
+      issues.some(
+        (i) => i.includes('2 keyword(s)') && i.includes('between 3 and 6'),
+      ),
     ).toBe(true);
   });
 
-  it('flags English keyword count != 5 (too many)', () => {
-    const content = withSection(compliantContent, 'abs-en', {
+  it('accepts English keyword counts of 3 and 6', () => {
+    const three = withSection(compliantContent, 'abs-en', {
+      keywords: 'Neural, Network, Deep',
+    });
+    expect(
+      damascusFormatIssues(checkDamascusStructure(three)).some((i) =>
+        i.includes('English abstract has'),
+      ),
+    ).toBe(false);
+
+    const six = withSection(compliantContent, 'abs-en', {
       text: 'Alpha Beta Gamma Delta Epsilon Zeta in this study.',
       keywords: 'Alpha, Beta, Gamma, Delta, Epsilon, Zeta',
     });
-    const check = checkDamascusStructure(content);
+    const check = checkDamascusStructure(six);
     expect(check.keywordsEnCount).toBe(6);
-    const issues = damascusFormatIssues(check);
-    expect(issues.some((i) => i.includes('6 keyword(s)'))).toBe(true);
+    expect(
+      damascusFormatIssues(check).some((i) =>
+        i.includes('English abstract has'),
+      ),
+    ).toBe(false);
   });
 
-  it('flags Arabic keyword count != 5', () => {
+  it('flags English keyword count above 6 (too many)', () => {
+    const content = withSection(compliantContent, 'abs-en', {
+      text: 'Alpha Beta Gamma Delta Epsilon Zeta Eta in this study.',
+      keywords: 'Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta',
+    });
+    const check = checkDamascusStructure(content);
+    expect(check.keywordsEnCount).toBe(7);
+    const issues = damascusFormatIssues(check);
+    expect(issues.some((i) => i.includes('7 keyword(s)'))).toBe(true);
+  });
+
+  it('flags Arabic keyword count outside 3-6', () => {
+    const content = withSection(compliantContent, 'abs-ar', {
+      text: 'تبحث هذه الدراسة في الشبكة والتعلم.',
+      keywords: 'الشبكة, التعلم',
+    });
+    const check = checkDamascusStructure(content);
+    expect(check.keywordsArCount).toBe(2);
+    const issues = damascusFormatIssues(check);
+    expect(issues.some((i) => i.includes('2 keyword(s)'))).toBe(true);
+  });
+
+  it('accepts Arabic keyword count of 3', () => {
     const content = withSection(compliantContent, 'abs-ar', {
       text: 'تبحث هذه الدراسة في الشبكة والتعلم والخوارزمية.',
       keywords: 'الشبكة, التعلم, الخوارزمية',
     });
     const check = checkDamascusStructure(content);
     expect(check.keywordsArCount).toBe(3);
-    const issues = damascusFormatIssues(check);
-    expect(issues.some((i) => i.includes('3 keyword(s)'))).toBe(true);
+    expect(
+      damascusFormatIssues(check).some((i) =>
+        i.includes('Arabic abstract has'),
+      ),
+    ).toBe(false);
   });
 
   it('flags English keyword not present in abstract text', () => {

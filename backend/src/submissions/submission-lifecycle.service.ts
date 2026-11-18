@@ -177,18 +177,18 @@ export class SubmissionLifecycleService {
       });
     }
     const kw = this.parseKeywordList(s.keywords);
-    if (kw.length !== 5) {
+    if (kw.length < 3 || kw.length > 6) {
       throw new BadRequestException({
         message:
-          'Provide exactly 5 English keywords, separated by commas or semicolons',
+          'Provide between 3 and 6 English keywords, separated by commas or semicolons',
         code: 'SUBMISSION_INCOMPLETE_KEYWORDS',
       });
     }
     const kwAr = this.parseKeywordList(s.keywordsAr);
-    if (kwAr.length !== 5) {
+    if (kwAr.length < 3 || kwAr.length > 6) {
       throw new BadRequestException({
         message:
-          'Provide exactly 5 Arabic keywords, separated by commas or semicolons',
+          'Provide between 3 and 6 Arabic keywords, separated by commas or semicolons',
         code: 'SUBMISSION_INCOMPLETE_KEYWORDS_AR',
       });
     }
