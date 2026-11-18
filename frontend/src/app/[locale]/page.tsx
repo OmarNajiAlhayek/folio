@@ -9,6 +9,7 @@ import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { useMe } from '@/lib/queries/auth';
 
 type TabKind = 'author' | 'editor' | 'reviewer' | 'copyeditor';
 type RoleCardKind = Exclude<TabKind, 'editor'>;
@@ -88,6 +89,7 @@ export default function HomePage() {
   const t = useTranslations('Home');
   const locale = useLocale();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
+  const signedIn = !!useMe().data;
   const [activeTimelineStep, setActiveTimelineStep] = useState<number>(2); // Default to Peer Review
 
   const features = [
@@ -273,28 +275,32 @@ export default function HomePage() {
 
           {/* Enhanced Action Buttons with glows */}
           <div className="mt-8 flex flex-wrap gap-4 items-center">
-            <Button
-              asChild
-              variant="primary"
-              size="lg"
-              className="group relative min-w-0 hover:shadow-[0_0_20px_rgba(196,92,62,0.35)] dark:hover:shadow-[0_0_20px_rgba(212,120,92,0.25)]"
-            >
-              <Link href="/register">
-                {t('createAccount')}
-                <span className="ms-1.5 transform transition-transform duration-300 group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
-                  →
-                </span>
-              </Link>
-            </Button>
+            {!signedIn && (
+              <Button
+                asChild
+                variant="primary"
+                size="lg"
+                className="group relative min-w-0 hover:shadow-[0_0_20px_rgba(196,92,62,0.35)] dark:hover:shadow-[0_0_20px_rgba(212,120,92,0.25)]"
+              >
+                <Link href="/register">
+                  {t('createAccount')}
+                  <span className="ms-1.5 transform transition-transform duration-300 group-hover:translate-x-1 rtl:group-hover:-translate-x-1">
+                    →
+                  </span>
+                </Link>
+              </Button>
+            )}
 
-            <Button
-              asChild
-              variant="secondary"
-              size="lg"
-              className="min-w-0 border-accent-2/30 bg-surface/80 text-accent-2 shadow-xs backdrop-blur-md hover:border-accent-2/45 hover:bg-accent-2/8"
-            >
-              <Link href="/login">{t('logIn')}</Link>
-            </Button>
+            {!signedIn && (
+              <Button
+                asChild
+                variant="secondary"
+                size="lg"
+                className="min-w-0 border-accent-2/30 bg-surface/80 text-accent-2 shadow-xs backdrop-blur-md hover:border-accent-2/45 hover:bg-accent-2/8"
+              >
+                <Link href="/login">{t('logIn')}</Link>
+              </Button>
+            )}
 
             <Button
               asChild

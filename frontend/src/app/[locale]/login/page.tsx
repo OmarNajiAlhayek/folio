@@ -20,7 +20,6 @@ import { OrcidButton, OrcidDivider } from '@/components/auth/orcid-button';
 import { CONSTRUCTOR_ENTRY_POINTS_ENABLED } from '@/lib/constructor-entry-points';
 import { parseOrcidAuthError } from '@/lib/orcid-auth';
 import { toast } from '@/lib/toast';
-
 type LoginFormData = { email: string; password: string };
 
 function LoginForm() {
