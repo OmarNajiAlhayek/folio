@@ -38,10 +38,14 @@ import {
   canManageOwnSubmissions,
   PERMISSION_SLUGS,
 } from '@/lib/permissions';
+import { reminderRescheduleInputValue } from '@/lib/reminder-datetime-local';
 import {
-  minReminderRescheduleDatetimeLocal,
-  reminderRescheduleInputValue,
-} from '@/lib/reminder-datetime-local';
+  fromIsoDay,
+  fromLocalDateTime,
+  toIsoDay,
+  toLocalDateTime,
+} from '@/lib/iso-day';
+import { DatePicker, DateTimePicker } from '@/components/ui/date-picker';
 import {
   useSubmissionDetail,
   type SubmissionDetailPayload,
@@ -103,8 +107,6 @@ import {
   usePatchSubmission,
 } from '@/lib/queries/submissions';
 import { CopyeditSection } from '@/components/copyedit/CopyeditSection';
-import { SubmissionDisciplinePanel } from '@/components/submission-discipline-panel';
-import { DisciplineBadges } from '@/components/discipline-badges';
 import { CorpusSimilarityPanel } from '@/components/corpus-similarity-panel';
 import { ReviewerSuggestionsPanel } from '@/components/reviewer-suggestions-panel';
 import {
@@ -1126,12 +1128,6 @@ export default function SubmissionDetailPage() {
     ethicalApprovalReference: sub.ethicalApprovalReference ?? null,
     originalityConfirmed: sub.originalityConfirmed === true,
     aiUsageStatement: sub.aiUsageStatement ?? null,
-    disciplines: sub.disciplines ?? [],
-    disciplineSource: sub.disciplineSource ?? null,
-    disciplineSuggestedLabels: sub.disciplineSuggestedLabels ?? [],
-    disciplineSuggestedConfidence: sub.disciplineSuggestedConfidence ?? null,
-    disciplineScopeInJournal: sub.disciplineScopeInJournal ?? null,
-    disciplineScopeWarning: sub.disciplineScopeWarning ?? null,
   };
   const metadataDisplayInitial: MetadataDisplayInitial = {
     articleType: metadataFormInitial.articleType,
@@ -1144,19 +1140,6 @@ export default function SubmissionDetailPage() {
     ethicalApprovalReference: metadataFormInitial.ethicalApprovalReference,
     originalityConfirmed: metadataFormInitial.originalityConfirmed,
     aiUsageStatement: metadataFormInitial.aiUsageStatement,
-    ...(isEditorView
-      ? {}
-      : {
-          disciplines: metadataFormInitial.disciplines,
-          disciplineSource: metadataFormInitial.disciplineSource,
-          disciplineSuggestedLabels:
-            metadataFormInitial.disciplineSuggestedLabels,
-          disciplineSuggestedConfidence:
-            metadataFormInitial.disciplineSuggestedConfidence,
-          disciplineScopeInJournal:
-            metadataFormInitial.disciplineScopeInJournal,
-          disciplineScopeWarning: metadataFormInitial.disciplineScopeWarning,
-        }),
   };
   const files = sub.files ?? [];
   /**
@@ -1248,14 +1231,12 @@ export default function SubmissionDetailPage() {
   const hasTitle = sub.title?.trim().length > 0;
   const hasAbstract = sub.abstract?.trim().length > 0;
   const hasManuscript = hasUploadedManuscript || hasConstructorDraft;
-  const hasDiscipline = (sub.disciplines?.length ?? 0) > 0;
 
   let completedSteps = 0;
-  const totalSteps = 4;
+  const totalSteps = 3;
   if (hasTitle) completedSteps++;
   if (hasAbstract) completedSteps++;
   if (hasManuscript) completedSteps++;
-  if (hasDiscipline) completedSteps++;
 
   const progressPercent = Math.round((completedSteps / totalSteps) * 100);
 
@@ -1486,7 +1467,6 @@ export default function SubmissionDetailPage() {
                   clearFieldError={clearSubmitFieldError}
                   onFieldErrorsChange={setSubmitFieldErrors}
                   onSaved={() => invalidateDetail(slug)}
-                  onDisciplineUpdated={() => invalidateDetail(slug)}
                   onError={(msg) => {
                     if (msg.trim())
                       toast.error(msg, { id: 'submission-metadata-form' });
@@ -1840,7 +1820,7 @@ export default function SubmissionDetailPage() {
             </section>
           )}
 
-          {/* Discipline panel for editors */}
+          {/* Editor actions */}
           {isEditorView && (
             <section className="rounded-xl border border-ink/10 dark:border-white/10 bg-surface p-6 shadow-xs space-y-4">
               <h2 className="font-serif text-lg font-semibold text-ink">
@@ -1850,23 +1830,6 @@ export default function SubmissionDetailPage() {
                 {t('editorPanelHint')}
               </p>
               <div className="pt-2">
-                <SubmissionDisciplinePanel
-                  slug={sub.slug}
-                  mode="editor"
-                  canEdit={false}
-                  fields={{
-                    disciplines: sub.disciplines ?? [],
-                    disciplineSource: sub.disciplineSource ?? null,
-                    disciplineSuggestedLabels:
-                      sub.disciplineSuggestedLabels ?? [],
-                    disciplineSuggestedConfidence:
-                      sub.disciplineSuggestedConfidence ?? null,
-                    disciplineScopeInJournal:
-                      sub.disciplineScopeInJournal ?? null,
-                    disciplineScopeWarning: sub.disciplineScopeWarning ?? null,
-                  }}
-                  onUpdated={() => invalidateDetail(slug)}
-                />
                 {showCorpusSimilarity && (
                   <CorpusSimilarityPanel slug={sub.slug} />
                 )}
@@ -2129,32 +2092,6 @@ export default function SubmissionDetailPage() {
                     </div>
                   </li>
 
-                  <li className="flex items-center gap-3">
-                    <span
-                      className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                        hasDiscipline
-                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'border-ink/20 dark:border-white/20 bg-paper text-transparent'
-                      }`}
-                    >
-                      ✓
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-ink">
-                        {t('readinessDiscipline')}
-                      </p>
-                      <div className="text-[10px] text-ink/50">
-                        {hasDiscipline ? (
-                          <DisciplineBadges
-                            labels={sub.disciplines ?? []}
-                            size="sm"
-                          />
-                        ) : (
-                          t('readinessDisciplineRequired')
-                        )}
-                      </div>
-                    </div>
-                  </li>
                 </ul>
 
                 {/* Submit Section inside Checklist */}
@@ -2489,24 +2426,28 @@ export default function SubmissionDetailPage() {
                         <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
                           {t('assignResponseDue')}
                         </label>
-                        <input
-                          type="date"
-                          value={assignResponseDue}
-                          onChange={(e) => setAssignResponseDue(e.target.value)}
+                        <DatePicker
+                          size="sm"
+                          value={fromIsoDay(assignResponseDue)}
+                          onChange={(d) =>
+                            setAssignResponseDue(d ? toIsoDay(d) : '')
+                          }
+                          minDate={new Date()}
                           disabled={busy}
-                          className="rounded-md border border-ink/15 bg-surface px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                         />
                       </div>
                       <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-semibold uppercase tracking-wide text-ink/50">
                           {t('assignReviewDue')}
                         </label>
-                        <input
-                          type="date"
-                          value={assignReviewDue}
-                          onChange={(e) => setAssignReviewDue(e.target.value)}
+                        <DatePicker
+                          size="sm"
+                          value={fromIsoDay(assignReviewDue)}
+                          onChange={(d) =>
+                            setAssignReviewDue(d ? toIsoDay(d) : '')
+                          }
+                          minDate={new Date()}
                           disabled={busy}
-                          className="rounded-md border border-ink/15 bg-surface px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                         />
                       </div>
                     </div>
@@ -2676,19 +2617,26 @@ export default function SubmissionDetailPage() {
                                                 'reminderReschedulePlaceholder',
                                               )}
                                             </label>
-                                            <input
-                                              type="datetime-local"
-                                              step={60}
-                                              min={minReminderRescheduleDatetimeLocal(
-                                                REMINDER_MIN_LEAD_MS,
+                                            <DateTimePicker
+                                              size="sm"
+                                              minDate={
+                                                new Date(
+                                                  new Date(
+                                                    Date.now() +
+                                                      REMINDER_MIN_LEAD_MS,
+                                                  ).setHours(0, 0, 0, 0),
+                                                )
+                                              }
+                                              value={fromLocalDateTime(
+                                                rescheduleValue,
                                               )}
-                                              className="rounded border border-ink/15 bg-paper px-2 py-1 text-[10px] text-ink w-full"
-                                              value={rescheduleValue}
-                                              onChange={(e) =>
+                                              onChange={(d) =>
                                                 setReminderRescheduleAt(
                                                   (prev) => ({
                                                     ...prev,
-                                                    [r.id]: e.target.value,
+                                                    [r.id]: d
+                                                      ? toLocalDateTime(d)
+                                                      : '',
                                                   }),
                                                 )
                                               }
