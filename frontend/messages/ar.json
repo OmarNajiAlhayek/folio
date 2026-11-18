@@ -169,6 +169,10 @@
       "title": "دعوة محرر",
       "body": "دعاك {invitedByDisplayName} للانضمام كـ {roleSlug}."
     },
+    "roleRemoved": {
+      "title": "أُزيل دور",
+      "body": "أزال {removedByDisplayName} دورك ({role, select, editor {رئيس التحرير} section_editor {محرر قسم علمي} journal_manager {مدير مجلة} reviewer {محكّم} copyeditor {محرر نهائي} other {{role}}}). سُجّل خروجك من جميع الأجهزة؛ سجّل الدخول من جديد للمتابعة."
+    },
     "submissionPublished": {
       "title": "نُشرت المقالة",
       "body": "أصبحت {submissionTitle} متاحة في الفهرس العام."
@@ -1210,7 +1214,20 @@
     "heldBy": "يشغلها {name}",
     "journalRoleTaken": "لكل مجلة شخص واحد في هذا الدور. أزل المجلة من بطاقة من يشغلها، ثم عيّنها هنا.",
     "journalsSaved": "حُفظت المجلات",
-    "journalsSaveFailed": "تعذّر حفظ المجلات"
+    "journalsSaveFailed": "تعذّر حفظ المجلات",
+    "actionFailed": "تعذّر حفظ هذا التغيير. حاول مرة أخرى.",
+    "cancel": "إلغاء",
+    "cancelInvite": "إلغاء الدعوة",
+    "inviteCancelled": "أُلغيت الدعوة",
+    "revokeRole": "إزالة",
+    "confirmRevokeTitle": "إزالة هذا الدور؟",
+    "confirmRevokeBody": "سيفقد {name} دور {role} وأي مجلات مرتبطة به، وسيتم تسجيل خروجه من جميع الأجهزة. يسجّل الدخول من جديد للمتابعة.",
+    "confirmRevokeAction": "إزالة الدور",
+    "selfRolesHint": "لا يمكنك منح نفسك أدواراً أو دعوة نفسك. اطلب ذلك من مدير مجلة آخر.",
+    "signOutHint": "تغيير الدور يُسجّل خروج الشخص من جميع الأجهزة.",
+    "errSelfRoleElevation": "لا يمكنك منح نفسك أدواراً إضافية. اطلب ذلك من مدير مجلة آخر.",
+    "errOutOfScope": "يشغل هذا الشخص هذا الدور في مجلة لا تديرها، لذا لا يمكنك إزالته.",
+    "errInvitationExpired": "انتهت صلاحية هذه الدعوة. أرسل دعوة جديدة."
   },
   "JournalManagerAuditLog": {
     "title": "سجل التدقيق",

@@ -216,9 +216,18 @@ export const createReviewSchema = z
   );
 
 /** backend/src/users/dto/update-user-roles.dto.ts */
-export const updateUserRolesSchema = z.object({
-  roleSlugs: z.array(z.string().trim().min(1)).min(1),
-});
+export const updateUserRolesSchema = z
+  .object({
+    roleSlugs: z.array(z.string().trim().min(1)).min(1).optional(),
+    add: z.array(z.string().trim().min(1)).optional(),
+    remove: z.array(z.string().trim().min(1)).optional(),
+  })
+  .refine(
+    (v) =>
+      (v.roleSlugs !== undefined) !==
+      (v.add !== undefined || v.remove !== undefined),
+    { message: "Send either roleSlugs, or add and/or remove" },
+  );
 
 /** backend/src/users/dto/create-role-invitation.dto.ts */
 export const createRoleInvitationSchema = z.object({

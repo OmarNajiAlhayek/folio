@@ -169,6 +169,10 @@
       "title": "Editor invitation",
       "body": "{invitedByDisplayName} invited you to join as {roleSlug}."
     },
+    "roleRemoved": {
+      "title": "Role removed",
+      "body": "{removedByDisplayName} removed your {role, select, editor {editor-in-chief} section_editor {section editor} journal_manager {journal manager} reviewer {reviewer} copyeditor {copyeditor} other {{role}}} role. You were signed out of all devices; sign in again to continue."
+    },
     "submissionPublished": {
       "title": "Manuscript published",
       "body": "{submissionTitle} is now in the public catalog."
@@ -1210,7 +1214,20 @@
     "heldBy": "Held by {name}",
     "journalRoleTaken": "Each journal can have only one person in this role. Remove the journal from the person who already holds it, then assign it here.",
     "journalsSaved": "Journals saved",
-    "journalsSaveFailed": "Could not save journals"
+    "journalsSaveFailed": "Could not save journals",
+    "actionFailed": "That change could not be saved. Try again.",
+    "cancel": "Cancel",
+    "cancelInvite": "Cancel invite",
+    "inviteCancelled": "Invitation cancelled",
+    "revokeRole": "Remove",
+    "confirmRevokeTitle": "Remove this role?",
+    "confirmRevokeBody": "{name} will lose the {role} role and any journals assigned to it, and will be signed out of all devices. They sign back in to continue.",
+    "confirmRevokeAction": "Remove role",
+    "selfRolesHint": "You cannot grant yourself roles or invite yourself. Ask another journal manager.",
+    "signOutHint": "Changing a role signs the person out of all devices.",
+    "errSelfRoleElevation": "You cannot grant yourself additional roles. Ask another journal manager.",
+    "errOutOfScope": "This person holds that role on a journal you do not manage, so you cannot remove it.",
+    "errInvitationExpired": "That invitation expired. Send a new one."
   },
   "JournalManagerAuditLog": {
     "title": "Audit log",

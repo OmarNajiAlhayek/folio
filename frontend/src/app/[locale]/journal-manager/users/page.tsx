@@ -14,8 +14,9 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiErrorState } from '@/components/api-error-state';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,11 +30,13 @@ import {
   SkeletonBusyRegion,
   SkeletonLoadingStatus,
 } from '@/components/ui/skeleton-loading-status';
+import { ApiError } from '@/lib/api';
 import { useMe } from '@/lib/queries/auth';
 import {
+  cancelRoleInvitation,
+  changeUserRoles,
   createRoleInvitation,
   fetchAdminUsers,
-  patchUserRoles,
 } from '@/lib/queries/users-admin';
 import { EMPTY_STATE_CLS } from '@/lib/page-shell';
 import { PERMISSION_SLUGS, ROLE_SLUGS } from '@/lib/permissions';
@@ -47,7 +50,7 @@ import {
   updateUserRolesSchema,
 } from '@/lib/validation';
 import type { AdminUserRow } from '@/lib/users-admin';
-import { hasPendingInvite, hasRole, withRoleToggle } from '@/lib/users-admin';
+import { hasPendingInvite, hasRole } from '@/lib/users-admin';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
@@ -118,7 +121,23 @@ function avatarColorClass(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/** Server error codes this screen explains in its own words. */
+const ERROR_CODE_MESSAGE_KEYS = {
+  SELF_ROLE_ELEVATION: 'errSelfRoleElevation',
+  JOURNAL_OUT_OF_SCOPE: 'errOutOfScope',
+  INVITATION_EXPIRED: 'errInvitationExpired',
+} as const;
+
+/** Offset for a calendar day picked in the browser, so "that day" means the viewer's day. */
+function tzOffsetFor(ymd: string): number | undefined {
+  if (!ymd) return undefined;
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).getTimezoneOffset();
+}
+
 function getInitials(name: string): string {
+  // ORCID sign-ups start as "ORCID 0000-…"; initials of that read "O0".
+  if (/^ORCID \d{4}-/.test(name)) return 'OR';
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return (parts[0] ?? '').slice(0, 2).toUpperCase();
   return (
@@ -196,6 +215,12 @@ export default function JournalManagerUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorCause, setErrorCause] = useState<unknown>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [confirmRemoval, setConfirmRemoval] = useState<{
+    row: AdminUserRow;
+    roleSlug: string;
+  } | null>(null);
+  // Only the newest request may write results; older ones are aborted.
+  const loadAbort = useRef<AbortController | null>(null);
 
   // Advanced search draft state (what the user is building)
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -232,25 +257,34 @@ export default function JournalManagerUsersPage() {
 
   const load = useCallback(async () => {
     if (!canAccess) return;
+    loadAbort.current?.abort();
+    const ctrl = new AbortController();
+    loadAbort.current = ctrl;
     setLoading(true);
     setError(null);
     setErrorCause(null);
     try {
-      const data = await fetchAdminUsers({
-        q: debouncedQ || undefined,
-        role: appliedRole || undefined,
-        joinedFrom: appliedJoinedFrom || undefined,
-        joinedTo: appliedJoinedTo || undefined,
-        limit: PAGE_SIZE,
-        offset,
-      });
+      const data = await fetchAdminUsers(
+        {
+          q: debouncedQ || undefined,
+          role: appliedRole || undefined,
+          joinedFrom: appliedJoinedFrom || undefined,
+          joinedTo: appliedJoinedTo || undefined,
+          tzOffset: tzOffsetFor(appliedJoinedFrom || appliedJoinedTo),
+          limit: PAGE_SIZE,
+          offset,
+        },
+        ctrl.signal,
+      );
+      if (ctrl.signal.aborted) return;
       setItems(data.items);
       setTotal(data.total);
     } catch (err) {
+      if (ctrl.signal.aborted) return;
       setErrorCause(err);
       setError(resolveApiError(err, t('loadFailed')));
     } finally {
-      setLoading(false);
+      if (loadAbort.current === ctrl) setLoading(false);
     }
   }, [
     canAccess,
@@ -265,7 +299,22 @@ export default function JournalManagerUsersPage() {
 
   useEffect(() => {
     void load();
+    return () => loadAbort.current?.abort();
   }, [load]);
+
+  function reportError(err: unknown) {
+    if (err instanceof ApiError) {
+      const key =
+        ERROR_CODE_MESSAGE_KEYS[
+          err.code as keyof typeof ERROR_CODE_MESSAGE_KEYS
+        ];
+      if (key) {
+        toast.error(t(key));
+        return;
+      }
+    }
+    showApiError(err, t('actionFailed'));
+  }
 
   function applyAdvanced() {
     setAppliedRole(roleDraft);
@@ -292,26 +341,27 @@ export default function JournalManagerUsersPage() {
     setAdvancedOpen(false);
   }
 
-  async function toggleDirectRole(
+  /**
+   * Grants or revokes one role. Only that role is sent; the server applies it
+   * to what the user holds now, so a stale card cannot undo another change.
+   */
+  async function applyRoleChange(
     row: AdminUserRow,
     roleSlug: string,
     on: boolean,
   ) {
-    const next = withRoleToggle(row.roleSlugs, roleSlug, on);
-    const parsed = safeParseResult(updateUserRolesSchema, { roleSlugs: next });
+    const change = on ? { add: [roleSlug] } : { remove: [roleSlug] };
+    const parsed = safeParseResult(updateUserRolesSchema, change);
     if (!parsed.ok) return;
 
     setRowBusy(row.id);
     try {
-      await patchUserRoles(row.id, parsed.data.roleSlugs);
-      setItems((prev) =>
-        prev.map((u) =>
-          u.id === row.id ? { ...u, roleSlugs: parsed.data.roleSlugs } : u,
-        ),
-      );
+      await changeUserRoles(row.id, change);
       toast.success(t('rolesSaved'));
+      // Roles can have changed elsewhere meanwhile; show what is stored.
+      void load();
     } catch (err) {
-      showApiError(err, t('loadFailed'));
+      reportError(err);
     } finally {
       setRowBusy(null);
     }
@@ -326,7 +376,7 @@ export default function JournalManagerUsersPage() {
 
     setRowBusy(row.id);
     try {
-      await createRoleInvitation(row.id, parsed.data.roleSlug);
+      const created = await createRoleInvitation(row.id, parsed.data.roleSlug);
       setItems((prev) =>
         prev.map((u) => {
           if (u.id !== row.id) return u;
@@ -335,15 +385,39 @@ export default function JournalManagerUsersPage() {
             ...u,
             pendingRoleInvitations: [
               ...u.pendingRoleInvitations,
-              { id: `pending-${roleSlug}`, roleSlug },
+              { id: created.id, roleSlug },
             ],
           };
         }),
       );
       toast.success(t('inviteSent'));
-      void load();
     } catch (err) {
-      showApiError(err, t('loadFailed'));
+      reportError(err);
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
+  async function cancelInvite(row: AdminUserRow, invitationId: string) {
+    setRowBusy(row.id);
+    try {
+      await cancelRoleInvitation(row.id, invitationId);
+      setItems((prev) =>
+        prev.map((u) =>
+          u.id === row.id
+            ? {
+                ...u,
+                pendingRoleInvitations: u.pendingRoleInvitations.filter(
+                  (p) => p.id !== invitationId,
+                ),
+              }
+            : u,
+        ),
+      );
+      toast.success(t('inviteCancelled'));
+    } catch (err) {
+      reportError(err);
+      void load();
     } finally {
       setRowBusy(null);
     }
@@ -391,8 +465,14 @@ export default function JournalManagerUsersPage() {
     { value: ROLE_SLUGS.REVIEWER, label: t('roleReviewer') },
     { value: ROLE_SLUGS.COPYEDITOR, label: t('roleCopyeditor') },
     { value: ROLE_SLUGS.EDITOR, label: t('roleEditor') },
+    { value: ROLE_SLUGS.SECTION_EDITOR, label: t('roleSectionEditor') },
     { value: ROLE_SLUGS.JOURNAL_MANAGER, label: t('roleJournalManager') },
   ];
+
+  function roleName(slug: string): string {
+    const key = roleLabelKey(slug);
+    return key ? t(key) : slug;
+  }
 
   return (
     <main className={submissionQueueShellCls}>
@@ -622,6 +702,18 @@ export default function JournalManagerUsersPage() {
         </div>
       ) : null}
 
+      {error && items.length > 0 ? (
+        <div
+          role="alert"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/25 bg-rose-500/8 px-4 py-3 text-sm text-rose-700 dark:text-rose-400"
+        >
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={() => void load()}>
+            {t('retryLoad')}
+          </Button>
+        </div>
+      ) : null}
+
       {/* Content */}
       {loading && items.length === 0 ? (
         <SkeletonBusyRegion label={t('loading')} className="mt-6">
@@ -662,6 +754,9 @@ export default function JournalManagerUsersPage() {
           <ul className="mt-3 space-y-4">
             {items.map((row) => {
               const busy = rowBusy === row.id;
+              const isSelf = row.id === me.data?.id;
+              const pendingId = (slug: string) =>
+                row.pendingRoleInvitations.find((p) => p.roleSlug === slug)?.id;
               const editorHas = hasRole(row, ROLE_SLUGS.EDITOR);
               const jmHas = hasRole(row, ROLE_SLUGS.JOURNAL_MANAGER);
               const seHas = hasRole(row, ROLE_SLUGS.SECTION_EDITOR);
@@ -742,30 +837,30 @@ export default function JournalManagerUsersPage() {
                         {t('directRolesHeading')}
                       </p>
                       <div className="space-y-2">
-                        <Checkbox
-                          label={t('toggleReviewer')}
-                          checked={hasRole(row, ROLE_SLUGS.REVIEWER)}
-                          onCheckedChange={(checked) =>
-                            void toggleDirectRole(
-                              row,
-                              ROLE_SLUGS.REVIEWER,
-                              checked,
-                            )
-                          }
-                          disabled={busy}
-                        />
-                        <Checkbox
-                          label={t('toggleCopyeditor')}
-                          checked={hasRole(row, ROLE_SLUGS.COPYEDITOR)}
-                          onCheckedChange={(checked) =>
-                            void toggleDirectRole(
-                              row,
-                              ROLE_SLUGS.COPYEDITOR,
-                              checked,
-                            )
-                          }
-                          disabled={busy}
-                        />
+                        {(
+                          [
+                            [ROLE_SLUGS.REVIEWER, 'toggleReviewer'],
+                            [ROLE_SLUGS.COPYEDITOR, 'toggleCopyeditor'],
+                          ] as const
+                        ).map(([slug, labelKey]) => (
+                          <Checkbox
+                            key={slug}
+                            label={t(labelKey)}
+                            checked={hasRole(row, slug)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                void applyRoleChange(row, slug, true);
+                              } else {
+                                setConfirmRemoval({ row, roleSlug: slug });
+                              }
+                            }}
+                            // You cannot grant yourself roles; you can still give one up.
+                            disabled={busy || (isSelf && !hasRole(row, slug))}
+                          />
+                        ))}
+                        <p className="text-xs leading-relaxed text-ink/55">
+                          {isSelf ? t('selfRolesHint') : t('signOutHint')}
+                        </p>
                       </div>
                     </div>
 
@@ -778,7 +873,20 @@ export default function JournalManagerUsersPage() {
                         {editorPending ? (
                           <div className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                             <Clock className="size-3.5 shrink-0" aria-hidden />
-                            {t('pendingEditorInvite')}
+                            <span className="flex-1">
+                              {t('pendingEditorInvite')}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy || !pendingId('editor')}
+                              onClick={() => {
+                                const id = pendingId('editor');
+                                if (id) void cancelInvite(row, id);
+                              }}
+                              className="rounded-md px-1.5 py-0.5 underline-offset-2 hover:underline disabled:opacity-50"
+                            >
+                              {t('cancelInvite')}
+                            </button>
                           </div>
                         ) : editorHas ? (
                           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
@@ -786,9 +894,21 @@ export default function JournalManagerUsersPage() {
                               className="size-3.5 shrink-0"
                               aria-hidden
                             />
-                            {t('hasEditorRole')}
+                            <span className="flex-1">{t('hasEditorRole')}</span>
+                            {
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setConfirmRemoval({ row, roleSlug: 'editor' })
+                                }
+                                className="rounded-md px-1.5 py-0.5 text-rose-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-rose-400"
+                              >
+                                {t('revokeRole')}
+                              </button>
+                            }
                           </div>
-                        ) : (
+                        ) : isSelf ? null : (
                           <Button
                             variant="outline"
                             size="sm"
@@ -807,7 +927,20 @@ export default function JournalManagerUsersPage() {
                         {jmPending ? (
                           <div className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                             <Clock className="size-3.5 shrink-0" aria-hidden />
-                            {t('pendingJournalManagerInvite')}
+                            <span className="flex-1">
+                              {t('pendingJournalManagerInvite')}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy || !pendingId('journal_manager')}
+                              onClick={() => {
+                                const id = pendingId('journal_manager');
+                                if (id) void cancelInvite(row, id);
+                              }}
+                              className="rounded-md px-1.5 py-0.5 underline-offset-2 hover:underline disabled:opacity-50"
+                            >
+                              {t('cancelInvite')}
+                            </button>
                           </div>
                         ) : jmHas ? (
                           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
@@ -815,9 +948,26 @@ export default function JournalManagerUsersPage() {
                               className="size-3.5 shrink-0"
                               aria-hidden
                             />
-                            {t('hasJournalManagerRole')}
+                            <span className="flex-1">
+                              {t('hasJournalManagerRole')}
+                            </span>
+                            {!isSelf ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setConfirmRemoval({
+                                    row,
+                                    roleSlug: 'journal_manager',
+                                  })
+                                }
+                                className="rounded-md px-1.5 py-0.5 text-rose-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-rose-400"
+                              >
+                                {t('revokeRole')}
+                              </button>
+                            ) : null}
                           </div>
-                        ) : (
+                        ) : isSelf ? null : (
                           <Button
                             variant="outline"
                             size="sm"
@@ -838,7 +988,20 @@ export default function JournalManagerUsersPage() {
                         {sePending ? (
                           <div className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                             <Clock className="size-3.5 shrink-0" aria-hidden />
-                            {t('pendingSectionEditorInvite')}
+                            <span className="flex-1">
+                              {t('pendingSectionEditorInvite')}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy || !pendingId('section_editor')}
+                              onClick={() => {
+                                const id = pendingId('section_editor');
+                                if (id) void cancelInvite(row, id);
+                              }}
+                              className="rounded-md px-1.5 py-0.5 underline-offset-2 hover:underline disabled:opacity-50"
+                            >
+                              {t('cancelInvite')}
+                            </button>
                           </div>
                         ) : seHas ? (
                           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
@@ -846,9 +1009,26 @@ export default function JournalManagerUsersPage() {
                               className="size-3.5 shrink-0"
                               aria-hidden
                             />
-                            {t('hasSectionEditorRole')}
+                            <span className="flex-1">
+                              {t('hasSectionEditorRole')}
+                            </span>
+                            {
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  setConfirmRemoval({
+                                    row,
+                                    roleSlug: 'section_editor',
+                                  })
+                                }
+                                className="rounded-md px-1.5 py-0.5 text-rose-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-rose-400"
+                              >
+                                {t('revokeRole')}
+                              </button>
+                            }
                           </div>
-                        ) : (
+                        ) : isSelf ? null : (
                           <Button
                             variant="outline"
                             size="sm"
@@ -994,6 +1174,29 @@ export default function JournalManagerUsersPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmRemoval !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemoval(null);
+        }}
+        title={t('confirmRevokeTitle')}
+        description={t('confirmRevokeBody', {
+          name: confirmRemoval?.row.displayName ?? '',
+          role: confirmRemoval ? roleName(confirmRemoval.roleSlug) : '',
+        })}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('confirmRevokeAction')}
+        onConfirm={() => {
+          if (confirmRemoval) {
+            void applyRoleChange(
+              confirmRemoval.row,
+              confirmRemoval.roleSlug,
+              false,
+            );
+          }
+        }}
+      />
     </main>
   );
 }

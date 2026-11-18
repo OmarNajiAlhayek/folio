@@ -31,6 +31,8 @@ export function getNotificationVisuals(
       };
     case 'role_invitation_created':
     case 'roleInvitation':
+    case 'role_removed':
+    case 'roleRemoved':
       return {
         bg: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400 border-teal-500/20',
         icon: ShieldCheck,
