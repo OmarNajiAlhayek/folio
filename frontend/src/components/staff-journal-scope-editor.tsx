@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, apiJson } from '@/lib/api';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Spinner } from '@/components/ui/spinner';
@@ -20,10 +21,7 @@ import { cn } from '@/lib/utils';
 
 /** The journal-scoped role being assigned; each has its own endpoint. */
 export type StaffJournalScope =
-  | 'section-editor'
-  | 'editor'
-  | 'journal-manager'
-  | 'reviewer';
+  'section-editor' | 'editor' | 'journal-manager' | 'reviewer';
 
 const SCOPE_PATH: Record<StaffJournalScope, string> = {
   'section-editor': 'section-editor-journals',
@@ -82,6 +80,8 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [confirmHandover, setConfirmHandover] = useState(false);
 
   const path = `/users/${userId}/${SCOPE_PATH[scope]}`;
   const labelKey =
@@ -104,6 +104,7 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const data = await apiJson<string[]>(path);
       setJournals(data);
@@ -112,6 +113,7 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
       setDirty(false);
     } catch {
       setLoaded(false);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -129,6 +131,21 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
     window.addEventListener('beforeunload', onLeave);
     return () => window.removeEventListener('beforeunload', onLeave);
   }, [dirty]);
+
+  /**
+   * Handing over your last journal-manager seat leaves you with access to these
+   * pages but no journal; ask before doing that.
+   */
+  function requestSave() {
+    if (scope === 'journal-manager' && managedSlugs.size > 0) {
+      const handedOver = journals.filter((slug) => managedSlugs.has(slug));
+      if (handedOver.length === managedSlugs.size) {
+        setConfirmHandover(true);
+        return;
+      }
+    }
+    void save();
+  }
 
   async function save() {
     setSaving(true);
@@ -173,7 +190,11 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
   }, [holders, userId, scope, me?.id]);
 
   const visibleJournals = journals.filter((slug) => managedSlugs.has(slug));
-  const needsJournal = loaded && !dirty && visibleJournals.length === 0;
+  // "No journal yet" only when the person serves nowhere; someone who serves
+  // only journals this manager does not run is not unassigned.
+  const otherJournalCount = saved.length - savedVisible.length;
+  const needsJournal =
+    loaded && !dirty && visibleJournals.length === 0 && saved.length === 0;
 
   const options = useMemo(
     () =>
@@ -192,6 +213,17 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
         }),
     [journalOptions, locale, holderBySlug, t, managedSlugs, singleton],
   );
+
+  if (loadFailed) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-rose-700 dark:text-rose-400">
+        <span>{t('scopeLoadFailed')}</span>
+        <Button size="sm" variant="outline" onClick={() => void load()}>
+          {t('scopeRetry')}
+        </Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -236,6 +268,11 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
         aria-label={t(labelKey)}
         className="w-full"
       />
+      {loaded && otherJournalCount > 0 ? (
+        <p className="text-xs leading-relaxed text-ink/55">
+          {t('servesElsewhere', { count: otherJournalCount })}
+        </p>
+      ) : null}
       {dirty ? (
         <div className="space-y-2">
           <p className="text-xs font-medium text-ink/70">
@@ -244,13 +281,22 @@ export function StaffJournalScopeEditor({ userId, scope }: Props) {
           <Button
             size="sm"
             loading={saving}
-            onClick={() => void save()}
+            onClick={requestSave}
             className="w-full text-xs"
           >
             {t('saveJournals')}
           </Button>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmHandover}
+        onOpenChange={setConfirmHandover}
+        title={t('confirmHandoverTitle')}
+        description={t('confirmHandoverBody')}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('confirmHandoverAction')}
+        onConfirm={() => void save()}
+      />
     </div>
   );
 }

@@ -378,6 +378,12 @@ export default function DashboardPage() {
           classes:
             'bg-amber-50 border-amber-200/60 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400',
         };
+      case ROLE_SLUGS.SECTION_EDITOR:
+        return {
+          label: t('roleSectionEditor'),
+          classes:
+            'bg-teal-50 border-teal-200/60 text-teal-700 dark:bg-teal-500/10 dark:border-teal-500/20 dark:text-teal-400',
+        };
       case ROLE_SLUGS.COPYEDITOR:
         return {
           label: t('roleCopyeditor'),
@@ -805,10 +811,14 @@ export default function DashboardPage() {
                                   ? t('roleInviteJournalManagerLine', {
                                       name: r.invitedBy.displayName,
                                     })
-                                  : t('roleInviteGenericLine', {
-                                      name: r.invitedBy.displayName,
-                                      roleSlug: r.roleSlug,
-                                    })}
+                                  : r.roleSlug === 'section_editor'
+                                    ? t('roleInviteSectionEditorLine', {
+                                        name: r.invitedBy.displayName,
+                                      })
+                                    : t('roleInviteGenericLine', {
+                                        name: r.invitedBy.displayName,
+                                        roleSlug: r.roleSlug,
+                                      })}
                             </p>
                             <p className="mt-1 text-[11px] text-ink/50 flex items-center gap-1">
                               <span>📅</span>

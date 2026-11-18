@@ -26,7 +26,10 @@
     "networkError": "Could not reach the server. Check your connection and try again.",
     "rateLimitHint": "Waiting a short time before retrying usually resolves this.",
     "retry": "Try again",
-    "goHome": "Go to dashboard"
+    "goHome": "Go to dashboard",
+    "journalOutOfScope": "That item belongs to a journal you do not manage.",
+    "selfRoleElevation": "You cannot grant yourself additional roles. Ask another journal manager.",
+    "invitationExpired": "That invitation expired. Ask for a new one."
   },
   "NotFound": {
     "title": "Page not found",
@@ -452,6 +455,7 @@
     "roleInviteEditorLine": "{name} invited you to become an editor",
     "roleInviteJournalManagerLine": "{name} invited you to become a journal manager",
     "roleInviteGenericLine": "{name} invited you to join as {roleSlug}",
+    "roleInviteSectionEditorLine": "{name} invited you to become a section editor",
     "acceptRole": "Accept",
     "declineRole": "Decline",
     "working": "…",
@@ -497,6 +501,7 @@
     "roleEditor": "Editor",
     "roleJournalManager": "Journal Manager",
     "roleCopyeditor": "Copyeditor",
+    "roleSectionEditor": "Section Editor",
     "constructorLabel": "Word Constructor:",
     "filesPackageLabel": "Files Package:",
     "allCaughtUp": "All Caught Up!",
@@ -1219,6 +1224,12 @@
     "journalRoleTaken": "Each journal can have only one person in this role. Remove the journal from the person who already holds it, then assign it here.",
     "journalsSaved": "Journals saved",
     "journalsSaveFailed": "Could not save journals",
+    "scopeLoadFailed": "Could not load the journals for this person.",
+    "scopeRetry": "Try again",
+    "servesElsewhere": "Also serves {count, plural, one {# journal} other {# journals}} you do not manage. Only your own journals are shown here.",
+    "confirmHandoverTitle": "Hand over your last journal?",
+    "confirmHandoverBody": "You manage no other journal. After this you will keep access to these pages but your queue and journal settings will be empty, until another manager gives you a journal back.",
+    "confirmHandoverAction": "Hand over",
     "actionFailed": "That change could not be saved. Try again.",
     "cancel": "Cancel",
     "cancelInvite": "Cancel invite",
@@ -1232,6 +1243,10 @@
     "errSelfRoleElevation": "You cannot grant yourself additional roles. Ask another journal manager.",
     "errOutOfScope": "This person holds that role on a journal you do not manage, so you cannot remove it.",
     "errInvitationExpired": "That invitation expired. Send a new one."
+  },
+  "ManagerSeatNotice": {
+    "title": "You are not seated on any journal",
+    "body": "You have manager access, but no journal is assigned to you, so your queue and journal settings are empty and actions on journals will be refused. Ask another journal manager to hand you a journal from the Users page."
   },
   "JournalManagerAuditLog": {
     "title": "Audit log",

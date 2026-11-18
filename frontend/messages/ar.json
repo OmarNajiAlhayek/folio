@@ -26,7 +26,10 @@
     "networkError": "تعذّر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.",
     "rateLimitHint": "الانتظار قليلاً قبل إعادة المحاولة يحل المشكلة عادةً.",
     "retry": "إعادة المحاولة",
-    "goHome": "الذهاب إلى لوحة التحكم"
+    "goHome": "الذهاب إلى لوحة التحكم",
+    "journalOutOfScope": "هذا العنصر يتبع مجلة لا تديرها.",
+    "selfRoleElevation": "لا يمكنك منح نفسك أدواراً إضافية. اطلب ذلك من مدير مجلة آخر.",
+    "invitationExpired": "انتهت صلاحية هذه الدعوة. اطلب دعوة جديدة."
   },
   "NotFound": {
     "title": "الصفحة غير موجودة",
@@ -452,6 +455,7 @@
     "roleInviteEditorLine": "دعاك {name} لتصبح محرّرًا",
     "roleInviteJournalManagerLine": "دعاك {name} لتصبح مدير مجلة",
     "roleInviteGenericLine": "دعاك {name} للانضمام كـ {roleSlug}",
+    "roleInviteSectionEditorLine": "دعاك {name} لتصبح محرر قسم علمي",
     "acceptRole": "قبول",
     "declineRole": "رفض",
     "working": "…",
@@ -497,6 +501,7 @@
     "roleEditor": "محرر",
     "roleJournalManager": "مدير المجلة",
     "roleCopyeditor": "مدقق لغوي",
+    "roleSectionEditor": "محرر قسم علمي",
     "constructorLabel": "منشئ النصوص:",
     "filesPackageLabel": "حزمة الملفات:",
     "allCaughtUp": "كل شيء جاهز!",
@@ -1219,6 +1224,12 @@
     "journalRoleTaken": "لكل مجلة شخص واحد في هذا الدور. أزل المجلة من بطاقة من يشغلها، ثم عيّنها هنا.",
     "journalsSaved": "حُفظت المجلات",
     "journalsSaveFailed": "تعذّر حفظ المجلات",
+    "scopeLoadFailed": "تعذّر تحميل مجلات هذا الشخص.",
+    "scopeRetry": "إعادة المحاولة",
+    "servesElsewhere": "يعمل أيضاً في {count, plural, one {مجلة واحدة} two {مجلتين} few {# مجلات} many {# مجلة} other {# مجلة}} لا تديرها. تظهر هنا مجلاتك فقط.",
+    "confirmHandoverTitle": "تسليم مجلتك الأخيرة؟",
+    "confirmHandoverBody": "لا تدير أي مجلة أخرى. بعد ذلك ستبقى لك صلاحية هذه الصفحات لكن قائمتك وإعدادات المجلة ستكون فارغة حتى يمنحك مدير آخر مجلة.",
+    "confirmHandoverAction": "تسليم",
     "actionFailed": "تعذّر حفظ هذا التغيير. حاول مرة أخرى.",
     "cancel": "إلغاء",
     "cancelInvite": "إلغاء الدعوة",
@@ -1232,6 +1243,10 @@
     "errSelfRoleElevation": "لا يمكنك منح نفسك أدواراً إضافية. اطلب ذلك من مدير مجلة آخر.",
     "errOutOfScope": "يشغل هذا الشخص هذا الدور في مجلة لا تديرها، لذا لا يمكنك إزالته.",
     "errInvitationExpired": "انتهت صلاحية هذه الدعوة. أرسل دعوة جديدة."
+  },
+  "ManagerSeatNotice": {
+    "title": "لا تشغل مقعداً في أي مجلة",
+    "body": "لديك صلاحية مدير، لكن لم تُسند إليك أي مجلة، لذلك تبقى قائمتك وإعدادات المجلة فارغة وسترفض الإجراءات على المجلات. اطلب من مدير مجلة آخر أن يمنحك مجلة من صفحة المستخدمين."
   },
   "JournalManagerAuditLog": {
     "title": "سجل التدقيق",
