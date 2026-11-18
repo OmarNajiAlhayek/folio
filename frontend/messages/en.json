@@ -594,6 +594,7 @@
     "createDraft": "Create Submission Draft"
   },
   "SubmissionDetail": {
+    "journalLabel": "Journal",
     "back": "← Submissions",
     "status": "Status: {status}",
     "sectionLabel": "Section",

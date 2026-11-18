@@ -594,6 +594,7 @@
     "createDraft": "حفظ مقالة التقديم"
   },
   "SubmissionDetail": {
+    "journalLabel": "المجلة",
     "back": "← الطلبات",
     "status": "الحالة: {status}",
     "sectionLabel": "القسم",

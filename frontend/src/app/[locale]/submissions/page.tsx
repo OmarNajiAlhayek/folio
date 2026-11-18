@@ -19,6 +19,7 @@ import {
   SkeletonLoadingStatus,
 } from '@/components/ui/skeleton-loading-status';
 import {
+  localizedName,
   SubmissionListSkeleton,
   SubmissionQueueRow,
   submissionQueueShellCls,
@@ -283,6 +284,8 @@ export default function SubmissionsPage() {
               updatedAt={s.updatedAt}
               locale={locale}
               t={t}
+              journalName={localizedName(s.journal, locale)}
+              sectionName={localizedName(s.section, locale)}
             />
           ))}
         </ul>

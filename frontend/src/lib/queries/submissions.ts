@@ -17,6 +17,13 @@ export type SubmissionListItem = {
   title: string;
   status: string;
   updatedAt: string;
+  journal?: {
+    id: string;
+    slug: string;
+    titleAr: string;
+    titleEn: string;
+  } | null;
+  section?: { id: string; nameAr: string; nameEn: string } | null;
 };
 
 import type { SubmissionArticleType } from '@/lib/validation/constants';

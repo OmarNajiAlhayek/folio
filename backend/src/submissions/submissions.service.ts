@@ -187,6 +187,17 @@ export class SubmissionsService implements OnModuleInit {
     ) {
       const qb = this.submissionsRepo
         .createQueryBuilder('s')
+        .leftJoin('s.section', 'section')
+        .leftJoin('s.journal', 'journal')
+        .addSelect([
+          'section.id',
+          'section.nameAr',
+          'section.nameEn',
+          'journal.id',
+          'journal.slug',
+          'journal.titleAr',
+          'journal.titleEn',
+        ])
         .where('s.status != :draft', { draft: SubmissionStatus.DRAFT })
         .orderBy('s.updatedAt', 'DESC');
       if (status) {
@@ -209,6 +220,17 @@ export class SubmissionsService implements OnModuleInit {
     }
     const qb = this.submissionsRepo
       .createQueryBuilder('s')
+      .leftJoin('s.section', 'section')
+      .leftJoin('s.journal', 'journal')
+      .addSelect([
+        'section.id',
+        'section.nameAr',
+        'section.nameEn',
+        'journal.id',
+        'journal.slug',
+        'journal.titleAr',
+        'journal.titleEn',
+      ])
       .where('s.author_id = :authorId', { authorId: user.sub })
       .orderBy('s.updatedAt', 'DESC');
     if (status) {

@@ -11,6 +11,7 @@ import { useApiErrorMessages } from '@/lib/use-api-error-messages';
 import { MultiSelect } from '@/components/ui/multi-select';
 import {
   EMPTY_STATE_CLS,
+  localizedName,
   SubmissionListSkeleton,
   SubmissionQueueRow,
   submissionQueueShellCls,
@@ -25,6 +26,8 @@ type Submission = {
   updatedAt: string;
   disciplineSuggestedLabels?: string[] | null;
   disciplines?: string[] | null;
+  journal?: { titleAr: string; titleEn: string } | null;
+  section?: { nameAr: string; nameEn: string } | null;
 };
 
 const SECTION_EDITOR_FILTER_STATUSES = [
@@ -159,6 +162,8 @@ export default function SectionEditorPage() {
               t={tSub}
               disciplineSuggestedLabels={s.disciplineSuggestedLabels}
               disciplines={s.disciplines}
+              journalName={localizedName(s.journal, locale)}
+              sectionName={localizedName(s.section, locale)}
             />
           ))}
         </ul>
