@@ -12,6 +12,7 @@ export const ADMIN_EMAIL_TEMPLATE_KEYS = [
   'review-invitation-declined',
   'submission-published',
   'role-invitation',
+  'role-removed',
 ] as const;
 
 export type AdminEmailTemplateKey = (typeof ADMIN_EMAIL_TEMPLATE_KEYS)[number];

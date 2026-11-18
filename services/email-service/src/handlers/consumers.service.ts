@@ -17,6 +17,7 @@ import {
   ReviewInvitationDeclinedEvent,
   SubmissionPublishedEvent,
   RoleInvitationCreatedEvent,
+  RoleRemovedEvent,
   AuthVerificationOtpEvent,
   AuthPasswordResetEvent,
   AuthRegistrationWelcomeEvent,
@@ -226,6 +227,13 @@ export class ConsumersService implements OnModuleInit {
       ) {
         outcome = await this.phase3.handleRoleInvitation(
           event as RoleInvitationCreatedEvent,
+        );
+      } else if (
+        routingKey === ROUTING_KEY.roleInvitation &&
+        event.type === 'RoleRemoved'
+      ) {
+        outcome = await this.phase3.handleRoleRemoved(
+          event as RoleRemovedEvent,
         );
       } else if (
         routingKey === ROUTING_KEY.authVerificationOtp &&

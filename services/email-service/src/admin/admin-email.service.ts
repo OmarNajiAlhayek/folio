@@ -138,6 +138,13 @@ const PREVIEW_CONTEXT: Record<
     roleLabel: 'editor',
     dashboardUrl: 'https://example.org/preview/dashboard',
   },
+  'role-removed': {
+    displayName: 'Editor Example',
+    removedByDisplayName: 'Journal Manager',
+    roleLabels: 'reviewer',
+    multipleRoles: false,
+    loginUrl: 'https://example.org/preview/login',
+  },
 };
 
 @Injectable()

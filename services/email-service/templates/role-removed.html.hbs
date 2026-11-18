@@ -1,0 +1,15 @@
+{{#> folio-email-layout dir="ltr" lang="en"}}
+<p style="margin:0 0 16px;">Dear {{displayName}},</p>
+<p style="margin:0 0 16px;">
+  <strong>{{removedByDisplayName}}</strong> removed your
+  <strong>{{roleLabels}}</strong>
+  {{#if multipleRoles}}roles{{else}}role{{/if}} on Damascus University Journal.
+</p>
+<p style="margin:0 0 16px;color:#64748b;font-size:14px;">
+  Any journals assigned to {{#if multipleRoles}}those roles{{else}}that role{{/if}} were removed too.
+  For security you were signed out of all devices; sign in again to continue with your remaining access.
+  If you think this was a mistake, contact the journal manager.
+</p>
+{{> folio-email-button href=loginUrl label="Sign in" align="left"}}
+<p style="margin:24px 0 0;">Thank you,<br />Damascus University Journal editorial team</p>
+{{/folio-email-layout}}

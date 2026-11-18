@@ -6,6 +6,7 @@ import {
   ReviewInvitationDeclinedEvent,
   ReviewSubmittedEvent,
   RoleInvitationCreatedEvent,
+  RoleRemovedEvent,
   SubmissionPublishedEvent,
 } from '@folio/shared/contracts/email-events';
 import {
@@ -13,6 +14,7 @@ import {
   reviewInvitationDeclinedEmailKey,
   reviewSubmittedEmailKey,
   roleInvitationEmailKey,
+  roleRemovedEmailKey,
   submissionPublishedKey,
 } from '@folio/shared/messaging/idempotency';
 import { redactEventPayload } from '@folio/shared/messaging/redactor';
@@ -22,11 +24,28 @@ import {
 } from '../providers/email-provider';
 import { TemplatesService } from '../templates/templates.service';
 import { ACK, HandlerOutcome } from './handler-result';
+
 import {
   CopyeditMailDeps,
   preclaimCopyeditEmail,
   renderAndSendCopyeditEmail,
 } from './copyedit-email.util';
+
+const ROLE_LABELS_EN: Record<string, string> = {
+  editor: 'editor-in-chief',
+  section_editor: 'section editor',
+  journal_manager: 'journal manager',
+  reviewer: 'reviewer',
+  copyeditor: 'copyeditor',
+};
+
+const ROLE_LABELS_AR: Record<string, string> = {
+  editor: 'رئيس التحرير',
+  section_editor: 'محرر قسم علمي',
+  journal_manager: 'مدير مجلة',
+  reviewer: 'محكّم',
+  copyeditor: 'محرر نهائي',
+};
 
 @Injectable()
 export class Phase3WorkflowHandlers {
@@ -162,6 +181,31 @@ export class Phase3WorkflowHandlers {
         invitedByDisplayName: event.invitedBy.displayName,
         roleLabel,
         dashboardUrl: event.dashboardUrl,
+      },
+    });
+  }
+
+  async handleRoleRemoved(event: RoleRemovedEvent): Promise<HandlerOutcome> {
+    if (event.idempotencyKey !== roleRemovedEmailKey(event.removalId)) {
+      this.logger.warn(
+        `idempotencyKey mismatch ${JSON.stringify(redactEventPayload(event))}`,
+      );
+      return { kind: 'nack-no-requeue', reason: 'bad idempotency key' };
+    }
+    const labels =
+      event.emailLocale === 'ar' ? ROLE_LABELS_AR : ROLE_LABELS_EN;
+    const roleLabels = event.roleSlugs
+      .map((slug) => labels[slug] ?? slug)
+      .join(event.emailLocale === 'ar' ? '، ' : ', ');
+    return this.dispatch(event, {
+      recipient: event.user.email,
+      template: 'role-removed',
+      templateVars: {
+        displayName: event.user.displayName,
+        removedByDisplayName: event.removedBy.displayName,
+        roleLabels,
+        multipleRoles: event.roleSlugs.length > 1,
+        loginUrl: event.loginUrl,
       },
     });
   }
