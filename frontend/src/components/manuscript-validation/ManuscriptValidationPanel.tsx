@@ -12,7 +12,7 @@ import { CollapsibleSection } from '@/components/ui/collapsible-section';
 
 type GrammarNote = PreSubmitAnalysis['grammarNotes'][number];
 
-function BlockingSection({
+export function BlockingSection({
   title,
   issues,
   isUnavailable,
@@ -31,7 +31,7 @@ function BlockingSection({
     <div className="rounded-lg border border-ink/10 bg-paper/60">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
@@ -82,12 +82,14 @@ function BlockingSection({
   );
 }
 
-function GrammarSection({
+export function GrammarSection({
   notes,
   unavailable,
+  title,
 }: {
   notes: GrammarNote[];
   unavailable?: boolean;
+  title?: string;
 }) {
   const t = useTranslations('ManuscriptValidation');
   const [open, setOpen] = useState(true);
@@ -97,12 +99,12 @@ function GrammarSection({
     <div className="rounded-lg border border-ink/10 bg-paper/60">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
         <span className="font-sans text-sm font-semibold text-ink">
-          {t('languageTitle')}
+          {title ?? t('languageTitle')}
         </span>
         <span className="flex items-center gap-2">
           {notes.length > 0 ? (

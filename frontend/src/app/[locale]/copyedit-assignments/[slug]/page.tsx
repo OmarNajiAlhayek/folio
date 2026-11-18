@@ -166,8 +166,13 @@ export default function CopyeditWorkbenchPage() {
     void load();
   }, [load]);
 
+  // Once published (or retracted) the work is history: every action below is
+  // rejected by the API, so the page is read-only instead of offering them.
+  const isReadOnly = row?.submission?.status !== 'copyediting';
+
   const canSubmitNote =
-    row?.status === 'active' || row?.status === 'ready_for_review';
+    !isReadOnly &&
+    (row?.status === 'active' || row?.status === 'ready_for_review');
 
   const canPublish =
     row?.status === 'ready_for_review' &&
@@ -315,7 +320,13 @@ export default function CopyeditWorkbenchPage() {
         </p>
       )}
 
-      {row.notes?.length > 0 && (
+      {isReadOnly && (
+        <p className="mt-4 rounded-lg border border-ink/10 bg-paper/60 px-3 py-2 text-sm text-ink/70">
+          {t('readOnlyNotice')}
+        </p>
+      )}
+
+      {(row.notes?.length ?? 0) > 0 && (
         <section className="mt-6 space-y-3">
           <h2 className="font-sans text-sm font-semibold uppercase tracking-wide text-ink/50">
             {t('queryHistory')}
@@ -350,7 +361,7 @@ export default function CopyeditWorkbenchPage() {
             {t('noteForAuthor')}
 
             <textarea
-              className="mt-1 w-full rounded-lg border border-ink/15 p-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-surface p-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent dark:border-white/15"
               rows={4}
               value={noteForAuthor}
               onChange={(e) => setNoteForAuthor(e.target.value)}
@@ -361,7 +372,7 @@ export default function CopyeditWorkbenchPage() {
             {t('noteToEditor')}
 
             <textarea
-              className="mt-1 w-full rounded-lg border border-ink/15 p-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-surface p-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent dark:border-white/15"
               rows={2}
               value={noteToEditor}
               onChange={(e) => setNoteToEditor(e.target.value)}
@@ -412,7 +423,7 @@ export default function CopyeditWorkbenchPage() {
         </section>
       )}
 
-      {row.slug && <CopyeditAiPanel assignmentSlug={row.slug} />}
+      {row.slug && !isReadOnly && <CopyeditAiPanel assignmentSlug={row.slug} />}
     </main>
   );
 }

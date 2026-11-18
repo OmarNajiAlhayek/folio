@@ -578,6 +578,18 @@ export class SubmissionsService implements OnModuleInit {
     );
   }
 
+  async unassignCopyeditor(
+    submissionSlug: string,
+    assignmentId: string,
+    editor: RequestUser,
+  ): Promise<{ removed: true }> {
+    return this.copyeditWorkflow.unassignCopyeditor(
+      submissionSlug,
+      assignmentId,
+      editor,
+    );
+  }
+
   async listCopyeditAssignments(
     submissionSlug: string,
     user: RequestUser,

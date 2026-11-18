@@ -1899,6 +1899,13 @@
     "roundLabel": "Round {round}",
     "markReady": "I've addressed these requests",
     "markedReady": "Marked as ready for copyeditor review.",
+    "readOnlyNotice": "This article is no longer in copyediting. You can review the history, but no further queries can be sent.",
+    "unassignButton": "Remove",
+    "unassigned": "Copyeditor removed.",
+    "unassignFailed": "Could not remove the copyeditor.",
+    "unassignConfirmTitle": "Remove copyeditor?",
+    "unassignConfirmBody": "{name} will lose access to this submission and their queries will be deleted. If no copyeditor remains, you can assign another one.",
+    "cancel": "Cancel",
     "readyFailed": "Could not mark ready. Upload a revised manuscript after the latest request.",
     "uploadRevision": "Upload revised manuscript",
     "uploadRevisionHint": "Upload a new manuscript file after addressing each round of requests.",
@@ -1951,6 +1958,8 @@
     "expandAll": "Show details"
   },
   "ManuscriptValidation": {
+    "allClear": "All checks passed.",
+    "notRunHint": "Run the analysis to check formatting, references and language.",
     "sectionTitle": "Manuscript validation",
     "sectionHint": "Checks Damascus University structure, language notes, and citation cross-references before you submit for review.",
     "runButton": "Run validation",

@@ -1,3 +1,4 @@
+import type { ManuscriptAnalysisResult } from './pre-submit-analysis.types';
 import {
   BadRequestException,
   ForbiddenException,
@@ -208,6 +209,59 @@ export class CopyeditWorkflowService {
         this.events.emitPendingNotifications(pending);
         return saved;
       });
+  }
+
+  /**
+   * Removes a copyeditor from a submission (OJS "remove participant").
+   *
+   * The row is deleted, not flagged: the "already assigned" check and the
+   * `every assignment ready` publish gate both read this table, so a cancelled
+   * row would keep blocking re-assignment and publishing. Their notes go with
+   * it (FK cascade). When the last copyeditor is removed the submission goes
+   * back to `accepted` so the editor can assign someone else.
+   */
+  async unassignCopyeditor(
+    submissionSlug: string,
+    assignmentId: string,
+    editor: RequestUser,
+  ): Promise<{ removed: true }> {
+    assertCallerPermission(
+      editor,
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
+      'Editor role required',
+    );
+    const submission = await this.access.getBySlugOrThrow(submissionSlug);
+    await this.access.assertStaffSubmissionScope(submission, editor);
+    if (submission.status !== SubmissionStatus.COPYEDITING) {
+      throw new BadRequestException({
+        message: 'Copyeditors can only be removed while in copyediting',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+    const assignment = await this.copyeditAssignmentsRepo.findOne({
+      where: { id: assignmentId, submissionId: submission.id },
+    });
+    if (!assignment) {
+      throw new NotFoundException({
+        message: 'Assignment not found',
+        code: 'NOT_FOUND',
+      });
+    }
+    await this.copyeditAssignmentsRepo.manager.transaction(async (em) => {
+      await em.getRepository(CopyeditAssignment).delete({ id: assignment.id });
+      const remaining = await em
+        .getRepository(CopyeditAssignment)
+        .count({ where: { submissionId: submission.id } });
+      if (remaining === 0) {
+        await claimStatusTransition(
+          em,
+          submission.id,
+          SubmissionStatus.COPYEDITING,
+          SubmissionStatus.ACCEPTED,
+        );
+      }
+    });
+    return { removed: true };
   }
 
   /**
@@ -713,12 +767,7 @@ export class CopyeditWorkflowService {
   async runCopyeditAnalysis(
     assignmentSlug: string,
     user: RequestUser,
-  ): Promise<{
-    formatIssues: string[];
-    grammarNotes: Array<{ excerpt: string; suggestion: string; rule: string }>;
-    referenceIssues: string[];
-    aiUnavailable: boolean;
-  }> {
+  ): Promise<ManuscriptAnalysisResult> {
     const assignment = await this.copyeditAssignmentsRepo.findOne({
       where: { slug: assignmentSlug },
       relations: ['submission'],
@@ -738,6 +787,13 @@ export class CopyeditWorkflowService {
       throw new ForbiddenException({
         message: 'Access denied',
         code: 'FORBIDDEN',
+      });
+    }
+
+    if (assignment.submission?.status !== SubmissionStatus.COPYEDITING) {
+      throw new BadRequestException({
+        message: 'Submission is not in copyediting',
+        code: 'VALIDATION_ERROR',
       });
     }
 

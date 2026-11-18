@@ -434,6 +434,20 @@ export class SubmissionsController {
     );
   }
 
+  @Delete(':slug/copyedit-assignments/:assignmentId')
+  @Permissions(PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR)
+  unassignCopyeditor(
+    @Param('slug') slug: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.submissionsService.unassignCopyeditor(
+      slug,
+      assignmentId,
+      user,
+    );
+  }
+
   @Get(':slug/copyedit-assignments')
   @Permissions(
     PERMISSION_SLUGS.SUBMISSION_VIEW_EDITOR_QUEUE,

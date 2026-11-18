@@ -7,6 +7,7 @@ import { toast } from '@/lib/toast';
 import { useToastApiError } from '@/lib/use-toast-api-error';
 import { PERMISSION_SLUGS } from '@/lib/permissions';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { PublishIssuePicker } from '@/components/copyedit/PublishIssuePicker';
 import { statusPillClass } from '@/lib/submission-list-ui';
@@ -65,6 +66,8 @@ export function CopyeditSection({
   const [notes, setNotes] = useState<CopyeditNoteRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [confirmRemove, setConfirmRemove] =
+    useState<CopyeditAssignmentRow | null>(null);
   const showApiError = useToastApiError();
 
   const load = useCallback(async () => {
@@ -114,6 +117,23 @@ export function CopyeditSection({
       await load();
     } catch (err) {
       showApiError(err, t('assignFailed'), { id: 'copyedit-assign' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unassign(assignment: CopyeditAssignmentRow) {
+    setBusy(true);
+    try {
+      await apiJson(
+        `/submissions/${submissionSlug}/copyedit-assignments/${assignment.id}`,
+        { method: 'DELETE' },
+      );
+      toast.success(t('unassigned'));
+      onReload();
+      await load();
+    } catch (err) {
+      showApiError(err, t('unassignFailed'), { id: 'copyedit-unassign' });
     } finally {
       setBusy(false);
     }
@@ -258,6 +278,16 @@ export function CopyeditSection({
               <span className={`ms-2 ${statusPillClass(a.status)}`}>
                 {t(`assignmentStatus_${a.status}` as 'assignmentStatus_active')}
               </span>
+              {canAssign && submissionStatus === 'copyediting' && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="ms-3 text-xs font-medium text-red-700 hover:underline disabled:opacity-50 dark:text-red-400"
+                  onClick={() => setConfirmRemove(a)}
+                >
+                  {t('unassignButton')}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -339,6 +369,25 @@ export function CopyeditSection({
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={confirmRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemove(null);
+        }}
+        title={t('unassignConfirmTitle')}
+        description={t('unassignConfirmBody', {
+          name:
+            confirmRemove?.copyeditor?.displayName ??
+            confirmRemove?.copyeditor?.email ??
+            '',
+        })}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('unassignButton')}
+        onConfirm={() => {
+          if (confirmRemove) void unassign(confirmRemove);
+        }}
+      />
     </section>
   );
 }
