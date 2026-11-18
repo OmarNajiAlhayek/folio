@@ -865,11 +865,11 @@
     "workflowReviewerCompleted": "أرسل التحكيم",
     "workflowReviewerDue": "يستحق في {date}",
     "workflowRevisionRound": "جولة التعديل {round}",
+    "reviewRoundLabel": "الجولة {round}",
     "severityMinor": "تعديلات طفيفة",
     "severityMajor": "تعديلات جوهرية",
     "revisionSeverityLabel": "درجة التعديل",
     "revisionSeverityHint": "طفيفة: تغييرات محدودة ومحدّدة. جوهرية: إعادة عمل كبيرة، وقد تُعاد المقالة المنقّحة إلى المحكّمين.",
-    "reviewRoundLabel": "الجولة {round}",
     "releaseFilesLabel": "مشاركة ملفات المحكّمين مع المؤلف",
     "releaseFilesHint": "تبقى ملفات المحكّمين مقتصرة على المحرر حتى تشاركها. تصل الملفات المشاركة إلى المؤلف باسم مجهول الهوية.",
     "releaseFilesAlreadyReleased": "تمت مشاركته مع المؤلف",
@@ -1918,6 +1918,13 @@
     "error_CONSTRUCTOR_DATA_AVAILABILITY_EMPTY": "لا يمكن أن يكون بيان توفر البيانات فارغًا لهذا النمط."
   },
   "Copyedit": {
+    "readOnlyNotice": "لم يعد هذا المقال في مرحلة التحرير اللغوي. يمكنك مراجعة السجل، لكن لا يمكن إرسال استفسارات أخرى.",
+    "unassignButton": "إزالة",
+    "unassigned": "تمت إزالة المحرر اللغوي.",
+    "unassignFailed": "تعذّرت إزالة المحرر اللغوي.",
+    "unassignConfirmTitle": "إزالة المحرر اللغوي؟",
+    "unassignConfirmBody": "سيفقد {name} صلاحية الوصول إلى هذا التقديم وستُحذف استفساراته. إن لم يتبقَّ أي محرر لغوي يمكنك تعيين محرر آخر.",
+    "cancel": "إلغاء",
     "title": "التحرير النهائي",
     "queueTitle": "مهام التحرير النهائي",
     "queueHint": "مقالات مُسندة إليك للتحرير قبل النشر.",
@@ -1936,13 +1943,6 @@
     "roundLabel": "الجولة {round}",
     "markReady": "أنجزتُ هذه الطلبات",
     "markedReady": "تم الإبلاغ عن جاهزية المراجعة.",
-    "readOnlyNotice": "لم يعد هذا المقال في مرحلة التحرير اللغوي. يمكنك مراجعة السجل، لكن لا يمكن إرسال استفسارات أخرى.",
-    "unassignButton": "إزالة",
-    "unassigned": "تمت إزالة المحرر اللغوي.",
-    "unassignFailed": "تعذّرت إزالة المحرر اللغوي.",
-    "unassignConfirmTitle": "إزالة المحرر اللغوي؟",
-    "unassignConfirmBody": "سيفقد {name} صلاحية الوصول إلى هذا التقديم وستُحذف استفساراته. إن لم يتبقَّ أي محرر لغوي يمكنك تعيين محرر آخر.",
-    "cancel": "إلغاء",
     "readyFailed": "تعذّر التأكيد. ارفع ملف مقالة مُحدَّثًا بعد آخر طلب.",
     "uploadRevision": "رفع مقالة مُحدَّثة",
     "uploadRevisionHint": "ارفع ملف مقالة جديدًا بعد معالجة كل جولة من الطلبات.",
@@ -1977,6 +1977,8 @@
     "assignmentStatus_ready_for_review": "جاهز لمراجعتك"
   },
   "CopyeditAi": {
+    "allClear": "اجتاز جميع الفحوصات.",
+    "notRunHint": "شغّل التحليل لفحص التنسيق والمراجع واللغة.",
     "runButton": "تشغيل التحليل الآلي",
     "running": "جارٍ التحليل…",
     "sectionTitle": "تحليل محرر النصوص الآلي",
@@ -1995,8 +1997,6 @@
     "expandAll": "عرض التفاصيل"
   },
   "ManuscriptValidation": {
-    "allClear": "اجتاز جميع الفحوصات.",
-    "notRunHint": "شغّل التحليل لفحص التنسيق والمراجع واللغة.",
     "sectionTitle": "التحقق من المقال",
     "sectionHint": "يتحقق من بنية جامعة دمشق وملاحظات اللغة والإحالات المرجعية قبل الإرسال للمراجعة.",
     "runButton": "تشغيل التحقق",

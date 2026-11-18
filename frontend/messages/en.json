@@ -865,11 +865,11 @@
     "workflowReviewerCompleted": "Review submitted",
     "workflowReviewerDue": "due {date}",
     "workflowRevisionRound": "Revision round {round}",
+    "reviewRoundLabel": "Round {round}",
     "severityMinor": "Minor revisions",
     "severityMajor": "Major revisions",
     "revisionSeverityLabel": "Revision severity",
     "revisionSeverityHint": "Minor: limited, targeted changes. Major: substantial rework, and the revised manuscript may go back to the reviewers.",
-    "reviewRoundLabel": "Round {round}",
     "releaseFilesLabel": "Release reviewer files to author",
     "releaseFilesHint": "Reviewer files stay editor-only until you release them. Released files reach the author under an anonymised name.",
     "releaseFilesAlreadyReleased": "Already released to the author",
@@ -1918,6 +1918,13 @@
     "error_CONSTRUCTOR_DATA_AVAILABILITY_EMPTY": "Data availability statement cannot be empty for this style."
   },
   "Copyedit": {
+    "readOnlyNotice": "This article is no longer in copyediting. You can review the history, but no further queries can be sent.",
+    "unassignButton": "Remove",
+    "unassigned": "Copyeditor removed.",
+    "unassignFailed": "Could not remove the copyeditor.",
+    "unassignConfirmTitle": "Remove copyeditor?",
+    "unassignConfirmBody": "{name} will lose access to this submission and their queries will be deleted. If no copyeditor remains, you can assign another one.",
+    "cancel": "Cancel",
     "title": "Copyediting",
     "queueTitle": "Copyediting assignments",
     "queueHint": "Manuscripts assigned to you for production copyediting.",
@@ -1936,13 +1943,6 @@
     "roundLabel": "Round {round}",
     "markReady": "I've addressed these requests",
     "markedReady": "Marked as ready for copyeditor review.",
-    "readOnlyNotice": "This article is no longer in copyediting. You can review the history, but no further queries can be sent.",
-    "unassignButton": "Remove",
-    "unassigned": "Copyeditor removed.",
-    "unassignFailed": "Could not remove the copyeditor.",
-    "unassignConfirmTitle": "Remove copyeditor?",
-    "unassignConfirmBody": "{name} will lose access to this submission and their queries will be deleted. If no copyeditor remains, you can assign another one.",
-    "cancel": "Cancel",
     "readyFailed": "Could not mark ready. Upload a revised manuscript after the latest request.",
     "uploadRevision": "Upload revised manuscript",
     "uploadRevisionHint": "Upload a new manuscript file after addressing each round of requests.",
@@ -1977,6 +1977,8 @@
     "assignmentStatus_ready_for_review": "Ready for your review"
   },
   "CopyeditAi": {
+    "allClear": "All checks passed.",
+    "notRunHint": "Run the analysis to check formatting, references and language.",
     "runButton": "Run AI Analysis",
     "running": "Analysing…",
     "sectionTitle": "AI Copyeditor Analysis",
@@ -1995,8 +1997,6 @@
     "expandAll": "Show details"
   },
   "ManuscriptValidation": {
-    "allClear": "All checks passed.",
-    "notRunHint": "Run the analysis to check formatting, references and language.",
     "sectionTitle": "Manuscript validation",
     "sectionHint": "Checks Damascus University structure, language notes, and citation cross-references before you submit for review.",
     "runButton": "Run validation",
