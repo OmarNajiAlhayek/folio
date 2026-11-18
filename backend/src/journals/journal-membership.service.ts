@@ -104,6 +104,30 @@ export class JournalMembershipService {
   }
 
   /**
+   * Restricts `userIds` to those holding any editorial seat in `journalId`:
+   * editor-in-chief, journal manager or section editor.
+   */
+  async filterStaffUserIdsInJournal(
+    userIds: string[],
+    journalId: string,
+  ): Promise<string[]> {
+    if (userIds.length === 0) return [];
+    const rows = await this.membershipsRepo.find({
+      where: {
+        userId: In(userIds),
+        journalId,
+        roleSlug: In([
+          ROLE_SLUGS.EDITOR,
+          ROLE_SLUGS.JOURNAL_MANAGER,
+          ROLE_SLUGS.SECTION_EDITOR,
+        ]),
+      },
+      select: ['userId'],
+    });
+    return [...new Set(rows.map((r) => r.userId))];
+  }
+
+  /**
    * Journal slugs a user serves for `roleSlug`, keyed by user id.
    *
    * Slugs, not ids, because this is what the staff-admin API speaks: they are

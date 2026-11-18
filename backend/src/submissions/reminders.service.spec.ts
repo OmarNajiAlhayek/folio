@@ -1,10 +1,12 @@
 import {
+  ForbiddenException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { EmailServiceClient } from '../email-client/email-client.service';
 import { RemindersService } from './reminders.service';
+import { SubmissionAccessService } from './submission-access.service';
 import { Submission } from '../entities/submission.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
 import { PERMISSION_SLUGS } from '../rbac/permission-slugs';
@@ -33,6 +35,7 @@ describe('RemindersService', () => {
   >;
   let submissionsRepo: { findOne: jest.Mock };
   let assignmentsRepo: { findOne: jest.Mock; find: jest.Mock };
+  let assertStaffSubmissionScope: jest.Mock;
 
   beforeEach(() => {
     emailClient = {
@@ -44,11 +47,36 @@ describe('RemindersService', () => {
     };
     submissionsRepo = { findOne: jest.fn() };
     assignmentsRepo = { findOne: jest.fn(), find: jest.fn() };
+    assertStaffSubmissionScope = jest.fn().mockResolvedValue(undefined);
     service = new RemindersService(
       emailClient as unknown as EmailServiceClient,
       submissionsRepo as unknown as Repository<Submission>,
       assignmentsRepo as unknown as Repository<ReviewAssignment>,
+      { assertStaffSubmissionScope } as unknown as SubmissionAccessService,
     );
+  });
+
+  it('refuses reminders of a submission outside the caller journals', async () => {
+    submissionsRepo.findOne.mockResolvedValue({ id: 's1', slug: 'sub-1' });
+    assertStaffSubmissionScope.mockRejectedValue(
+      new ForbiddenException({ code: 'JOURNAL_OUT_OF_SCOPE' }),
+    );
+
+    await expect(
+      service.listForAssignment(
+        'sub-1',
+        'asg-1',
+        user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.listForSubmission(
+        'sub-1',
+        user([PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS]),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(emailClient.listReminders).not.toHaveBeenCalled();
+    expect(emailClient.listRemindersForAssignments).not.toHaveBeenCalled();
   });
 
   it('listForAssignment allows journal managers (caller auth is on the controller)', async () => {

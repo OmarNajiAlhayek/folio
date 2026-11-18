@@ -5,6 +5,7 @@ import { Journal } from '../entities/journal.entity';
 import { JournalIssue } from '../entities/journal-issue.entity';
 import { JournalMembership } from '../entities/journal-membership.entity';
 import { JournalSection } from '../entities/journal-section.entity';
+import { SectionEditorAssignment } from '../entities/section-editor-assignment.entity';
 import { SectionEditorLink } from '../entities/section-editor.entity';
 import { Submission } from '../entities/submission.entity';
 import { RbacModule } from '../rbac/rbac.module';
@@ -16,6 +17,7 @@ import { JournalMetadataService } from './journal-metadata.service';
 import { JournalPortalService } from './journal-portal.service';
 import { JournalMembershipService } from './journal-membership.service';
 import { JournalSectionsService } from './journal-sections.service';
+import { StaffReleaseService } from './staff-release.service';
 
 /**
  * Journal reference data and staff scoping. Imported by any module that needs
@@ -31,6 +33,7 @@ import { JournalSectionsService } from './journal-sections.service';
       JournalMembership,
       JournalSection,
       SectionEditorLink,
+      SectionEditorAssignment,
       EditorialBoardMember,
       Submission,
     ]),
@@ -44,6 +47,7 @@ import { JournalSectionsService } from './journal-sections.service';
     JournalMetadataService,
     EditorialBoardService,
     JournalSectionsService,
+    StaffReleaseService,
   ],
   exports: [
     JournalMembershipService,
@@ -52,6 +56,7 @@ import { JournalSectionsService } from './journal-sections.service';
     JournalDirectoryService,
     EditorialBoardService,
     JournalSectionsService,
+    StaffReleaseService,
   ],
 })
 export class JournalsModule {}

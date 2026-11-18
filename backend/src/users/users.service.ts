@@ -20,6 +20,7 @@ import {
 } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { JournalMembershipService } from '../journals/journal-membership.service';
+import { StaffReleaseService } from '../journals/staff-release.service';
 import {
   OAuthIdentity,
   OAUTH_PROVIDER_ORCID,
@@ -68,6 +69,13 @@ const DIRECT_ROLES: ReadonlySet<string> = new Set([
   ROLE_SLUGS.REVIEWER,
   ROLE_SLUGS.COPYEDITOR,
 ]);
+
+/** Seats that make someone an assignee of a journal's papers. */
+const EDITORIAL_SEAT_ROLES: readonly string[] = [
+  ROLE_SLUGS.EDITOR,
+  ROLE_SLUGS.JOURNAL_MANAGER,
+  ROLE_SLUGS.SECTION_EDITOR,
+];
 
 /** Roles whose reach is narrowed by `journal_memberships`. */
 const JOURNAL_SCOPED_ROLES: readonly string[] = [
@@ -163,6 +171,7 @@ export class UsersService {
     @InjectRepository(RoleInvitation)
     private readonly roleInvRepo: Repository<RoleInvitation>,
     private readonly journalMemberships: JournalMembershipService,
+    private readonly staffRelease: StaffReleaseService,
     private readonly rbacService: RbacService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
@@ -740,6 +749,17 @@ export class UsersService {
       targetUserId,
       removedScoped,
     );
+    // They no longer serve these journals: stop routing and mailing their
+    // papers to them, and hand any paper left without an assignee onward.
+    const lostEditorialSeat = removedScoped.some((slug) =>
+      EDITORIAL_SEAT_ROLES.includes(slug),
+    );
+    if (lostEditorialSeat) {
+      await this.staffRelease.releaseUserFromAllJournals(
+        targetUserId,
+        actorUserId ?? targetUserId,
+      );
+    }
     // Sessions carry the old role claims, so they only need to go when the
     // role set actually changed.
     const changed =
@@ -1294,11 +1314,53 @@ export class UsersService {
         code: 'NOT_FOUND',
       });
     }
-    return this.journalMemberships.setJournalSlugsWithinActor(
+    const editorial = EDITORIAL_SEAT_ROLES.includes(roleSlug);
+    const idsBefore = editorial
+      ? await this.journalMemberships.listJournalIdsForUser(userId, roleSlug)
+      : [];
+    // Handing over a journal-manager seat releases the actor's own seat too.
+    const actorBefore =
+      roleSlug === ROLE_SLUGS.JOURNAL_MANAGER
+        ? await this.journalMemberships.listJournalIdsForUser(
+            actorUserId,
+            roleSlug,
+          )
+        : [];
+    const stored = await this.journalMemberships.setJournalSlugsWithinActor(
       actorUserId,
       userId,
       roleSlug,
       journals,
     );
+    if (editorial) {
+      const idsAfter = new Set(
+        await this.journalMemberships.listJournalIdsForUser(userId, roleSlug),
+      );
+      const dropped = idsBefore.filter((id) => !idsAfter.has(id));
+      if (dropped.length > 0) {
+        await this.staffRelease.releaseUserFromJournals(
+          userId,
+          dropped,
+          actorUserId,
+        );
+      }
+    }
+    if (actorBefore.length > 0 && actorUserId !== userId) {
+      const actorAfter = new Set(
+        await this.journalMemberships.listJournalIdsForUser(
+          actorUserId,
+          roleSlug,
+        ),
+      );
+      const handedOver = actorBefore.filter((id) => !actorAfter.has(id));
+      if (handedOver.length > 0) {
+        await this.staffRelease.releaseUserFromJournals(
+          actorUserId,
+          handedOver,
+          actorUserId,
+        );
+      }
+    }
+    return stored;
   }
 }

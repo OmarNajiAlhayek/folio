@@ -6,6 +6,7 @@ import type { ReminderAdminDto } from '../email-client/email-client.types';
 import { Submission } from '../entities/submission.entity';
 import { ReviewAssignment } from '../entities/review-assignment.entity';
 import type { RequestUser } from '../common/types/request-user';
+import { SubmissionAccessService } from './submission-access.service';
 
 export type { ReminderAdminDto };
 
@@ -17,15 +18,20 @@ export class RemindersService {
     private readonly submissionsRepo: Repository<Submission>,
     @InjectRepository(ReviewAssignment)
     private readonly assignmentsRepo: Repository<ReviewAssignment>,
+    private readonly access: SubmissionAccessService,
   ) {}
 
-  /** Resource scope only — caller auth is enforced by `AssignmentRemindersController`. */
+  /**
+   * The submission must exist and sit inside the caller's journals. Without
+   * the journal check, staff of one journal could read or cancel the reminders
+   * of another journal's reviewers. Permission itself is enforced by
+   * `AssignmentRemindersController`.
+   */
   private async assertAssignmentScope(
     submissionSlug: string,
     assignmentSlug: string,
     user: RequestUser,
   ): Promise<void> {
-    void user;
     const sub = await this.submissionsRepo.findOne({
       where: { slug: submissionSlug },
     });
@@ -35,6 +41,7 @@ export class RemindersService {
         code: 'NOT_FOUND',
       });
     }
+    await this.access.assertStaffSubmissionScope(sub, user);
     const assignment = await this.assignmentsRepo.findOne({
       where: { slug: assignmentSlug, submissionId: sub.id },
     });
@@ -63,7 +70,6 @@ export class RemindersService {
     submissionSlug: string,
     user: RequestUser,
   ): Promise<Record<string, ReminderAdminDto[]>> {
-    void user;
     const sub = await this.submissionsRepo.findOne({
       where: { slug: submissionSlug },
     });
@@ -73,6 +79,7 @@ export class RemindersService {
         code: 'NOT_FOUND',
       });
     }
+    await this.access.assertStaffSubmissionScope(sub, user);
     const assignments = await this.assignmentsRepo.find({
       where: { submissionId: sub.id },
       select: ['slug'],

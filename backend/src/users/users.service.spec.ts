@@ -9,6 +9,7 @@ import {
   RoleInvitationStatus,
 } from '../entities/role-invitation.entity';
 import { JournalMembershipService } from '../journals/journal-membership.service';
+import { StaffReleaseService } from '../journals/staff-release.service';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -57,6 +58,7 @@ describe('UsersService', () => {
           provide: JournalMembershipService,
           useValue: {},
         },
+        { provide: StaffReleaseService, useValue: {} },
         {
           provide: RbacService,
           useValue: { getEffectiveForUsers },

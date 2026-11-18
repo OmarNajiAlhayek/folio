@@ -156,6 +156,11 @@ export class RbacService implements OnModuleInit {
       PERMISSION_SLUGS.SUBMISSION_CHANGE_STATUS,
       PERMISSION_SLUGS.SUBMISSION_ASSIGN_REVIEWER,
       PERMISSION_SLUGS.SUBMISSION_LIST_ASSIGNMENTS,
+      // Without these a manager can accept a paper but not move it on. Both
+      // services check the journal scope, so this stays inside the manager's
+      // own journals.
+      PERMISSION_SLUGS.SUBMISSION_ASSIGN_COPYEDITOR,
+      PERMISSION_SLUGS.COPYEDIT_PUBLISH,
       PERMISSION_SLUGS.USERS_MANAGE_ROLES,
       PERMISSION_SLUGS.EMAIL_MANAGE_REMINDERS,
       PERMISSION_SLUGS.EMAIL_MANAGE_ASSIGNMENT_REMINDERS,

@@ -6,9 +6,7 @@ import { SectionEditorAssignment } from '../entities/section-editor-assignment.e
 import { SectionEditorLink } from '../entities/section-editor.entity';
 import { Submission } from '../entities/submission.entity';
 import { JournalMembershipService } from '../journals/journal-membership.service';
-import { ROLE_SLUGS } from '../rbac/permission-slugs';
-
-type RouteTarget = { userId: string; canRecordDecision: boolean };
+import { resolveRouteTargets } from '../journals/route-targets';
 
 /**
  * Who a new submission is handed to, in OJS order:
@@ -81,8 +79,12 @@ export class SubmissionRoutingService {
       where: { submissionId: submission.id },
       select: ['sectionEditorId'],
     });
-    if (existing.length > 0) {
-      return existing.map((row) => row.sectionEditorId);
+    const seated = await this.memberships.filterStaffUserIdsInJournal(
+      existing.map((row) => row.sectionEditorId),
+      submission.journalId,
+    );
+    if (seated.length > 0) {
+      return seated;
     }
     const targets = await this.targetsFor(submission);
     if (targets.length === 0) return [];
@@ -100,41 +102,31 @@ export class SubmissionRoutingService {
     return targets.map((target) => target.userId);
   }
 
-  /** People already assigned to this submission. Workflow mail goes only here. */
+  /**
+   * People assigned to this submission who still hold a seat on its journal.
+   * Workflow mail goes only here, so someone who lost their role or journal
+   * stops receiving it even if an old assignment row remains.
+   */
   async assigneeIds(submissionId: string): Promise<string[]> {
     const rows = await this.assignmentsRepo.find({
       where: { submissionId },
       select: ['sectionEditorId'],
     });
-    return rows.map((row) => row.sectionEditorId);
+    if (rows.length === 0) return [];
+    const submission = await this.assignmentsRepo.manager
+      .getRepository(Submission)
+      .findOne({ where: { id: submissionId }, select: ['id', 'journalId'] });
+    if (!submission) return [];
+    return this.memberships.filterStaffUserIdsInJournal(
+      rows.map((row) => row.sectionEditorId),
+      submission.journalId,
+    );
   }
 
-  private async targetsFor(submission: Submission): Promise<RouteTarget[]> {
-    if (!submission.sectionId) return [];
-    const links = await this.linksRepo.find({
-      where: { sectionId: submission.sectionId },
-    });
-    if (links.length > 0) {
-      return links.map((link) => ({
-        userId: link.userId,
-        canRecordDecision: link.canRecordDecision,
-      }));
-    }
-    const chiefs = await this.memberships.listUserIdsForJournal(
-      submission.journalId,
-      ROLE_SLUGS.EDITOR,
+  private targetsFor(submission: Submission) {
+    return resolveRouteTargets(
+      { linksRepo: this.linksRepo, memberships: this.memberships },
+      submission,
     );
-    if (chiefs.length === 1) {
-      return [{ userId: chiefs[0], canRecordDecision: true }];
-    }
-    if (chiefs.length > 1) return [];
-    const managers = await this.memberships.listUserIdsForJournal(
-      submission.journalId,
-      ROLE_SLUGS.JOURNAL_MANAGER,
-    );
-    if (managers.length === 1) {
-      return [{ userId: managers[0], canRecordDecision: true }];
-    }
-    return [];
   }
 }

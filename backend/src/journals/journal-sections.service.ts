@@ -16,6 +16,7 @@ import type {
   UpdateJournalSectionDto,
 } from './dto/journal-section.dto';
 import { JournalMembershipService } from './journal-membership.service';
+import { StaffReleaseService } from './staff-release.service';
 import { JournalMetadataService } from './journal-metadata.service';
 
 export type SectionEditorView = {
@@ -49,6 +50,7 @@ export class JournalSectionsService {
     private readonly metadata: JournalMetadataService,
     private readonly memberships: JournalMembershipService,
     private readonly rbac: RbacService,
+    private readonly staffRelease: StaffReleaseService,
   ) {}
 
   async listActiveBySlug(slug: string): Promise<JournalSectionView[]> {
@@ -195,6 +197,12 @@ export class JournalSectionsService {
         link.userId,
         ROLE_SLUGS.SECTION_EDITOR,
         current.filter((item) => item !== slug),
+      );
+      // Unlinked from every section of this journal: off its open papers too.
+      await this.staffRelease.releaseUserFromJournals(
+        link.userId,
+        [section.journalId],
+        user.sub,
       );
     }
 

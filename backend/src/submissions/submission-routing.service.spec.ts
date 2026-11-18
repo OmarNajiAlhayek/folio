@@ -13,6 +13,9 @@ describe('SubmissionRoutingService', () => {
   let service: SubmissionRoutingService;
   let linksFind: jest.Mock;
   let listUserIdsForJournal: jest.Mock;
+  let filterUserIdsInJournal: jest.Mock;
+  let filterStaffUserIdsInJournal: jest.Mock;
+  let assignmentsFind: jest.Mock;
   let saved: unknown[];
 
   const submission = {
@@ -24,6 +27,14 @@ describe('SubmissionRoutingService', () => {
   beforeEach(async () => {
     linksFind = jest.fn().mockResolvedValue([]);
     listUserIdsForJournal = jest.fn().mockResolvedValue([]);
+    // By default everyone still holds their seat.
+    filterUserIdsInJournal = jest
+      .fn()
+      .mockImplementation((ids: string[]) => Promise.resolve(ids));
+    filterStaffUserIdsInJournal = jest
+      .fn()
+      .mockImplementation((ids: string[]) => Promise.resolve(ids));
+    assignmentsFind = jest.fn().mockResolvedValue([]);
     saved = [];
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -35,11 +46,22 @@ describe('SubmissionRoutingService', () => {
         },
         {
           provide: getRepositoryToken(SectionEditorAssignment),
-          useValue: { find: jest.fn().mockResolvedValue([]) },
+          useValue: {
+            find: assignmentsFind,
+            manager: {
+              getRepository: () => ({
+                findOne: jest.fn().mockResolvedValue(submission),
+              }),
+            },
+          },
         },
         {
           provide: JournalMembershipService,
-          useValue: { listUserIdsForJournal },
+          useValue: {
+            listUserIdsForJournal,
+            filterUserIdsInJournal,
+            filterStaffUserIdsInJournal,
+          },
         },
       ],
     }).compile();
@@ -104,6 +126,65 @@ describe('SubmissionRoutingService', () => {
     await expect(
       service.routeOnSubmit(em(), submission, 'author-1'),
     ).resolves.toEqual(['manager-1']);
+  });
+
+  it('skips linked section editors who no longer hold the seat', async () => {
+    linksFind.mockResolvedValue([
+      { userId: 'gone', canRecordDecision: true },
+      { userId: 'se-2', canRecordDecision: false },
+    ]);
+    filterUserIdsInJournal.mockResolvedValue(['se-2']);
+
+    await expect(
+      service.routeOnSubmit(em(), submission, 'author-1'),
+    ).resolves.toEqual(['se-2']);
+  });
+
+  it('falls back to the chief when every linked editor has lost the seat', async () => {
+    linksFind.mockResolvedValue([{ userId: 'gone', canRecordDecision: true }]);
+    filterUserIdsInJournal.mockResolvedValue([]);
+    listUserIdsForJournal.mockImplementation((_journal: string, role: string) =>
+      Promise.resolve(role === ROLE_SLUGS.EDITOR ? ['chief-1'] : []),
+    );
+
+    await expect(
+      service.routeOnSubmit(em(), submission, 'author-1'),
+    ).resolves.toEqual(['chief-1']);
+  });
+
+  it('does not reuse a previous assignee who lost their seat on resubmission', async () => {
+    const existingEm = {
+      getRepository: () => ({
+        find: jest.fn().mockResolvedValue([{ sectionEditorId: 'gone' }]),
+        create: (row: unknown) => row,
+        save: jest.fn((rows: unknown[]) => {
+          saved = rows;
+          return Promise.resolve(rows);
+        }),
+      }),
+    } as unknown as EntityManager;
+    filterStaffUserIdsInJournal.mockResolvedValue([]);
+    listUserIdsForJournal.mockImplementation((_journal: string, role: string) =>
+      Promise.resolve(role === ROLE_SLUGS.EDITOR ? ['chief-1'] : []),
+    );
+
+    await expect(
+      service.routeOnSubmit(existingEm, submission, 'author-1'),
+    ).resolves.toEqual(['chief-1']);
+  });
+
+  it('only returns assignees who still hold a seat on the journal', async () => {
+    assignmentsFind.mockResolvedValue([
+      { sectionEditorId: 'kept' },
+      { sectionEditorId: 'gone' },
+    ]);
+    filterStaffUserIdsInJournal.mockResolvedValue(['kept']);
+
+    await expect(service.assigneeIds('sub-1')).resolves.toEqual(['kept']);
+    expect(filterStaffUserIdsInJournal).toHaveBeenCalledWith(
+      ['kept', 'gone'],
+      submission.journalId,
+    );
   });
 
   it('leaves the paper unassigned when both seats are empty', async () => {

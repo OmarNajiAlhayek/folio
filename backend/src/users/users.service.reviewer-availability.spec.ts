@@ -8,6 +8,7 @@ import { User } from '../entities/user.entity';
 import { OAuthIdentity } from '../entities/oauth-identity.entity';
 import { RoleInvitation } from '../entities/role-invitation.entity';
 import { JournalMembershipService } from '../journals/journal-membership.service';
+import { StaffReleaseService } from '../journals/staff-release.service';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -60,6 +61,7 @@ describe('UsersService reviewer availability', () => {
         },
         { provide: getRepositoryToken(RoleInvitation), useValue: {} },
         { provide: JournalMembershipService, useValue: {} },
+        { provide: StaffReleaseService, useValue: {} },
         {
           provide: RbacService,
           useValue: {

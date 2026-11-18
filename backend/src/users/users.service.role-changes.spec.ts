@@ -14,6 +14,7 @@ import {
   RoleInvitationStatus,
 } from '../entities/role-invitation.entity';
 import { JournalMembershipService } from '../journals/journal-membership.service';
+import { StaffReleaseService } from '../journals/staff-release.service';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -29,6 +30,8 @@ describe('UsersService role changes', () => {
   let assignRoles: jest.Mock;
   let revokeAllSessionsForUser: jest.Mock;
   let removeRoleMemberships: jest.Mock;
+  let releaseUserFromAllJournals: jest.Mock;
+  let releaseUserFromJournals: jest.Mock;
   let listJournalIdsForUser: jest.Mock;
   let roleInvFind: jest.Mock;
   let roleInvFindOne: jest.Mock;
@@ -53,6 +56,8 @@ describe('UsersService role changes', () => {
       });
     revokeAllSessionsForUser = jest.fn().mockResolvedValue(1);
     removeRoleMemberships = jest.fn().mockResolvedValue(undefined);
+    releaseUserFromAllJournals = jest.fn().mockResolvedValue(undefined);
+    releaseUserFromJournals = jest.fn().mockResolvedValue(undefined);
     listJournalIdsForUser = jest
       .fn()
       .mockImplementation((userId: string, role: string) =>
@@ -115,6 +120,10 @@ describe('UsersService role changes', () => {
         {
           provide: JournalMembershipService,
           useValue: { listJournalIdsForUser, removeRoleMemberships },
+        },
+        {
+          provide: StaffReleaseService,
+          useValue: { releaseUserFromAllJournals, releaseUserFromJournals },
         },
         {
           provide: RbacService,
@@ -232,6 +241,26 @@ describe('UsersService role changes', () => {
         ROLE_SLUGS.EDITOR,
       ]);
       expect(revokeAllSessionsForUser).toHaveBeenCalledWith(TARGET);
+    });
+
+    it('takes the person off the journal papers when an editorial role is removed', async () => {
+      memberships[ACTOR] = { [ROLE_SLUGS.JOURNAL_MANAGER]: ['j-a'] };
+      memberships[TARGET] = { [ROLE_SLUGS.EDITOR]: ['j-a'] };
+      await service.changeRolesForUser(
+        TARGET,
+        { remove: [ROLE_SLUGS.EDITOR] },
+        ACTOR,
+      );
+      expect(releaseUserFromAllJournals).toHaveBeenCalledWith(TARGET, ACTOR);
+    });
+
+    it('does not touch assignments when only the reviewer role is removed', async () => {
+      await service.changeRolesForUser(
+        TARGET,
+        { remove: [ROLE_SLUGS.REVIEWER] },
+        ACTOR,
+      );
+      expect(releaseUserFromAllJournals).not.toHaveBeenCalled();
     });
 
     it('emails and notifies the person whose role was removed', async () => {
