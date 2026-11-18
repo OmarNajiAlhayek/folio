@@ -193,12 +193,6 @@ export function PublicationsCatalogSearch({
         label: t('filterChipQuery', { value: filters.q.trim() }),
       });
     }
-    if (filters.searchMode === 'semantic') {
-      chips.push({
-        key: 'searchMode',
-        label: t('searchModeSemantic'),
-      });
-    }
     if (filters.author?.trim()) {
       chips.push({
         key: 'author',
